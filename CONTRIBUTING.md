@@ -5,7 +5,7 @@ Thanks for considering contributing!
 ## Setup
 
 ```bash
-git clone https://github.com/yourusername/dirio.git
+git clone https://github.com/mallardduck/dirio.git
 cd dirio
 go mod tidy
 make build

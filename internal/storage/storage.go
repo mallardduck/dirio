@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/yourusername/dirio/internal/metadata"
-	"github.com/yourusername/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/internal/metadata"
+	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
 var (
@@ -39,7 +39,7 @@ func New(dataDir string, metadata *metadata.Manager) (*Storage, error) {
 // ListBuckets returns all buckets
 func (s *Storage) ListBuckets() ([]s3types.Bucket, error) {
 	bucketsDir := filepath.Join(s.dataDir, "buckets")
-	
+
 	entries, err := os.ReadDir(bucketsDir)
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func (s *Storage) ListBuckets() ([]s3types.Bucket, error) {
 // CreateBucket creates a new bucket
 func (s *Storage) CreateBucket(bucket string) error {
 	bucketPath := s.bucketPath(bucket)
-	
+
 	// Check if bucket exists
 	if _, err := os.Stat(bucketPath); err == nil {
 		return ErrBucketExists

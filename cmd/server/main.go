@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/yourusername/dirio/internal/server"
+	"github.com/mallardduck/dirio/internal/server"
 )
 
 func main() {
@@ -38,7 +38,7 @@ func main() {
 
 	log.Printf("Starting DirIO server on port %d", *port)
 	log.Printf("Data directory: %s", *dataDir)
-	
+
 	if err := srv.Start(); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}

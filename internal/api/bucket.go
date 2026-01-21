@@ -3,14 +3,14 @@ package api
 import (
 	"net/http"
 
-	"github.com/yourusername/dirio/internal/storage"
-	"github.com/yourusername/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/internal/storage"
+	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
 // CreateBucket handles PUT /{bucket}
 func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request, bucket string) {
 	// TODO: Parse bucket configuration from request body if present
-	
+
 	if err := h.storage.CreateBucket(bucket); err != nil {
 		if err == storage.ErrBucketExists {
 			writeErrorResponse(w, s3types.ErrBucketAlreadyExists, err)

@@ -1,4 +1,4 @@
-module github.com/yourusername/dirio
+module github.com/mallardduck/dirio
 
 go 1.21
 

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/yourusername/dirio/internal/storage"
-	"github.com/yourusername/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/internal/storage"
+	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
 // GetObject handles GET /{bucket}/{key}

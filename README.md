@@ -104,7 +104,7 @@ You can switch back to MinIO anytime. The `buckets/` directory is shared.
 
 ```bash
 # Clone and build
-git clone https://github.com/yourusername/dirio.git
+git clone https://github.com/mallardduck/dirio.git
 cd dirio
 make build
 

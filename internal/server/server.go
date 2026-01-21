@@ -6,10 +6,10 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/yourusername/dirio/internal/api"
-	"github.com/yourusername/dirio/internal/auth"
-	"github.com/yourusername/dirio/internal/metadata"
-	"github.com/yourusername/dirio/internal/storage"
+	"github.com/mallardduck/dirio/internal/api"
+	"github.com/mallardduck/dirio/internal/auth"
+	"github.com/mallardduck/dirio/internal/metadata"
+	"github.com/mallardduck/dirio/internal/storage"
 )
 
 // Config holds server configuration

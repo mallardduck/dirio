@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/yourusername/dirio/internal/metadata"
+	"github.com/mallardduck/dirio/internal/metadata"
 )
 
 // Object represents an S3 object with content

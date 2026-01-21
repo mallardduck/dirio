@@ -1,12 +1,12 @@
 package auth
 
 import (
-	"github.com/yourusername/dirio/internal/metadata"
+	"github.com/mallardduck/dirio/internal/metadata"
 )
 
 // Authenticator handles authentication and authorization
 type Authenticator struct {
-	metadata  *metadata.Manager
+	metadata      *metadata.Manager
 	rootAccessKey string
 	rootSecretKey string
 }

@@ -6,10 +6,10 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"github.com/yourusername/dirio/internal/auth"
-	"github.com/yourusername/dirio/internal/metadata"
-	"github.com/yourusername/dirio/internal/storage"
-	"github.com/yourusername/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/internal/auth"
+	"github.com/mallardduck/dirio/internal/metadata"
+	"github.com/mallardduck/dirio/internal/storage"
+	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
 // Handler handles S3 API requests
@@ -106,7 +106,7 @@ func (h *Handler) ObjectHandler(w http.ResponseWriter, r *http.Request) {
 func writeXMLResponse(w http.ResponseWriter, statusCode int, data interface{}) {
 	w.Header().Set("Content-Type", "application/xml")
 	w.WriteHeader(statusCode)
-	
+
 	w.Write([]byte(xml.Header))
 	encoder := xml.NewEncoder(w)
 	encoder.Indent("", "  ")
@@ -115,7 +115,7 @@ func writeXMLResponse(w http.ResponseWriter, statusCode int, data interface{}) {
 
 func writeErrorResponse(w http.ResponseWriter, errCode s3types.ErrorCode, err error) {
 	w.Header().Set("Content-Type", "application/xml")
-	
+
 	statusCode := errCode.HTTPStatus()
 	w.WriteHeader(statusCode)
 
