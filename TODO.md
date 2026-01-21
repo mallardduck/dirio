@@ -30,10 +30,12 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 - [x] Define configuration structure (ServerConfig)
 - [x] Support CLI flags, ENV vars, and YAML config file
 - [x] Default config locations (`~/.dirio/config.yaml`, `/etc/dirio/config.yaml`)
-- [ ] Global config values system similar to [SCC-Operator internal/config](https://github.com/rancher/scc-operator/tree/main/internal/config) (minus ConfigMap support)
-- [ ] Config validation and sensible defaults
+- [x] Global config values system similar to [SCC-Operator internal/config](https://github.com/rancher/scc-operator/tree/main/internal/config) (minus ConfigMap support) - Implemented in `internal/config/`
+- [x] Config validation and sensible defaults - Settings.Validate() in `internal/config/config.go`
 
 ### mDNS Service Discovery
+- Q: How do we know the IP to use for mDNS record?
+- Q: Assume we must support simple ":9000" port binding - how do we look up IP?
 - [ ] Add github.com/hashicorp/mdns dependency
 - [ ] Implement mDNS service registration
 - [ ] Default mDNS name: `dirio-s3.local` (configurable)
@@ -51,7 +53,7 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 - [ ] Test MinIO import with real data
 - [ ] Test mDNS registration and discovery
 - [ ] Test URL generation with different Host headers
-- [ ] Test config loading from CLI/ENV/file with precedence
+- [x] Test config loading from CLI/ENV/file with precedence - Tests in `internal/config/config_test.go`
 
 ## Phase 2: Authentication, Security & Audit Logging
 
