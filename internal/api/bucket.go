@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"github.com/yourusername/dirio/internal/storage"
 	"github.com/yourusername/dirio/pkg/s3types"
 )
 
@@ -82,7 +83,7 @@ func (h *Handler) ListObjects(w http.ResponseWriter, r *http.Request, bucket str
 	prefix := query.Get("prefix")
 	delimiter := query.Get("delimiter")
 	marker := query.Get("marker")
-	maxKeys := query.Get("max-keys")
+	_ = query.Get("max-keys") // TODO: use for pagination
 
 	// TODO: Implement ListObjectsV1
 	// For now, return empty result

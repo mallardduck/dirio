@@ -3,10 +3,8 @@ package storage
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/yourusername/dirio/internal/metadata"
 	"github.com/yourusername/dirio/pkg/s3types"

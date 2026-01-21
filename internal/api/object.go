@@ -4,7 +4,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/yourusername/dirio/internal/storage"
 	"github.com/yourusername/dirio/pkg/s3types"
