@@ -33,13 +33,16 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 - [x] Global config values system similar to [SCC-Operator internal/config](https://github.com/rancher/scc-operator/tree/main/internal/config) (minus ConfigMap support) - Implemented in `internal/config/`
 - [x] Config validation and sensible defaults - Settings.Validate() in `internal/config/config.go`
 
-### mDNS Service Discovery
+### mDNS Service Discovery ✅
 - Q: How do we know the IP to use for mDNS record?
+  - A: Use the "outbound IP" method: create a UDP connection to 8.8.8.8:80 (doesn't send packets) and get the local address the OS would use. Fallback: enumerate network interfaces and pick first non-loopback IPv4. See `internal/mdns/ip.go`.
 - Q: Assume we must support simple ":9000" port binding - how do we look up IP?
-- [ ] Add github.com/hashicorp/mdns dependency
-- [ ] Implement mDNS service registration
-- [ ] Default mDNS name: `dirio-s3.local` (configurable)
-- [ ] Graceful mDNS shutdown on server stop
+  - A: Same approach - `GetLocalIP()` in `internal/mdns/ip.go` auto-detects the appropriate IP address.
+- [x] Add github.com/hashicorp/mdns dependency
+- [x] Implement mDNS service registration - `internal/mdns/mdns.go`
+- [x] Default mDNS name: `dirio-s3.local` (configurable via `--mdns-name` flag)
+- [x] Graceful mDNS shutdown on server stop - integrated with signal handling in `internal/server/server.go`
+- [x] Graceful HTTP server shutdown with SIGINT/SIGTERM handling
 
 ### Domain-Aware URL Generation
 - [ ] Add CanonicalDomain configuration option
@@ -51,7 +54,7 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 
 ### Testing
 - [ ] Test MinIO import with real data
-- [ ] Test mDNS registration and discovery
+- [x] Test mDNS registration and discovery - Unit tests in `internal/mdns/mdns_test.go`
 - [ ] Test URL generation with different Host headers
 - [x] Test config loading from CLI/ENV/file with precedence - Tests in `internal/config/config_test.go`
 

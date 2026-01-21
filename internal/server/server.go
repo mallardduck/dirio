@@ -1,13 +1,19 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/mallardduck/dirio/internal/api"
 	"github.com/mallardduck/dirio/internal/auth"
+	"github.com/mallardduck/dirio/internal/mdns"
 	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/internal/storage"
 )
@@ -18,6 +24,10 @@ type Config struct {
 	Port      int
 	AccessKey string
 	SecretKey string
+
+	// mDNS settings
+	MDNSEnabled bool
+	MDNSName    string
 }
 
 // Server represents the S3-compatible HTTP server
@@ -27,6 +37,7 @@ type Server struct {
 	storage  *storage.Storage
 	metadata *metadata.Manager
 	auth     *auth.Authenticator
+	mdns     *mdns.Service
 }
 
 // New creates a new server instance
@@ -116,9 +127,84 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.ResponseWriter.WriteHeader(code)
 }
 
-// Start begins serving HTTP requests
+// Start begins serving HTTP requests with graceful shutdown support.
+// It listens for SIGINT and SIGTERM to trigger a graceful shutdown,
+// properly stopping mDNS service and draining HTTP connections.
 func (s *Server) Start() error {
 	addr := fmt.Sprintf(":%d", s.config.Port)
-	log.Printf("Server listening on %s", addr)
-	return http.ListenAndServe(addr, s.router)
+
+	// Create HTTP server with timeouts
+	httpServer := &http.Server{
+		Addr:         addr,
+		Handler:      s.router,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Start mDNS service if enabled
+	if s.config.MDNSEnabled {
+		mdnsSvc, err := mdns.New(&mdns.Config{
+			ServiceName: s.config.MDNSName,
+			Port:        s.config.Port,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create mDNS service: %w", err)
+		}
+		if err := mdnsSvc.Start(); err != nil {
+			return fmt.Errorf("failed to start mDNS service: %w", err)
+		}
+		s.mdns = mdnsSvc
+		log.Printf("mDNS service started: %s.local", s.config.MDNSName)
+	}
+
+	// Channel to receive server errors
+	serverErr := make(chan error, 1)
+
+	// Start HTTP server in a goroutine
+	go func() {
+		log.Printf("Server listening on %s", addr)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+
+	// Setup signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Wait for either server error or shutdown signal
+	select {
+	case err := <-serverErr:
+		s.shutdown()
+		return err
+	case sig := <-sigChan:
+		log.Printf("Received signal %v, initiating graceful shutdown...", sig)
+	}
+
+	// Graceful shutdown with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Stop accepting new connections and drain existing ones
+	if err := httpServer.Shutdown(ctx); err != nil {
+		log.Printf("HTTP server shutdown error: %v", err)
+	}
+
+	// Stop mDNS service
+	s.shutdown()
+
+	log.Printf("Server stopped gracefully")
+	return nil
+}
+
+// shutdown performs cleanup operations during server shutdown
+func (s *Server) shutdown() {
+	if s.mdns != nil {
+		if err := s.mdns.Stop(); err != nil {
+			log.Printf("mDNS shutdown error: %v", err)
+		}
+		s.mdns = nil
+	}
 }

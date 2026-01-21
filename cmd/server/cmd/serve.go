@@ -40,6 +40,10 @@ func init() {
 	serveCmd.Flags().String(config.LogFormat.GetFlagKey(), config.LogFormat.GetDefaultAsString(), "Log format (text, json)")
 	serveCmd.Flags().Bool(config.Debug.GetFlagKey(), false, "Enable debug mode (sets log-level to debug)")
 
+	// mDNS flags
+	serveCmd.Flags().Bool(config.MDNSEnabled.GetFlagKey(), false, "Enable mDNS service discovery")
+	serveCmd.Flags().String(config.MDNSName.GetFlagKey(), config.MDNSName.GetDefaultAsString(), "mDNS service name (advertised as <name>.local)")
+
 	// Bind flags to viper for config file support
 	viper.BindPFlag(config.DataDir.GetViperKey(), serveCmd.Flags().Lookup(config.DataDir.GetFlagKey()))
 	viper.BindPFlag(config.Port.GetViperKey(), serveCmd.Flags().Lookup(config.Port.GetFlagKey()))
@@ -48,6 +52,8 @@ func init() {
 	viper.BindPFlag(config.LogLevel.GetViperKey(), serveCmd.Flags().Lookup(config.LogLevel.GetFlagKey()))
 	viper.BindPFlag(config.LogFormat.GetViperKey(), serveCmd.Flags().Lookup(config.LogFormat.GetFlagKey()))
 	viper.BindPFlag(config.Debug.GetViperKey(), serveCmd.Flags().Lookup(config.Debug.GetFlagKey()))
+	viper.BindPFlag(config.MDNSEnabled.GetViperKey(), serveCmd.Flags().Lookup(config.MDNSEnabled.GetFlagKey()))
+	viper.BindPFlag(config.MDNSName.GetViperKey(), serveCmd.Flags().Lookup(config.MDNSName.GetFlagKey()))
 }
 
 func runServer(cmd *cobra.Command, args []string) error {
@@ -69,10 +75,12 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 	// Create server configuration from settings
 	serverConfig := &server.Config{
-		DataDir:   settings.DataDir,
-		Port:      settings.Port,
-		AccessKey: settings.AccessKey,
-		SecretKey: settings.SecretKey,
+		DataDir:     settings.DataDir,
+		Port:        settings.Port,
+		AccessKey:   settings.AccessKey,
+		SecretKey:   settings.SecretKey,
+		MDNSEnabled: settings.MDNSEnabled,
+		MDNSName:    settings.MDNSName,
 	}
 
 	// Initialize and start server
