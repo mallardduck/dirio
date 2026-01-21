@@ -48,7 +48,7 @@ test-coverage:
 
 # Run the server locally
 run:
-	go run ./cmd/server --data-dir ./data --port 9000
+	go run ./cmd/server serve --data-dir ./data --port 9000
 
 # Build Docker image
 docker-build:

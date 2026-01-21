@@ -25,11 +25,12 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 ## Phase 1.5: Configuration & Service Discovery
 
 ### Configuration Framework
-- [ ] Add spf13/cobra for CLI command structure
-- [ ] Add spf13/viper for configuration management
-- [ ] Define configuration structure (ServerConfig)
-- [ ] Support CLI flags, ENV vars, and YAML config file
-- [ ] Default config locations (`~/.dirio/config.yaml`, `/etc/dirio/config.yaml`)
+- [x] Add spf13/cobra for CLI command structure
+- [x] Add spf13/viper for configuration management
+- [x] Define configuration structure (ServerConfig)
+- [x] Support CLI flags, ENV vars, and YAML config file
+- [x] Default config locations (`~/.dirio/config.yaml`, `/etc/dirio/config.yaml`)
+- [ ] Global config values system similar to [SCC-Operator internal/config](https://github.com/rancher/scc-operator/tree/main/internal/config) (minus ConfigMap support)
 - [ ] Config validation and sensible defaults
 
 ### mDNS Service Discovery
