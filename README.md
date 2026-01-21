@@ -1,6 +1,7 @@
-# DirIO
+# DirIO - Filesystem-first S3
 
-**Direct I/O for S3**
+**Objects on the outside. Directories on the inside.
+A filesystem-native S3-compatible object store.**
 
 DirIO is an S3-compatible object storage server where objects are just files on disk. No chunking, no encoding, no abstraction layers—just directories and files.
 
@@ -10,8 +11,8 @@ Built as a drop-in replacement for MinIO's discontinued single-node filesystem m
 
 - Objects are files. Buckets are directories. That's it.
 - No database. Metadata lives in simple JSON files.
-- Import your existing MinIO data and keep going.
 - One binary. One data directory. Zero ceremony.
+- Import your existing MinIO data and keep going.
 
 ## What DirIO Does
 
