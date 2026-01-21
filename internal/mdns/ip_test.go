@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // mockInterfaceProvider is a mock implementation of InterfaceProvider for testing.
@@ -87,9 +89,7 @@ func TestIsValidInterface(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := isValidInterface(tt.iface)
-			if got != tt.want {
-				t.Errorf("isValidInterface() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -138,11 +138,12 @@ func TestExtractValidIPv4(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			assert := assert.New(t)
 			got := extractValidIPv4(tt.addr)
-			if tt.want == nil && got != nil {
-				t.Errorf("extractValidIPv4() = %v, want nil", got)
-			} else if tt.want != nil && !tt.want.Equal(got) {
-				t.Errorf("extractValidIPv4() = %v, want %v", got, tt.want)
+			if tt.want == nil {
+				assert.Nil(got)
+			} else {
+				assert.True(tt.want.Equal(got))
 			}
 		})
 	}
@@ -197,9 +198,9 @@ func TestGetIPFromInterfacesWithProvider(t *testing.T) {
 				},
 				addrs: map[int][]net.Addr{
 					1: {
-						makeIPNet("fe80::1", 64),          // IPv6 - skipped
-						makeIPNet("192.168.1.100", 24),   // IPv4 - picked
-						makeIPNet("192.168.1.101", 24),   // IPv4 - not reached
+						makeIPNet("fe80::1", 64),        // IPv6 - skipped
+						makeIPNet("192.168.1.100", 24), // IPv4 - picked
+						makeIPNet("192.168.1.101", 24), // IPv4 - not reached
 					},
 				},
 			},
@@ -286,15 +287,17 @@ func TestGetIPFromInterfacesWithProvider(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			assert := assert.New(t)
 			got, err := getIPFromInterfacesWithProvider(tt.provider)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("getIPFromInterfacesWithProvider() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(err)
 				return
 			}
-			if tt.wantIP == nil && got != nil {
-				t.Errorf("getIPFromInterfacesWithProvider() = %v, want nil", got)
-			} else if tt.wantIP != nil && !tt.wantIP.Equal(got) {
-				t.Errorf("getIPFromInterfacesWithProvider() = %v, want %v", got, tt.wantIP)
+			assert.NoError(err)
+			if tt.wantIP == nil {
+				assert.Nil(got)
+			} else {
+				assert.True(tt.wantIP.Equal(got))
 			}
 		})
 	}
@@ -365,19 +368,16 @@ func TestGetAllLocalIPsWithProvider(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			assert := assert.New(t)
 			got, err := getAllLocalIPsWithProvider(tt.provider)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("getAllLocalIPsWithProvider() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(err)
 				return
 			}
-			if len(got) != len(tt.wantIPs) {
-				t.Errorf("getAllLocalIPsWithProvider() returned %d IPs, want %d", len(got), len(tt.wantIPs))
-				return
-			}
+			assert.NoError(err)
+			assert.Len(got, len(tt.wantIPs))
 			for i, wantIP := range tt.wantIPs {
-				if !wantIP.Equal(got[i]) {
-					t.Errorf("getAllLocalIPsWithProvider()[%d] = %v, want %v", i, got[i], wantIP)
-				}
+				assert.True(wantIP.Equal(got[i]))
 			}
 		})
 	}
@@ -394,13 +394,9 @@ func TestGetOutboundIP_Integration(t *testing.T) {
 		t.Skipf("GetOutboundIP unavailable (no network?): %v", err)
 	}
 
-	if ip == nil {
-		t.Error("GetOutboundIP returned nil IP without error")
-	}
-
-	if ip.IsLoopback() {
-		t.Error("GetOutboundIP returned loopback address")
-	}
+	assert := assert.New(t)
+	assert.NotNil(ip)
+	assert.False(ip.IsLoopback())
 }
 
 func TestGetLocalIP_Integration(t *testing.T) {
@@ -409,13 +405,9 @@ func TestGetLocalIP_Integration(t *testing.T) {
 		t.Skipf("GetLocalIP unavailable (no network?): %v", err)
 	}
 
-	if ip == nil {
-		t.Error("GetLocalIP returned nil IP without error")
-	}
-
-	if ip.IsLoopback() {
-		t.Error("GetLocalIP returned loopback address")
-	}
+	assert := assert.New(t)
+	assert.NotNil(ip)
+	assert.False(ip.IsLoopback())
 }
 
 func TestGetAllLocalIPs_Integration(t *testing.T) {
@@ -424,13 +416,10 @@ func TestGetAllLocalIPs_Integration(t *testing.T) {
 		t.Skipf("GetAllLocalIPs unavailable (no network?): %v", err)
 	}
 
-	if len(ips) == 0 {
-		t.Error("GetAllLocalIPs returned empty slice without error")
-	}
+	assert := assert.New(t)
+	assert.NotEmpty(ips)
 
 	for _, ip := range ips {
-		if ip.IsLoopback() {
-			t.Errorf("GetAllLocalIPs included loopback address: %v", ip)
-		}
+		assert.False(ip.IsLoopback())
 	}
 }

@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/mallardduck/dirio/pkg/s3types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestListObjectsV2Empty(t *testing.T) {
@@ -17,27 +19,18 @@ func TestListObjectsV2Empty(t *testing.T) {
 	ts.CreateBucket(t, "test-bucket")
 
 	resp, err := http.Get(ts.BucketURL("test-bucket") + "?list-type=2")
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", resp.StatusCode)
-	}
+	assert := assert.New(t)
+	assert.Equal(http.StatusOK, resp.StatusCode)
 
 	var result s3types.ListBucketV2Result
 	body, _ := io.ReadAll(resp.Body)
-	if err := xml.Unmarshal(body, &result); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
+	require.NoError(t, xml.Unmarshal(body, &result))
 
-	if result.KeyCount != 0 {
-		t.Errorf("Expected 0 objects, got %d", result.KeyCount)
-	}
-	if len(result.Contents) != 0 {
-		t.Errorf("Expected empty contents, got %d items", len(result.Contents))
-	}
+	assert.Equal(0, result.KeyCount)
+	assert.Empty(result.Contents)
 }
 
 func TestListObjectsV2WithObjects(t *testing.T) {
@@ -55,20 +48,15 @@ func TestListObjectsV2WithObjects(t *testing.T) {
 	})
 
 	resp, err := http.Get(ts.BucketURL("test-bucket") + "?list-type=2")
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	var result s3types.ListBucketV2Result
 	body, _ := io.ReadAll(resp.Body)
-	if err := xml.Unmarshal(body, &result); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
+	require.NoError(t, xml.Unmarshal(body, &result))
 
-	if result.KeyCount != 6 {
-		t.Errorf("Expected 6 objects, got %d", result.KeyCount)
-	}
+	assert := assert.New(t)
+	assert.Equal(6, result.KeyCount)
 
 	// Check that all keys are present
 	keys := make(map[string]bool)
@@ -82,9 +70,7 @@ func TestListObjectsV2WithObjects(t *testing.T) {
 		"docs/readme.md", "docs/sub/nested.md",
 	}
 	for _, key := range expectedKeys {
-		if !keys[key] {
-			t.Errorf("Expected key %s not found in results", key)
-		}
+		assert.True(keys[key], "Expected key %s not found in results", key)
 	}
 }
 
@@ -103,29 +89,19 @@ func TestListObjectsV2WithPrefix(t *testing.T) {
 
 	// Test prefix=photos/
 	resp, err := http.Get(ts.BucketURL("test-bucket") + "?list-type=2&prefix=photos/")
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	var result s3types.ListBucketV2Result
 	body, _ := io.ReadAll(resp.Body)
-	if err := xml.Unmarshal(body, &result); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
+	require.NoError(t, xml.Unmarshal(body, &result))
 
-	if result.KeyCount != 2 {
-		t.Errorf("Expected 2 objects with prefix 'photos/', got %d", result.KeyCount)
-	}
-
-	if result.Prefix != "photos/" {
-		t.Errorf("Expected Prefix 'photos/', got %q", result.Prefix)
-	}
+	assert := assert.New(t)
+	assert.Equal(2, result.KeyCount)
+	assert.Equal("photos/", result.Prefix)
 
 	for _, obj := range result.Contents {
-		if !strings.HasPrefix(obj.Key, "photos/") {
-			t.Errorf("Object %s does not have prefix 'photos/'", obj.Key)
-		}
+		assert.True(strings.HasPrefix(obj.Key, "photos/"))
 	}
 }
 
@@ -143,20 +119,14 @@ func TestListObjectsV2WithPrefixPartialMatch(t *testing.T) {
 
 	// Test prefix=file (should match file1.txt, file2.txt, filter.log)
 	resp, err := http.Get(ts.BucketURL("test-bucket") + "?list-type=2&prefix=file")
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	var result s3types.ListBucketV2Result
 	body, _ := io.ReadAll(resp.Body)
-	if err := xml.Unmarshal(body, &result); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
+	require.NoError(t, xml.Unmarshal(body, &result))
 
-	if result.KeyCount != 2 {
-		t.Errorf("Expected 2 objects with prefix 'file', got %d", result.KeyCount)
-	}
+	assert.Equal(t, 2, result.KeyCount)
 }
 
 func TestListObjectsV2NonexistentBucket(t *testing.T) {
@@ -164,19 +134,14 @@ func TestListObjectsV2NonexistentBucket(t *testing.T) {
 	defer ts.Cleanup()
 
 	resp, err := http.Get(ts.BucketURL("nonexistent") + "?list-type=2")
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("Expected status 404, got %d", resp.StatusCode)
-	}
+	assert := assert.New(t)
+	assert.Equal(http.StatusNotFound, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "NoSuchBucket") {
-		t.Errorf("Expected NoSuchBucket error, got: %s", body)
-	}
+	assert.Contains(string(body), "NoSuchBucket")
 }
 
 func TestListObjectsV1(t *testing.T) {
@@ -191,28 +156,18 @@ func TestListObjectsV1(t *testing.T) {
 
 	// V1 is the default (no list-type param)
 	resp, err := http.Get(ts.BucketURL("test-bucket"))
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", resp.StatusCode)
-	}
+	assert := assert.New(t)
+	assert.Equal(http.StatusOK, resp.StatusCode)
 
 	var result s3types.ListBucketResult
 	body, _ := io.ReadAll(resp.Body)
-	if err := xml.Unmarshal(body, &result); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
+	require.NoError(t, xml.Unmarshal(body, &result))
 
-	if len(result.Contents) != 2 {
-		t.Errorf("Expected 2 objects, got %d", len(result.Contents))
-	}
-
-	if result.Name != "test-bucket" {
-		t.Errorf("Expected bucket name 'test-bucket', got %q", result.Name)
-	}
+	assert.Len(result.Contents, 2)
+	assert.Equal("test-bucket", result.Name)
 }
 
 func TestListObjectsV1WithPrefix(t *testing.T) {
@@ -227,24 +182,16 @@ func TestListObjectsV1WithPrefix(t *testing.T) {
 	})
 
 	resp, err := http.Get(ts.BucketURL("test-bucket") + "?prefix=logs/")
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	var result s3types.ListBucketResult
 	body, _ := io.ReadAll(resp.Body)
-	if err := xml.Unmarshal(body, &result); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
+	require.NoError(t, xml.Unmarshal(body, &result))
 
-	if len(result.Contents) != 2 {
-		t.Errorf("Expected 2 objects with prefix 'logs/', got %d", len(result.Contents))
-	}
-
-	if result.Prefix != "logs/" {
-		t.Errorf("Expected Prefix 'logs/', got %q", result.Prefix)
-	}
+	assert := assert.New(t)
+	assert.Len(result.Contents, 2)
+	assert.Equal("logs/", result.Prefix)
 }
 
 func TestListObjectsV1NonexistentBucket(t *testing.T) {
@@ -252,19 +199,14 @@ func TestListObjectsV1NonexistentBucket(t *testing.T) {
 	defer ts.Cleanup()
 
 	resp, err := http.Get(ts.BucketURL("nonexistent"))
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("Expected status 404, got %d", resp.StatusCode)
-	}
+	assert := assert.New(t)
+	assert.Equal(http.StatusNotFound, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "NoSuchBucket") {
-		t.Errorf("Expected NoSuchBucket error, got: %s", body)
-	}
+	assert.Contains(string(body), "NoSuchBucket")
 }
 
 func TestListObjectsResponseFields(t *testing.T) {
@@ -275,32 +217,19 @@ func TestListObjectsResponseFields(t *testing.T) {
 	ts.PutObject(t, "test-bucket", "test.txt", "test content")
 
 	resp, err := http.Get(ts.BucketURL("test-bucket") + "?list-type=2")
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	var result s3types.ListBucketV2Result
 	body, _ := io.ReadAll(resp.Body)
-	if err := xml.Unmarshal(body, &result); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
+	require.NoError(t, xml.Unmarshal(body, &result))
 
-	if len(result.Contents) != 1 {
-		t.Fatalf("Expected 1 object, got %d", len(result.Contents))
-	}
+	require.Len(t, result.Contents, 1)
 
+	assert := assert.New(t)
 	obj := result.Contents[0]
-	if obj.Key != "test.txt" {
-		t.Errorf("Expected Key 'test.txt', got %q", obj.Key)
-	}
-	if obj.Size != 12 {
-		t.Errorf("Expected Size 12, got %d", obj.Size)
-	}
-	if obj.StorageClass != "STANDARD" {
-		t.Errorf("Expected StorageClass 'STANDARD', got %q", obj.StorageClass)
-	}
-	if obj.LastModified.IsZero() {
-		t.Error("Expected LastModified to be set")
-	}
+	assert.Equal("test.txt", obj.Key)
+	assert.Equal(int64(12), obj.Size)
+	assert.Equal("STANDARD", obj.StorageClass)
+	assert.False(obj.LastModified.IsZero())
 }

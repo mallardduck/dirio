@@ -2,6 +2,9 @@ package mdns
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewService(t *testing.T) {
@@ -32,55 +35,42 @@ func TestNewService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			assert := assert.New(t)
 			svc, err := New(tt.config)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("New() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(err)
 				return
 			}
-			if !tt.wantErr && svc == nil {
-				t.Error("New() returned nil service without error")
-			}
+			assert.NoError(err)
+			assert.NotNil(svc)
 		})
 	}
 }
 
 func TestServiceDefaults(t *testing.T) {
+	assert := assert.New(t)
 	cfg := &Config{}
 	svc, err := New(cfg)
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
+	require.NoError(t, err)
 
 	// Check that defaults were applied
-	if svc.config.ServiceName != "dirio-s3" {
-		t.Errorf("default ServiceName = %q, want %q", svc.config.ServiceName, "dirio-s3")
-	}
-	if svc.config.Port != 9000 {
-		t.Errorf("default Port = %d, want %d", svc.config.Port, 9000)
-	}
+	assert.Equal("dirio-s3", svc.config.ServiceName)
+	assert.Equal(9000, svc.config.Port)
 }
 
 func TestGetAdvertisedHost(t *testing.T) {
 	svc, err := New(&Config{ServiceName: "my-service"})
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
+	require.NoError(t, err)
 
 	host := svc.GetAdvertisedHost()
-	if host != "my-service.local" {
-		t.Errorf("GetAdvertisedHost() = %q, want %q", host, "my-service.local")
-	}
+	assert.Equal(t, "my-service.local", host)
 }
 
 func TestIsRunning(t *testing.T) {
 	svc, err := New(&Config{})
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
+	require.NoError(t, err)
 
-	if svc.IsRunning() {
-		t.Error("IsRunning() = true before Start()")
-	}
+	assert.False(t, svc.IsRunning())
 }
 
 func TestStartStop(t *testing.T) {
@@ -90,39 +80,24 @@ func TestStartStop(t *testing.T) {
 		t.Skip("No network available for mDNS test")
 	}
 
+	assert := assert.New(t)
 	svc, err := New(&Config{
 		ServiceName: "dirio-test",
 		Port:        19000, // Use a non-standard port to avoid conflicts
 	})
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
+	require.NoError(t, err)
 
 	// Start the service
-	if err := svc.Start(); err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
-
-	if !svc.IsRunning() {
-		t.Error("IsRunning() = false after Start()")
-	}
+	require.NoError(t, svc.Start())
+	assert.True(svc.IsRunning())
 
 	// Starting again should fail
-	if err := svc.Start(); err == nil {
-		t.Error("Start() should fail when already running")
-	}
+	assert.Error(svc.Start())
 
 	// Stop the service
-	if err := svc.Stop(); err != nil {
-		t.Fatalf("Stop() error = %v", err)
-	}
-
-	if svc.IsRunning() {
-		t.Error("IsRunning() = true after Stop()")
-	}
+	require.NoError(t, svc.Stop())
+	assert.False(svc.IsRunning())
 
 	// Stop should be idempotent
-	if err := svc.Stop(); err != nil {
-		t.Errorf("Stop() should be idempotent, got error: %v", err)
-	}
+	assert.NoError(svc.Stop())
 }

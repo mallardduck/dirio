@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestValueResolverPriority(t *testing.T) {
@@ -21,9 +22,7 @@ func TestValueResolverPriority(t *testing.T) {
 	t.Run("default value", func(t *testing.T) {
 		resolver := NewValueResolver(flags, v)
 		val := resolver.Get(DataDir)
-		if val != "/data" { // From options.go default
-			t.Errorf("expected default '/data', got '%s'", val)
-		}
+		assert.Equal(t, "/data", val) // From options.go default (single assertion)
 	})
 
 	// Test 2: Viper (config file) overrides default
@@ -31,9 +30,7 @@ func TestValueResolverPriority(t *testing.T) {
 		v.Set("data_dir", "/from/config")
 		resolver := NewValueResolver(flags, v)
 		val := resolver.Get(DataDir)
-		if val != "/from/config" {
-			t.Errorf("expected '/from/config', got '%s'", val)
-		}
+		assert.Equal(t, "/from/config", val)
 		v.Set("data_dir", nil) // reset
 	})
 
@@ -44,9 +41,7 @@ func TestValueResolverPriority(t *testing.T) {
 
 		resolver := NewValueResolver(flags, v)
 		val := resolver.Get(DataDir)
-		if val != "/from/flag" {
-			t.Errorf("expected '/from/flag', got '%s'", val)
-		}
+		assert.Equal(t, "/from/flag", val)
 		v.Set("data_dir", nil) // reset
 	})
 
@@ -58,9 +53,7 @@ func TestValueResolverPriority(t *testing.T) {
 		// Need a new resolver to pick up the env change
 		resolver := NewValueResolver(flags, v)
 		val := resolver.Get(DataDir)
-		if val != "/from/env" {
-			t.Errorf("expected '/from/env', got '%s'", val)
-		}
+		assert.Equal(t, "/from/env", val)
 	})
 }
 
@@ -135,8 +128,10 @@ func TestSettingsValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.settings.Validate()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -151,26 +146,20 @@ func TestGetIntAndBool(t *testing.T) {
 	t.Run("GetInt from default", func(t *testing.T) {
 		resolver := NewValueResolver(flags, v)
 		val := resolver.GetInt(Port)
-		if val != 9000 {
-			t.Errorf("expected 9000, got %d", val)
-		}
+		assert.Equal(t, 9000, val)
 	})
 
 	t.Run("GetBool from default", func(t *testing.T) {
 		resolver := NewValueResolver(flags, v)
 		val := resolver.GetBool(Debug)
-		if val != false {
-			t.Errorf("expected false, got %v", val)
-		}
+		assert.False(t, val)
 	})
 
 	t.Run("GetInt from viper", func(t *testing.T) {
 		v.Set("port", 8080)
 		resolver := NewValueResolver(flags, v)
 		val := resolver.GetInt(Port)
-		if val != 8080 {
-			t.Errorf("expected 8080, got %d", val)
-		}
+		assert.Equal(t, 8080, val)
 		v.Set("port", nil)
 	})
 
@@ -180,8 +169,6 @@ func TestGetIntAndBool(t *testing.T) {
 
 		resolver := NewValueResolver(flags, v)
 		val := resolver.GetBool(Debug)
-		if val != true {
-			t.Errorf("expected true, got %v", val)
-		}
+		assert.True(t, val)
 	})
 }

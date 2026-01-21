@@ -4,10 +4,11 @@ import (
 	"encoding/xml"
 	"io"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/mallardduck/dirio/pkg/s3types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestListBucketsEmpty(t *testing.T) {
@@ -15,19 +16,14 @@ func TestListBucketsEmpty(t *testing.T) {
 	defer ts.Cleanup()
 
 	resp, err := http.Get(ts.URL("/"))
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", resp.StatusCode)
-	}
+	assert := assert.New(t)
+	assert.Equal(http.StatusOK, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "<Buckets></Buckets>") {
-		t.Errorf("Expected empty buckets list, got: %s", body)
-	}
+	assert.Contains(string(body), "<Buckets></Buckets>")
 }
 
 func TestCreateBucket(t *testing.T) {
@@ -36,14 +32,10 @@ func TestCreateBucket(t *testing.T) {
 
 	req, _ := http.NewRequest("PUT", ts.BucketURL("test-bucket"), nil)
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", resp.StatusCode)
-	}
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
 func TestCreateBucketDuplicate(t *testing.T) {
@@ -56,19 +48,14 @@ func TestCreateBucketDuplicate(t *testing.T) {
 	// Try to create duplicate
 	req, _ := http.NewRequest("PUT", ts.BucketURL("test-bucket"), nil)
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusConflict {
-		t.Errorf("Expected status 409 Conflict, got %d", resp.StatusCode)
-	}
+	assert := assert.New(t)
+	assert.Equal(http.StatusConflict, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "BucketAlreadyExists") {
-		t.Errorf("Expected BucketAlreadyExists error, got: %s", body)
-	}
+	assert.Contains(string(body), "BucketAlreadyExists")
 }
 
 func TestListBucketsAfterCreate(t *testing.T) {
@@ -80,20 +67,15 @@ func TestListBucketsAfterCreate(t *testing.T) {
 	ts.CreateBucket(t, "bucket-beta")
 
 	resp, err := http.Get(ts.URL("/"))
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	bodyStr := string(body)
 
-	if !strings.Contains(bodyStr, "<Name>bucket-alpha</Name>") {
-		t.Errorf("Expected bucket-alpha in list, got: %s", bodyStr)
-	}
-	if !strings.Contains(bodyStr, "<Name>bucket-beta</Name>") {
-		t.Errorf("Expected bucket-beta in list, got: %s", bodyStr)
-	}
+	assert := assert.New(t)
+	assert.Contains(bodyStr, "<Name>bucket-alpha</Name>")
+	assert.Contains(bodyStr, "<Name>bucket-beta</Name>")
 }
 
 func TestHeadBucketExists(t *testing.T) {
@@ -104,14 +86,10 @@ func TestHeadBucketExists(t *testing.T) {
 
 	req, _ := http.NewRequest("HEAD", ts.BucketURL("test-bucket"), nil)
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", resp.StatusCode)
-	}
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
 func TestHeadBucketNotExists(t *testing.T) {
@@ -120,14 +98,10 @@ func TestHeadBucketNotExists(t *testing.T) {
 
 	req, _ := http.NewRequest("HEAD", ts.BucketURL("nonexistent"), nil)
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("Expected status 404, got %d", resp.StatusCode)
-	}
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
 func TestGetBucketLocation(t *testing.T) {
@@ -137,19 +111,14 @@ func TestGetBucketLocation(t *testing.T) {
 	ts.CreateBucket(t, "test-bucket")
 
 	resp, err := http.Get(ts.BucketURL("test-bucket") + "?location")
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", resp.StatusCode)
-	}
+	assert := assert.New(t)
+	assert.Equal(http.StatusOK, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "us-east-1") {
-		t.Errorf("Expected us-east-1 location, got: %s", body)
-	}
+	assert.Contains(string(body), "us-east-1")
 }
 
 func TestDeleteBucketEmpty(t *testing.T) {
@@ -160,23 +129,17 @@ func TestDeleteBucketEmpty(t *testing.T) {
 
 	req, _ := http.NewRequest("DELETE", ts.BucketURL("test-bucket"), nil)
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNoContent {
-		t.Errorf("Expected status 204, got %d", resp.StatusCode)
-	}
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 
 	// Verify bucket is gone
 	headReq, _ := http.NewRequest("HEAD", ts.BucketURL("test-bucket"), nil)
 	headResp, _ := http.DefaultClient.Do(headReq)
 	defer headResp.Body.Close()
 
-	if headResp.StatusCode != http.StatusNotFound {
-		t.Errorf("Expected bucket to be deleted, but HEAD returned %d", headResp.StatusCode)
-	}
+	assert.Equal(t, http.StatusNotFound, headResp.StatusCode)
 }
 
 func TestDeleteBucketNotEmpty(t *testing.T) {
@@ -188,19 +151,14 @@ func TestDeleteBucketNotEmpty(t *testing.T) {
 
 	req, _ := http.NewRequest("DELETE", ts.BucketURL("test-bucket"), nil)
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusConflict {
-		t.Errorf("Expected status 409 Conflict, got %d", resp.StatusCode)
-	}
+	assert := assert.New(t)
+	assert.Equal(http.StatusConflict, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "BucketNotEmpty") {
-		t.Errorf("Expected BucketNotEmpty error, got: %s", body)
-	}
+	assert.Contains(string(body), "BucketNotEmpty")
 }
 
 func TestDeleteBucketNotExists(t *testing.T) {
@@ -209,20 +167,14 @@ func TestDeleteBucketNotExists(t *testing.T) {
 
 	req, _ := http.NewRequest("DELETE", ts.BucketURL("nonexistent"), nil)
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("Expected status 404, got %d", resp.StatusCode)
-	}
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 
 	var errResp s3types.ErrorResponse
 	body, _ := io.ReadAll(resp.Body)
 	xml.Unmarshal(body, &errResp)
 
-	if errResp.Code != "NoSuchBucket" {
-		t.Errorf("Expected NoSuchBucket error code, got: %s", errResp.Code)
-	}
+	assert.Equal(t, "NoSuchBucket", errResp.Code)
 }
