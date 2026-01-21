@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  dirio:
+    build: .
+    container_name: dirio
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./data:/data
+    environment:
+      - DATA_DIR=/data
+      - PORT=9000
+      - ACCESS_KEY=minioadmin
+      - SECRET_KEY=minioadmin
+    restart: unless-stopped

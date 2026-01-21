@@ -1,0 +1,35 @@
+# Binaries
+s3-homelab-server
+s3-homelab-client
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Data directory
+data/
+.data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go workspace file
+go.work
+
+# Vendor directory
+vendor/

@@ -1,0 +1,15 @@
+# DirIO Configuration
+
+# Data directory where buckets and metadata are stored
+data_dir: /data
+
+# Server port
+port: 9000
+
+# Root credentials (default: minioadmin/minioadmin)
+# Change these in production!
+access_key: minioadmin
+secret_key: minioadmin
+
+# Enable debug logging
+debug: false

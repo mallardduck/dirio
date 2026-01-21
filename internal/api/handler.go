@@ -1,0 +1,144 @@
+package api
+
+import (
+	"encoding/xml"
+	"net/http"
+	"strings"
+
+	"github.com/gorilla/mux"
+	"github.com/yourusername/dirio/internal/auth"
+	"github.com/yourusername/dirio/internal/metadata"
+	"github.com/yourusername/dirio/internal/storage"
+	"github.com/yourusername/dirio/pkg/s3types"
+)
+
+// Handler handles S3 API requests
+type Handler struct {
+	storage  *storage.Storage
+	metadata *metadata.Manager
+	auth     *auth.Authenticator
+}
+
+// New creates a new API handler
+func New(storage *storage.Storage, metadata *metadata.Manager, auth *auth.Authenticator) *Handler {
+	return &Handler{
+		storage:  storage,
+		metadata: metadata,
+		auth:     auth,
+	}
+}
+
+// ListBuckets handles GET / (list all buckets)
+func (h *Handler) ListBuckets(w http.ResponseWriter, r *http.Request) {
+	buckets, err := h.storage.ListBuckets()
+	if err != nil {
+		writeErrorResponse(w, s3types.ErrInternalError, err)
+		return
+	}
+
+	response := s3types.ListBucketsResponse{
+		Buckets: buckets,
+		Owner: s3types.Owner{
+			ID:          "root",
+			DisplayName: "root",
+		},
+	}
+
+	writeXMLResponse(w, http.StatusOK, response)
+}
+
+// BucketHandler routes bucket operations based on query params and method
+func (h *Handler) BucketHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	// Check query parameters to determine operation
+	query := r.URL.Query()
+
+	// Handle special query operations
+	if _, ok := query["location"]; ok {
+		h.GetBucketLocation(w, r, bucket)
+		return
+	}
+
+	if query.Get("list-type") == "2" {
+		h.ListObjectsV2(w, r, bucket)
+		return
+	}
+
+	// Handle standard bucket operations
+	switch r.Method {
+	case "GET":
+		h.ListObjects(w, r, bucket)
+	case "PUT":
+		h.CreateBucket(w, r, bucket)
+	case "HEAD":
+		h.HeadBucket(w, r, bucket)
+	case "DELETE":
+		h.DeleteBucket(w, r, bucket)
+	default:
+		writeErrorResponse(w, s3types.ErrMethodNotAllowed, nil)
+	}
+}
+
+// ObjectHandler routes object operations based on method
+func (h *Handler) ObjectHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	key := vars["key"]
+
+	switch r.Method {
+	case "GET":
+		h.GetObject(w, r, bucket, key)
+	case "PUT":
+		h.PutObject(w, r, bucket, key)
+	case "HEAD":
+		h.HeadObject(w, r, bucket, key)
+	case "DELETE":
+		h.DeleteObject(w, r, bucket, key)
+	default:
+		writeErrorResponse(w, s3types.ErrMethodNotAllowed, nil)
+	}
+}
+
+// Helper functions
+
+func writeXMLResponse(w http.ResponseWriter, statusCode int, data interface{}) {
+	w.Header().Set("Content-Type", "application/xml")
+	w.WriteHeader(statusCode)
+	
+	w.Write([]byte(xml.Header))
+	encoder := xml.NewEncoder(w)
+	encoder.Indent("", "  ")
+	encoder.Encode(data)
+}
+
+func writeErrorResponse(w http.ResponseWriter, errCode s3types.ErrorCode, err error) {
+	w.Header().Set("Content-Type", "application/xml")
+	
+	statusCode := errCode.HTTPStatus()
+	w.WriteHeader(statusCode)
+
+	errMsg := errCode.Description()
+	if err != nil {
+		errMsg = err.Error()
+	}
+
+	response := s3types.ErrorResponse{
+		Code:      errCode.String(),
+		Message:   errMsg,
+		RequestID: "TODO", // Generate request ID
+	}
+
+	w.Write([]byte(xml.Header))
+	xml.NewEncoder(w).Encode(response)
+}
+
+func getBucketAndKey(r *http.Request) (bucket, key string) {
+	vars := mux.Vars(r)
+	bucket = vars["bucket"]
+	key = vars["key"]
+	// Remove leading slash if present
+	key = strings.TrimPrefix(key, "/")
+	return
+}
