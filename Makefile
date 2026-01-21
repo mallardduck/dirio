@@ -1,4 +1,4 @@
-.PHONY: build build-client build-all clean test run docker-build docker-run release release-server release-client release-all
+.PHONY: build build-client build-all clean test test-unit test-integration test-coverage run docker-build docker-run release release-server release-client release-all
 
 # Build the server binary using GoReleaser (local snapshot)
 build:
@@ -29,9 +29,22 @@ clean:
 	rm -f dirio-server dirio-client
 	rm -rf data/ dist/
 
-# Run tests
+# Run all tests
 test:
 	go test -v ./...
+
+# Run unit tests only (excludes integration tests)
+test-unit:
+	go test -v ./internal/... ./pkg/...
+
+# Run integration tests only
+test-integration:
+	go test -v ./tests/integration/...
+
+# Run tests with coverage
+test-coverage:
+	go test -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
 
 # Run the server locally
 run:

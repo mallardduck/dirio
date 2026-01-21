@@ -17,9 +17,9 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 - [x] Implement missing storage error types in API handlers
 - [x] Add go.sum file (run `go mod tidy`)
 - [x] Test basic server startup
-- [ ] Test bucket operations (create, list, delete)
-- [ ] Test object operations (put, get, head, delete)
-- [ ] Test ListObjectsV2 with various parameters
+- [x] Test bucket operations (create, list, delete) - Integration tests in `tests/integration/bucket_test.go`
+- [x] Test object operations (put, get, head, delete) - Integration tests in `tests/integration/object_test.go`
+- [x] Test ListObjectsV2 with various parameters - Integration tests in `tests/integration/list_objects_test.go`
 - [x] Add basic logging
 
 ## Phase 1.5: Configuration & Service Discovery
