@@ -14,13 +14,13 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 
 ### Remaining for Phase 1
 - [x] Fix compilation errors
-- [ ] Implement missing storage error types in API handlers
-- [ ] Add go.sum file (run `go mod tidy`)
-- [ ] Test basic server startup
+- [x] Implement missing storage error types in API handlers
+- [x] Add go.sum file (run `go mod tidy`)
+- [x] Test basic server startup
 - [ ] Test bucket operations (create, list, delete)
 - [ ] Test object operations (put, get, head, delete)
 - [ ] Test ListObjectsV2 with various parameters
-- [ ] Add basic logging
+- [x] Add basic logging
 - [ ] Test MinIO import with real data
 
 ## Phase 2: Authentication & Security

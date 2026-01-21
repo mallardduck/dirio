@@ -81,7 +81,8 @@ func (s *Server) setupRoutes() {
 	// Object operations
 	s.router.HandleFunc("/{bucket}/{key:.*}", apiHandler.ObjectHandler).Methods("GET", "PUT", "HEAD", "DELETE")
 
-	// Add authentication middleware
+	// Add middleware
+	s.router.Use(s.loggingMiddleware)
 	s.router.Use(s.authMiddleware)
 }
 
@@ -92,6 +93,27 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 		// For now, just pass through - we'll add this in phase 2
 		next.ServeHTTP(w, r)
 	})
+}
+
+// loggingMiddleware logs incoming HTTP requests
+func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Wrap response writer to capture status code
+		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		next.ServeHTTP(wrapped, r)
+		log.Printf("%s %s %d %s", r.Method, r.URL.Path, wrapped.statusCode, r.RemoteAddr)
+	})
+}
+
+// responseWriter wraps http.ResponseWriter to capture status code
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
 }
 
 // Start begins serving HTTP requests

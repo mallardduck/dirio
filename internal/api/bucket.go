@@ -85,8 +85,16 @@ func (h *Handler) ListObjects(w http.ResponseWriter, r *http.Request, bucket str
 	marker := query.Get("marker")
 	_ = query.Get("max-keys") // TODO: use for pagination
 
-	// TODO: Implement ListObjectsV1
-	// For now, return empty result
+	objects, err := h.storage.ListObjects(bucket, prefix, delimiter, 1000)
+	if err != nil {
+		if err == storage.ErrNoSuchBucket {
+			writeErrorResponse(w, s3types.ErrNoSuchBucket, err)
+			return
+		}
+		writeErrorResponse(w, s3types.ErrInternalError, err)
+		return
+	}
+
 	response := s3types.ListBucketResult{
 		Name:        bucket,
 		Prefix:      prefix,
@@ -94,7 +102,7 @@ func (h *Handler) ListObjects(w http.ResponseWriter, r *http.Request, bucket str
 		Marker:      marker,
 		MaxKeys:     1000,
 		IsTruncated: false,
-		Contents:    []s3types.Object{},
+		Contents:    objects,
 	}
 
 	writeXMLResponse(w, http.StatusOK, response)
