@@ -12,7 +12,7 @@ before:
 builds:
   - id: server
     main: ./cmd/server
-    binary: dirio-server
+    binary: dirio
     env:
       - CGO_ENABLED=0
     goos:

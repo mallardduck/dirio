@@ -26,7 +26,7 @@ release-all:
 
 # Clean build artifacts
 clean:
-	rm -f dirio-server dirio-client
+	rm -f dirio dirio-client
 	rm -rf data/ dist/
 
 # Run all tests
