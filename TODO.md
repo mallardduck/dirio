@@ -89,6 +89,7 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 - [ ] Range requests for GetObject
 - [ ] Copy object
 - [ ] Object tagging
+- [ ] ListObjects pagination (max-keys parameter)
 
 ### Virtual-Hosted-Style Buckets (Future)
 - [ ] Support `bucket.domain.com` style addressing

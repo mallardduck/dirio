@@ -2,6 +2,7 @@ package api
 
 import (
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -35,7 +36,10 @@ func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request, bucket, key 
 
 	// Copy object content to response
 	w.WriteHeader(http.StatusOK)
-	io.Copy(w, obj.Content)
+	if _, err := io.Copy(w, obj.Content); err != nil {
+		// Can't send error response after headers written, but log for debugging
+		slog.Warn("failed to write object content", "bucket", bucket, "key", key, "error", err)
+	}
 }
 
 // PutObject handles PUT /{bucket}/{key}
