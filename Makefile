@@ -1,20 +1,33 @@
-.PHONY: build clean test run docker-build docker-run
+.PHONY: build build-client build-all clean test run docker-build docker-run release release-server release-client release-all
 
-# Build the server binary
+# Build the server binary using GoReleaser (local snapshot)
 build:
-	go build -o dirio-server ./cmd/server
+	goreleaser build --id=server --snapshot --clean --single-target
 
-# Build the client binary
+# Build the client binary using GoReleaser (local snapshot)
 build-client:
-	go build -o dirio-client ./cmd/client
+	goreleaser build --id=client --snapshot --clean --single-target
 
-# Build both binaries
-build-all: build build-client
+# Build both binaries using GoReleaser (local snapshot)
+build-all:
+	goreleaser build --snapshot --clean --single-target
+
+# Build for all platforms (server only)
+release-server:
+	goreleaser build --id=server --snapshot --clean
+
+# Build for all platforms (client only)
+release-client:
+	goreleaser build --id=client --snapshot --clean
+
+# Build for all platforms (both)
+release-all:
+	goreleaser build --snapshot --clean
 
 # Clean build artifacts
 clean:
 	rm -f dirio-server dirio-client
-	rm -rf data/
+	rm -rf data/ dist/
 
 # Run tests
 test:

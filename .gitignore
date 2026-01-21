@@ -6,6 +6,7 @@ s3-homelab-client
 *.dll
 *.so
 *.dylib
+dist/
 
 # Test binary
 *.test
