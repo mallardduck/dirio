@@ -50,9 +50,12 @@ test-coverage:
 run:
 	go run ./cmd/server serve --data-dir ./data --port 9000
 
-# Run the server locally
+# Run the server locally w/ mdns
 run-mdns:
 	go run ./cmd/server serve --mdns-enabled  --data-dir ./data --port 9000
+
+run-mdns-debug:
+	go run ./cmd/server serve --log-level=debug --verbosity=verbose --mdns-enabled  --data-dir ./data --port 9000
 
 # Build Docker image
 docker-build:

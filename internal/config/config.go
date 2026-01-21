@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"sync"
 
 	"github.com/spf13/pflag"
@@ -21,6 +20,7 @@ type Settings struct {
 	// Logging settings
 	LogLevel  string
 	LogFormat string
+	Verbosity string
 	Debug     bool
 
 	// mDNS settings (for future use)
@@ -44,18 +44,25 @@ func (s *Settings) Validate() error {
 		return fmt.Errorf("secret key must be set")
 	}
 
-	// Validate log level
+	// Validate log level (slog levels)
 	validLogLevels := map[string]bool{
-		"trace": true, "debug": true, "info": true,
-		"warn": true, "error": true, "fatal": true,
+		"debug": true, "info": true, "warn": true, "error": true,
 	}
 	if !validLogLevels[s.LogLevel] {
-		return fmt.Errorf("invalid log level: %s (valid: trace, debug, info, warn, error, fatal)", s.LogLevel)
+		return fmt.Errorf("invalid log level: %s (valid: debug, info, warn, error)", s.LogLevel)
 	}
 
 	// Validate log format
 	if s.LogFormat != "text" && s.LogFormat != "json" {
 		return fmt.Errorf("invalid log format: %s (valid: text, json)", s.LogFormat)
+	}
+
+	// Validate verbosity
+	validVerbosities := map[string]bool{
+		"quiet": true, "normal": true, "verbose": true,
+	}
+	if !validVerbosities[s.Verbosity] {
+		return fmt.Errorf("invalid verbosity: %s (valid: quiet, normal, verbose)", s.Verbosity)
 	}
 
 	return nil
@@ -82,6 +89,7 @@ func LoadConfig(flags *pflag.FlagSet, v *viper.Viper) (*Settings, error) {
 		// Logging settings
 		LogLevel:  resolver.Get(LogLevel),
 		LogFormat: resolver.Get(LogFormat),
+		Verbosity: resolver.Get(Verbosity),
 		Debug:     resolver.GetBool(Debug),
 
 		// mDNS settings
@@ -99,9 +107,6 @@ func LoadConfig(flags *pflag.FlagSet, v *viper.Viper) (*Settings, error) {
 	mu.Lock()
 	currentConfig = settings
 	mu.Unlock()
-
-	log.Printf("Configuration loaded: data_dir=%s, port=%d, log_level=%s",
-		settings.DataDir, settings.Port, settings.LogLevel)
 
 	return settings, nil
 }

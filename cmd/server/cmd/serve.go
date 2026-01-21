@@ -2,10 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/mallardduck/dirio/internal/config"
+	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/server"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -36,8 +36,9 @@ func init() {
 	serveCmd.Flags().String(config.SecretKey.GetFlagKey(), config.SecretKey.GetDefaultAsString(), "Root secret key")
 
 	// Logging flags
-	serveCmd.Flags().String(config.LogLevel.GetFlagKey(), config.LogLevel.GetDefaultAsString(), "Log level (trace, debug, info, warn, error, fatal)")
+	serveCmd.Flags().String(config.LogLevel.GetFlagKey(), config.LogLevel.GetDefaultAsString(), "Log level (debug, info, warn, error)")
 	serveCmd.Flags().String(config.LogFormat.GetFlagKey(), config.LogFormat.GetDefaultAsString(), "Log format (text, json)")
+	serveCmd.Flags().String(config.Verbosity.GetFlagKey(), config.Verbosity.GetDefaultAsString(), "Verbosity level (quiet, normal, verbose)")
 	serveCmd.Flags().Bool(config.Debug.GetFlagKey(), false, "Enable debug mode (sets log-level to debug)")
 
 	// mDNS flags
@@ -51,6 +52,7 @@ func init() {
 	viper.BindPFlag(config.SecretKey.GetViperKey(), serveCmd.Flags().Lookup(config.SecretKey.GetFlagKey()))
 	viper.BindPFlag(config.LogLevel.GetViperKey(), serveCmd.Flags().Lookup(config.LogLevel.GetFlagKey()))
 	viper.BindPFlag(config.LogFormat.GetViperKey(), serveCmd.Flags().Lookup(config.LogFormat.GetFlagKey()))
+	viper.BindPFlag(config.Verbosity.GetViperKey(), serveCmd.Flags().Lookup(config.Verbosity.GetFlagKey()))
 	viper.BindPFlag(config.Debug.GetViperKey(), serveCmd.Flags().Lookup(config.Debug.GetFlagKey()))
 	viper.BindPFlag(config.MDNSEnabled.GetViperKey(), serveCmd.Flags().Lookup(config.MDNSEnabled.GetFlagKey()))
 	viper.BindPFlag(config.MDNSName.GetViperKey(), serveCmd.Flags().Lookup(config.MDNSName.GetFlagKey()))
@@ -67,6 +69,16 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if err := settings.Validate(); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
+
+	// Initialize logging
+	logging.Setup(logging.Config{
+		Level:     settings.LogLevel,
+		Format:    settings.LogFormat,
+		Verbosity: settings.Verbosity,
+	})
+
+	log := logging.Component("server")
+	log.Info("logging service setup", "level", settings.LogLevel, "format", settings.LogFormat, "verbosity", settings.Verbosity)
 
 	// Validate data directory exists or can be created
 	if err := validateDataDir(settings.DataDir); err != nil {
@@ -89,8 +101,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create server: %w", err)
 	}
 
-	log.Printf("Starting DirIO server on port %d", settings.Port)
-	log.Printf("Data directory: %s", settings.DataDir)
+	log.Info("starting server", "port", settings.Port, "data_dir", settings.DataDir)
 
 	if err := srv.Start(); err != nil {
 		return fmt.Errorf("server error: %w", err)

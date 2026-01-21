@@ -3,9 +3,11 @@ package storage
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
+	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
@@ -21,6 +23,7 @@ var (
 type Storage struct {
 	dataDir  string
 	metadata *metadata.Manager
+	log      *slog.Logger
 }
 
 // New creates a new storage backend
@@ -33,6 +36,7 @@ func New(dataDir string, metadata *metadata.Manager) (*Storage, error) {
 	return &Storage{
 		dataDir:  dataDir,
 		metadata: metadata,
+		log:      logging.Component("storage"),
 	}, nil
 }
 

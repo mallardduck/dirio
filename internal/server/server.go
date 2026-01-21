@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/mallardduck/dirio/internal/api"
 	"github.com/mallardduck/dirio/internal/auth"
+	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/mdns"
 	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/internal/storage"
@@ -38,10 +39,13 @@ type Server struct {
 	metadata *metadata.Manager
 	auth     *auth.Authenticator
 	mdns     *mdns.Service
+	log      *slog.Logger
 }
 
 // New creates a new server instance
 func New(config *Config) (*Server, error) {
+	log := logging.Component("server")
+
 	// Initialize metadata manager
 	metaMgr, err := metadata.New(config.DataDir)
 	if err != nil {
@@ -50,7 +54,7 @@ func New(config *Config) (*Server, error) {
 
 	// Check for MinIO migration
 	if err := metaMgr.CheckAndImportMinIO(); err != nil {
-		log.Printf("Warning: MinIO import failed: %v", err)
+		log.Warn("minio import failed", "error", err)
 	}
 
 	// Initialize storage backend
@@ -68,6 +72,7 @@ func New(config *Config) (*Server, error) {
 		storage:  store,
 		metadata: metaMgr,
 		auth:     authenticator,
+		log:      log,
 	}
 
 	// Setup routes
@@ -112,7 +117,12 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 		// Wrap response writer to capture status code
 		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		next.ServeHTTP(wrapped, r)
-		log.Printf("%s %s %d %s", r.Method, r.URL.Path, wrapped.statusCode, r.RemoteAddr)
+		s.log.Info("request handled",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", wrapped.statusCode,
+			"remote", r.RemoteAddr,
+		)
 	})
 }
 
@@ -155,7 +165,7 @@ func (s *Server) Start() error {
 			return fmt.Errorf("failed to start mDNS service: %w", err)
 		}
 		s.mdns = mdnsSvc
-		log.Printf("mDNS service started: %s.local", s.config.MDNSName)
+		s.log.Info("mdns service started", "host", s.config.MDNSName+".local")
 	}
 
 	// Channel to receive server errors
@@ -163,7 +173,7 @@ func (s *Server) Start() error {
 
 	// Start HTTP server in a goroutine
 	go func() {
-		log.Printf("Server listening on %s", addr)
+		s.log.Info("server listening", "addr", addr)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			serverErr <- err
 		}
@@ -180,7 +190,7 @@ func (s *Server) Start() error {
 		s.shutdown()
 		return err
 	case sig := <-sigChan:
-		log.Printf("Received signal %v, initiating graceful shutdown...", sig)
+		s.log.Info("received signal, initiating graceful shutdown", "signal", sig)
 	}
 
 	// Graceful shutdown with timeout
@@ -189,13 +199,13 @@ func (s *Server) Start() error {
 
 	// Stop accepting new connections and drain existing ones
 	if err := httpServer.Shutdown(ctx); err != nil {
-		log.Printf("HTTP server shutdown error: %v", err)
+		s.log.Error("http server shutdown error", "error", err)
 	}
 
 	// Stop mDNS service
 	s.shutdown()
 
-	log.Printf("Server stopped gracefully")
+	s.log.Info("server stopped gracefully")
 	return nil
 }
 
@@ -203,7 +213,7 @@ func (s *Server) Start() error {
 func (s *Server) shutdown() {
 	if s.mdns != nil {
 		if err := s.mdns.Stop(); err != nil {
-			log.Printf("mDNS shutdown error: %v", err)
+			s.log.Error("mdns shutdown error", "error", err)
 		}
 		s.mdns = nil
 	}

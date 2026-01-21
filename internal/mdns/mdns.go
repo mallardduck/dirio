@@ -2,17 +2,19 @@ package mdns
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"os"
 
 	"github.com/hashicorp/mdns"
+	"github.com/mallardduck/dirio/internal/logging"
 )
 
 // Service represents an mDNS service registration for DirIO.
 type Service struct {
 	server *mdns.Server
 	config *Config
+	log    *slog.Logger
 }
 
 // Config holds configuration for mDNS service registration.
@@ -44,6 +46,7 @@ func New(cfg *Config) (*Service, error) {
 
 	return &Service{
 		config: cfg,
+		log:    logging.Component("mdns"),
 	}, nil
 }
 
@@ -97,16 +100,26 @@ func (s *Service) Start() error {
 		return fmt.Errorf("failed to create mDNS service: %w", err)
 	}
 
+	// Create mDNS server config with verbosity-aware logging
+	// In quiet mode, suppress noisy error messages from malformed packets
+	serverConfig := &mdns.Config{
+		Zone:   service,
+		Logger: logging.StdLogger("mdns"),
+	}
+
 	// Create and start the server
-	server, err := mdns.NewServer(&mdns.Config{Zone: service})
+	server, err := mdns.NewServer(serverConfig)
 	if err != nil {
 		return fmt.Errorf("failed to start mDNS server: %w", err)
 	}
 
 	s.server = server
 
-	log.Printf("mDNS service registered: %s.local -> %v:%d",
-		s.config.ServiceName, ips, s.config.Port)
+	s.log.Info("mdns service registered",
+		"host", s.config.ServiceName+".local",
+		"ips", ips,
+		"port", s.config.Port,
+	)
 
 	return nil
 }
@@ -117,7 +130,7 @@ func (s *Service) Stop() error {
 		return nil
 	}
 
-	log.Printf("Stopping mDNS service: %s.local", s.config.ServiceName)
+	s.log.Info("stopping mdns service", "host", s.config.ServiceName+".local")
 
 	err := s.server.Shutdown()
 	s.server = nil

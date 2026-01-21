@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -132,7 +131,7 @@ func (s *Storage) PutObject(bucket, key string, content io.Reader, contentType s
 	if err := s.metadata.PutObjectMetadata(bucket, key, meta); err != nil {
 		// Log error but don't fail the operation
 		// Metadata can be regenerated if needed
-		log.Printf("Warning: failed to save object metadata: %v", err)
+		s.log.Warn("failed to save object metadata", "bucket", bucket, "key", key, "error", err)
 	}
 
 	return etag, nil

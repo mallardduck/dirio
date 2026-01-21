@@ -21,11 +21,14 @@ var (
 
 // Logging configuration options
 var (
-	// LogLevel controls the application log verbosity
+	// LogLevel controls the application log level (debug, info, warn, error)
 	LogLevel = option.NewOption("log-level", "info")
 
 	// LogFormat controls the log output format (text, json)
 	LogFormat = option.NewOption("log-format", "text")
+
+	// Verbosity controls component chattiness (quiet, normal, verbose)
+	Verbosity = option.NewOption("verbosity", "normal")
 
 	// Debug enables debug mode (shortcut for log-level=debug)
 	Debug = option.NewOption("debug", false)
