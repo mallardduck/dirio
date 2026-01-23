@@ -111,7 +111,7 @@ func (s *Server) setupRoutes() {
 	// Add middleware (trace ID first, then request ID, then logging, then auth)
 	s.router.Use(middleware.TraceID)
 	s.router.Use(middleware.RequestID)
-	s.router.Use(loggingHttp.PrepareLoggingMiddleware(s.log))
+	s.router.Use(loggingHttp.PrepareAccessLogMiddleware(s.log))
 	s.router.Use(s.authMiddleware)
 }
 

@@ -42,8 +42,8 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.ResponseWriter.WriteHeader(code)
 }
 
-// PrepareLoggingMiddleware builds a logging middleware instance using the provided logger
-func PrepareLoggingMiddleware(serverLogger *slog.Logger) func(next http.Handler) http.Handler {
+// PrepareAccessLogMiddleware builds a logging middleware instance using the provided logger
+func PrepareAccessLogMiddleware(serverLogger *slog.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Initialize the metadata container
