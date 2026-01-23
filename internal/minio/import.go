@@ -3,9 +3,13 @@ package minio
 import (
 	"encoding/json"
 	"fmt"
-	"os"
+	"io/fs"
 	"path/filepath"
+	"strings"
 	"time"
+
+	"github.com/go-git/go-billy/v5"
+	"github.com/go-git/go-billy/v5/util"
 )
 
 // ImportResult contains the results of a MinIO import operation
@@ -15,16 +19,16 @@ type ImportResult struct {
 	Policies map[string]*Policy
 }
 
-// Import reads MinIO data from the specified directory and returns parsed data.
+// Import reads MinIO data from the specified filesystem and returns parsed data.
 // This is a read-only operation - it does not modify DirIO metadata.
 //
 // The import process:
 // 1. Validates format.json (must be single-node FS mode)
-// 2. Reads users from .minio.sys/config/iam/users/
-// 3. Reads bucket metadata from .minio.sys/buckets/
-func Import(dataDir string) (*ImportResult, error) {
+// 2. Reads users from config/iam/users/
+// 3. Reads bucket metadata from buckets/
+func Import(minioFS billy.Filesystem) (*ImportResult, error) {
 	// First check: validate format
-	if err := ValidateFormat(dataDir); err != nil {
+	if err := ValidateFormat(minioFS); err != nil {
 		return nil, fmt.Errorf("format validation failed: %w", err)
 	}
 
@@ -35,22 +39,22 @@ func Import(dataDir string) (*ImportResult, error) {
 	}
 
 	// Import policies first
-	if err := importPolicies(dataDir, result.Policies); err != nil {
+	if err := importPolicies(minioFS, result.Policies); err != nil {
 		return nil, fmt.Errorf("failed to import policies: %w", err)
 	}
 
 	// Import users
-	if err := importUsers(dataDir, result.Users); err != nil {
+	if err := importUsers(minioFS, result.Users); err != nil {
 		return nil, fmt.Errorf("failed to import users: %w", err)
 	}
 
 	// Attach policies to users
-	if err := importUserPolicyMappings(dataDir, result.Users); err != nil {
+	if err := importUserPolicyMappings(minioFS, result.Users); err != nil {
 		return nil, fmt.Errorf("failed to import user-policy mappings: %w", err)
 	}
 
 	// Import buckets
-	if err := importBuckets(dataDir, result.Buckets); err != nil {
+	if err := importBuckets(minioFS, result.Buckets); err != nil {
 		return nil, fmt.Errorf("failed to import buckets: %w", err)
 	}
 
@@ -58,14 +62,17 @@ func Import(dataDir string) (*ImportResult, error) {
 }
 
 // importUsers reads MinIO IAM users
-func importUsers(dataDir string, users map[string]*User) error {
-	usersDir := filepath.Join(dataDir, ".minio.sys", "config", "iam", "users")
+func importUsers(minioFS billy.Filesystem, users map[string]*User) error {
+	usersDir := filepath.Join("config", "iam", "users")
 
-	if _, err := os.Stat(usersDir); os.IsNotExist(err) {
-		return nil // No users to import
+	if _, err := minioFS.Stat(usersDir); err != nil {
+		if isNotExist(err) {
+			return nil // No users to import
+		}
+		return err
 	}
 
-	entries, err := os.ReadDir(usersDir)
+	entries, err := minioFS.ReadDir(usersDir)
 	if err != nil {
 		return err
 	}
@@ -79,7 +86,7 @@ func importUsers(dataDir string, users map[string]*User) error {
 		identityPath := filepath.Join(usersDir, username, "identity.json")
 
 		// Read identity.json
-		data, err := os.ReadFile(identityPath)
+		data, err := util.ReadFile(minioFS, identityPath)
 		if err != nil {
 			fmt.Printf("Warning: failed to read identity for user %s: %v\n", username, err)
 			continue
@@ -106,14 +113,17 @@ func importUsers(dataDir string, users map[string]*User) error {
 }
 
 // importPolicies reads MinIO IAM policies
-func importPolicies(dataDir string, policies map[string]*Policy) error {
-	policiesDir := filepath.Join(dataDir, ".minio.sys", "config", "iam", "policies")
+func importPolicies(minioFS billy.Filesystem, policies map[string]*Policy) error {
+	policiesDir := filepath.Join("config", "iam", "policies")
 
-	if _, err := os.Stat(policiesDir); os.IsNotExist(err) {
-		return nil // No policies to import
+	if _, err := minioFS.Stat(policiesDir); err != nil {
+		if isNotExist(err) {
+			return nil // No policies to import
+		}
+		return err
 	}
 
-	entries, err := os.ReadDir(policiesDir)
+	entries, err := minioFS.ReadDir(policiesDir)
 	if err != nil {
 		return err
 	}
@@ -127,7 +137,7 @@ func importPolicies(dataDir string, policies map[string]*Policy) error {
 		policyPath := filepath.Join(policiesDir, policyName, "policy.json")
 
 		// Read policy.json
-		data, err := os.ReadFile(policyPath)
+		data, err := util.ReadFile(minioFS, policyPath)
 		if err != nil {
 			fmt.Printf("Warning: failed to read policy %s: %v\n", policyName, err)
 			continue
@@ -160,14 +170,17 @@ func importPolicies(dataDir string, policies map[string]*Policy) error {
 }
 
 // importUserPolicyMappings reads user-policy mappings and attaches them to users
-func importUserPolicyMappings(dataDir string, users map[string]*User) error {
-	policydbDir := filepath.Join(dataDir, ".minio.sys", "config", "iam", "policydb", "users")
+func importUserPolicyMappings(minioFS billy.Filesystem, users map[string]*User) error {
+	policydbDir := filepath.Join("config", "iam", "policydb", "users")
 
-	if _, err := os.Stat(policydbDir); os.IsNotExist(err) {
-		return nil // No user-policy mappings
+	if _, err := minioFS.Stat(policydbDir); err != nil {
+		if isNotExist(err) {
+			return nil // No user-policy mappings
+		}
+		return err
 	}
 
-	entries, err := os.ReadDir(policydbDir)
+	entries, err := minioFS.ReadDir(policydbDir)
 	if err != nil {
 		return err
 	}
@@ -186,7 +199,7 @@ func importUserPolicyMappings(dataDir string, users map[string]*User) error {
 		mappingPath := filepath.Join(policydbDir, filename)
 
 		// Read user policy mapping
-		data, err := os.ReadFile(mappingPath)
+		data, err := util.ReadFile(minioFS, mappingPath)
 		if err != nil {
 			fmt.Printf("Warning: failed to read policy mapping for %s: %v\n", username, err)
 			continue
@@ -209,14 +222,17 @@ func importUserPolicyMappings(dataDir string, users map[string]*User) error {
 }
 
 // importBuckets reads MinIO bucket metadata
-func importBuckets(dataDir string, buckets map[string]*Bucket) error {
-	bucketsMetaDir := filepath.Join(dataDir, ".minio.sys", "buckets")
+func importBuckets(minioFS billy.Filesystem, buckets map[string]*Bucket) error {
+	bucketsMetaDir := "buckets"
 
-	if _, err := os.Stat(bucketsMetaDir); os.IsNotExist(err) {
-		return nil // No buckets to import
+	if _, err := minioFS.Stat(bucketsMetaDir); err != nil {
+		if isNotExist(err) {
+			return nil // No buckets to import
+		}
+		return err
 	}
 
-	entries, err := os.ReadDir(bucketsMetaDir)
+	entries, err := minioFS.ReadDir(bucketsMetaDir)
 	if err != nil {
 		return err
 	}
@@ -233,20 +249,27 @@ func importBuckets(dataDir string, buckets map[string]*Bucket) error {
 		metadataPath := filepath.Join(bucketsMetaDir, bucketName, ".metadata.bin")
 
 		// Check if metadata file exists
-		if _, err := os.Stat(metadataPath); os.IsNotExist(err) {
-			// Create basic bucket info
-			buckets[bucketName] = &Bucket{
-				Name:    bucketName,
-				Owner:   "root",
-				Created: time.Now(),
+		if _, err := minioFS.Stat(metadataPath); err != nil {
+			if isNotExist(err) {
+				// Create basic bucket info
+				buckets[bucketName] = &Bucket{
+					Name:    bucketName,
+					Owner:   "root",
+					Created: time.Now(),
+				}
+				fmt.Printf("Found MinIO bucket (no metadata): %s\n", bucketName)
+				continue
 			}
-			fmt.Printf("Found MinIO bucket (no metadata): %s\n", bucketName)
-			continue
+			return err
 		}
 
 		// Read and parse MinIO metadata
+		readFileFunc := func(path string) ([]byte, error) {
+			return util.ReadFile(minioFS, path)
+		}
+
 		var minioMeta *BucketMetadata
-		if minioMeta, err = readLegacyBucketMetadata(bucketName, os.ReadFile); err != nil {
+		if minioMeta, err = readLegacyBucketMetadata(bucketName, readFileFunc); err != nil {
 			fmt.Printf("Warning: failed to parse metadata for bucket %s: %v\n", bucketName, err)
 			continue
 		}
@@ -263,4 +286,19 @@ func importBuckets(dataDir string, buckets map[string]*Bucket) error {
 	}
 
 	return nil
+}
+
+// isNotExist checks if an error is a "not exist" error
+func isNotExist(err error) bool {
+	if err == nil {
+		return false
+	}
+	if err == fs.ErrNotExist {
+		return true
+	}
+	// Check for common "not exist" error messages from different filesystem implementations
+	errMsg := err.Error()
+	return errMsg == "file does not exist" ||
+		strings.Contains(errMsg, "no such file or directory") ||
+		strings.Contains(errMsg, "does not exist")
 }

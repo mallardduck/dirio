@@ -5,11 +5,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/go-git/go-billy/v5"
 	"github.com/mallardduck/dirio/internal/metadata"
+	"github.com/mallardduck/dirio/internal/path"
 )
 
 // Object represents an S3 object with content
@@ -31,14 +32,26 @@ func (s *Storage) GetObject(bucket, key string) (*Object, error) {
 		return nil, ErrNoSuchBucket
 	}
 
-	objectPath := s.objectPath(bucket, key)
+	// Validate key for path safety
+	if err := path.ValidatePathSafe(key); err != nil {
+		return nil, fmt.Errorf("invalid key: %w", err)
+	}
+
+	// Get bucket filesystem
+	bucketFS, err := path.NewBucketFS(s.rootFS, bucket)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert S3 key to filesystem path
+	objectPath := filepath.FromSlash(key)
 
 	// Check if object exists
-	info, err := os.Stat(objectPath)
-	if os.IsNotExist(err) {
-		return nil, ErrNoSuchKey
-	}
+	info, err := bucketFS.Stat(objectPath)
 	if err != nil {
+		if isNotExist(err) {
+			return nil, ErrNoSuchKey
+		}
 		return nil, err
 	}
 	if info.IsDir() {
@@ -46,7 +59,7 @@ func (s *Storage) GetObject(bucket, key string) (*Object, error) {
 	}
 
 	// Open file for reading
-	file, err := os.Open(objectPath)
+	file, err := bucketFS.Open(objectPath)
 	if err != nil {
 		return nil, err
 	}
@@ -55,11 +68,12 @@ func (s *Storage) GetObject(bucket, key string) (*Object, error) {
 	meta, err := s.metadata.GetObjectMetadata(bucket, key)
 	if err != nil {
 		// If no metadata, create basic metadata
+		etag := s.calculateETag(bucketFS, objectPath)
 		meta = &metadata.ObjectMetadata{
 			ContentType:  "application/octet-stream",
 			Size:         info.Size(),
 			LastModified: info.ModTime(),
-			ETag:         calculateETag(objectPath),
+			ETag:         etag,
 		}
 	}
 
@@ -82,21 +96,41 @@ func (s *Storage) PutObject(bucket, key string, content io.Reader, contentType s
 		return "", ErrNoSuchBucket
 	}
 
-	objectPath := s.objectPath(bucket, key)
+	// Validate key for path safety
+	if err := path.ValidatePathSafe(key); err != nil {
+		return "", fmt.Errorf("invalid key: %w", err)
+	}
+
+	// Get bucket filesystem
+	bucketFS, err := path.NewBucketFS(s.rootFS, bucket)
+	if err != nil {
+		return "", err
+	}
+
+	// Convert S3 key to filesystem path
+	objectPath := filepath.FromSlash(key)
 
 	// Create parent directories
 	dir := filepath.Dir(objectPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create directory: %w", err)
+	if dir != "." && dir != "" {
+		if err := bucketFS.MkdirAll(dir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create directory: %w", err)
+		}
 	}
 
-	// Create temporary file
-	tmpFile, err := os.CreateTemp(dir, ".tmp-*")
+	// Create temporary file in the same directory for atomic rename
+	// Use a generated name instead of TempFile to avoid path issues with scoped filesystems
+	tmpName := fmt.Sprintf(".tmp-%d", time.Now().UnixNano())
+	tmpPath := filepath.Join(dir, tmpName)
+	if dir == "." || dir == "" {
+		tmpPath = tmpName
+	}
+
+	tmpFile, err := bucketFS.Create(tmpPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
-	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath) // Cleanup on failure
+	defer bucketFS.Remove(tmpPath) // Cleanup on failure
 
 	// Calculate MD5 hash while writing
 	hash := md5.New()
@@ -117,7 +151,7 @@ func (s *Storage) PutObject(bucket, key string, content io.Reader, contentType s
 	etag := `"` + hex.EncodeToString(hash.Sum(nil)) + `"`
 
 	// Atomically rename temp file to final location
-	if err := os.Rename(tmpPath, objectPath); err != nil {
+	if err := bucketFS.Rename(tmpPath, objectPath); err != nil {
 		return "", fmt.Errorf("failed to rename object: %w", err)
 	}
 
@@ -146,14 +180,26 @@ func (s *Storage) GetObjectMetadata(bucket, key string) (*metadata.ObjectMetadat
 		return nil, ErrNoSuchBucket
 	}
 
-	objectPath := s.objectPath(bucket, key)
+	// Validate key for path safety
+	if err := path.ValidatePathSafe(key); err != nil {
+		return nil, fmt.Errorf("invalid key: %w", err)
+	}
+
+	// Get bucket filesystem
+	bucketFS, err := path.NewBucketFS(s.rootFS, bucket)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert S3 key to filesystem path
+	objectPath := filepath.FromSlash(key)
 
 	// Check if object exists
-	info, err := os.Stat(objectPath)
-	if os.IsNotExist(err) {
-		return nil, ErrNoSuchKey
-	}
+	info, err := bucketFS.Stat(objectPath)
 	if err != nil {
+		if isNotExist(err) {
+			return nil, ErrNoSuchKey
+		}
 		return nil, err
 	}
 	if info.IsDir() {
@@ -164,11 +210,12 @@ func (s *Storage) GetObjectMetadata(bucket, key string) (*metadata.ObjectMetadat
 	meta, err := s.metadata.GetObjectMetadata(bucket, key)
 	if err != nil {
 		// If no metadata, create basic metadata
+		etag := s.calculateETag(bucketFS, objectPath)
 		meta = &metadata.ObjectMetadata{
 			ContentType:  "application/octet-stream",
 			Size:         info.Size(),
 			LastModified: info.ModTime(),
-			ETag:         calculateETag(objectPath),
+			ETag:         etag,
 		}
 	}
 
@@ -184,14 +231,26 @@ func (s *Storage) DeleteObject(bucket, key string) error {
 		return ErrNoSuchBucket
 	}
 
-	objectPath := s.objectPath(bucket, key)
+	// Validate key for path safety
+	if err := path.ValidatePathSafe(key); err != nil {
+		return fmt.Errorf("invalid key: %w", err)
+	}
+
+	// Get bucket filesystem
+	bucketFS, err := path.NewBucketFS(s.rootFS, bucket)
+	if err != nil {
+		return err
+	}
+
+	// Convert S3 key to filesystem path
+	objectPath := filepath.FromSlash(key)
 
 	// Check if object exists
-	info, err := os.Stat(objectPath)
-	if os.IsNotExist(err) {
-		return ErrNoSuchKey
-	}
+	info, err := bucketFS.Stat(objectPath)
 	if err != nil {
+		if isNotExist(err) {
+			return ErrNoSuchKey
+		}
 		return err
 	}
 	if info.IsDir() {
@@ -199,7 +258,7 @@ func (s *Storage) DeleteObject(bucket, key string) error {
 	}
 
 	// Delete the file
-	if err := os.Remove(objectPath); err != nil {
+	if err := bucketFS.Remove(objectPath); err != nil {
 		return err
 	}
 
@@ -207,26 +266,26 @@ func (s *Storage) DeleteObject(bucket, key string) error {
 	s.metadata.DeleteObjectMetadata(bucket, key)
 
 	// Clean up empty parent directories
-	s.cleanupEmptyDirs(filepath.Dir(objectPath), s.bucketPath(bucket))
+	s.cleanupEmptyDirs(bucketFS, filepath.Dir(objectPath))
 
 	return nil
 }
 
 // cleanupEmptyDirs removes empty directories up to the bucket root
-func (s *Storage) cleanupEmptyDirs(dir, stopAt string) {
-	for dir != stopAt {
-		entries, err := os.ReadDir(dir)
+func (s *Storage) cleanupEmptyDirs(bucketFS billy.Filesystem, dir string) {
+	for dir != "." && dir != "" && dir != "/" {
+		entries, err := bucketFS.ReadDir(dir)
 		if err != nil || len(entries) > 0 {
 			break
 		}
-		os.Remove(dir)
+		bucketFS.Remove(dir)
 		dir = filepath.Dir(dir)
 	}
 }
 
 // calculateETag computes the ETag for a file
-func calculateETag(path string) string {
-	file, err := os.Open(path)
+func (s *Storage) calculateETag(bucketFS billy.Filesystem, path string) string {
+	file, err := bucketFS.Open(path)
 	if err != nil {
 		return ""
 	}

@@ -12,6 +12,12 @@ import (
 
 // GetObject handles GET /{bucket}/{key}
 func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request, bucket, key, requestID string) {
+	// Validate key according to S3 naming rules
+	if err := ValidateS3Key(key); err != nil {
+		writeErrorResponse(w, requestID, s3types.ErrInvalidObjectKey, err)
+		return
+	}
+
 	obj, err := h.storage.GetObject(bucket, key)
 	if err != nil {
 		if err == storage.ErrNoSuchKey {
@@ -45,6 +51,12 @@ func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request, bucket, key,
 
 // PutObject handles PUT /{bucket}/{key}
 func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request, bucket, key, requestID string) {
+	// Validate key according to S3 naming rules
+	if err := ValidateS3Key(key); err != nil {
+		writeErrorResponse(w, requestID, s3types.ErrInvalidObjectKey, err)
+		return
+	}
+
 	contentType := r.Header.Get("Content-Type")
 	if contentType == "" {
 		contentType = "application/octet-stream"
@@ -68,6 +80,12 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request, bucket, key,
 
 // HeadObject handles HEAD /{bucket}/{key}
 func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request, bucket, key, requestID string) {
+	// Validate key according to S3 naming rules
+	if err := ValidateS3Key(key); err != nil {
+		writeErrorResponse(w, requestID, s3types.ErrInvalidObjectKey, err)
+		return
+	}
+
 	meta, err := h.storage.GetObjectMetadata(bucket, key)
 	if err != nil {
 		if err == storage.ErrNoSuchKey {
@@ -94,6 +112,12 @@ func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request, bucket, key
 
 // DeleteObject handles DELETE /{bucket}/{key}
 func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request, bucket, key, requestID string) {
+	// Validate key according to S3 naming rules
+	if err := ValidateS3Key(key); err != nil {
+		writeErrorResponse(w, requestID, s3types.ErrInvalidObjectKey, err)
+		return
+	}
+
 	err := h.storage.DeleteObject(bucket, key)
 	if err != nil {
 		// S3 returns 204 even if object doesn't exist

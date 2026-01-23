@@ -18,6 +18,7 @@ import (
 	"github.com/mallardduck/dirio/internal/mdns"
 	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/internal/middleware"
+	"github.com/mallardduck/dirio/internal/path"
 	"github.com/mallardduck/dirio/internal/storage"
 	"github.com/mallardduck/dirio/internal/urlbuilder"
 )
@@ -54,8 +55,14 @@ type Server struct {
 func New(config *Config) (*Server, error) {
 	log := logging.Component("server")
 
+	// Create root filesystem with chroot protection
+	rootFS, err := path.NewRootFS(config.DataDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create root filesystem: %w", err)
+	}
+
 	// Initialize metadata manager
-	metaMgr, err := metadata.New(config.DataDir)
+	metaMgr, err := metadata.New(rootFS)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize metadata: %w", err)
 	}
@@ -66,7 +73,7 @@ func New(config *Config) (*Server, error) {
 	}
 
 	// Initialize storage backend
-	store, err := storage.New(config.DataDir, metaMgr)
+	store, err := storage.New(rootFS, metaMgr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize storage: %w", err)
 	}

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +23,9 @@ func TestImport_EmptyDirectory(t *testing.T) {
 	formatJSON := `{"version":"1","format":"fs","id":"test-fs","fs":{"version":"2"}}`
 	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0644))
 
-	result, err := Import(tmpDir)
+	// Create billy filesystem scoped to .minio.sys directory
+	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	result, err := Import(minioFS)
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Empty(t, result.Users)
@@ -57,7 +60,9 @@ func TestImport_WithUsers(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(usersDir, "identity.json"), identityJSON, 0644))
 
-	result, err := Import(tmpDir)
+	// Create billy filesystem scoped to .minio.sys directory
+	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	result, err := Import(minioFS)
 	require.NoError(t, err)
 	assert.Len(t, result.Users, 1)
 	assert.Contains(t, result.Users, "testuser")
@@ -103,7 +108,9 @@ func TestImport_WithPolicies(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(policiesDir, "policy.json"), policyJSON, 0644))
 
-	result, err := Import(tmpDir)
+	// Create billy filesystem scoped to .minio.sys directory
+	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	result, err := Import(minioFS)
 	require.NoError(t, err)
 	assert.Len(t, result.Policies, 1)
 	assert.Contains(t, result.Policies, "test-policy")
@@ -150,7 +157,9 @@ func TestImport_WithUserPolicyMappings(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(policydbDir, "alice.json"), mappingJSON, 0644))
 
-	result, err := Import(tmpDir)
+	// Create billy filesystem scoped to .minio.sys directory
+	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	result, err := Import(minioFS)
 	require.NoError(t, err)
 	assert.Len(t, result.Users, 1)
 
@@ -172,7 +181,9 @@ func TestImport_WithBucketsNoMetadata(t *testing.T) {
 	bucketsDir := filepath.Join(minioSys, "buckets", "test-bucket")
 	require.NoError(t, os.MkdirAll(bucketsDir, 0755))
 
-	result, err := Import(tmpDir)
+	// Create billy filesystem scoped to .minio.sys directory
+	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	result, err := Import(minioFS)
 	require.NoError(t, err)
 	assert.Len(t, result.Buckets, 1)
 	assert.Contains(t, result.Buckets, "test-bucket")
@@ -192,7 +203,9 @@ func TestImport_InvalidFormat(t *testing.T) {
 	formatJSON := `{"version":"1","format":"erasure","id":"test-erasure"}`
 	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0644))
 
-	_, err := Import(tmpDir)
+	// Create billy filesystem scoped to .minio.sys directory
+	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	_, err := Import(minioFS)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "format validation failed")
 }
@@ -201,7 +214,9 @@ func TestImport_InvalidFormat(t *testing.T) {
 func TestImport_MissingFormatFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	_, err := Import(tmpDir)
+	// Create billy filesystem scoped to .minio.sys directory
+	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	_, err := Import(minioFS)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "format validation failed")
 }
@@ -277,7 +292,9 @@ func TestImport_CompleteSetup(t *testing.T) {
 	}
 
 	// Run import
-	result, err := Import(tmpDir)
+	// Create billy filesystem scoped to .minio.sys directory
+	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	result, err := Import(minioFS)
 	require.NoError(t, err)
 
 	// Verify users

@@ -9,6 +9,12 @@ import (
 
 // CreateBucket handles PUT /{bucket}
 func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request, bucket, requestID string) {
+	// Validate bucket name according to S3 naming rules
+	if err := ValidateS3BucketName(bucket); err != nil {
+		writeErrorResponse(w, requestID, s3types.ErrInvalidBucketName, err)
+		return
+	}
+
 	// TODO: Parse bucket configuration from request body if present
 
 	if err := h.storage.CreateBucket(bucket); err != nil {

@@ -3,11 +3,11 @@ package metadata
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
+	"github.com/go-git/go-billy/v5/util"
 	"github.com/mallardduck/dirio/internal/minio"
+	"github.com/mallardduck/dirio/internal/path"
 )
 
 // ImportState tracks MinIO import status
@@ -21,8 +21,11 @@ type ImportState struct {
 // CheckAndImportMinIO checks for MinIO data and imports if needed
 func (m *Manager) CheckAndImportMinIO() error {
 	// Check if .minio.sys exists
-	if _, err := os.Stat(m.minioSysDir); os.IsNotExist(err) {
-		return nil // No MinIO data to import
+	if _, err := m.rootFS.Stat(path.MinIODir); err != nil {
+		if isNotExist(err) {
+			return nil // No MinIO data to import
+		}
+		return err
 	}
 
 	// Check import state
@@ -43,7 +46,13 @@ func (m *Manager) CheckAndImportMinIO() error {
 	// Perform import using minio package
 	fmt.Println("Detected MinIO data. Starting import...")
 
-	result, err := minio.Import(m.dataDir)
+	// Get MinIO filesystem
+	minioFS, err := path.NewMinIOFS(m.rootFS)
+	if err != nil {
+		return fmt.Errorf("failed to create MinIO filesystem: %w", err)
+	}
+
+	result, err := minio.Import(minioFS)
 	if err != nil {
 		return fmt.Errorf("MinIO import failed: %w", err)
 	}
@@ -117,13 +126,11 @@ func (m *Manager) CheckAndImportMinIO() error {
 
 // getImportState retrieves the import state
 func (m *Manager) getImportState() (*ImportState, error) {
-	statePath := filepath.Join(m.metadataDir, ".import-state")
-
-	data, err := os.ReadFile(statePath)
-	if os.IsNotExist(err) {
-		return &ImportState{}, nil
-	}
+	data, err := util.ReadFile(m.metadataFS, ".import-state")
 	if err != nil {
+		if isNotExist(err) {
+			return &ImportState{}, nil
+		}
 		return nil, err
 	}
 
@@ -137,19 +144,17 @@ func (m *Manager) getImportState() (*ImportState, error) {
 
 // saveImportState saves the import state
 func (m *Manager) saveImportState(state *ImportState) error {
-	statePath := filepath.Join(m.metadataDir, ".import-state")
-
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(statePath, data, 0644)
+	return util.WriteFile(m.metadataFS, ".import-state", data, 0644)
 }
 
 // getMinIOModTime gets the last modification time of MinIO data
 func (m *Manager) getMinIOModTime() (time.Time, error) {
-	info, err := os.Stat(m.minioSysDir)
+	info, err := m.rootFS.Stat(path.MinIODir)
 	if err != nil {
 		return time.Time{}, err
 	}

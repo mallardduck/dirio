@@ -3,8 +3,9 @@ package minio
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
+
+	"github.com/go-git/go-billy/v5"
+	"github.com/go-git/go-billy/v5/util"
 )
 
 // FormatInfo represents MinIO's format.json structure
@@ -34,12 +35,12 @@ type XLFormatInfo struct {
 // - format.json doesn't exist
 // - format is not "fs" (filesystem mode)
 // - format is erasure coded or distributed
-func ValidateFormat(dataDir string) error {
-	formatPath := filepath.Join(dataDir, ".minio.sys", "format.json")
+func ValidateFormat(minioFS billy.Filesystem) error {
+	formatPath := "format.json"
 
-	data, err := os.ReadFile(formatPath)
+	data, err := util.ReadFile(minioFS, formatPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if isNotExist(err) {
 			return fmt.Errorf("format.json not found - not a valid MinIO data directory")
 		}
 		return fmt.Errorf("failed to read format.json: %w", err)

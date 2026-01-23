@@ -3,18 +3,19 @@ package metadata
 import (
 	"encoding/json"
 	"fmt"
-	"os"
+	"io/fs"
 	"path/filepath"
 	"time"
+
+	"github.com/go-git/go-billy/v5"
+	"github.com/go-git/go-billy/v5/util"
+	"github.com/mallardduck/dirio/internal/path"
 )
 
 // Manager handles metadata storage and retrieval
 type Manager struct {
-	dataDir      string
-	metadataDir  string
-	bucketsDir   string
-	policiesDir  string
-	minioSysDir  string
+	rootFS      billy.Filesystem
+	metadataFS  billy.Filesystem
 }
 
 // User represents a user with credentials
@@ -51,26 +52,28 @@ type ObjectMetadata struct {
 }
 
 // New creates a new metadata manager
-func New(dataDir string) (*Manager, error) {
-	metadataDir := filepath.Join(dataDir, ".metadata")
-	bucketsDir := filepath.Join(metadataDir, "buckets")
-	policiesDir := filepath.Join(metadataDir, "policies")
-	minioSysDir := filepath.Join(dataDir, ".minio.sys")
+func New(rootFS billy.Filesystem) (*Manager, error) {
+	if rootFS == nil {
+		return nil, fmt.Errorf("rootFS cannot be nil")
+	}
 
-	// Create metadata directories
-	if err := os.MkdirAll(bucketsDir, 0755); err != nil {
+	// Create metadata filesystem
+	metadataFS, err := path.NewMetadataFS(rootFS)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create metadata filesystem: %w", err)
+	}
+
+	// Create subdirectories
+	if err := metadataFS.MkdirAll("buckets", 0755); err != nil {
 		return nil, fmt.Errorf("failed to create buckets directory: %w", err)
 	}
-	if err := os.MkdirAll(policiesDir, 0755); err != nil {
+	if err := metadataFS.MkdirAll("policies", 0755); err != nil {
 		return nil, fmt.Errorf("failed to create policies directory: %w", err)
 	}
 
 	return &Manager{
-		dataDir:     dataDir,
-		metadataDir: metadataDir,
-		bucketsDir:  bucketsDir,
-		policiesDir: policiesDir,
-		minioSysDir: minioSysDir,
+		rootFS:     rootFS,
+		metadataFS: metadataFS,
 	}, nil
 }
 
@@ -87,15 +90,15 @@ func (m *Manager) CreateBucket(bucket string) error {
 
 // DeleteBucket removes bucket metadata
 func (m *Manager) DeleteBucket(bucket string) error {
-	metaPath := filepath.Join(m.bucketsDir, bucket+".json")
-	return os.Remove(metaPath)
+	metaPath := filepath.Join("buckets", bucket+".json")
+	return m.metadataFS.Remove(metaPath)
 }
 
 // GetBucketMetadata retrieves bucket metadata
 func (m *Manager) GetBucketMetadata(bucket string) (*BucketMetadata, error) {
-	metaPath := filepath.Join(m.bucketsDir, bucket+".json")
-	
-	data, err := os.ReadFile(metaPath)
+	metaPath := filepath.Join("buckets", bucket+".json")
+
+	data, err := util.ReadFile(m.metadataFS, metaPath)
 	if err != nil {
 		return nil, err
 	}
@@ -110,14 +113,14 @@ func (m *Manager) GetBucketMetadata(bucket string) (*BucketMetadata, error) {
 
 // saveBucketMetadata saves bucket metadata to disk
 func (m *Manager) saveBucketMetadata(bucket string, meta *BucketMetadata) error {
-	metaPath := filepath.Join(m.bucketsDir, bucket+".json")
-	
+	metaPath := filepath.Join("buckets", bucket+".json")
+
 	data, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(metaPath, data, 0644)
+	return util.WriteFile(m.metadataFS, metaPath, data, 0644)
 }
 
 // GetObjectMetadata retrieves object metadata
@@ -142,13 +145,11 @@ func (m *Manager) DeleteObjectMetadata(bucket, key string) error {
 
 // GetUsers retrieves all users
 func (m *Manager) GetUsers() (map[string]*User, error) {
-	usersPath := filepath.Join(m.metadataDir, "users.json")
-	
-	data, err := os.ReadFile(usersPath)
-	if os.IsNotExist(err) {
-		return make(map[string]*User), nil
-	}
+	data, err := util.ReadFile(m.metadataFS, "users.json")
 	if err != nil {
+		if isNotExist(err) {
+			return make(map[string]*User), nil
+		}
 		return nil, err
 	}
 
@@ -162,33 +163,31 @@ func (m *Manager) GetUsers() (map[string]*User, error) {
 
 // SaveUsers saves all users
 func (m *Manager) SaveUsers(users map[string]*User) error {
-	usersPath := filepath.Join(m.metadataDir, "users.json")
-
 	data, err := json.MarshalIndent(users, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(usersPath, data, 0644)
+	return util.WriteFile(m.metadataFS, "users.json", data, 0644)
 }
 
 // SavePolicy saves a single policy
 func (m *Manager) SavePolicy(policy *Policy) error {
-	policyPath := filepath.Join(m.policiesDir, policy.Name+".json")
+	policyPath := filepath.Join("policies", policy.Name+".json")
 
 	data, err := json.MarshalIndent(policy, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(policyPath, data, 0644)
+	return util.WriteFile(m.metadataFS, policyPath, data, 0644)
 }
 
 // GetPolicy retrieves a policy by name
 func (m *Manager) GetPolicy(name string) (*Policy, error) {
-	policyPath := filepath.Join(m.policiesDir, name+".json")
+	policyPath := filepath.Join("policies", name+".json")
 
-	data, err := os.ReadFile(policyPath)
+	data, err := util.ReadFile(m.metadataFS, policyPath)
 	if err != nil {
 		return nil, err
 	}
@@ -203,9 +202,9 @@ func (m *Manager) GetPolicy(name string) (*Policy, error) {
 
 // GetPolicies retrieves all policies
 func (m *Manager) GetPolicies() (map[string]*Policy, error) {
-	entries, err := os.ReadDir(m.policiesDir)
+	entries, err := m.metadataFS.ReadDir("policies")
 	if err != nil {
-		if os.IsNotExist(err) {
+		if isNotExist(err) {
 			return make(map[string]*Policy), nil
 		}
 		return nil, err
@@ -227,4 +226,9 @@ func (m *Manager) GetPolicies() (map[string]*Policy, error) {
 	}
 
 	return policies, nil
+}
+
+// isNotExist checks if an error is a "not exist" error
+func isNotExist(err error) bool {
+	return err != nil && fs.ErrNotExist != nil && (err == fs.ErrNotExist || err.Error() == "file does not exist")
 }

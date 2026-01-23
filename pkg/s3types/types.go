@@ -98,6 +98,8 @@ const (
 	ErrMethodNotAllowed
 	ErrInvalidAccessKeyID
 	ErrSignatureDoesNotMatch
+	ErrInvalidBucketName
+	ErrInvalidObjectKey
 )
 
 // String returns the string representation of error code
@@ -121,6 +123,10 @@ func (e ErrorCode) String() string {
 		return "InvalidAccessKeyId"
 	case ErrSignatureDoesNotMatch:
 		return "SignatureDoesNotMatch"
+	case ErrInvalidBucketName:
+		return "InvalidBucketName"
+	case ErrInvalidObjectKey:
+		return "KeyTooLongError"
 	default:
 		return "InternalError"
 	}
@@ -145,6 +151,10 @@ func (e ErrorCode) Description() string {
 		return "The AWS access key ID you provided does not exist in our records."
 	case ErrSignatureDoesNotMatch:
 		return "The request signature we calculated does not match the signature you provided."
+	case ErrInvalidBucketName:
+		return "The specified bucket is not valid."
+	case ErrInvalidObjectKey:
+		return "Your key is too long or contains invalid characters."
 	default:
 		return "Internal error"
 	}
@@ -163,6 +173,8 @@ func (e ErrorCode) HTTPStatus() int {
 		return http.StatusMethodNotAllowed
 	case ErrInvalidAccessKeyID, ErrSignatureDoesNotMatch:
 		return http.StatusForbidden
+	case ErrInvalidBucketName, ErrInvalidObjectKey:
+		return http.StatusBadRequest
 	default:
 		return http.StatusInternalServerError
 	}
