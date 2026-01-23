@@ -65,19 +65,10 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 
 ### Authentication
 - [x] Add request ID generation
-- [ ] Add access logging
+- [x] Add access logging
 - [ ] Add authentication middleware
 - [ ] Implement AWS Signature V4 authentication
 - [ ] Test with AWS CLI
-
-### HTTP Audit Logging
-- [ ] Design audit log middleware (streaming, queue-based)
-- [ ] Implement log levels (0=off, 1=headers, 2=headers+req body, 3=headers+both bodies)
-- [ ] Non-blocking audit log writer with queue
-- [ ] Minimize memory allocation in middleware
-- [ ] Audit log configuration (level, output destination)
-- [ ] Audit log rotation support
-- [ ] Document distinction: HTTP audit log vs full app audit log
 
 ## Phase 3: Advanced Features
 
@@ -118,6 +109,15 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 - [ ] Graceful shutdown improvements
 - [ ] Log rotation for application logs
 - [ ] Admin commands via CLI (will need separate audit consideration)
+
+### HTTP Audit Logging
+- [ ] Design audit log middleware (streaming, queue-based)
+- [ ] Implement log levels (0=off, 1=headers, 2=headers+req body, 3=headers+both bodies)
+- [ ] Non-blocking audit log writer with queue
+- [ ] Minimize memory allocation in middleware
+- [ ] Audit log configuration (level, output destination)
+- [ ] Audit log rotation support
+- [ ] Document distinction: HTTP audit log vs full app audit log
 
 ## Phase 5: Client CLI (Low Priority)
 
