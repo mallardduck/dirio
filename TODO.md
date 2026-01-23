@@ -61,7 +61,7 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 - [x] Test URL generation with different Host headers - Tests in `internal/urlbuilder/urlbuilder_test.go`
 - [x] Test config loading from CLI/ENV/file with precedence - Tests in `internal/config/config_test.go`
 
-## Phase 2: Authentication, Security & Audit Logging
+## Phase 2: Authentication, Security Enhance & Improved MinIO Imports
 
 ### Authentication
 - [x] Add request ID generation
@@ -69,6 +69,22 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 - [ ] Add authentication middleware
 - [ ] Implement AWS Signature V4 authentication
 - [ ] Test with AWS CLI
+
+### Security Enhance
+- [ ] Import github.com/go-git/go-billy
+- [ ] Create an internal path package to make using go-billy easier
+  - It should provide FS helpers that will be helpful for how we read/write to buckets
+  - There should be a R/O FS exposed to access and read the Minio metadata.
+  - There should be a R/W FS exposed for DirIO metadata
+  - A helper to get FS for specific buckets
+  - A helper to get "root data dir" for creating new bucket Dirs
+- [ ] Refactor and replace all stdlib os.Open (and similar FS) calls with new go-billy based pkg
+
+### Improved MinIO Imports
+- [ ] Parse MinIO's Created timestamp in import
+- [ ] Per-object metadata import and storage
+- [ ] Ensure all minio metadata files and data has been audited for parity in DirIO
+  - The data may not need to be used by DirIO yet, but we should import it. 
 
 ## Phase 3: Advanced Features
 
@@ -85,16 +101,7 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 - [ ] Object tagging
 - [ ] ListObjects pagination (max-keys parameter)
 
-### Virtual-Hosted-Style Buckets (Future)
-- [ ] Support `bucket.domain.com` style addressing
-- [ ] Subdomain routing logic
-- [ ] Update URL generation for virtual-hosted style
-- [ ] DNS/mDNS considerations for wildcard subdomains
-- [ ] Document virtual-hosted-style bucket support and configuration
-
 ### Metadata
-- [ ] Per-object metadata storage (if needed)
-- [ ] Parse MinIO's Created timestamp in import
 - [ ] Store custom metadata headers
 
 ### Performance
@@ -133,6 +140,15 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 - [ ] User management UI
 - [ ] Bucket policy editor
 - [ ] (Note: UI actions will need audit logging separate from HTTP middleware)
+
+## Phase N+: Any future work
+
+### Virtual-Hosted-Style Buckets (Future)
+- [ ] Support `bucket.domain.com` style addressing
+- [ ] Subdomain routing logic
+- [ ] Update URL generation for virtual-hosted style
+- [ ] DNS/mDNS considerations for wildcard subdomains
+- [ ] Document virtual-hosted-style bucket support and configuration
 
 ## Known Issues / Questions
 
