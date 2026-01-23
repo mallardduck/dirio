@@ -40,16 +40,20 @@ Current status: **Phase 1 - MVP Scaffold Complete**
   - A: Same approach - `GetLocalIP()` in `internal/mdns/ip.go` auto-detects the appropriate IP address.
 - [x] Add github.com/hashicorp/mdns dependency
 - [x] Implement mDNS service registration - `internal/mdns/mdns.go`
-- [x] Default mDNS name: `dirio-s3.local` (configurable via `--mdns-name` flag)
+- [x] Multi-instance support: mDNS name format `{service}.{hostname}.local` (e.g., `dirio-s3.macbook.local`)
+  - Allows multiple DirIO instances to coexist on the same network
+  - `--mdns-name` flag configures service name (default: `dirio-s3`)
+  - `--mdns-hostname` flag overrides hostname component (default: system hostname)
+  - Advertised as: `{mdns-name}.{mdns-hostname}.local`
 - [x] Graceful mDNS shutdown on server stop - integrated with signal handling in `internal/server/server.go`
 - [x] Graceful HTTP server shutdown with SIGINT/SIGTERM handling
 
-### Domain-Aware URL Generation
-- [ ] Add CanonicalDomain configuration option
-- [ ] Implement request domain detection (Host header)
-- [ ] Build URL generation helpers (internal vs canonical)
-- [ ] Update API responses to use appropriate domain
-- [ ] Mock/test domain-aware URL generation
+### Domain-Aware URL Generation ✅
+- [x] Add CanonicalDomain configuration option
+- [x] Implement request domain detection (Host header)
+- [x] Build URL generation helpers (internal vs canonical)
+- [x] Update API responses to use appropriate domain
+- [x] Mock/test domain-aware URL generation
 - [ ] Document virtual-hosted-style bucket support for future (Phase 3)
 
 ### Testing

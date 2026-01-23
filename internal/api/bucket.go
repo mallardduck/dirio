@@ -20,6 +20,10 @@ func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request, bucket st
 		return
 	}
 
+	// Generate Location header per S3 spec
+	location := h.urlBuilder.BucketURL(r, bucket)
+	w.Header().Set("Location", location)
+
 	w.WriteHeader(http.StatusOK)
 }
 

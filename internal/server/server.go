@@ -17,6 +17,7 @@ import (
 	"github.com/mallardduck/dirio/internal/mdns"
 	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/internal/storage"
+	"github.com/mallardduck/dirio/internal/urlbuilder"
 )
 
 // Config holds server configuration
@@ -27,8 +28,13 @@ type Config struct {
 	SecretKey string
 
 	// mDNS settings
-	MDNSEnabled bool
-	MDNSName    string
+	MDNSEnabled  bool
+	MDNSName     string
+	MDNSHostname string
+	MDNSMode     string
+
+	// URL generation
+	CanonicalDomain string
 }
 
 // Server represents the S3-compatible HTTP server
@@ -85,8 +91,11 @@ func New(config *Config) (*Server, error) {
 func (s *Server) setupRoutes() {
 	s.router = mux.NewRouter()
 
+	// Create URL builder
+	urlBuilder := urlbuilder.New(s.config.CanonicalDomain)
+
 	// Create API handler
-	apiHandler := api.New(s.storage, s.metadata, s.auth)
+	apiHandler := api.New(s.storage, s.metadata, s.auth, urlBuilder)
 
 	// Root - ListBuckets
 	s.router.HandleFunc("/", apiHandler.ListBuckets).Methods("GET")
@@ -165,7 +174,7 @@ func (s *Server) Start() error {
 			return fmt.Errorf("failed to start mDNS service: %w", err)
 		}
 		s.mdns = mdnsSvc
-		s.log.Info("mdns service started", "host", s.config.MDNSName+".local")
+		s.log.Info("mdns service started", "host", mdnsSvc.GetAdvertisedHost())
 	}
 
 	// Channel to receive server errors

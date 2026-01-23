@@ -43,7 +43,10 @@ func init() {
 
 	// mDNS flags
 	serveCmd.Flags().Bool(config.MDNSEnabled.GetFlagKey(), false, "Enable mDNS service discovery")
-	serveCmd.Flags().String(config.MDNSName.GetFlagKey(), config.MDNSName.GetDefaultAsString(), "mDNS service name (advertised as <name>.local)")
+	serveCmd.Flags().String(config.MDNSName.GetFlagKey(), config.MDNSName.GetDefaultAsString(), "mDNS service name (e.g., dirio-s3)")
+	serveCmd.Flags().String(config.MDNSHostname.GetFlagKey(), config.MDNSHostname.GetDefaultAsString(), "mDNS hostname component (defaults to system hostname, advertised as <name>.<hostname>.local)")
+	serveCmd.Flags().String(config.MDNSMode.GetFlagKey(), config.MDNSMode.GetDefaultAsString(), "controls mDNS responder mode detection")
+	serveCmd.Flags().String(config.CanonicalDomain.GetFlagKey(), config.CanonicalDomain.GetDefaultAsString(), "Canonical domain for URL generation (e.g., s3.example.com)")
 
 	// Bind flags to viper for config file support
 	viper.BindPFlag(config.DataDir.GetViperKey(), serveCmd.Flags().Lookup(config.DataDir.GetFlagKey()))
@@ -56,6 +59,9 @@ func init() {
 	viper.BindPFlag(config.Debug.GetViperKey(), serveCmd.Flags().Lookup(config.Debug.GetFlagKey()))
 	viper.BindPFlag(config.MDNSEnabled.GetViperKey(), serveCmd.Flags().Lookup(config.MDNSEnabled.GetFlagKey()))
 	viper.BindPFlag(config.MDNSName.GetViperKey(), serveCmd.Flags().Lookup(config.MDNSName.GetFlagKey()))
+	viper.BindPFlag(config.MDNSHostname.GetViperKey(), serveCmd.Flags().Lookup(config.MDNSHostname.GetFlagKey()))
+	viper.BindPFlag(config.MDNSMode.GetViperKey(), serveCmd.Flags().Lookup(config.MDNSMode.GetFlagKey()))
+	viper.BindPFlag(config.CanonicalDomain.GetViperKey(), serveCmd.Flags().Lookup(config.CanonicalDomain.GetFlagKey()))
 }
 
 func runServer(cmd *cobra.Command, args []string) error {
@@ -87,12 +93,15 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 	// Create server configuration from settings
 	serverConfig := &server.Config{
-		DataDir:     settings.DataDir,
-		Port:        settings.Port,
-		AccessKey:   settings.AccessKey,
-		SecretKey:   settings.SecretKey,
-		MDNSEnabled: settings.MDNSEnabled,
-		MDNSName:    settings.MDNSName,
+		DataDir:         settings.DataDir,
+		Port:            settings.Port,
+		AccessKey:       settings.AccessKey,
+		SecretKey:       settings.SecretKey,
+		MDNSEnabled:     settings.MDNSEnabled,
+		MDNSName:        settings.MDNSName,
+		MDNSHostname:    settings.MDNSHostname,
+		MDNSMode:        settings.MDNSMode,
+		CanonicalDomain: settings.CanonicalDomain,
 	}
 
 	// Initialize and start server

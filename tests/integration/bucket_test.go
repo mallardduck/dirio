@@ -178,3 +178,61 @@ func TestDeleteBucketNotExists(t *testing.T) {
 
 	assert.Equal(t, "NoSuchBucket", errResp.Code)
 }
+
+func TestCreateBucket_ReturnsLocationHeader(t *testing.T) {
+	ts := NewTestServer(t)
+	defer ts.Cleanup()
+
+	req, _ := http.NewRequest("PUT", ts.BucketURL("test-bucket"), nil)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert := assert.New(t)
+	assert.Equal(http.StatusOK, resp.StatusCode)
+
+	location := resp.Header.Get("Location")
+	assert.NotEmpty(location, "Location header should be present")
+	assert.Contains(location, "/test-bucket", "Location should contain bucket name")
+	assert.Contains(location, "localhost", "Location should contain host")
+}
+
+func TestCreateBucket_LocationWithCustomHost(t *testing.T) {
+	ts := NewTestServer(t)
+	defer ts.Cleanup()
+
+	req, _ := http.NewRequest("PUT", ts.BucketURL("test-bucket"), nil)
+	req.Host = "dirio-s3.local:9000"
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert := assert.New(t)
+	assert.Equal(http.StatusOK, resp.StatusCode)
+
+	location := resp.Header.Get("Location")
+	assert.Contains(location, "dirio-s3.local:9000/test-bucket", "Location should use custom Host header")
+}
+
+func TestCreateBucket_LocationWithXForwardedProto(t *testing.T) {
+	ts := NewTestServer(t)
+	defer ts.Cleanup()
+
+	req, _ := http.NewRequest("PUT", ts.BucketURL("test-bucket"), nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert := assert.New(t)
+	assert.Equal(http.StatusOK, resp.StatusCode)
+
+	location := resp.Header.Get("Location")
+	assert.NotEmpty(location, "Location header should be present")
+	assert.True(
+		assert.Contains(location, "https://") || assert.Contains(location, "http://"),
+		"Location should have a scheme",
+	)
+}

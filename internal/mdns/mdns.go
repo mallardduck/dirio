@@ -1,33 +1,53 @@
 package mdns
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
-	"os"
 
-	"github.com/hashicorp/mdns"
+	"github.com/mallardduck/dirio/internal/hostname"
 	"github.com/mallardduck/dirio/internal/logging"
+	"github.com/mallardduck/dirio/internal/mdns/dnssd"
 )
 
 // Service represents an mDNS service registration for DirIO.
+//
+// The service uses a unique hostname format: <service-name>-<unique-id>.local
+// This prevents conflicts with system mDNS responders (Bonjour/Avahi) and allows
+// us to safely run our own mDNS responder on all platforms.
+//
+// TODO: Future enhancement - implement Guest mode that interoperates with
+// native system mDNS responders (Bonjour on macOS, Avahi on Linux) by
+// registering through their APIs instead of running our own responder.
 type Service struct {
-	server *mdns.Server
-	config *Config
-	log    *slog.Logger
+	service *dnssd.Service
+	config  *Config
+	log     *slog.Logger
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 // Config holds configuration for mDNS service registration.
 type Config struct {
-	// ServiceName is the mDNS service name (without .local suffix).
-	// Default: "dirio-s3"
+	// ServiceName is the mDNS service name (e.g., "dirio-s3")
 	ServiceName string
 
-	// Port is the port number the S3 service is listening on.
+	// Port is the HTTP port number
 	Port int
+
+	// HTTPSPort is the HTTPS port (optional)
+	HTTPSPort int
 
 	// IPs are the IP addresses to advertise. If nil, auto-detected.
 	IPs []net.IP
+
+	// Interfaces are the network interface names to use (e.g., ["en0"]).
+	// If empty, uses the primary interface automatically.
+	Interfaces []string
+
+	// TXTRecords are additional TXT records for service discovery
+	TXTRecords map[string]string
 }
 
 // New creates a new mDNS service but does not start it.
@@ -51,103 +71,128 @@ func New(cfg *Config) (*Service, error) {
 }
 
 // Start begins advertising the mDNS service on the local network.
-// The service will be advertised as:
-//   - Name: <ServiceName>.local (e.g., dirio-s3.local)
-//   - Type: _http._tcp (standard HTTP service type)
 //
-// Clients can discover the service using mDNS and connect to the
-// advertised IP and port.
+// The service uses a unique hostname format: <service-name>-<unique-id>.local
+// (e.g., "dirio-s3-abc123.local") which prevents conflicts with system
+// mDNS responders.
+//
+// Service discovery records (_http._tcp, _s3._tcp) point to this unique hostname,
+// allowing clients to discover and connect to the service.
 func (s *Service) Start() error {
-	if s.server != nil {
+	if s.service != nil {
 		return fmt.Errorf("mDNS service already started")
 	}
+
+	// Get unique hostname from hostname package
+	uniqueID := hostname.Identity()
+	hostnameStr := fmt.Sprintf("%s-%s", s.config.ServiceName, uniqueID)
+
+	s.log.Debug("using unique hostname for mDNS",
+		"hostname", hostnameStr,
+		"unique_id", uniqueID)
 
 	// Get IPs to advertise
 	ips := s.config.IPs
 	if len(ips) == 0 {
-		// Auto-detect local IP
-		ip, err := GetLocalIP()
+		// Auto-detect primary interface IP
+		primary, err := dnssd.GetPrimaryInterface()
 		if err != nil {
-			return fmt.Errorf("failed to detect local IP for mDNS: %w", err)
+			return fmt.Errorf("failed to detect primary interface: %w", err)
 		}
-		ips = []net.IP{ip}
+
+		addrs, err := primary.Addrs()
+		if err != nil {
+			return fmt.Errorf("failed to get interface addresses: %w", err)
+		}
+
+		// Get first IPv4 address
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+
+			if ip4 := ip.To4(); ip4 != nil && !ip.IsLoopback() {
+				ips = []net.IP{ip4}
+				break
+			}
+		}
+
+		if len(ips) == 0 {
+			return fmt.Errorf("no valid IPv4 address found on primary interface")
+		}
 	}
 
-	// Get hostname for the service info
-	hostname, err := os.Hostname()
+	// Create context for service lifecycle
+	ctx, cancel := context.WithCancel(context.Background())
+	s.ctx = ctx
+	s.cancel = cancel
+
+	// Configure dnssd service
+	svcCfg := &dnssd.ServiceConfig{
+		Name:       s.config.ServiceName,
+		Hostname:   hostnameStr,
+		Port:       s.config.Port,
+		HTTPSPort:  s.config.HTTPSPort,
+		IPs:        ips,
+		Interfaces: s.config.Interfaces,
+		TXTRecords: s.config.TXTRecords,
+	}
+
+	// Create and start dnssd service
+	service, err := dnssd.NewService(ctx, svcCfg, s.log)
 	if err != nil {
-		hostname = "dirio"
+		cancel()
+		return fmt.Errorf("failed to start mDNS service: %w", err)
 	}
 
-	// Create service info
-	// The service name becomes: <instance>._http._tcp.local
-	// The host becomes: <ServiceName>.local
-	info := []string{
-		"DirIO S3-compatible storage",
-		"version=1.0",
-	}
-
-	service, err := mdns.NewMDNSService(
-		hostname,                       // Instance name
-		"_http._tcp",                   // Service type
-		"",                             // Domain (empty for .local)
-		s.config.ServiceName+".local.", // Host name
-		s.config.Port,                  // Port
-		ips,                            // IPs
-		info,                           // TXT records
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create mDNS service: %w", err)
-	}
-
-	// Create mDNS server config with verbosity-aware logging
-	// In quiet mode, suppress noisy error messages from malformed packets
-	serverConfig := &mdns.Config{
-		Zone:   service,
-		Logger: logging.StdLogger("mdns"),
-	}
-
-	// Create and start the server
-	server, err := mdns.NewServer(serverConfig)
-	if err != nil {
-		return fmt.Errorf("failed to start mDNS server: %w", err)
-	}
-
-	s.server = server
+	s.service = service
 
 	s.log.Info("mdns service registered",
-		"host", s.config.ServiceName+".local",
+		"service", s.config.ServiceName,
+		"hostname", hostnameStr+".local",
 		"ips", ips,
-		"port", s.config.Port,
-	)
+		"port", s.config.Port)
 
 	return nil
 }
 
 // Stop gracefully shuts down the mDNS service.
 func (s *Service) Stop() error {
-	if s.server == nil {
+	if s.service == nil {
 		return nil
 	}
 
-	s.log.Info("stopping mdns service", "host", s.config.ServiceName+".local")
+	s.log.Info("stopping mdns service", "service", s.config.ServiceName)
 
-	err := s.server.Shutdown()
-	s.server = nil
+	// Stop the dnssd service
+	s.service.Stop()
 
-	if err != nil {
-		return fmt.Errorf("failed to stop mDNS server: %w", err)
+	// Cancel context
+	if s.cancel != nil {
+		s.cancel()
 	}
 
+	// Clear references
+	s.service = nil
+	s.ctx = nil
+	s.cancel = nil
+
+	s.log.Debug("mdns service stopped")
 	return nil
 }
 
 // IsRunning returns true if the mDNS service is currently running.
 func (s *Service) IsRunning() bool {
-	return s.server != nil
+	return s.service != nil
 }
 
 // GetAdvertisedHost returns the hostname being advertised via mDNS.
+// Format: <service-name>-<unique-id>.local (e.g., "dirio-s3-abc123.local")
 func (s *Service) GetAdvertisedHost() string {
-	return s.config.ServiceName + ".local"
+	uniqueID := hostname.Identity()
+	return fmt.Sprintf("%s-%s.local", s.config.ServiceName, uniqueID)
 }

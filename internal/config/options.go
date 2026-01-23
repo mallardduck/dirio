@@ -42,6 +42,16 @@ var (
 	// MDNSName is the mDNS service name to advertise
 	MDNSName = option.NewOption("mdns-name", "dirio-s3")
 
+	// MDNSHostname is the hostname component for mDNS (defaults to system hostname)
+	// The advertised name will be: {mdns-name}.{mdns-hostname}.local
+	MDNSHostname = option.NewOption("mdns-hostname", "")
+
+	// MDNSMode controls mDNS responder mode detection
+	// - "auto": Detect via port 5353 probe (default)
+	// - "guest": Force Guest mode (PTR/SRV only, delegates A/AAAA to system)
+	// - "master": Force Master mode (full A/AAAA + PTR/SRV stack)
+	MDNSMode = option.NewOption("mdns-mode", "auto")
+
 	// CanonicalDomain is the canonical domain for URL generation
 	CanonicalDomain = option.NewOption("canonical-domain", "")
 )

@@ -23,9 +23,11 @@ type Settings struct {
 	Verbosity string
 	Debug     bool
 
-	// mDNS settings (for future use)
+	// mDNS settings
 	MDNSEnabled     bool
 	MDNSName        string
+	MDNSHostname    string
+	MDNSMode        string
 	CanonicalDomain string
 }
 
@@ -65,6 +67,14 @@ func (s *Settings) Validate() error {
 		return fmt.Errorf("invalid verbosity: %s (valid: quiet, normal, verbose)", s.Verbosity)
 	}
 
+	// Validate mDNS mode
+	validMDNSModes := map[string]bool{
+		"auto": true, "guest": true, "master": true,
+	}
+	if !validMDNSModes[s.MDNSMode] {
+		return fmt.Errorf("invalid mdns-mode: %s (valid: auto, guest, master)", s.MDNSMode)
+	}
+
 	return nil
 }
 
@@ -95,6 +105,8 @@ func LoadConfig(flags *pflag.FlagSet, v *viper.Viper) (*Settings, error) {
 		// mDNS settings
 		MDNSEnabled:     resolver.GetBool(MDNSEnabled),
 		MDNSName:        resolver.Get(MDNSName),
+		MDNSHostname:    resolver.Get(MDNSHostname),
+		MDNSMode:        resolver.Get(MDNSMode),
 		CanonicalDomain: resolver.Get(CanonicalDomain),
 	}
 

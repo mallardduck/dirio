@@ -14,17 +14,25 @@ import (
 
 // Handler handles S3 API requests
 type Handler struct {
-	storage  *storage.Storage
-	metadata *metadata.Manager
-	auth     *auth.Authenticator
+	storage    *storage.Storage
+	metadata   *metadata.Manager
+	auth       *auth.Authenticator
+	urlBuilder URLBuilder
+}
+
+// URLBuilder defines the interface for generating URLs in S3 API responses
+type URLBuilder interface {
+	BucketURL(r *http.Request, bucket string) string
+	ObjectURL(r *http.Request, bucket, key string) string
 }
 
 // New creates a new API handler
-func New(storage *storage.Storage, metadata *metadata.Manager, auth *auth.Authenticator) *Handler {
+func New(storage *storage.Storage, metadata *metadata.Manager, auth *auth.Authenticator, urlBuilder URLBuilder) *Handler {
 	return &Handler{
-		storage:  storage,
-		metadata: metadata,
-		auth:     auth,
+		storage:    storage,
+		metadata:   metadata,
+		auth:       auth,
+		urlBuilder: urlBuilder,
 	}
 }
 

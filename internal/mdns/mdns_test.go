@@ -63,7 +63,12 @@ func TestGetAdvertisedHost(t *testing.T) {
 	require.NoError(t, err)
 
 	host := svc.GetAdvertisedHost()
-	assert.Equal(t, "my-service.local", host)
+
+	// Should be in format: my-service-{unique-id}.local
+	assert := assert.New(t)
+	assert.Contains(host, "my-service-")
+	assert.Contains(host, ".local")
+	assert.NotEqual("my-service.local", host, "Should include unique ID component")
 }
 
 func TestIsRunning(t *testing.T) {
@@ -74,10 +79,8 @@ func TestIsRunning(t *testing.T) {
 }
 
 func TestStartStop(t *testing.T) {
-	// Skip if no network available
-	_, err := GetLocalIP()
-	if err != nil {
-		t.Skip("No network available for mDNS test")
+	if testing.Short() {
+		t.Skip("skipping network test in short mode")
 	}
 
 	assert := assert.New(t)
