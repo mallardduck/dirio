@@ -11,18 +11,18 @@ import (
 )
 
 // GetObject handles GET /{bucket}/{key}
-func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request, bucket, key string) {
+func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request, bucket, key, requestID string) {
 	obj, err := h.storage.GetObject(bucket, key)
 	if err != nil {
 		if err == storage.ErrNoSuchKey {
-			writeErrorResponse(w, s3types.ErrNoSuchKey, err)
+			writeErrorResponse(w, requestID, s3types.ErrNoSuchKey, err)
 			return
 		}
 		if err == storage.ErrNoSuchBucket {
-			writeErrorResponse(w, s3types.ErrNoSuchBucket, err)
+			writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err)
 			return
 		}
-		writeErrorResponse(w, s3types.ErrInternalError, err)
+		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
 		return
 	}
 	defer obj.Content.Close()
@@ -43,7 +43,7 @@ func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request, bucket, key 
 }
 
 // PutObject handles PUT /{bucket}/{key}
-func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request, bucket, key string) {
+func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request, bucket, key, requestID string) {
 	contentType := r.Header.Get("Content-Type")
 	if contentType == "" {
 		contentType = "application/octet-stream"
@@ -53,10 +53,10 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request, bucket, key 
 	etag, err := h.storage.PutObject(bucket, key, r.Body, contentType)
 	if err != nil {
 		if err == storage.ErrNoSuchBucket {
-			writeErrorResponse(w, s3types.ErrNoSuchBucket, err)
+			writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err)
 			return
 		}
-		writeErrorResponse(w, s3types.ErrInternalError, err)
+		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
 		return
 	}
 
@@ -66,18 +66,18 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request, bucket, key 
 }
 
 // HeadObject handles HEAD /{bucket}/{key}
-func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request, bucket, key string) {
+func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request, bucket, key, requestID string) {
 	meta, err := h.storage.GetObjectMetadata(bucket, key)
 	if err != nil {
 		if err == storage.ErrNoSuchKey {
-			writeErrorResponse(w, s3types.ErrNoSuchKey, err)
+			writeErrorResponse(w, requestID, s3types.ErrNoSuchKey, err)
 			return
 		}
 		if err == storage.ErrNoSuchBucket {
-			writeErrorResponse(w, s3types.ErrNoSuchBucket, err)
+			writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err)
 			return
 		}
-		writeErrorResponse(w, s3types.ErrInternalError, err)
+		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
 		return
 	}
 
@@ -92,16 +92,16 @@ func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request, bucket, key
 }
 
 // DeleteObject handles DELETE /{bucket}/{key}
-func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request, bucket, key string) {
+func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request, bucket, key, requestID string) {
 	err := h.storage.DeleteObject(bucket, key)
 	if err != nil {
 		// S3 returns 204 even if object doesn't exist
 		if err != storage.ErrNoSuchKey {
 			if err == storage.ErrNoSuchBucket {
-				writeErrorResponse(w, s3types.ErrNoSuchBucket, err)
+				writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err)
 				return
 			}
-			writeErrorResponse(w, s3types.ErrInternalError, err)
+			writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
 			return
 		}
 	}

@@ -8,15 +8,15 @@ import (
 )
 
 // CreateBucket handles PUT /{bucket}
-func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request, bucket string) {
+func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request, bucket, requestID string) {
 	// TODO: Parse bucket configuration from request body if present
 
 	if err := h.storage.CreateBucket(bucket); err != nil {
 		if err == storage.ErrBucketExists {
-			writeErrorResponse(w, s3types.ErrBucketAlreadyExists, err)
+			writeErrorResponse(w, requestID, s3types.ErrBucketAlreadyExists, err)
 			return
 		}
-		writeErrorResponse(w, s3types.ErrInternalError, err)
+		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
 		return
 	}
 
@@ -28,15 +28,15 @@ func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request, bucket st
 }
 
 // HeadBucket handles HEAD /{bucket}
-func (h *Handler) HeadBucket(w http.ResponseWriter, r *http.Request, bucket string) {
+func (h *Handler) HeadBucket(w http.ResponseWriter, r *http.Request, bucket, requestID string) {
 	exists, err := h.storage.BucketExists(bucket)
 	if err != nil {
-		writeErrorResponse(w, s3types.ErrInternalError, err)
+		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
 		return
 	}
 
 	if !exists {
-		writeErrorResponse(w, s3types.ErrNoSuchBucket, nil)
+		writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, nil)
 		return
 	}
 
@@ -44,17 +44,17 @@ func (h *Handler) HeadBucket(w http.ResponseWriter, r *http.Request, bucket stri
 }
 
 // DeleteBucket handles DELETE /{bucket}
-func (h *Handler) DeleteBucket(w http.ResponseWriter, r *http.Request, bucket string) {
+func (h *Handler) DeleteBucket(w http.ResponseWriter, r *http.Request, bucket, requestID string) {
 	if err := h.storage.DeleteBucket(bucket); err != nil {
 		if err == storage.ErrNoSuchBucket {
-			writeErrorResponse(w, s3types.ErrNoSuchBucket, err)
+			writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err)
 			return
 		}
 		if err == storage.ErrBucketNotEmpty {
-			writeErrorResponse(w, s3types.ErrBucketNotEmpty, err)
+			writeErrorResponse(w, requestID, s3types.ErrBucketNotEmpty, err)
 			return
 		}
-		writeErrorResponse(w, s3types.ErrInternalError, err)
+		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
 		return
 	}
 
@@ -62,15 +62,15 @@ func (h *Handler) DeleteBucket(w http.ResponseWriter, r *http.Request, bucket st
 }
 
 // GetBucketLocation handles GET /{bucket}?location
-func (h *Handler) GetBucketLocation(w http.ResponseWriter, r *http.Request, bucket string) {
+func (h *Handler) GetBucketLocation(w http.ResponseWriter, r *http.Request, bucket, requestID string) {
 	exists, err := h.storage.BucketExists(bucket)
 	if err != nil {
-		writeErrorResponse(w, s3types.ErrInternalError, err)
+		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
 		return
 	}
 
 	if !exists {
-		writeErrorResponse(w, s3types.ErrNoSuchBucket, nil)
+		writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, nil)
 		return
 	}
 
@@ -82,7 +82,7 @@ func (h *Handler) GetBucketLocation(w http.ResponseWriter, r *http.Request, buck
 }
 
 // ListObjects handles GET /{bucket} (ListObjectsV1)
-func (h *Handler) ListObjects(w http.ResponseWriter, r *http.Request, bucket string) {
+func (h *Handler) ListObjects(w http.ResponseWriter, r *http.Request, bucket, requestID string) {
 	query := r.URL.Query()
 	prefix := query.Get("prefix")
 	delimiter := query.Get("delimiter")
@@ -92,10 +92,10 @@ func (h *Handler) ListObjects(w http.ResponseWriter, r *http.Request, bucket str
 	objects, err := h.storage.ListObjects(bucket, prefix, delimiter, 1000)
 	if err != nil {
 		if err == storage.ErrNoSuchBucket {
-			writeErrorResponse(w, s3types.ErrNoSuchBucket, err)
+			writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err)
 			return
 		}
-		writeErrorResponse(w, s3types.ErrInternalError, err)
+		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
 		return
 	}
 
@@ -113,7 +113,7 @@ func (h *Handler) ListObjects(w http.ResponseWriter, r *http.Request, bucket str
 }
 
 // ListObjectsV2 handles GET /{bucket}?list-type=2
-func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request, bucket string) {
+func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request, bucket, requestID string) {
 	query := r.URL.Query()
 	prefix := query.Get("prefix")
 	delimiter := query.Get("delimiter")
@@ -122,10 +122,10 @@ func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request, bucket s
 	objects, err := h.storage.ListObjects(bucket, prefix, delimiter, 1000)
 	if err != nil {
 		if err == storage.ErrNoSuchBucket {
-			writeErrorResponse(w, s3types.ErrNoSuchBucket, err)
+			writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err)
 			return
 		}
-		writeErrorResponse(w, s3types.ErrInternalError, err)
+		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
 		return
 	}
 

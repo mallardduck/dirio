@@ -16,6 +16,7 @@ import (
 	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/mdns"
 	"github.com/mallardduck/dirio/internal/metadata"
+	"github.com/mallardduck/dirio/internal/middleware"
 	"github.com/mallardduck/dirio/internal/storage"
 	"github.com/mallardduck/dirio/internal/urlbuilder"
 )
@@ -106,7 +107,8 @@ func (s *Server) setupRoutes() {
 	// Object operations
 	s.router.HandleFunc("/{bucket}/{key:.*}", apiHandler.ObjectHandler).Methods("GET", "PUT", "HEAD", "DELETE")
 
-	// Add middleware
+	// Add middleware (request ID first, then logging, then auth)
+	s.router.Use(middleware.RequestID)
 	s.router.Use(s.loggingMiddleware)
 	s.router.Use(s.authMiddleware)
 }
@@ -126,7 +128,12 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 		// Wrap response writer to capture status code
 		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		next.ServeHTTP(wrapped, r)
+
+		// Extract request ID from context
+		requestID := middleware.GetRequestID(r.Context())
+
 		s.log.Info("request handled",
+			"request_id", requestID,
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", wrapped.statusCode,

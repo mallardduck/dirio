@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/mallardduck/dirio/internal/auth"
 	"github.com/mallardduck/dirio/internal/metadata"
+	"github.com/mallardduck/dirio/internal/middleware"
 	"github.com/mallardduck/dirio/internal/storage"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
@@ -38,9 +39,11 @@ func New(storage *storage.Storage, metadata *metadata.Manager, auth *auth.Authen
 
 // ListBuckets handles GET / (list all buckets)
 func (h *Handler) ListBuckets(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
 	buckets, err := h.storage.ListBuckets()
 	if err != nil {
-		writeErrorResponse(w, s3types.ErrInternalError, err)
+		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
 		return
 	}
 
@@ -57,6 +60,7 @@ func (h *Handler) ListBuckets(w http.ResponseWriter, r *http.Request) {
 
 // BucketHandler routes bucket operations based on query params and method
 func (h *Handler) BucketHandler(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -65,47 +69,48 @@ func (h *Handler) BucketHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Handle special query operations
 	if _, ok := query["location"]; ok {
-		h.GetBucketLocation(w, r, bucket)
+		h.GetBucketLocation(w, r, bucket, requestID)
 		return
 	}
 
 	if query.Get("list-type") == "2" {
-		h.ListObjectsV2(w, r, bucket)
+		h.ListObjectsV2(w, r, bucket, requestID)
 		return
 	}
 
 	// Handle standard bucket operations
 	switch r.Method {
 	case "GET":
-		h.ListObjects(w, r, bucket)
+		h.ListObjects(w, r, bucket, requestID)
 	case "PUT":
-		h.CreateBucket(w, r, bucket)
+		h.CreateBucket(w, r, bucket, requestID)
 	case "HEAD":
-		h.HeadBucket(w, r, bucket)
+		h.HeadBucket(w, r, bucket, requestID)
 	case "DELETE":
-		h.DeleteBucket(w, r, bucket)
+		h.DeleteBucket(w, r, bucket, requestID)
 	default:
-		writeErrorResponse(w, s3types.ErrMethodNotAllowed, nil)
+		writeErrorResponse(w, requestID, s3types.ErrMethodNotAllowed, nil)
 	}
 }
 
 // ObjectHandler routes object operations based on method
 func (h *Handler) ObjectHandler(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	key := vars["key"]
 
 	switch r.Method {
 	case "GET":
-		h.GetObject(w, r, bucket, key)
+		h.GetObject(w, r, bucket, key, requestID)
 	case "PUT":
-		h.PutObject(w, r, bucket, key)
+		h.PutObject(w, r, bucket, key, requestID)
 	case "HEAD":
-		h.HeadObject(w, r, bucket, key)
+		h.HeadObject(w, r, bucket, key, requestID)
 	case "DELETE":
-		h.DeleteObject(w, r, bucket, key)
+		h.DeleteObject(w, r, bucket, key, requestID)
 	default:
-		writeErrorResponse(w, s3types.ErrMethodNotAllowed, nil)
+		writeErrorResponse(w, requestID, s3types.ErrMethodNotAllowed, nil)
 	}
 }
 
@@ -121,7 +126,7 @@ func writeXMLResponse(w http.ResponseWriter, statusCode int, data interface{}) {
 	encoder.Encode(data)
 }
 
-func writeErrorResponse(w http.ResponseWriter, errCode s3types.ErrorCode, err error) {
+func writeErrorResponse(w http.ResponseWriter, requestID string, errCode s3types.ErrorCode, err error) {
 	w.Header().Set("Content-Type", "application/xml")
 
 	statusCode := errCode.HTTPStatus()
@@ -135,7 +140,7 @@ func writeErrorResponse(w http.ResponseWriter, errCode s3types.ErrorCode, err er
 	response := s3types.ErrorResponse{
 		Code:      errCode.String(),
 		Message:   errMsg,
-		RequestID: "TODO", // Generate request ID
+		RequestID: requestID,
 	}
 
 	w.Write([]byte(xml.Header))
