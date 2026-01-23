@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
@@ -14,8 +15,8 @@ import (
 
 // Manager handles metadata storage and retrieval
 type Manager struct {
-	rootFS      billy.Filesystem
-	metadataFS  billy.Filesystem
+	rootFS     billy.Filesystem
+	metadataFS billy.Filesystem
 }
 
 // User represents a user with credentials
@@ -29,10 +30,10 @@ type User struct {
 
 // BucketMetadata represents bucket configuration
 type BucketMetadata struct {
-	Name      string    `json:"name"`
-	Owner     string    `json:"owner"`
-	Created   time.Time `json:"created"`
-	Policy    string    `json:"policy,omitempty"`    // S3 bucket policy JSON
+	Name    string    `json:"name"`
+	Owner   string    `json:"owner"`
+	Created time.Time `json:"created"`
+	Policy  string    `json:"policy,omitempty"` // S3 bucket policy JSON
 }
 
 // Policy represents an IAM policy
@@ -230,5 +231,5 @@ func (m *Manager) GetPolicies() (map[string]*Policy, error) {
 
 // isNotExist checks if an error is a "not exist" error
 func isNotExist(err error) bool {
-	return err != nil && fs.ErrNotExist != nil && (err == fs.ErrNotExist || err.Error() == "file does not exist")
+	return err != nil && fs.ErrNotExist != nil && (errors.Is(err, fs.ErrNotExist) || err.Error() == "file does not exist")
 }

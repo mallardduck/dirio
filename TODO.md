@@ -71,14 +71,14 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 - [ ] Test with AWS CLI
 
 ### Security Enhance
-- [ ] Import github.com/go-git/go-billy
-- [ ] Create an internal path package to make using go-billy easier
+- [x] Import github.com/go-git/go-billy
+- [x] Create an internal path package to make using go-billy easier
   - It should provide FS helpers that will be helpful for how we read/write to buckets
   - There should be a R/O FS exposed to access and read the Minio metadata.
   - There should be a R/W FS exposed for DirIO metadata
   - A helper to get FS for specific buckets
   - A helper to get "root data dir" for creating new bucket Dirs
-- [ ] Refactor and replace all stdlib os.Open (and similar FS) calls with new go-billy based pkg
+- [x] Refactor and replace all stdlib os.Open (and similar FS) calls with new go-billy based pkg
 
 ### Improved MinIO Imports
 - [ ] Parse MinIO's Created timestamp in import

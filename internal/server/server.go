@@ -69,7 +69,7 @@ func New(config *Config) (*Server, error) {
 
 	// Check for MinIO migration
 	if err := metaMgr.CheckAndImportMinIO(); err != nil {
-		log.Warn("minio import failed", "error", err)
+		log.Warn("minio data check & import failed", "error", err)
 	}
 
 	// Initialize storage backend

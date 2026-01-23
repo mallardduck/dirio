@@ -54,6 +54,10 @@ run:
 run-mdns:
 	go run ./cmd/server serve --verbosity=verbose --mdns-enabled  --data-dir ./data --port 9000
 
+run-import:
+	go run ./cmd/server serve --log-level=debug --verbosity=verbose --mdns-enabled  --data-dir ./minio-data --port 9000
+
+
 # Build Docker image
 docker-build:
 	docker build -t dirio:latest .
