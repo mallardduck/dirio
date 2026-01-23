@@ -1,0 +1,82 @@
+<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <!-- Define path for curved text -->
+        <path id="textPath" d="M 60,200 A 140,100 0 0,1 340,200" />
+
+        <!-- Clip path for headshot - use the inner ribbon circle -->
+        <clipPath id="faceClip">
+            <circle cx="200" cy="200" r="167.5"/>
+        </clipPath>
+    </defs>
+
+    <!-- Background - pale yellow like Daria -->
+    <circle cx="200" cy="200" r="197.5" fill="#FFFF9A"/>
+
+    <!-- Ribbon border - outer black ring (thicker to compensate for visual appearance) -->
+    <circle cx="200" cy="200" r="195" fill="none" stroke="#000000" stroke-width="10"/>
+
+    <!-- Ribbon border - teal/turquoise band (matching Daria's color) -->
+    <circle cx="200" cy="200" r="183" fill="none" stroke="#00A292" stroke-width="26"/>
+
+    <!-- Inner yellow background (inside ribbon) -->
+    <circle cx="200" cy="200" r="170" fill="#FFFF9A"/>
+
+    <!-- Robot head/face - much larger and closer, cutting off chin -->
+    <g clip-path="url(#faceClip)">
+        <!-- Neck/body suggestion -->
+        <rect x="150" y="320" width="100" height="80" fill="#8BA3C0" stroke="#000000" stroke-width="4"/>
+
+        <!-- Main head -->
+        <rect x="110" y="180" width="180" height="200" rx="25" fill="#B0C4DE" stroke="#000000" stroke-width="4"/>
+
+        <!-- Antenna on top -->
+        <line x1="200" y1="180" x2="200" y2="145" stroke="#000000" stroke-width="5"/>
+        <circle cx="200" cy="138" r="9" fill="#FF6B6B" stroke="#000000" stroke-width="3"/>
+
+        <!-- Ears/side panels -->
+        <rect x="100" y="240" width="15" height="40" rx="3" fill="#8BA3C0" stroke="#000000" stroke-width="3"/>
+        <rect x="285" y="240" width="15" height="40" rx="3" fill="#8BA3C0" stroke="#000000" stroke-width="3"/>
+
+        <!-- Glasses (thick nerdy frames like Daria) -->
+        <rect x="125" y="225" width="55" height="45" rx="6" fill="none" stroke="#000000" stroke-width="7"/>
+        <rect x="220" y="225" width="55" height="45" rx="6" fill="none" stroke="#000000" stroke-width="7"/>
+        <!-- Bridge -->
+        <line x1="180" y1="247" x2="220" y2="247" stroke="#000000" stroke-width="7"/>
+
+        <!-- Eyes (glowing cyan) -->
+        <circle cx="152" cy="247" r="16" fill="#00CED1"/>
+        <circle cx="247" cy="247" r="16" fill="#00CED1"/>
+        <!-- Eye highlights -->
+        <circle cx="156" cy="242" r="6" fill="#FFFFFF"/>
+        <circle cx="251" cy="242" r="6" fill="#FFFFFF"/>
+
+        <!-- Nose bridge line -->
+        <line x1="200" y1="270" x2="200" y2="283" stroke="#000000" stroke-width="3"/>
+
+        <!-- Nose (small rectangular sensor) -->
+        <rect x="195" y="283" width="10" height="8" fill="#000000"/>
+
+        <!-- Mouth (slight downturn like Daria's deadpan expression) -->
+        <path d="M 165 315 Q 200 312 235 315" fill="none" stroke="#000000" stroke-width="4" stroke-linecap="round"/>
+
+        <!-- Robot panel lines on forehead -->
+        <line x1="130" y1="210" x2="155" y2="210" stroke="#000000" stroke-width="2"/>
+        <line x1="245" y1="210" x2="270" y2="210" stroke="#000000" stroke-width="2"/>
+
+        <!-- Screws/bolts -->
+        <circle cx="125" cy="195" r="4" fill="#000000"/>
+        <circle cx="275" cy="195" r="4" fill="#000000"/>
+        <circle cx="125" cy="350" r="4" fill="#000000"/>
+        <circle cx="275" cy="350" r="4" fill="#000000"/>
+    </g>
+
+    <!-- Ribbon border - inner black ring (drawn AFTER face to clip it) -->
+    <circle cx="200" cy="200" r="170" fill="none" stroke="#000000" stroke-width="5"/>
+
+    <!-- "DarIO" text on curved path at top, overlapping ribbon -->
+    <text font-family="Comic Sans MS, Bradley Hand, cursive" font-size="75" font-weight="bold" fill="#000000" letter-spacing="4" stroke="#FFFF98" stroke-width="5" paint-order="stroke">
+        <textPath href="#textPath" startOffset="50%" text-anchor="middle">
+            DirIO
+        </textPath>
+    </text>
+</svg>

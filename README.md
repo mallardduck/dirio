@@ -3,6 +3,10 @@
 **Objects on the outside. Directories on the inside.
 A filesystem-native S3-compatible object store.**
 
+<p align="center">
+  <img src="./assets/dirio_logo.svg" alt="DirIO Logo" width="200">
+</p>
+
 DirIO is an S3-compatible object storage server where objects are just files on disk. No chunking, no encoding, no abstraction layers—just directories and files.
 
 Built as a drop-in replacement for MinIO's discontinued single-node filesystem mode.
