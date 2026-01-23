@@ -4,8 +4,10 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/mallardduck/dirio/internal/logging"
+	"github.com/mallardduck/dirio/internal/middleware"
 )
 
 // contextKey for storing response writer in context
@@ -46,6 +48,15 @@ func (rw *responseWriter) WriteHeader(code int) {
 func PrepareAccessLogMiddleware(serverLogger *slog.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Try to get the request start time from context (set by Timing middleware)
+			// If not found, capture it now as a fallback
+			var start time.Time
+			if reqStart, ok := middleware.GetRequestStartTime(r.Context()); ok {
+				start = reqStart
+			} else {
+				start = time.Now()
+			}
+
 			// Initialize the metadata container
 			data := &LogMetadata{Custom: make(map[string]string)}
 
@@ -58,22 +69,40 @@ func PrepareAccessLogMiddleware(serverLogger *slog.Logger) func(next http.Handle
 			// Pass the new context down the chain
 			next.ServeHTTP(wrapped, r.WithContext(ctx))
 
+			// Capture response time and calculate duration
+			end := time.Now()
+			duration := end.Sub(start)
+
 			// Use context-aware logging (automatically includes trace_id)
 			log := logging.WithContext(serverLogger, r.Context())
 
 			// Build log attributes
 			attrs := []any{
 				"method", r.Method,
+				"host", r.URL.Host,
 				"path", r.URL.Path,
 				"status", wrapped.statusCode,
 				"remote", r.RemoteAddr,
+				"req_time", start.Format(time.RFC3339Nano),
+				"resp_time", end.Format(time.RFC3339Nano),
+				"duration_ms", duration.Milliseconds(),
+			}
+
+			// Add query parameters if present
+			if r.URL.RawQuery != "" {
+				attrs = append(attrs, "query", r.URL.RawQuery)
+			}
+
+			// Add fragment if present
+			if r.URL.Fragment != "" {
+				attrs = append(attrs, "fragment", r.URL.Fragment)
 			}
 
 			// Add operation name if present
 			if data.Action != "" {
 				attrs = append(attrs, "operation", data.Action)
 			}
-			if data.Custom != nil && len(data.Custom) > 0 {
+			if len(data.Custom) > 0 {
 				attrs = append(attrs, "extra", data.Custom)
 			}
 
