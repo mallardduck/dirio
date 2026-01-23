@@ -54,22 +54,21 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 - [x] Build URL generation helpers (internal vs canonical)
 - [x] Update API responses to use appropriate domain
 - [x] Mock/test domain-aware URL generation
-- [ ] Document virtual-hosted-style bucket support for future (Phase 3)
 
 ### Testing
-- [ ] Test MinIO import with real data
+- [x] Test MinIO import with real data - Comprehensive tests in `internal/minio/import_test.go`
 - [x] Test mDNS registration and discovery - Unit tests in `internal/mdns/mdns_test.go`
-- [ ] Test URL generation with different Host headers
+- [x] Test URL generation with different Host headers - Tests in `internal/urlbuilder/urlbuilder_test.go`
 - [x] Test config loading from CLI/ENV/file with precedence - Tests in `internal/config/config_test.go`
 
 ## Phase 2: Authentication, Security & Audit Logging
 
 ### Authentication
-- [ ] Implement AWS Signature V4 authentication
-- [ ] Add authentication middleware
-- [ ] Test with AWS CLI
 - [ ] Add request ID generation
 - [ ] Add access logging
+- [ ] Add authentication middleware
+- [ ] Implement AWS Signature V4 authentication
+- [ ] Test with AWS CLI
 
 ### HTTP Audit Logging
 - [ ] Design audit log middleware (streaming, queue-based)
@@ -100,6 +99,7 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 - [ ] Subdomain routing logic
 - [ ] Update URL generation for virtual-hosted style
 - [ ] DNS/mDNS considerations for wildcard subdomains
+- [ ] Document virtual-hosted-style bucket support and configuration
 
 ### Metadata
 - [ ] Per-object metadata storage (if needed)
