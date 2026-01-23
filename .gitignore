@@ -18,6 +18,7 @@ coverage.*
 # Data directory
 data/
 .data/
+minio-data/
 
 # IDE
 .vscode/
