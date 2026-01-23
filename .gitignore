@@ -11,6 +11,7 @@ dist/
 # Test binary
 *.test
 coverage.*
+server
 
 # Output of the go coverage tool
 *.out

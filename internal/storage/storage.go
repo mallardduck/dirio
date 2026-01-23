@@ -28,9 +28,9 @@ type Storage struct {
 
 // New creates a new storage backend
 func New(dataDir string, metadata *metadata.Manager) (*Storage, error) {
-	bucketsDir := filepath.Join(dataDir, "buckets")
-	if err := os.MkdirAll(bucketsDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create buckets directory: %w", err)
+	// Ensure data directory exists
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
 
 	return &Storage{
@@ -42,9 +42,7 @@ func New(dataDir string, metadata *metadata.Manager) (*Storage, error) {
 
 // ListBuckets returns all buckets
 func (s *Storage) ListBuckets() ([]s3types.Bucket, error) {
-	bucketsDir := filepath.Join(s.dataDir, "buckets")
-
-	entries, err := os.ReadDir(bucketsDir)
+	entries, err := os.ReadDir(s.dataDir)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +52,10 @@ func (s *Storage) ListBuckets() ([]s3types.Bucket, error) {
 		if !entry.IsDir() {
 			continue
 		}
-		if entry.Name() == ".minio.sys" {
+
+		// Skip metadata directories
+		name := entry.Name()
+		if name == ".minio.sys" || name == ".metadata" || name[0] == '.' {
 			continue
 		}
 
@@ -64,7 +65,7 @@ func (s *Storage) ListBuckets() ([]s3types.Bucket, error) {
 		}
 
 		buckets = append(buckets, s3types.Bucket{
-			Name:         entry.Name(),
+			Name:         name,
 			CreationDate: info.ModTime(),
 		})
 	}
@@ -211,7 +212,7 @@ func (s *Storage) ListObjects(bucket, prefix, delimiter string, maxKeys int) ([]
 
 // bucketPath returns the filesystem path for a bucket
 func (s *Storage) bucketPath(bucket string) string {
-	return filepath.Join(s.dataDir, "buckets", bucket)
+	return filepath.Join(s.dataDir, bucket)
 }
 
 // objectPath returns the filesystem path for an object

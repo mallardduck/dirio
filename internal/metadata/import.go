@@ -48,15 +48,33 @@ func (m *Manager) CheckAndImportMinIO() error {
 		return fmt.Errorf("MinIO import failed: %w", err)
 	}
 
+	// Convert and save policies
+	if len(result.Policies) > 0 {
+		for _, minioPolicy := range result.Policies {
+			policy := &Policy{
+				Name:       minioPolicy.Name,
+				PolicyJSON: minioPolicy.PolicyJSON,
+				CreateDate: minioPolicy.CreateDate,
+				UpdateDate: minioPolicy.UpdateDate,
+			}
+			if err := m.SavePolicy(policy); err != nil {
+				fmt.Printf("Warning: failed to save policy %s: %v\n", minioPolicy.Name, err)
+				continue
+			}
+		}
+		fmt.Printf("Imported %d policies\n", len(result.Policies))
+	}
+
 	// Convert and save users
 	if len(result.Users) > 0 {
 		dirioUsers := make(map[string]*User)
 		for username, minioUser := range result.Users {
 			dirioUsers[username] = &User{
-				AccessKey: minioUser.AccessKey,
-				SecretKey: minioUser.SecretKey,
-				Status:    minioUser.Status,
-				UpdatedAt: minioUser.UpdatedAt,
+				AccessKey:      minioUser.AccessKey,
+				SecretKey:      minioUser.SecretKey,
+				Status:         minioUser.Status,
+				UpdatedAt:      minioUser.UpdatedAt,
+				AttachedPolicy: minioUser.AttachedPolicy,
 			}
 		}
 		if err := m.SaveUsers(dirioUsers); err != nil {

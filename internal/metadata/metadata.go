@@ -13,15 +13,17 @@ type Manager struct {
 	dataDir      string
 	metadataDir  string
 	bucketsDir   string
+	policiesDir  string
 	minioSysDir  string
 }
 
 // User represents a user with credentials
 type User struct {
-	AccessKey string    `json:"accessKey"`
-	SecretKey string    `json:"secretKey"`
-	Status    string    `json:"status"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	AccessKey      string    `json:"accessKey"`
+	SecretKey      string    `json:"secretKey"`
+	Status         string    `json:"status"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+	AttachedPolicy string    `json:"attachedPolicy,omitempty"` // Name of attached IAM policy
 }
 
 // BucketMetadata represents bucket configuration
@@ -30,6 +32,14 @@ type BucketMetadata struct {
 	Owner     string    `json:"owner"`
 	Created   time.Time `json:"created"`
 	Policy    string    `json:"policy,omitempty"`    // S3 bucket policy JSON
+}
+
+// Policy represents an IAM policy
+type Policy struct {
+	Name       string    `json:"name"`
+	PolicyJSON string    `json:"policyJson"` // IAM policy document (S3 format)
+	CreateDate time.Time `json:"createDate"`
+	UpdateDate time.Time `json:"updateDate"`
 }
 
 // ObjectMetadata represents object metadata
@@ -44,17 +54,22 @@ type ObjectMetadata struct {
 func New(dataDir string) (*Manager, error) {
 	metadataDir := filepath.Join(dataDir, ".metadata")
 	bucketsDir := filepath.Join(metadataDir, "buckets")
+	policiesDir := filepath.Join(metadataDir, "policies")
 	minioSysDir := filepath.Join(dataDir, ".minio.sys")
 
 	// Create metadata directories
 	if err := os.MkdirAll(bucketsDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create metadata directory: %w", err)
+		return nil, fmt.Errorf("failed to create buckets directory: %w", err)
+	}
+	if err := os.MkdirAll(policiesDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create policies directory: %w", err)
 	}
 
 	return &Manager{
 		dataDir:     dataDir,
 		metadataDir: metadataDir,
 		bucketsDir:  bucketsDir,
+		policiesDir: policiesDir,
 		minioSysDir: minioSysDir,
 	}, nil
 }
@@ -148,11 +163,68 @@ func (m *Manager) GetUsers() (map[string]*User, error) {
 // SaveUsers saves all users
 func (m *Manager) SaveUsers(users map[string]*User) error {
 	usersPath := filepath.Join(m.metadataDir, "users.json")
-	
+
 	data, err := json.MarshalIndent(users, "", "  ")
 	if err != nil {
 		return err
 	}
 
 	return os.WriteFile(usersPath, data, 0644)
+}
+
+// SavePolicy saves a single policy
+func (m *Manager) SavePolicy(policy *Policy) error {
+	policyPath := filepath.Join(m.policiesDir, policy.Name+".json")
+
+	data, err := json.MarshalIndent(policy, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(policyPath, data, 0644)
+}
+
+// GetPolicy retrieves a policy by name
+func (m *Manager) GetPolicy(name string) (*Policy, error) {
+	policyPath := filepath.Join(m.policiesDir, name+".json")
+
+	data, err := os.ReadFile(policyPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var policy Policy
+	if err := json.Unmarshal(data, &policy); err != nil {
+		return nil, err
+	}
+
+	return &policy, nil
+}
+
+// GetPolicies retrieves all policies
+func (m *Manager) GetPolicies() (map[string]*Policy, error) {
+	entries, err := os.ReadDir(m.policiesDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return make(map[string]*Policy), nil
+		}
+		return nil, err
+	}
+
+	policies := make(map[string]*Policy)
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+
+		policyName := entry.Name()[:len(entry.Name())-5] // Remove .json
+		policy, err := m.GetPolicy(policyName)
+		if err != nil {
+			fmt.Printf("Warning: failed to load policy %s: %v\n", policyName, err)
+			continue
+		}
+		policies[policyName] = policy
+	}
+
+	return policies, nil
 }
