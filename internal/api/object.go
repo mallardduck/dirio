@@ -2,10 +2,10 @@ package api
 
 import (
 	"io"
-	"log/slog"
 	"net/http"
 	"strconv"
 
+	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/storage"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
@@ -38,7 +38,8 @@ func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request, bucket, key,
 	w.WriteHeader(http.StatusOK)
 	if _, err := io.Copy(w, obj.Content); err != nil {
 		// Can't send error response after headers written, but log for debugging
-		slog.Warn("failed to write object content", "bucket", bucket, "key", key, "error", err)
+		log := logging.ComponentWithContext(r.Context(), "api")
+		log.Warn("failed to write object content", "bucket", bucket, "key", key, "error", err)
 	}
 }
 

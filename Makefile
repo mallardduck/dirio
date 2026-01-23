@@ -52,11 +52,7 @@ run:
 
 # Run the server locally w/ mdns
 run-mdns:
-	go run ./cmd/server serve --log-level=debug --verbosity=verbose --mdns-enabled  --data-dir ./data --port 9000
-
-run-mdns-master:
-	go run ./cmd/server serve --log-level=debug --verbosity=verbose --mdns-enabled --mdns-mode=master --data-dir ./data --port 9000
-
+	go run ./cmd/server serve --verbosity=verbose --mdns-enabled  --data-dir ./data --port 9000
 
 # Build Docker image
 docker-build:

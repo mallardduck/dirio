@@ -14,6 +14,7 @@ import (
 	"github.com/mallardduck/dirio/internal/api"
 	"github.com/mallardduck/dirio/internal/auth"
 	"github.com/mallardduck/dirio/internal/logging"
+	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/mdns"
 	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/internal/middleware"
@@ -107,9 +108,10 @@ func (s *Server) setupRoutes() {
 	// Object operations
 	s.router.HandleFunc("/{bucket}/{key:.*}", apiHandler.ObjectHandler).Methods("GET", "PUT", "HEAD", "DELETE")
 
-	// Add middleware (request ID first, then logging, then auth)
+	// Add middleware (trace ID first, then request ID, then logging, then auth)
+	s.router.Use(middleware.TraceID)
 	s.router.Use(middleware.RequestID)
-	s.router.Use(s.loggingMiddleware)
+	s.router.Use(loggingHttp.PrepareLoggingMiddleware(s.log))
 	s.router.Use(s.authMiddleware)
 }
 
@@ -120,37 +122,6 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 		// For now, just pass through - we'll add this in phase 2
 		next.ServeHTTP(w, r)
 	})
-}
-
-// loggingMiddleware logs incoming HTTP requests
-func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Wrap response writer to capture status code
-		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-		next.ServeHTTP(wrapped, r)
-
-		// Extract request ID from context
-		requestID := middleware.GetRequestID(r.Context())
-
-		s.log.Info("request handled",
-			"request_id", requestID,
-			"method", r.Method,
-			"path", r.URL.Path,
-			"status", wrapped.statusCode,
-			"remote", r.RemoteAddr,
-		)
-	})
-}
-
-// responseWriter wraps http.ResponseWriter to capture status code
-type responseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rw *responseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
 }
 
 // Start begins serving HTTP requests with graceful shutdown support.

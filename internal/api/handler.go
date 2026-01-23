@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/mallardduck/dirio/internal/auth"
+	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/internal/middleware"
 	"github.com/mallardduck/dirio/internal/storage"
@@ -39,6 +40,10 @@ func New(storage *storage.Storage, metadata *metadata.Manager, auth *auth.Authen
 
 // ListBuckets handles GET / (list all buckets)
 func (h *Handler) ListBuckets(w http.ResponseWriter, r *http.Request) {
+	if data, ok := loggingHttp.GetLogData(r.Context()); ok {
+		data.Action = "ListBuckets"
+	}
+
 	requestID := middleware.GetRequestID(r.Context())
 
 	buckets, err := h.storage.ListBuckets()
@@ -60,7 +65,8 @@ func (h *Handler) ListBuckets(w http.ResponseWriter, r *http.Request) {
 
 // BucketHandler routes bucket operations based on query params and method
 func (h *Handler) BucketHandler(w http.ResponseWriter, r *http.Request) {
-	requestID := middleware.GetRequestID(r.Context())
+	ctx := r.Context()
+	requestID := middleware.GetRequestID(ctx)
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -69,11 +75,17 @@ func (h *Handler) BucketHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Handle special query operations
 	if _, ok := query["location"]; ok {
+		if data, ok := loggingHttp.GetLogData(ctx); ok {
+			data.Action = "GetBucketLocation"
+		}
 		h.GetBucketLocation(w, r, bucket, requestID)
 		return
 	}
 
 	if query.Get("list-type") == "2" {
+		if data, ok := loggingHttp.GetLogData(ctx); ok {
+			data.Action = "ListObjectsV2"
+		}
 		h.ListObjectsV2(w, r, bucket, requestID)
 		return
 	}
@@ -81,12 +93,24 @@ func (h *Handler) BucketHandler(w http.ResponseWriter, r *http.Request) {
 	// Handle standard bucket operations
 	switch r.Method {
 	case "GET":
+		if data, ok := loggingHttp.GetLogData(ctx); ok {
+			data.Action = "ListObjects"
+		}
 		h.ListObjects(w, r, bucket, requestID)
 	case "PUT":
+		if data, ok := loggingHttp.GetLogData(ctx); ok {
+			data.Action = "CreateBucket"
+		}
 		h.CreateBucket(w, r, bucket, requestID)
 	case "HEAD":
+		if data, ok := loggingHttp.GetLogData(ctx); ok {
+			data.Action = "HeadBucket"
+		}
 		h.HeadBucket(w, r, bucket, requestID)
 	case "DELETE":
+		if data, ok := loggingHttp.GetLogData(ctx); ok {
+			data.Action = "DeleteBucket"
+		}
 		h.DeleteBucket(w, r, bucket, requestID)
 	default:
 		writeErrorResponse(w, requestID, s3types.ErrMethodNotAllowed, nil)
@@ -95,19 +119,32 @@ func (h *Handler) BucketHandler(w http.ResponseWriter, r *http.Request) {
 
 // ObjectHandler routes object operations based on method
 func (h *Handler) ObjectHandler(w http.ResponseWriter, r *http.Request) {
-	requestID := middleware.GetRequestID(r.Context())
+	ctx := r.Context()
+	requestID := middleware.GetRequestID(ctx)
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	key := vars["key"]
 
 	switch r.Method {
 	case "GET":
+		if data, ok := loggingHttp.GetLogData(ctx); ok {
+			data.Action = "GetObject"
+		}
 		h.GetObject(w, r, bucket, key, requestID)
 	case "PUT":
+		if data, ok := loggingHttp.GetLogData(ctx); ok {
+			data.Action = "PutObject"
+		}
 		h.PutObject(w, r, bucket, key, requestID)
 	case "HEAD":
+		if data, ok := loggingHttp.GetLogData(ctx); ok {
+			data.Action = "HeadObject"
+		}
 		h.HeadObject(w, r, bucket, key, requestID)
 	case "DELETE":
+		if data, ok := loggingHttp.GetLogData(ctx); ok {
+			data.Action = "DeleteObject"
+		}
 		h.DeleteObject(w, r, bucket, key, requestID)
 	default:
 		writeErrorResponse(w, requestID, s3types.ErrMethodNotAllowed, nil)
