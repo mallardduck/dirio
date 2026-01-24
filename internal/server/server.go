@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/xml"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -19,8 +20,10 @@ import (
 	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/internal/middleware"
 	"github.com/mallardduck/dirio/internal/path"
+	"github.com/mallardduck/dirio/internal/sigv4"
 	"github.com/mallardduck/dirio/internal/storage"
 	"github.com/mallardduck/dirio/internal/urlbuilder"
+	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
 // Config holds server configuration
@@ -126,10 +129,56 @@ func (s *Server) setupRoutes() {
 // authMiddleware validates authentication for all requests
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement AWS Signature V4 authentication
-		// For now, just pass through - we'll add this in phase 2
+		// Skip authentication for health check endpoints (if we add them in the future)
+		// For now, require auth for all requests
+
+		requestID := middleware.GetRequestID(r.Context())
+
+		// Extract access key from Authorization header
+		accessKey, err := sigv4.GetAccessKey(r)
+		if err != nil {
+			// Missing or invalid Authorization header
+			s.writeAuthError(w, requestID, s3types.ErrAccessDenied)
+			return
+		}
+
+		// Look up user and get secret key
+		user, err := s.auth.GetUserForAccessKey(accessKey)
+		if err != nil || user == nil {
+			s.writeAuthError(w, requestID, s3types.ErrInvalidAccessKeyID)
+			return
+		}
+
+		// Check if user account is active
+		if user.Status != "on" {
+			s.writeAuthError(w, requestID, s3types.ErrAccessDenied)
+			return
+		}
+
+		// Verify AWS Signature V4
+		if err := sigv4.VerifySignature(r, user.SecretKey); err != nil {
+			s.writeAuthError(w, requestID, s3types.ErrSignatureDoesNotMatch)
+			return
+		}
+
+		// Authentication successful - proceed to next handler
 		next.ServeHTTP(w, r)
 	})
+}
+
+// writeAuthError writes an S3 error response
+func (s *Server) writeAuthError(w http.ResponseWriter, requestID string, errCode s3types.ErrorCode) {
+	w.Header().Set("Content-Type", "application/xml")
+	w.WriteHeader(errCode.HTTPStatus())
+
+	response := s3types.ErrorResponse{
+		Code:      errCode.String(),
+		Message:   errCode.Description(),
+		RequestID: requestID,
+	}
+
+	w.Write([]byte(xml.Header))
+	xml.NewEncoder(w).Encode(response)
 }
 
 // Start begins serving HTTP requests with graceful shutdown support.

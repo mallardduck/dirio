@@ -15,7 +15,10 @@ func TestListBucketsEmpty(t *testing.T) {
 	ts := NewTestServer(t)
 	defer ts.Cleanup()
 
-	resp, err := http.Get(ts.URL("/"))
+	req, err := http.NewRequest("GET", ts.URL("/"), nil)
+	require.NoError(t, err)
+	ts.SignRequest(req, nil)
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -31,6 +34,8 @@ func TestCreateBucket(t *testing.T) {
 	defer ts.Cleanup()
 
 	req, _ := http.NewRequest("PUT", ts.BucketURL("test-bucket"), nil)
+	ts.SignRequest(req, nil)
+	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -47,6 +52,8 @@ func TestCreateBucketDuplicate(t *testing.T) {
 
 	// Try to create duplicate
 	req, _ := http.NewRequest("PUT", ts.BucketURL("test-bucket"), nil)
+	ts.SignRequest(req, nil)
+	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -66,7 +73,10 @@ func TestListBucketsAfterCreate(t *testing.T) {
 	ts.CreateBucket(t, "bucket-alpha")
 	ts.CreateBucket(t, "bucket-beta")
 
-	resp, err := http.Get(ts.URL("/"))
+	req, err := http.NewRequest("GET", ts.URL("/"), nil)
+	require.NoError(t, err)
+	ts.SignRequest(req, nil)
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -85,6 +95,8 @@ func TestHeadBucketExists(t *testing.T) {
 	ts.CreateBucket(t, "test-bucket")
 
 	req, _ := http.NewRequest("HEAD", ts.BucketURL("test-bucket"), nil)
+	ts.SignRequest(req, nil)
+	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -97,6 +109,8 @@ func TestHeadBucketNotExists(t *testing.T) {
 	defer ts.Cleanup()
 
 	req, _ := http.NewRequest("HEAD", ts.BucketURL("nonexistent"), nil)
+	ts.SignRequest(req, nil)
+	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -110,7 +124,10 @@ func TestGetBucketLocation(t *testing.T) {
 
 	ts.CreateBucket(t, "test-bucket")
 
-	resp, err := http.Get(ts.BucketURL("test-bucket") + "?location")
+	req, err := http.NewRequest("GET", ts.BucketURL("test-bucket")+"?location", nil)
+	require.NoError(t, err)
+	ts.SignRequest(req, nil)
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -128,6 +145,7 @@ func TestDeleteBucketEmpty(t *testing.T) {
 	ts.CreateBucket(t, "test-bucket")
 
 	req, _ := http.NewRequest("DELETE", ts.BucketURL("test-bucket"), nil)
+	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -136,6 +154,7 @@ func TestDeleteBucketEmpty(t *testing.T) {
 
 	// Verify bucket is gone
 	headReq, _ := http.NewRequest("HEAD", ts.BucketURL("test-bucket"), nil)
+	ts.SignRequest(headReq, nil)
 	headResp, _ := http.DefaultClient.Do(headReq)
 	defer headResp.Body.Close()
 
@@ -150,6 +169,8 @@ func TestDeleteBucketNotEmpty(t *testing.T) {
 	ts.PutObject(t, "test-bucket", "file.txt", "content")
 
 	req, _ := http.NewRequest("DELETE", ts.BucketURL("test-bucket"), nil)
+	ts.SignRequest(req, nil)
+	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -166,6 +187,8 @@ func TestDeleteBucketNotExists(t *testing.T) {
 	defer ts.Cleanup()
 
 	req, _ := http.NewRequest("DELETE", ts.BucketURL("nonexistent"), nil)
+	ts.SignRequest(req, nil)
+	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -184,6 +207,8 @@ func TestCreateBucket_ReturnsLocationHeader(t *testing.T) {
 	defer ts.Cleanup()
 
 	req, _ := http.NewRequest("PUT", ts.BucketURL("test-bucket"), nil)
+	ts.SignRequest(req, nil)
+	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -203,7 +228,7 @@ func TestCreateBucket_LocationWithCustomHost(t *testing.T) {
 
 	req, _ := http.NewRequest("PUT", ts.BucketURL("test-bucket"), nil)
 	req.Host = "dirio-s3.local:9000"
-
+	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -220,6 +245,8 @@ func TestCreateBucket_LocationWithXForwardedProto(t *testing.T) {
 	defer ts.Cleanup()
 
 	req, _ := http.NewRequest("PUT", ts.BucketURL("test-bucket"), nil)
+	ts.SignRequest(req, nil)
+	ts.SignRequest(req, nil)
 	req.Header.Set("X-Forwarded-Proto", "https")
 
 	resp, err := http.DefaultClient.Do(req)

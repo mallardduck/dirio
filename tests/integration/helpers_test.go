@@ -1,25 +1,31 @@
 package integration
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/mallardduck/dirio/internal/server"
+	"github.com/mallardduck/dirio/internal/sigv4"
 )
 
 // TestServer wraps a dirio server for integration testing
 type TestServer struct {
-	Server  *server.Server
-	DataDir string
-	Port    int
-	BaseURL string
+	Server    *server.Server
+	DataDir   string
+	Port      int
+	BaseURL   string
+	AccessKey string
+	SecretKey string
 }
 
 // NewTestServer creates and starts a new test server
@@ -49,10 +55,12 @@ func NewTestServer(t *testing.T) *TestServer {
 	}
 
 	ts := &TestServer{
-		Server:  srv,
-		DataDir: dataDir,
-		Port:    port,
-		BaseURL: fmt.Sprintf("http://localhost:%d", port),
+		Server:    srv,
+		DataDir:   dataDir,
+		Port:      port,
+		BaseURL:   fmt.Sprintf("http://localhost:%d", port),
+		AccessKey: config.AccessKey,
+		SecretKey: config.SecretKey,
 	}
 
 	// Start server in background
@@ -119,10 +127,72 @@ func (ts *TestServer) ObjectURL(bucket, key string) string {
 	return fmt.Sprintf("%s/%s/%s", ts.BaseURL, bucket, key)
 }
 
+// NewRequest creates a new signed HTTP request
+func (ts *TestServer) NewRequest(method, url string, body []byte) (*http.Request, error) {
+	var bodyReader io.Reader
+	if body != nil {
+		bodyReader = strings.NewReader(string(body))
+	}
+	req, err := http.NewRequest(method, url, bodyReader)
+	if err != nil {
+		return nil, err
+	}
+	if body != nil {
+		req.ContentLength = int64(len(body))
+	}
+	ts.SignRequest(req, body)
+	return req, nil
+}
+
+// SignRequest signs an HTTP request with AWS Signature V4
+func (ts *TestServer) SignRequest(req *http.Request, body []byte) {
+	// Get current timestamp
+	timestamp := time.Now().UTC()
+
+	// Calculate payload hash
+	var payloadHash string
+	if body != nil {
+		h := sha256.Sum256(body)
+		payloadHash = hex.EncodeToString(h[:])
+	} else {
+		// Empty payload hash
+		h := sha256.Sum256([]byte{})
+		payloadHash = hex.EncodeToString(h[:])
+	}
+
+	// Set required headers
+	req.Header.Set("X-Amz-Date", timestamp.Format("20060102T150405Z"))
+	req.Header.Set("X-Amz-Content-Sha256", payloadHash)
+	req.Header.Set("Host", req.Host)
+
+	// Signed headers (must be sorted)
+	signedHeaders := []string{"host", "x-amz-content-sha256", "x-amz-date"}
+	sort.Strings(signedHeaders)
+
+	// Build canonical request
+	canonicalRequest := sigv4.BuildCanonicalRequest(req, signedHeaders, payloadHash)
+
+	// Build string to sign
+	region := "us-east-1"
+	stringToSign := sigv4.BuildStringToSign(timestamp, region, canonicalRequest)
+
+	// Compute signature
+	signature := sigv4.ComputeSignature(ts.SecretKey, timestamp, region, stringToSign)
+
+	// Build Authorization header
+	dateStamp := timestamp.Format("20060102")
+	credentialScope := fmt.Sprintf("%s/%s/s3/aws4_request", dateStamp, region)
+	authHeader := fmt.Sprintf("AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s",
+		ts.AccessKey, credentialScope, strings.Join(signedHeaders, ";"), signature)
+
+	req.Header.Set("Authorization", authHeader)
+}
+
 // CreateBucket creates a bucket and fails the test if it fails
 func (ts *TestServer) CreateBucket(t *testing.T, bucket string) {
 	t.Helper()
 	req, _ := http.NewRequest("PUT", ts.BucketURL(bucket), nil)
+	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("Failed to create bucket %s: %v", bucket, err)
@@ -145,8 +215,10 @@ func (ts *TestServer) CreateTestObjects(t *testing.T, bucket string, objects map
 // PutObject uploads an object
 func (ts *TestServer) PutObject(t *testing.T, bucket, key, content string) {
 	t.Helper()
+	body := []byte(content)
 	req, _ := http.NewRequest("PUT", ts.ObjectURL(bucket, key), strings.NewReader(content))
 	req.ContentLength = int64(len(content))
+	ts.SignRequest(req, body)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -154,8 +226,8 @@ func (ts *TestServer) PutObject(t *testing.T, bucket, key, content string) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("Failed to put object %s/%s: status %d, body: %s", bucket, key, resp.StatusCode, body)
+		respBody, _ := io.ReadAll(resp.Body)
+		t.Fatalf("Failed to put object %s/%s: status %d, body: %s", bucket, key, resp.StatusCode, respBody)
 	}
 }
 

@@ -18,7 +18,10 @@ func TestListObjectsV2Empty(t *testing.T) {
 
 	ts.CreateBucket(t, "test-bucket")
 
-	resp, err := http.Get(ts.BucketURL("test-bucket") + "?list-type=2")
+	req, err := http.NewRequest("GET", ts.BucketURL("test-bucket")+"?list-type=2", nil)
+	require.NoError(t, err)
+	ts.SignRequest(req, nil)
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -47,7 +50,10 @@ func TestListObjectsV2WithObjects(t *testing.T) {
 		"docs/sub/nested.md": "nested",
 	})
 
-	resp, err := http.Get(ts.BucketURL("test-bucket") + "?list-type=2")
+	req, err := http.NewRequest("GET", ts.BucketURL("test-bucket")+"?list-type=2", nil)
+	require.NoError(t, err)
+	ts.SignRequest(req, nil)
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -88,7 +94,10 @@ func TestListObjectsV2WithPrefix(t *testing.T) {
 	})
 
 	// Test prefix=photos/
-	resp, err := http.Get(ts.BucketURL("test-bucket") + "?list-type=2&prefix=photos/")
+	req, err := http.NewRequest("GET", ts.BucketURL("test-bucket")+"?list-type=2&prefix=photos/", nil)
+	require.NoError(t, err)
+	ts.SignRequest(req, nil)
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -118,7 +127,10 @@ func TestListObjectsV2WithPrefixPartialMatch(t *testing.T) {
 	})
 
 	// Test prefix=file (should match file1.txt, file2.txt, filter.log)
-	resp, err := http.Get(ts.BucketURL("test-bucket") + "?list-type=2&prefix=file")
+	req, err := http.NewRequest("GET", ts.BucketURL("test-bucket")+"?list-type=2&prefix=file", nil)
+	require.NoError(t, err)
+	ts.SignRequest(req, nil)
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -133,7 +145,10 @@ func TestListObjectsV2NonexistentBucket(t *testing.T) {
 	ts := NewTestServer(t)
 	defer ts.Cleanup()
 
-	resp, err := http.Get(ts.BucketURL("nonexistent") + "?list-type=2")
+	req, err := http.NewRequest("GET", ts.BucketURL("nonexistent")+"?list-type=2", nil)
+	require.NoError(t, err)
+	ts.SignRequest(req, nil)
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -155,7 +170,10 @@ func TestListObjectsV1(t *testing.T) {
 	})
 
 	// V1 is the default (no list-type param)
-	resp, err := http.Get(ts.BucketURL("test-bucket"))
+	req, err := http.NewRequest("GET", ts.BucketURL("test-bucket"), nil)
+	require.NoError(t, err)
+	ts.SignRequest(req, nil)
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -181,7 +199,10 @@ func TestListObjectsV1WithPrefix(t *testing.T) {
 		"config/app.yaml": "config",
 	})
 
-	resp, err := http.Get(ts.BucketURL("test-bucket") + "?prefix=logs/")
+	req, err := http.NewRequest("GET", ts.BucketURL("test-bucket")+"?prefix=logs/", nil)
+	require.NoError(t, err)
+	ts.SignRequest(req, nil)
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -198,7 +219,10 @@ func TestListObjectsV1NonexistentBucket(t *testing.T) {
 	ts := NewTestServer(t)
 	defer ts.Cleanup()
 
-	resp, err := http.Get(ts.BucketURL("nonexistent"))
+	req, err := http.NewRequest("GET", ts.BucketURL("nonexistent"), nil)
+	require.NoError(t, err)
+	ts.SignRequest(req, nil)
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -216,7 +240,10 @@ func TestListObjectsResponseFields(t *testing.T) {
 	ts.CreateBucket(t, "test-bucket")
 	ts.PutObject(t, "test-bucket", "test.txt", "test content")
 
-	resp, err := http.Get(ts.BucketURL("test-bucket") + "?list-type=2")
+	req, err := http.NewRequest("GET", ts.BucketURL("test-bucket")+"?list-type=2", nil)
+	require.NoError(t, err)
+	ts.SignRequest(req, nil)
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 

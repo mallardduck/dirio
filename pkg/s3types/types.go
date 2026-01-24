@@ -100,6 +100,7 @@ const (
 	ErrSignatureDoesNotMatch
 	ErrInvalidBucketName
 	ErrInvalidObjectKey
+	ErrAccessDenied
 )
 
 // String returns the string representation of error code
@@ -127,6 +128,8 @@ func (e ErrorCode) String() string {
 		return "InvalidBucketName"
 	case ErrInvalidObjectKey:
 		return "KeyTooLongError"
+	case ErrAccessDenied:
+		return "AccessDenied"
 	default:
 		return "InternalError"
 	}
@@ -155,6 +158,8 @@ func (e ErrorCode) Description() string {
 		return "The specified bucket is not valid."
 	case ErrInvalidObjectKey:
 		return "Your key is too long or contains invalid characters."
+	case ErrAccessDenied:
+		return "Access Denied"
 	default:
 		return "Internal error"
 	}
@@ -171,7 +176,7 @@ func (e ErrorCode) HTTPStatus() int {
 		return http.StatusConflict
 	case ErrMethodNotAllowed:
 		return http.StatusMethodNotAllowed
-	case ErrInvalidAccessKeyID, ErrSignatureDoesNotMatch:
+	case ErrInvalidAccessKeyID, ErrSignatureDoesNotMatch, ErrAccessDenied:
 		return http.StatusForbidden
 	case ErrInvalidBucketName, ErrInvalidObjectKey:
 		return http.StatusBadRequest

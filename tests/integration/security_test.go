@@ -88,6 +88,7 @@ func TestBucketNameValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req, err := http.NewRequest("PUT", ts.BucketURL(tt.bucketName), nil)
+			ts.SignRequest(req, nil)
 			require.NoError(t, err)
 
 			resp, err := http.DefaultClient.Do(req)
@@ -164,7 +165,9 @@ func TestObjectKeyValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			bodyBytes := []byte("test content")
 			req, err := http.NewRequest("PUT", ts.ObjectURL("test-bucket", tt.key), strings.NewReader("test content"))
+			ts.SignRequest(req, bodyBytes)
 			require.NoError(t, err)
 
 			resp, err := http.DefaultClient.Do(req)
@@ -201,7 +204,7 @@ func TestFilesystemIsolation(t *testing.T) {
 		// Verify objects can be retrieved
 		req, err := http.NewRequest("GET", ts.ObjectURL("test-bucket", "file1.txt"), nil)
 		require.NoError(t, err)
-
+		ts.SignRequest(req, nil)
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -223,6 +226,7 @@ func TestFilesystemIsolation(t *testing.T) {
 
 		// Verify each bucket has its own content
 		req1, _ := http.NewRequest("GET", ts.ObjectURL("bucket1", "test.txt"), nil)
+		ts.SignRequest(req1, nil)
 		resp1, err := http.DefaultClient.Do(req1)
 		require.NoError(t, err)
 		defer resp1.Body.Close()
@@ -231,6 +235,7 @@ func TestFilesystemIsolation(t *testing.T) {
 		assert.Equal(t, "content from bucket1", string(body1))
 
 		req2, _ := http.NewRequest("GET", ts.ObjectURL("bucket2", "test.txt"), nil)
+		ts.SignRequest(req2, nil)
 		resp2, err := http.DefaultClient.Do(req2)
 		require.NoError(t, err)
 		defer resp2.Body.Close()
@@ -249,6 +254,7 @@ func TestHeadObjectKeyValidation(t *testing.T) {
 
 	t.Run("HEAD with nonexistent key returns 404", func(t *testing.T) {
 		req, err := http.NewRequest("HEAD", ts.ObjectURL("test-bucket", "nonexistent.txt"), nil)
+		ts.SignRequest(req, nil)
 		require.NoError(t, err)
 
 		resp, err := http.DefaultClient.Do(req)
@@ -263,6 +269,7 @@ func TestHeadObjectKeyValidation(t *testing.T) {
 		ts.PutObject(t, "test-bucket", "valid.txt", "content")
 
 		req, err := http.NewRequest("HEAD", ts.ObjectURL("test-bucket", "valid.txt"), nil)
+		ts.SignRequest(req, nil)
 		require.NoError(t, err)
 
 		resp, err := http.DefaultClient.Do(req)
