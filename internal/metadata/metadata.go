@@ -13,6 +13,14 @@ import (
 	"github.com/mallardduck/dirio/internal/path"
 )
 
+// Metadata format versions
+const (
+	UserMetadataVersion   = "1.0.0"
+	BucketMetadataVersion = "1.0.0"
+	PolicyMetadataVersion = "1.0.0"
+	ObjectMetadataVersion = "1.0.0"
+)
+
 // Manager handles metadata storage and retrieval
 type Manager struct {
 	rootFS     billy.Filesystem
@@ -21,6 +29,7 @@ type Manager struct {
 
 // User represents a user with credentials
 type User struct {
+	Version        string    `json:"version"`                  // DirIO metadata version
 	AccessKey      string    `json:"accessKey"`
 	SecretKey      string    `json:"secretKey"`
 	Status         string    `json:"status"`
@@ -30,14 +39,35 @@ type User struct {
 
 // BucketMetadata represents bucket configuration
 type BucketMetadata struct {
+	Version string    `json:"version"` // DirIO metadata version
 	Name    string    `json:"name"`
 	Owner   string    `json:"owner"`
 	Created time.Time `json:"created"`
 	Policy  string    `json:"policy,omitempty"` // S3 bucket policy JSON
+
+	// Extended MinIO metadata (imported but may not be actively used yet)
+	NotificationConfigXML       string    `json:"notificationConfig,omitempty"`
+	LifecycleConfigXML          string    `json:"lifecycleConfig,omitempty"`
+	ObjectLockConfigXML         string    `json:"objectLockConfig,omitempty"`
+	VersioningConfigXML         string    `json:"versioningConfig,omitempty"`
+	EncryptionConfigXML         string    `json:"encryptionConfig,omitempty"`
+	TaggingConfigXML            string    `json:"taggingConfig,omitempty"`
+	QuotaConfigJSON             string    `json:"quotaConfig,omitempty"`
+	ReplicationConfigXML        string    `json:"replicationConfig,omitempty"`
+	BucketTargetsConfigJSON     string    `json:"bucketTargetsConfig,omitempty"`
+	BucketTargetsConfigMetaJSON string    `json:"bucketTargetsConfigMeta,omitempty"`
+	PolicyConfigUpdatedAt       time.Time `json:"policyConfigUpdatedAt,omitempty"`
+	ObjectLockConfigUpdatedAt   time.Time `json:"objectLockConfigUpdatedAt,omitempty"`
+	EncryptionConfigUpdatedAt   time.Time `json:"encryptionConfigUpdatedAt,omitempty"`
+	TaggingConfigUpdatedAt      time.Time `json:"taggingConfigUpdatedAt,omitempty"`
+	QuotaConfigUpdatedAt        time.Time `json:"quotaConfigUpdatedAt,omitempty"`
+	ReplicationConfigUpdatedAt  time.Time `json:"replicationConfigUpdatedAt,omitempty"`
+	VersioningConfigUpdatedAt   time.Time `json:"versioningConfigUpdatedAt,omitempty"`
 }
 
 // Policy represents an IAM policy
 type Policy struct {
+	Version    string    `json:"version"`    // DirIO metadata version
 	Name       string    `json:"name"`
 	PolicyJSON string    `json:"policyJson"` // IAM policy document (S3 format)
 	CreateDate time.Time `json:"createDate"`
@@ -46,6 +76,7 @@ type Policy struct {
 
 // ObjectMetadata represents object metadata
 type ObjectMetadata struct {
+	Version        string            `json:"version"`                  // DirIO metadata version
 	ContentType    string            `json:"contentType"`
 	Size           int64             `json:"size"`
 	ETag           string            `json:"etag"`
@@ -72,6 +103,9 @@ func New(rootFS billy.Filesystem) (*Manager, error) {
 	if err := metadataFS.MkdirAll("policies", 0755); err != nil {
 		return nil, fmt.Errorf("failed to create policies directory: %w", err)
 	}
+	if err := metadataFS.MkdirAll("objects", 0755); err != nil {
+		return nil, fmt.Errorf("failed to create objects directory: %w", err)
+	}
 
 	return &Manager{
 		rootFS:     rootFS,
@@ -82,6 +116,7 @@ func New(rootFS billy.Filesystem) (*Manager, error) {
 // CreateBucket creates metadata for a new bucket
 func (m *Manager) CreateBucket(bucket string) error {
 	meta := BucketMetadata{
+		Version: BucketMetadataVersion,
 		Name:    bucket,
 		Owner:   "root", // TODO: Get from auth context
 		Created: time.Now(),
@@ -117,7 +152,7 @@ func (m *Manager) GetBucketMetadata(bucket string) (*BucketMetadata, error) {
 func (m *Manager) saveBucketMetadata(bucket string, meta *BucketMetadata) error {
 	metaPath := filepath.Join("buckets", bucket+".json")
 
-	data, err := json.MarshalIndent(meta, "", "  ")
+	data, err := json.Marshal(meta)
 	if err != nil {
 		return err
 	}
@@ -127,21 +162,62 @@ func (m *Manager) saveBucketMetadata(bucket string, meta *BucketMetadata) error 
 
 // GetObjectMetadata retrieves object metadata
 func (m *Manager) GetObjectMetadata(bucket, key string) (*ObjectMetadata, error) {
-	// For now, we don't store per-object metadata separately
-	// We can add this later if needed
-	return nil, fmt.Errorf("object metadata not found")
+	metaPath := filepath.Join("objects", bucket, key+".json")
+
+	data, err := util.ReadFile(m.metadataFS, metaPath)
+	if err != nil {
+		if isNotExist(err) {
+			return nil, fmt.Errorf("object metadata not found")
+		}
+		return nil, err
+	}
+
+	var meta ObjectMetadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, err
+	}
+
+	return &meta, nil
 }
 
 // PutObjectMetadata stores object metadata
 func (m *Manager) PutObjectMetadata(bucket, key string, meta *ObjectMetadata) error {
-	// For now, we don't store per-object metadata separately
-	// We can add this later if needed
-	return nil
+	metaPath := filepath.Join("objects", bucket, key+".json")
+
+	// Create parent directories
+	dir := filepath.Dir(metaPath)
+	if err := m.metadataFS.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create metadata directory: %w", err)
+	}
+
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+
+	return util.WriteFile(m.metadataFS, metaPath, data, 0644)
 }
 
 // DeleteObjectMetadata removes object metadata
 func (m *Manager) DeleteObjectMetadata(bucket, key string) error {
-	// For now, we don't store per-object metadata separately
+	metaPath := filepath.Join("objects", bucket, key+".json")
+
+	err := m.metadataFS.Remove(metaPath)
+	if err != nil && !isNotExist(err) {
+		return err
+	}
+
+	// Clean up empty parent directories
+	dir := filepath.Dir(metaPath)
+	for dir != "." && dir != "" && dir != "/" && dir != "objects" {
+		entries, err := m.metadataFS.ReadDir(dir)
+		if err != nil || len(entries) > 0 {
+			break
+		}
+		m.metadataFS.Remove(dir)
+		dir = filepath.Dir(dir)
+	}
+
 	return nil
 }
 
@@ -165,7 +241,7 @@ func (m *Manager) GetUsers() (map[string]*User, error) {
 
 // SaveUsers saves all users
 func (m *Manager) SaveUsers(users map[string]*User) error {
-	data, err := json.MarshalIndent(users, "", "  ")
+	data, err := json.Marshal(users)
 	if err != nil {
 		return err
 	}
@@ -177,7 +253,7 @@ func (m *Manager) SaveUsers(users map[string]*User) error {
 func (m *Manager) SavePolicy(policy *Policy) error {
 	policyPath := filepath.Join("policies", policy.Name+".json")
 
-	data, err := json.MarshalIndent(policy, "", "  ")
+	data, err := json.Marshal(policy)
 	if err != nil {
 		return err
 	}

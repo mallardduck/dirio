@@ -190,7 +190,7 @@ func TestImport_WithBucketsNoMetadata(t *testing.T) {
 
 	bucket := result.Buckets["test-bucket"]
 	assert.Equal(t, "test-bucket", bucket.Name)
-	assert.Equal(t, "root", bucket.Owner)
+	// Note: BucketMetadata doesn't have Owner field - it's added during DirIO conversion
 }
 
 // TestImport_InvalidFormat tests that import fails with invalid format

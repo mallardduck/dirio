@@ -15,7 +15,7 @@ import (
 // ImportResult contains the results of a MinIO import operation
 type ImportResult struct {
 	Users          map[string]*User
-	Buckets        map[string]*Bucket
+	Buckets        map[string]*BucketMetadata
 	Policies       map[string]*Policy
 	ObjectMetadata map[string]map[string]*ObjectMetadata // bucket -> object key -> metadata
 }
@@ -35,7 +35,7 @@ func Import(minioFS billy.Filesystem) (*ImportResult, error) {
 
 	result := &ImportResult{
 		Users:          make(map[string]*User),
-		Buckets:        make(map[string]*Bucket),
+		Buckets:        make(map[string]*BucketMetadata),
 		Policies:       make(map[string]*Policy),
 		ObjectMetadata: make(map[string]map[string]*ObjectMetadata),
 	}
@@ -229,7 +229,7 @@ func importUserPolicyMappings(minioFS billy.Filesystem, users map[string]*User) 
 }
 
 // importBuckets reads MinIO bucket metadata
-func importBuckets(minioFS billy.Filesystem, buckets map[string]*Bucket) error {
+func importBuckets(minioFS billy.Filesystem, buckets map[string]*BucketMetadata) error {
 	bucketsMetaDir := "buckets"
 
 	if _, err := minioFS.Stat(bucketsMetaDir); err != nil {
@@ -259,9 +259,8 @@ func importBuckets(minioFS billy.Filesystem, buckets map[string]*Bucket) error {
 		if _, err := minioFS.Stat(metadataPath); err != nil {
 			if isNotExist(err) {
 				// Create basic bucket info
-				buckets[bucketName] = &Bucket{
+				buckets[bucketName] = &BucketMetadata{
 					Name:    bucketName,
-					Owner:   "root",
 					Created: time.Now(),
 				}
 				fmt.Printf("Found MinIO bucket (no metadata): %s\n", bucketName)
@@ -281,13 +280,8 @@ func importBuckets(minioFS billy.Filesystem, buckets map[string]*Bucket) error {
 			continue
 		}
 
-		// Convert to our format
-		buckets[bucketName] = &Bucket{
-			Name:    minioMeta.Name,
-			Owner:   "root", // MinIO doesn't store owner in bucket metadata
-			Created: minioMeta.Created,
-			Policy:  string(minioMeta.PolicyConfigJSON),
-		}
+		// Store the full MinIO bucket metadata
+		buckets[bucketName] = minioMeta
 
 		fmt.Printf("Found MinIO bucket: %s\n", bucketName)
 	}

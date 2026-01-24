@@ -80,16 +80,18 @@ Current status: **Phase 1 - MVP Scaffold Complete**
   - A helper to get "root data dir" for creating new bucket Dirs
 - [x] Refactor and replace all stdlib os.Open (and similar FS) calls with new go-billy based pkg
 
-### Improved MinIO Imports
+### Improved MinIO Imports ✅
 - [x] Parse MinIO's Created timestamp in import
 - [x] Per-object metadata import and storage (fs.json)
   - [x] Parse fs.json files during import
   - [x] Store custom metadata (x-amz-meta-*, Cache-Control, Content-Disposition, etc.)
   - [x] Return custom metadata in GetObject/HeadObject responses
   - [x] Accept and store custom metadata in PutObject requests
-- [ ] Ensure all minio metadata files and data has been audited for parity in DirIO
-  - [ ] Import additional bucket metadata fields (NotificationConfig, LifecycleConfig, ObjectLockConfig, VersioningConfig, EncryptionConfig, TaggingConfig, QuotaConfig, ReplicationConfig, BucketTargetsConfig)
-  - The data may not need to be used by DirIO yet, but we should import it. 
+- [x] Ensure all minio metadata files and data has been audited for parity in DirIO
+  - [x] Import additional bucket metadata fields (NotificationConfig, LifecycleConfig, ObjectLockConfig, VersioningConfig, EncryptionConfig, TaggingConfig, QuotaConfig, ReplicationConfig, BucketTargetsConfig)
+  - [x] Tested with both MinIO 2019 and 2022 to understand FS mode evolution
+  - **Decision:** Skip bitrot/checksums - never implemented in MinIO FS mode, rely on underlying filesystem (ZFS/Btrfs/RAID)
+  - All metadata now imported and stored in versioned compact JSON format, ready for future features 
 
 ## Phase 3: Advanced Features
 

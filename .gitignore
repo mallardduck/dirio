@@ -19,7 +19,7 @@ server
 # Data directory
 data/
 .data/
-minio-data/
+minio-data*/
 
 # IDE
 .vscode/

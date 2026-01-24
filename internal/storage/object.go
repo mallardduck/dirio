@@ -71,6 +71,7 @@ func (s *Storage) GetObject(bucket, key string) (*Object, error) {
 		// If no metadata, create basic metadata
 		etag := s.calculateETag(bucketFS, objectPath)
 		meta = &metadata.ObjectMetadata{
+			Version:      metadata.ObjectMetadataVersion,
 			ContentType:  "application/octet-stream",
 			Size:         info.Size(),
 			LastModified: info.ModTime(),
@@ -159,6 +160,7 @@ func (s *Storage) PutObject(bucket, key string, content io.Reader, contentType s
 
 	// Store object metadata
 	meta := &metadata.ObjectMetadata{
+		Version:        metadata.ObjectMetadataVersion,
 		ContentType:    contentType,
 		Size:           size,
 		ETag:           etag,
@@ -215,6 +217,7 @@ func (s *Storage) GetObjectMetadata(bucket, key string) (*metadata.ObjectMetadat
 		// If no metadata, create basic metadata
 		etag := s.calculateETag(bucketFS, objectPath)
 		meta = &metadata.ObjectMetadata{
+			Version:      metadata.ObjectMetadataVersion,
 			ContentType:  "application/octet-stream",
 			Size:         info.Size(),
 			LastModified: info.ModTime(),

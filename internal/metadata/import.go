@@ -61,6 +61,7 @@ func (m *Manager) CheckAndImportMinIO() error {
 	if len(result.Policies) > 0 {
 		for _, minioPolicy := range result.Policies {
 			policy := &Policy{
+				Version:    PolicyMetadataVersion,
 				Name:       minioPolicy.Name,
 				PolicyJSON: minioPolicy.PolicyJSON,
 				CreateDate: minioPolicy.CreateDate,
@@ -79,6 +80,7 @@ func (m *Manager) CheckAndImportMinIO() error {
 		dirioUsers := make(map[string]*User)
 		for username, minioUser := range result.Users {
 			dirioUsers[username] = &User{
+				Version:        UserMetadataVersion,
 				AccessKey:      minioUser.AccessKey,
 				SecretKey:      minioUser.SecretKey,
 				Status:         minioUser.Status,
@@ -96,10 +98,30 @@ func (m *Manager) CheckAndImportMinIO() error {
 	if len(result.Buckets) > 0 {
 		for bucketName, minioBucket := range result.Buckets {
 			meta := &BucketMetadata{
+				Version: BucketMetadataVersion,
 				Name:    minioBucket.Name,
-				Owner:   minioBucket.Owner,
+				Owner:   "root", // MinIO doesn't store owner in bucket metadata
 				Created: minioBucket.Created,
-				Policy:  minioBucket.Policy,
+				Policy:  string(minioBucket.PolicyConfigJSON),
+
+				// Import all extended MinIO metadata fields
+				NotificationConfigXML:       string(minioBucket.NotificationConfigXML),
+				LifecycleConfigXML:          string(minioBucket.LifecycleConfigXML),
+				ObjectLockConfigXML:         string(minioBucket.ObjectLockConfigXML),
+				VersioningConfigXML:         string(minioBucket.VersioningConfigXML),
+				EncryptionConfigXML:         string(minioBucket.EncryptionConfigXML),
+				TaggingConfigXML:            string(minioBucket.TaggingConfigXML),
+				QuotaConfigJSON:             string(minioBucket.QuotaConfigJSON),
+				ReplicationConfigXML:        string(minioBucket.ReplicationConfigXML),
+				BucketTargetsConfigJSON:     string(minioBucket.BucketTargetsConfigJSON),
+				BucketTargetsConfigMetaJSON: string(minioBucket.BucketTargetsConfigMetaJSON),
+				PolicyConfigUpdatedAt:       minioBucket.PolicyConfigUpdatedAt,
+				ObjectLockConfigUpdatedAt:   minioBucket.ObjectLockConfigUpdatedAt,
+				EncryptionConfigUpdatedAt:   minioBucket.EncryptionConfigUpdatedAt,
+				TaggingConfigUpdatedAt:      minioBucket.TaggingConfigUpdatedAt,
+				QuotaConfigUpdatedAt:        minioBucket.QuotaConfigUpdatedAt,
+				ReplicationConfigUpdatedAt:  minioBucket.ReplicationConfigUpdatedAt,
+				VersioningConfigUpdatedAt:   minioBucket.VersioningConfigUpdatedAt,
 			}
 			if err := m.saveBucketMetadata(bucketName, meta); err != nil {
 				fmt.Printf("Warning: failed to save metadata for bucket %s: %v\n", bucketName, err)
@@ -115,6 +137,7 @@ func (m *Manager) CheckAndImportMinIO() error {
 		for objectKey, minioMeta := range objects {
 			// Convert MinIO metadata to DirIO format
 			dirioMeta := &ObjectMetadata{
+				Version:        ObjectMetadataVersion,
 				ContentType:    minioMeta.Meta["content-type"],
 				ETag:           minioMeta.Meta["etag"],
 				CustomMetadata: make(map[string]string),
@@ -174,7 +197,7 @@ func (m *Manager) getImportState() (*ImportState, error) {
 
 // saveImportState saves the import state
 func (m *Manager) saveImportState(state *ImportState) error {
-	data, err := json.MarshalIndent(state, "", "  ")
+	data, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
