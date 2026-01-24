@@ -7,11 +7,13 @@ s3-homelab-client
 *.so
 *.dylib
 dist/
+bin/
 
 # Test binary
 *.test
 coverage.*
 server
+tests/clients/results/*.log
 
 # Output of the go coverage tool
 *.out
