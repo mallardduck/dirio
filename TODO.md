@@ -103,16 +103,21 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
 
 ### Client Compatibility Testing
 - [x] Test with AWS CLI - basic CRUD operations
-  - **Result:** 11/11 passed (via testcontainers-go)
+  - **Result:** 11/11 passed - 100% success rate (via testcontainers-go)
   - Core CRUD operations all work
   - High-level s3 commands (cp upload/download) work
+  - HeadBucket returns x-amz-bucket-region header
 - [x] Test with boto3 (Python) - programmatic access patterns
-  - **Result:** 10/10 passed (via testcontainers-go)
+  - **Result:** 14/21 passed - 67% success rate (via testcontainers-go)
   - Core CRUD operations all work
-  - Custom metadata on PutObject works
+  - GetBucketLocation now working
+  - Object Tagging works
+  - Custom metadata set works, get returns wrong key case
+  - Failed: delimiter, max-keys, range requests, CopyObject (empty file), pre-signed URLs, multipart
 - [x] Test with MinIO client (mc) - migration compatibility
-  - **Result:** 2/10 passed (via testcontainers-go)
-  - **Root cause:** GetBucketLocation API not implemented (mc uses this for all operations)
+  - **Result:** 2/10 passed - 20% success rate (via testcontainers-go)
+  - **Root cause:** "key cannot be empty" errors despite GetBucketLocation fix
+  - Only alias configuration and list buckets work
 - [x] Create S3 Compatibility Matrix (document ✅ ❌ ⚠️ for each feature/client)
 
 ### Real-World Scenarios
@@ -132,7 +137,7 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
 - [ ] ListObjects pagination with max-keys and continuation tokens
 - [ ] Range requests for GetObject (resumable downloads, video streaming)
 - [ ] Pre-signed URLs (temporary access sharing)
-- [x] Copy object (CopyObject API) - ✅ Already works!
+- [ ] CopyObject (x-amz-copy-source header) - NOT implemented, creates empty file
 
 ### Medium Priority
 - [ ] Multipart upload support (large files >5GB)
@@ -218,29 +223,29 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
 
 ## S3 Client Compatibility Matrix
 
-**Updated: January 2026 (Phase 2.5 Testing via testcontainers-go)**
+**Updated: January 24, 2026 - After GetBucketLocation fix**
 
 | Feature                    | AWS CLI | boto3 | MinIO mc | Notes                                        | Priority |
 |----------------------------|---------|-------|----------|----------------------------------------------|----------|
-| CreateBucket               | ✅      | ✅    | ❌       | mc fails: GetBucketLocation issue            | High     |
-| DeleteBucket               | ✅      | ✅    | ❌       | mc fails: GetBucketLocation issue            | High     |
+| CreateBucket               | ✅      | ✅    | ❌       | mc: "key cannot be empty" error              | High     |
+| DeleteBucket               | ✅      | ✅    | ❌       | mc: "key cannot be empty" error              | High     |
 | ListBuckets                | ✅      | ✅    | ✅       |                                              | High     |
-| HeadBucket                 | ✅      | ✅    | ❌       | mc fails: GetBucketLocation issue            | High     |
-| GetBucketLocation          | ?       | ✅    | ❌       | Works for boto3, mc gets "key cannot be empty" | High   |
-| PutObject                  | ✅      | ✅    | ❌       | mc fails: GetBucketLocation issue            | High     |
-| GetObject                  | ✅      | ✅    | ❌       | mc fails: GetBucketLocation issue            | High     |
-| HeadObject                 | ✅      | ✅    | ❌       | mc fails: GetBucketLocation issue            | High     |
-| DeleteObject               | ✅      | ✅    | ❌       | mc fails: GetBucketLocation issue            | High     |
-| ListObjectsV2 (basic)      | ✅      | ✅    | ❌       | mc fails: GetBucketLocation issue            | High     |
+| HeadBucket                 | ✅      | ✅    | ❌       | AWS CLI shows x-amz-bucket-region now        | High     |
+| GetBucketLocation          | ✅      | ✅    | ❌       | FIXED! mc: "key cannot be empty"             | High     |
+| PutObject                  | ✅      | ✅    | ❌       | mc: "key cannot be empty" error              | High     |
+| GetObject                  | ✅      | ✅    | ❌       | mc: "key cannot be empty" error              | High     |
+| HeadObject                 | ✅      | ✅    | ❌       | mc: "key cannot be empty" error              | High     |
+| DeleteObject               | ✅      | ✅    | ❌       | mc: "key cannot be empty" error              | High     |
+| ListObjectsV2 (basic)      | ✅      | ✅    | ❌       | mc: "key cannot be empty" error              | High     |
 | ListObjectsV2 (prefix)     | ✅      | ✅    | ❌       |                                              | High     |
 | ListObjectsV2 (delimiter)  | ❌      | ❌    | ❌       | CommonPrefixes not returned                  | High     |
-| ListObjectsV2 (max-keys)   | ✅      | ❌    | ❌       | MaxKeys parameter ignored                    | Medium   |
+| ListObjectsV2 (max-keys)   | ❌      | ❌    | ❌       | MaxKeys parameter ignored, returns all       | Medium   |
 | ListObjectsV1              | ✅      | ✅    | ❌       |                                              | Medium   |
-| Range Requests             | ❌      | ❌    | ❌       | Not implemented - returns full object        | High     |
+| Range Requests             | ❌      | ❌    | ❌       | Returns full object instead of range         | High     |
 | Custom Metadata (set)      | ✅      | ✅    | ❌       | x-amz-meta-* headers accepted                | Medium   |
-| Custom Metadata (get)      | ❌      | ⚠️    | ❌       | boto3: returned but key case changed         | Medium   |
+| Custom Metadata (get)      | ❌      | ⚠️    | ❌       | boto3: 'Custom-Key' instead of 'custom-key'  | Medium   |
 | Pre-signed URLs            | ❌      | ❌    | ❌       | Returns 403 Forbidden                        | Medium   |
-| CopyObject                 | ❌      | ✅    | ❌       | Works with boto3!                            | Medium   |
+| CopyObject                 | ?       | ❌    | ❌       | NOT IMPLEMENTED - creates empty file         | Medium   |
 | Multipart Upload           | ?       | ❌    | ?        | 405 Method Not Allowed                       | Medium   |
 | Object Tagging             | ?       | ✅    | ?        | Works with boto3!                            | Low      |
 
@@ -250,39 +255,43 @@ Legend: ✅ Works | ❌ Fails | ⚠️ Partial | ? Untested
 
 **Test Framework:** testcontainers-go running Docker containers for each client
 
-**AWS CLI (11/11 passed):**
-- Core CRUD operations all work
-- `s3` high-level commands (cp upload/download) work
+**AWS CLI (11/11 passed - 100%):**
+- ✅ All core CRUD operations work perfectly
+- ✅ High-level `s3` commands (cp upload/download) work
+- ✅ HeadBucket now returns `x-amz-bucket-region` header
 - Tested: ListBuckets, CreateBucket, HeadBucket, PutObject, HeadObject, GetObject, ListObjectsV2, s3 cp upload, s3 cp download, DeleteObject, DeleteBucket
 
-**boto3 (15/21 passed):**
-- Core CRUD operations all work
-- GetBucketLocation works
-- CopyObject works
-- Object tagging works
-- Custom metadata set works, get returns wrong key case
-- **Failed:** ListObjectsV2 delimiter (no CommonPrefixes), max-keys (ignored), Range requests, Pre-signed URLs (403), Multipart (405)
+**boto3 (14/21 passed - 67%):**
+- ✅ Core CRUD operations all work
+- ✅ **GetBucketLocation FIXED** - now works correctly
+- ✅ Object tagging works
+- ✅ Custom metadata set works
+- ⚠️ Custom metadata get returns Title-Case keys instead of lowercase
+- ❌ **Failed:** ListObjectsV2 delimiter (no CommonPrefixes), max-keys (ignored, returns all 5 instead of 2), Range requests (returns full object), CopyObject (creates empty file), Pre-signed URLs (403), Multipart (405 Method Not Allowed)
 
-**MinIO mc (2/10 passed):**
-- **Critical blocker:** GetBucketLocation returns "key cannot be empty"
-- mc calls `GET /bucket/?location=` before most operations
-- Only alias config and list buckets work
-- Once GetBucketLocation is fixed, most mc operations should work
+**MinIO mc (2/10 passed - 20%):**
+- ✅ Configure alias works
+- ✅ List buckets works
+- ❌ **Critical blocker:** All bucket/object operations fail with "key cannot be empty"
+- Despite GetBucketLocation being fixed, mc still has routing issues
+- mc appears to have additional incompatibilities beyond GetBucketLocation
 
 ### Recommended Priority for Phase 3 (based on findings):
 
-1. **Fix GetBucketLocation for MinIO mc** (Critical - unblocks mc client)
+1. **Investigate MinIO mc "key cannot be empty" errors** (Critical - mc still broken despite GetBucketLocation fix)
 2. **CommonPrefixes in ListObjectsV2** (delimiter support broken)
-3. **ListObjectsV2 max-keys/pagination** (MaxKeys parameter ignored)
-4. **Range requests** (video streaming, resumable downloads)
+3. **ListObjectsV2 max-keys/pagination** (MaxKeys parameter ignored, returns all objects)
+4. **Range requests** (video streaming, resumable downloads - returns full object)
 5. **Fix custom metadata key case** (returned as Title-Case instead of lowercase)
 6. **Pre-signed URL validation** (returns 403)
-7. **Multipart upload** (returns 405)
+7. **Multipart upload** (returns 405 Method Not Allowed)
 
-**Already working (confirmed by boto3 tests):**
-- ✅ CopyObject
-- ✅ Object Tagging
-- ✅ GetBucketLocation (for boto3, issue is mc-specific)
+**Already working:**
+- ✅ Object Tagging (boto3)
+- ✅ GetBucketLocation (AWS CLI and boto3) - FIXED Jan 24, 2026
+
+**Needs implementation:**
+- ❌ CopyObject - creates empty file instead of copying content
 
 ## Documentation
 

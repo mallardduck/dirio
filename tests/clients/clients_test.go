@@ -7,8 +7,11 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -21,6 +24,16 @@ const (
 	testAccessKey = "testaccess"
 	testSecretKey = "testsecret"
 	testRegion    = "us-east-1"
+)
+
+// Global cleanup tracking
+var (
+	activeContainers   = make([]testcontainers.Container, 0)
+	activeServers      = make([]*TestServer, 0)
+	cleanupMutex       sync.Mutex
+	cleanupContext     context.Context
+	cleanupCancelFunc  context.CancelFunc
+	cleanupInitialized bool
 )
 
 // TestServer manages the DirIO server for testing
@@ -58,7 +71,98 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(tty, "Running slow client tests...")
 		tty.Close()
 	}
-	os.Exit(m.Run())
+
+	// Initialize cleanup context
+	cleanupContext, cleanupCancelFunc = context.WithCancel(context.Background())
+	cleanupInitialized = true
+
+	// Set up signal handling for graceful cleanup
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		fmt.Fprintln(os.Stderr, "\nReceived interrupt signal, cleaning up...")
+		performCleanup()
+		os.Exit(130) // Standard exit code for SIGINT
+	}()
+
+	exitCode := m.Run()
+
+	// Clean up on normal exit too
+	performCleanup()
+
+	os.Exit(exitCode)
+}
+
+// registerContainer adds a container to the cleanup list
+func registerContainer(container testcontainers.Container) {
+	cleanupMutex.Lock()
+	defer cleanupMutex.Unlock()
+	activeContainers = append(activeContainers, container)
+}
+
+// registerServer adds a server to the cleanup list
+func registerServer(server *TestServer) {
+	cleanupMutex.Lock()
+	defer cleanupMutex.Unlock()
+	activeServers = append(activeServers, server)
+}
+
+// unregisterContainer removes a container from the cleanup list
+func unregisterContainer(container testcontainers.Container) {
+	cleanupMutex.Lock()
+	defer cleanupMutex.Unlock()
+	for i, c := range activeContainers {
+		if c == container {
+			activeContainers = append(activeContainers[:i], activeContainers[i+1:]...)
+			break
+		}
+	}
+}
+
+// unregisterServer removes a server from the cleanup list
+func unregisterServer(server *TestServer) {
+	cleanupMutex.Lock()
+	defer cleanupMutex.Unlock()
+	for i, s := range activeServers {
+		if s == server {
+			activeServers = append(activeServers[:i], activeServers[i+1:]...)
+			break
+		}
+	}
+}
+
+// performCleanup terminates all active containers and servers
+func performCleanup() {
+	cleanupMutex.Lock()
+	defer cleanupMutex.Unlock()
+
+	if cleanupCancelFunc != nil {
+		cleanupCancelFunc()
+	}
+
+	// Cleanup containers
+	for _, container := range activeContainers {
+		if container != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			container.Terminate(ctx)
+			cancel()
+		}
+	}
+	activeContainers = nil
+
+	// Cleanup servers
+	for _, server := range activeServers {
+		if server != nil && server.cmd != nil && server.cmd.Process != nil {
+			server.cmd.Process.Kill()
+			server.cmd.Wait()
+		}
+		if server != nil && server.dataDir != "" {
+			os.RemoveAll(server.dataDir)
+		}
+	}
+	activeServers = nil
 }
 
 // startTestServer builds and starts the DirIO server
@@ -372,6 +476,14 @@ func TestMinIOMC(t *testing.T) {
 func awsCLITestScript() string {
 	return `
 set +e
+
+# Cleanup handler for signals
+cleanup() {
+  echo "Received signal, cleaning up..."
+  exit 130
+}
+trap cleanup SIGINT SIGTERM
+
 PASSED=0
 FAILED=0
 
@@ -640,9 +752,13 @@ try:
         Key="copied.txt",
         CopySource={"Bucket": bucket, "Key": "test.txt"},
     )
-    # Verify copy exists
-    s3.head_object(Bucket=bucket, Key="copied.txt")
-    log_pass("CopyObject")
+    # Verify copy exists AND has correct content
+    response = s3.get_object(Bucket=bucket, Key="copied.txt")
+    copied_body = response["Body"].read()
+    if copied_body == b"test content":
+        log_pass("CopyObject")
+    else:
+        log_fail("CopyObject", f"copied content mismatch: expected 'test content', got '{copied_body[:50]}'")
 except Exception as e:
     log_fail("CopyObject", str(e))
 
@@ -750,6 +866,14 @@ PYTHON_SCRIPT
 func minioMCTestScript() string {
 	return `
 set +e
+
+# Cleanup handler for signals
+cleanup() {
+  echo "Received signal, cleaning up..."
+  exit 130
+}
+trap cleanup SIGINT SIGTERM
+
 PASSED=0
 FAILED=0
 

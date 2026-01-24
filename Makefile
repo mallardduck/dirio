@@ -46,6 +46,9 @@ test-coverage:
 	go test -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
 
+test-clients:
+	RUN_SLOW_TESTS=1 go test -v ./tests/clients/...
+
 # Run the server locally
 run:
 	go run ./cmd/server serve --data-dir ./data --port 9000
