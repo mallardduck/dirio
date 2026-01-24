@@ -141,6 +141,103 @@ func TestGetBucketLocation(t *testing.T) {
 	assert.Contains(string(body), "us-east-1")
 }
 
+// TestGetBucketLocationWithEmptyValue tests ?location= (empty value, like mc client sends)
+func TestGetBucketLocationWithEmptyValue(t *testing.T) {
+	ts := NewTestServer(t)
+	defer ts.Cleanup()
+
+	ts.CreateBucket(t, "test-bucket")
+
+	// MinIO mc sends ?location= (with equals but empty value)
+	req, err := http.NewRequest("GET", ts.BucketURL("test-bucket")+"?location=", nil)
+	require.NoError(t, err)
+	ts.SignRequest(req, nil)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert := assert.New(t)
+	assert.Equal(http.StatusOK, resp.StatusCode, "Should handle ?location= (empty value)")
+
+	body, _ := io.ReadAll(resp.Body)
+	assert.Contains(string(body), "us-east-1")
+}
+
+// TestGetBucketLocationWithTrailingSlash tests GET /bucket/?location
+func TestGetBucketLocationWithTrailingSlash(t *testing.T) {
+	ts := NewTestServer(t)
+	defer ts.Cleanup()
+
+	ts.CreateBucket(t, "test-bucket")
+
+	// MinIO mc might send /bucket/?location (trailing slash)
+	req, err := http.NewRequest("GET", ts.BucketURL("test-bucket")+"/?location", nil)
+	require.NoError(t, err)
+	ts.SignRequest(req, nil)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert := assert.New(t)
+	assert.Equal(http.StatusOK, resp.StatusCode, "Should handle /bucket/?location (trailing slash)")
+
+	body, _ := io.ReadAll(resp.Body)
+	assert.Contains(string(body), "us-east-1")
+}
+
+// TestListObjectsWithTrailingSlash tests GET /bucket/ (trailing slash, empty key)
+func TestListObjectsWithTrailingSlash(t *testing.T) {
+	ts := NewTestServer(t)
+	defer ts.Cleanup()
+
+	ts.CreateBucket(t, "test-bucket")
+	ts.PutObject(t, "test-bucket", "test.txt", "content")
+
+	// MinIO mc might send /bucket/ (trailing slash) to list objects
+	req, err := http.NewRequest("GET", ts.BucketURL("test-bucket")+"/", nil)
+	require.NoError(t, err)
+	ts.SignRequest(req, nil)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert := assert.New(t)
+	assert.Equal(http.StatusOK, resp.StatusCode, "Should handle /bucket/ (trailing slash) for ListObjects")
+
+	body, _ := io.ReadAll(resp.Body)
+	bodyStr := string(body)
+	assert.Contains(bodyStr, "ListBucketResult", "Should return ListBucketResult XML")
+	assert.Contains(bodyStr, "test.txt", "Should list the object")
+}
+
+// TestGetObjectWithEmptyKey tests GET /bucket/ interpreted as object request
+func TestGetObjectWithEmptyKey(t *testing.T) {
+	ts := NewTestServer(t)
+	defer ts.Cleanup()
+
+	ts.CreateBucket(t, "test-bucket")
+
+	// If /bucket/ is interpreted as GET object with empty key, should fail appropriately
+	req, err := http.NewRequest("GET", ts.BucketURL("test-bucket")+"/", nil)
+	require.NoError(t, err)
+	ts.SignRequest(req, nil)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	// This should either list objects (200) or return an appropriate error
+	// It should NOT return "key cannot be empty" as a raw error
+	assert := assert.New(t)
+	body, _ := io.ReadAll(resp.Body)
+	bodyStr := string(body)
+
+	if resp.StatusCode != http.StatusOK {
+		// If it's an error, it should be a proper S3 error XML, not a text error
+		assert.Contains(bodyStr, "<?xml", "Error response should be XML")
+		assert.NotContains(bodyStr, "key cannot be empty", "Should not expose internal validation errors")
+	}
+}
+
 func TestDeleteBucketEmpty(t *testing.T) {
 	ts := NewTestServer(t)
 	defer ts.Cleanup()
