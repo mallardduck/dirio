@@ -4,8 +4,8 @@ go 1.24.0
 
 require (
 	github.com/brutella/dnssd v1.2.14
+	github.com/go-chi/chi/v5 v5.2.4
 	github.com/go-git/go-billy/v5 v5.7.0
-	github.com/gorilla/mux v1.8.1
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0

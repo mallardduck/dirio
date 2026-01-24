@@ -127,7 +127,7 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
 **Prioritize based on Phase 2.5 findings:**
 
 ### High Priority (Core S3 compatibility)
-- [ ] Fix GetBucketLocation for MinIO mc (Critical - unblocks mc client)
+- [x] Fix GetBucketLocation for MinIO mc (Critical - unblocks mc client) - ✅ Fixed routing + added x-amz-bucket-region to HeadBucket
 - [ ] CommonPrefixes in ListObjectsV2 (delimiter support)
 - [ ] ListObjects pagination with max-keys and continuation tokens
 - [ ] Range requests for GetObject (resumable downloads, video streaming)

@@ -7,6 +7,9 @@ import (
 	"strings"
 
 	"github.com/mallardduck/dirio/internal/logging"
+	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
+	"github.com/mallardduck/dirio/internal/middleware"
+	"github.com/mallardduck/dirio/internal/router"
 	"github.com/mallardduck/dirio/internal/storage"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
@@ -167,4 +170,57 @@ func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request, bucket, k
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ObjectResourceHandler routes object operations based on method
+func (h *Handler) ObjectResourceHandler() routeHandler {
+	return routeHandler{
+		HeadHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			requestID := middleware.GetRequestID(ctx)
+			bucket := router.URLParam(r, "bucket")
+			// Chi uses "*" for catch-all wildcard parameter
+			key := router.URLParam(r, "*")
+
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "HeadObject"
+			}
+			h.HeadObject(w, r, bucket, key, requestID)
+		}, // HeadObject
+		StoreHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			requestID := middleware.GetRequestID(ctx)
+			bucket := router.URLParam(r, "bucket")
+			// Chi uses "*" for catch-all wildcard parameter
+			key := router.URLParam(r, "*")
+
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "PutObject"
+			}
+			h.PutObject(w, r, bucket, key, requestID)
+		}, // PutObject, TODO add CopyObject (x-amz-copy-source)
+		ShowHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			requestID := middleware.GetRequestID(ctx)
+			bucket := router.URLParam(r, "bucket")
+			// Chi uses "*" for catch-all wildcard parameter
+			key := router.URLParam(r, "*")
+
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "GetObject"
+			}
+			h.GetObject(w, r, bucket, key, requestID)
+		}, // GetObject
+		DestroyHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			requestID := middleware.GetRequestID(ctx)
+			bucket := router.URLParam(r, "bucket")
+			// Chi uses "*" for catch-all wildcard parameter
+			key := router.URLParam(r, "*")
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "DeleteObject"
+			}
+			h.DeleteObject(w, r, bucket, key, requestID)
+		}, // DeleteObject
+	}
 }

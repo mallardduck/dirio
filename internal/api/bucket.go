@@ -4,6 +4,9 @@ import (
 	"net/http"
 
 	"github.com/mallardduck/dirio/internal/consts"
+	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
+	"github.com/mallardduck/dirio/internal/middleware"
+	"github.com/mallardduck/dirio/internal/router"
 	"github.com/mallardduck/dirio/internal/storage"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
@@ -47,6 +50,14 @@ func (h *Handler) HeadBucket(w http.ResponseWriter, r *http.Request, bucket, req
 		return
 	}
 
+	// TODO: Per AWS S3 docs, we should implement:
+	// 	Request side:
+	// 		- `x-amz-expected-bucket-owner` - account ID of expected bucket owner. If not matching actual owner, 403.
+	// It needs to be an optional header we check since it is not always sent.
+	// Auth ACL things should already be blocking this, but if an admin level account tries to modify buckets with the same name owned by diffrent users it is helpful.
+
+	// Set bucket region header (best practice per AWS documentation)
+	w.Header().Set("x-amz-bucket-region", consts.DefaultBucketLocation)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -148,4 +159,71 @@ func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request, bucket, 
 	}
 
 	writeXMLResponse(w, http.StatusOK, response)
+}
+
+func (h *Handler) BucketResourceHandler() routeHandler {
+	return routeHandler{
+		HeadHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			requestID := middleware.GetRequestID(ctx)
+			bucket := router.URLParam(r, "bucket")
+
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "HeadBucket"
+			}
+			h.HeadBucket(w, r, bucket, requestID)
+		}, // HeadBucket
+		StoreHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			requestID := middleware.GetRequestID(ctx)
+			bucket := router.URLParam(r, "bucket")
+
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "CreateBucket"
+			}
+
+			h.CreateBucket(w, r, bucket, requestID)
+		}, // CreateBucket
+		ShowHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			requestID := middleware.GetRequestID(ctx)
+			bucket := router.URLParam(r, "bucket")
+
+			// Check query parameters to determine operation
+			query := r.URL.Query()
+
+			// GetBucketLocation (backwards compatibility - AWS recommends HeadBucket instead)
+			if _, ok := query["location"]; ok {
+				if data, ok := loggingHttp.GetLogData(ctx); ok {
+					data.Action = "GetBucketLocation"
+				}
+				h.GetBucketLocation(w, r, bucket, requestID)
+				return
+			}
+
+			if query.Get("list-type") == "2" {
+				if data, ok := loggingHttp.GetLogData(ctx); ok {
+					data.Action = "ListObjectsV2"
+				}
+				h.ListObjectsV2(w, r, bucket, requestID)
+				return
+			}
+
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "ListObjects"
+			}
+			h.ListObjects(w, r, bucket, requestID)
+		}, // ListObjects, ListObjectsV2, GetBucketLocation
+		DestroyHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			requestID := middleware.GetRequestID(ctx)
+			bucket := router.URLParam(r, "bucket")
+
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "DeleteBucket"
+			}
+			h.DeleteBucket(w, r, bucket, requestID)
+		}, // DeleteBucket
+
+	}
 }

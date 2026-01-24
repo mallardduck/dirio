@@ -101,7 +101,10 @@ func TestHeadBucketExists(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert := assert.New(t)
+	assert.Equal(http.StatusOK, resp.StatusCode)
+	// Verify bucket region header is present (AWS best practice)
+	assert.Equal("us-east-1", resp.Header.Get("x-amz-bucket-region"))
 }
 
 func TestHeadBucketNotExists(t *testing.T) {

@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/mallardduck/dirio/internal/api"
 	"github.com/mallardduck/dirio/internal/auth"
 	"github.com/mallardduck/dirio/internal/logging"
@@ -20,6 +19,7 @@ import (
 	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/internal/middleware"
 	"github.com/mallardduck/dirio/internal/path"
+	"github.com/mallardduck/dirio/internal/router"
 	"github.com/mallardduck/dirio/internal/sigv4"
 	"github.com/mallardduck/dirio/internal/storage"
 	"github.com/mallardduck/dirio/internal/urlbuilder"
@@ -46,7 +46,7 @@ type Config struct {
 // Server represents the S3-compatible HTTP server
 type Server struct {
 	config   *Config
-	router   *mux.Router
+	router   *router.Router
 	storage  *storage.Storage
 	metadata *metadata.Manager
 	auth     *auth.Authenticator
@@ -101,7 +101,14 @@ func New(config *Config) (*Server, error) {
 
 // setupRoutes configures HTTP routing
 func (s *Server) setupRoutes() {
-	s.router = mux.NewRouter()
+	s.router = router.New()
+
+	// Add middleware (timing first for accurate timestamps, then trace ID, request ID, logging, auth)
+	s.router.Use(middleware.Timing)
+	s.router.Use(middleware.TraceID)
+	s.router.Use(middleware.RequestID)
+	s.router.Use(loggingHttp.PrepareAccessLogMiddleware(s.log))
+	s.router.Use(s.authMiddleware)
 
 	// Create URL builder
 	urlBuilder := urlbuilder.New(s.config.CanonicalDomain)
@@ -110,20 +117,21 @@ func (s *Server) setupRoutes() {
 	apiHandler := api.New(s.storage, s.metadata, s.auth, urlBuilder)
 
 	// Root - ListBuckets
-	s.router.HandleFunc("/", apiHandler.ListBuckets).Methods("GET")
+	s.router.Get("/", apiHandler.ListBuckets, "index")
 
 	// Bucket operations
-	s.router.HandleFunc("/{bucket}", apiHandler.BucketHandler).Methods("GET", "PUT", "HEAD", "DELETE")
+	bucketHandler := apiHandler.BucketResourceHandler()
+	s.router.Head("/{bucket}", bucketHandler.HeadHandler, "buckets.head")
+	s.router.Put("/{bucket}", bucketHandler.StoreHandler, "buckets.store")
+	s.router.Get("/{bucket}", bucketHandler.ShowHandler, "buckets.show")
+	s.router.Delete("/{bucket}", bucketHandler.DestroyHandler, "buckets.destroy")
 
-	// Object operations
-	s.router.HandleFunc("/{bucket}/{key:.*}", apiHandler.ObjectHandler).Methods("GET", "PUT", "HEAD", "DELETE")
-
-	// Add middleware (timing first for accurate timestamps, then trace ID, request ID, logging, auth)
-	s.router.Use(middleware.Timing)
-	s.router.Use(middleware.TraceID)
-	s.router.Use(middleware.RequestID)
-	s.router.Use(loggingHttp.PrepareAccessLogMiddleware(s.log))
-	s.router.Use(s.authMiddleware)
+	// Object operations (use /* for catch-all to match keys with slashes)
+	objectHandler := apiHandler.ObjectResourceHandler()
+	s.router.Head("/{bucket}/*", objectHandler.HeadHandler, "objects.head")
+	s.router.Put("/{bucket}/*", objectHandler.StoreHandler, "objects.create")
+	s.router.Get("/{bucket}/*", objectHandler.ShowHandler, "objects.show")
+	s.router.Delete("/{bucket}/*", objectHandler.DestroyHandler, "objects.destroy")
 }
 
 // authMiddleware validates authentication for all requests

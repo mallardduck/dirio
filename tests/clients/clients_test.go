@@ -30,6 +30,37 @@ type TestServer struct {
 	dataDir string
 }
 
+func shouldRunSlowTests() bool {
+	env := os.Getenv("RUN_SLOW_TESTS")
+	return env == "1" || strings.ToLower(env) == "true"
+}
+
+func runSlowCheck(t *testing.T) {
+	if !shouldRunSlowTests() {
+		t.Skip("Skipping slow tests")
+	}
+
+	if testing.Short() {
+		t.Skip("Skipping client tests in short mode")
+	}
+}
+
+func TestMain(m *testing.M) {
+	if !shouldRunSlowTests() {
+		// Write directly to terminal (bypasses go test output capture)
+		if tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0); err == nil {
+			fmt.Fprintln(tty, "Slow client tests disabled. Set RUN_SLOW_TESTS=1 to enable.")
+			tty.Close()
+		}
+		os.Exit(0)
+	}
+	if tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0); err == nil {
+		fmt.Fprintln(tty, "Running slow client tests...")
+		tty.Close()
+	}
+	os.Exit(m.Run())
+}
+
 // startTestServer builds and starts the DirIO server
 func startTestServer(t *testing.T) *TestServer {
 	t.Helper()
@@ -145,9 +176,7 @@ func waitForServer(t *testing.T, port int, timeout time.Duration) bool {
 
 // TestAWSCLI runs AWS CLI compatibility tests
 func TestAWSCLI(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping client tests in short mode")
-	}
+	runSlowCheck(t)
 
 	ctx := context.Background()
 
@@ -212,9 +241,7 @@ func TestAWSCLI(t *testing.T) {
 
 // TestBoto3 runs boto3 (Python) compatibility tests
 func TestBoto3(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping client tests in short mode")
-	}
+	runSlowCheck(t)
 
 	ctx := context.Background()
 
@@ -278,9 +305,7 @@ func TestBoto3(t *testing.T) {
 
 // TestMinIOMC runs MinIO client compatibility tests
 func TestMinIOMC(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping client tests in short mode")
-	}
+	runSlowCheck(t)
 
 	ctx := context.Background()
 
