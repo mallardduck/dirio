@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/storage"
@@ -40,6 +41,11 @@ func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request, bucket, key,
 	w.Header().Set("Last-Modified", obj.LastModified.Format(http.TimeFormat))
 	w.Header().Set("Accept-Ranges", "bytes")
 
+	// Set custom metadata headers
+	for key, value := range obj.CustomMetadata {
+		w.Header().Set(key, value)
+	}
+
 	// Copy object content to response
 	w.WriteHeader(http.StatusOK)
 	if _, err := io.Copy(w, obj.Content); err != nil {
@@ -62,8 +68,32 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request, bucket, key,
 		contentType = "application/octet-stream"
 	}
 
+	// Extract custom metadata from request headers
+	customMetadata := make(map[string]string)
+
+	// Extract S3-standard metadata headers
+	metadataHeaders := []string{
+		"Cache-Control",
+		"Content-Disposition",
+		"Content-Encoding",
+		"Content-Language",
+		"Expires",
+	}
+	for _, header := range metadataHeaders {
+		if value := r.Header.Get(header); value != "" {
+			customMetadata[header] = value
+		}
+	}
+
+	// Extract user-defined metadata (x-amz-meta-*)
+	for key, values := range r.Header {
+		if strings.HasPrefix(strings.ToLower(key), "x-amz-meta-") && len(values) > 0 {
+			customMetadata[key] = values[0]
+		}
+	}
+
 	// Read object content from request body
-	etag, err := h.storage.PutObject(bucket, key, r.Body, contentType)
+	etag, err := h.storage.PutObject(bucket, key, r.Body, contentType, customMetadata)
 	if err != nil {
 		if err == storage.ErrNoSuchBucket {
 			writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err)
@@ -106,6 +136,11 @@ func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request, bucket, key
 	w.Header().Set("ETag", meta.ETag)
 	w.Header().Set("Last-Modified", meta.LastModified.Format(http.TimeFormat))
 	w.Header().Set("Accept-Ranges", "bytes")
+
+	// Set custom metadata headers
+	for key, value := range meta.CustomMetadata {
+		w.Header().Set(key, value)
+	}
 
 	w.WriteHeader(http.StatusOK)
 }

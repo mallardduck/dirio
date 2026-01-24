@@ -15,12 +15,13 @@ import (
 
 // Object represents an S3 object with content
 type Object struct {
-	Key          string
-	Size         int64
-	ContentType  string
-	ETag         string
-	LastModified time.Time
-	Content      io.ReadCloser
+	Key            string
+	Size           int64
+	ContentType    string
+	ETag           string
+	LastModified   time.Time
+	Content        io.ReadCloser
+	CustomMetadata map[string]string // Custom headers like Cache-Control, Content-Disposition, x-amz-meta-*, etc.
 }
 
 // GetObject retrieves an object from storage
@@ -78,17 +79,18 @@ func (s *Storage) GetObject(bucket, key string) (*Object, error) {
 	}
 
 	return &Object{
-		Key:          key,
-		Size:         info.Size(),
-		ContentType:  meta.ContentType,
-		ETag:         meta.ETag,
-		LastModified: info.ModTime(),
-		Content:      file,
+		Key:            key,
+		Size:           info.Size(),
+		ContentType:    meta.ContentType,
+		ETag:           meta.ETag,
+		LastModified:   info.ModTime(),
+		Content:        file,
+		CustomMetadata: meta.CustomMetadata,
 	}, nil
 }
 
 // PutObject stores an object
-func (s *Storage) PutObject(bucket, key string, content io.Reader, contentType string) (string, error) {
+func (s *Storage) PutObject(bucket, key string, content io.Reader, contentType string, customMetadata map[string]string) (string, error) {
 	// Check bucket exists
 	if exists, err := s.BucketExists(bucket); err != nil {
 		return "", err
@@ -157,10 +159,11 @@ func (s *Storage) PutObject(bucket, key string, content io.Reader, contentType s
 
 	// Store object metadata
 	meta := &metadata.ObjectMetadata{
-		ContentType:  contentType,
-		Size:         size,
-		ETag:         etag,
-		LastModified: time.Now(),
+		ContentType:    contentType,
+		Size:           size,
+		ETag:           etag,
+		LastModified:   time.Now(),
+		CustomMetadata: customMetadata,
 	}
 	if err := s.metadata.PutObjectMetadata(bucket, key, meta); err != nil {
 		// Log error but don't fail the operation

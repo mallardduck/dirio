@@ -109,6 +109,36 @@ func (m *Manager) CheckAndImportMinIO() error {
 		fmt.Printf("Imported %d buckets\n", len(result.Buckets))
 	}
 
+	// Convert and save object metadata
+	objectCount := 0
+	for bucketName, objects := range result.ObjectMetadata {
+		for objectKey, minioMeta := range objects {
+			// Convert MinIO metadata to DirIO format
+			dirioMeta := &ObjectMetadata{
+				ContentType:    minioMeta.Meta["content-type"],
+				ETag:           minioMeta.Meta["etag"],
+				CustomMetadata: make(map[string]string),
+			}
+
+			// Copy all metadata except content-type and etag (which have dedicated fields)
+			for key, value := range minioMeta.Meta {
+				if key != "content-type" && key != "etag" {
+					dirioMeta.CustomMetadata[key] = value
+				}
+			}
+
+			// Save the object metadata
+			if err := m.PutObjectMetadata(bucketName, objectKey, dirioMeta); err != nil {
+				fmt.Printf("Warning: failed to save metadata for %s/%s: %v\n", bucketName, objectKey, err)
+				continue
+			}
+			objectCount++
+		}
+	}
+	if objectCount > 0 {
+		fmt.Printf("Imported metadata for %d objects\n", objectCount)
+	}
+
 	// Save import state
 	state = &ImportState{
 		Imported:      true,

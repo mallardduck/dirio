@@ -14,9 +14,10 @@ import (
 
 // ImportResult contains the results of a MinIO import operation
 type ImportResult struct {
-	Users    map[string]*User
-	Buckets  map[string]*Bucket
-	Policies map[string]*Policy
+	Users          map[string]*User
+	Buckets        map[string]*Bucket
+	Policies       map[string]*Policy
+	ObjectMetadata map[string]map[string]*ObjectMetadata // bucket -> object key -> metadata
 }
 
 // Import reads MinIO data from the specified filesystem and returns parsed data.
@@ -33,9 +34,10 @@ func Import(minioFS billy.Filesystem) (*ImportResult, error) {
 	}
 
 	result := &ImportResult{
-		Users:    make(map[string]*User),
-		Buckets:  make(map[string]*Bucket),
-		Policies: make(map[string]*Policy),
+		Users:          make(map[string]*User),
+		Buckets:        make(map[string]*Bucket),
+		Policies:       make(map[string]*Policy),
+		ObjectMetadata: make(map[string]map[string]*ObjectMetadata),
 	}
 
 	// Import policies first
@@ -56,6 +58,11 @@ func Import(minioFS billy.Filesystem) (*ImportResult, error) {
 	// Import buckets
 	if err := importBuckets(minioFS, result.Buckets); err != nil {
 		return nil, fmt.Errorf("failed to import buckets: %w", err)
+	}
+
+	// Import per-object metadata
+	if err := importObjectMetadata(minioFS, result.ObjectMetadata); err != nil {
+		return nil, fmt.Errorf("failed to import object metadata: %w", err)
 	}
 
 	return result, nil
@@ -283,6 +290,90 @@ func importBuckets(minioFS billy.Filesystem, buckets map[string]*Bucket) error {
 		}
 
 		fmt.Printf("Found MinIO bucket: %s\n", bucketName)
+	}
+
+	return nil
+}
+
+// importObjectMetadata reads per-object metadata from fs.json files
+func importObjectMetadata(minioFS billy.Filesystem, objectMetadata map[string]map[string]*ObjectMetadata) error {
+	bucketsDir := "buckets"
+
+	if _, err := minioFS.Stat(bucketsDir); err != nil {
+		if isNotExist(err) {
+			return nil // No buckets to import
+		}
+		return err
+	}
+
+	bucketEntries, err := minioFS.ReadDir(bucketsDir)
+	if err != nil {
+		return err
+	}
+
+	for _, bucketEntry := range bucketEntries {
+		if !bucketEntry.IsDir() {
+			continue
+		}
+		if bucketEntry.Name() == ".minio.sys" {
+			continue
+		}
+
+		bucketName := bucketEntry.Name()
+		bucketPath := filepath.Join(bucketsDir, bucketName)
+
+		// Initialize map for this bucket's object metadata
+		objectMetadata[bucketName] = make(map[string]*ObjectMetadata)
+
+		// Walk the bucket's metadata directory to find all fs.json files
+		if err := walkBucketMetadata(minioFS, bucketPath, bucketName, objectMetadata[bucketName]); err != nil {
+			fmt.Printf("Warning: failed to walk bucket %s metadata: %v\n", bucketName, err)
+			continue
+		}
+	}
+
+	return nil
+}
+
+// walkBucketMetadata recursively walks a bucket's metadata directory and reads fs.json files
+func walkBucketMetadata(minioFS billy.Filesystem, currentPath, bucketName string, metadata map[string]*ObjectMetadata) error {
+	entries, err := minioFS.ReadDir(currentPath)
+	if err != nil {
+		if isNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	for _, entry := range entries {
+		entryPath := filepath.Join(currentPath, entry.Name())
+
+		if entry.IsDir() {
+			// Recursively walk subdirectories
+			if err := walkBucketMetadata(minioFS, entryPath, bucketName, metadata); err != nil {
+				return err
+			}
+		} else if entry.Name() == "fs.json" {
+			// Found an fs.json file - parse it
+			objectKey := filepath.Dir(strings.TrimPrefix(entryPath, filepath.Join("buckets", bucketName)+string(filepath.Separator)))
+
+			// Read and parse fs.json
+			data, err := util.ReadFile(minioFS, entryPath)
+			if err != nil {
+				fmt.Printf("Warning: failed to read %s: %v\n", entryPath, err)
+				continue
+			}
+
+			var objMeta ObjectMetadata
+			if err := json.Unmarshal(data, &objMeta); err != nil {
+				fmt.Printf("Warning: failed to parse %s: %v\n", entryPath, err)
+				continue
+			}
+
+			// Store the metadata with the object key
+			metadata[objectKey] = &objMeta
+			fmt.Printf("Imported metadata for %s/%s\n", bucketName, objectKey)
+		}
 	}
 
 	return nil

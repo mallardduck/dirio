@@ -46,10 +46,11 @@ type Policy struct {
 
 // ObjectMetadata represents object metadata
 type ObjectMetadata struct {
-	ContentType  string    `json:"contentType"`
-	Size         int64     `json:"size"`
-	ETag         string    `json:"etag"`
-	LastModified time.Time `json:"lastModified"`
+	ContentType    string            `json:"contentType"`
+	Size           int64             `json:"size"`
+	ETag           string            `json:"etag"`
+	LastModified   time.Time         `json:"lastModified"`
+	CustomMetadata map[string]string `json:"customMetadata,omitempty"` // Custom headers like Cache-Control, Content-Disposition, x-amz-meta-*, etc.
 }
 
 // New creates a new metadata manager

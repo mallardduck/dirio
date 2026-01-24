@@ -81,9 +81,14 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 - [x] Refactor and replace all stdlib os.Open (and similar FS) calls with new go-billy based pkg
 
 ### Improved MinIO Imports
-- [ ] Parse MinIO's Created timestamp in import
-- [ ] Per-object metadata import and storage
+- [x] Parse MinIO's Created timestamp in import
+- [x] Per-object metadata import and storage (fs.json)
+  - [x] Parse fs.json files during import
+  - [x] Store custom metadata (x-amz-meta-*, Cache-Control, Content-Disposition, etc.)
+  - [x] Return custom metadata in GetObject/HeadObject responses
+  - [x] Accept and store custom metadata in PutObject requests
 - [ ] Ensure all minio metadata files and data has been audited for parity in DirIO
+  - [ ] Import additional bucket metadata fields (NotificationConfig, LifecycleConfig, ObjectLockConfig, VersioningConfig, EncryptionConfig, TaggingConfig, QuotaConfig, ReplicationConfig, BucketTargetsConfig)
   - The data may not need to be used by DirIO yet, but we should import it. 
 
 ## Phase 3: Advanced Features
