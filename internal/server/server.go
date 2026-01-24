@@ -24,6 +24,8 @@ import (
 	"github.com/mallardduck/dirio/internal/storage"
 	"github.com/mallardduck/dirio/internal/urlbuilder"
 	"github.com/mallardduck/dirio/pkg/s3types"
+
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
 // Config holds server configuration
@@ -104,6 +106,7 @@ func (s *Server) setupRoutes() {
 	s.router = router.New()
 
 	// Add middleware (timing first for accurate timestamps, then trace ID, request ID, logging, auth)
+	s.router.Use(chiMiddleware.StripSlashes)
 	s.router.Use(middleware.Timing)
 	s.router.Use(middleware.TraceID)
 	s.router.Use(middleware.RequestID)
