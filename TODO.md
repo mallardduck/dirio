@@ -223,29 +223,29 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
 
 ## S3 Client Compatibility Matrix
 
-**Updated: January 24, 2026 - After GetBucketLocation fix**
+**Updated: January 24, 2026 - After routing investigation**
 
 | Feature                    | AWS CLI | boto3 | MinIO mc | Notes                                        | Priority |
 |----------------------------|---------|-------|----------|----------------------------------------------|----------|
-| CreateBucket               | ✅      | ✅    | ❌       | mc: "key cannot be empty" error              | High     |
-| DeleteBucket               | ✅      | ✅    | ❌       | mc: "key cannot be empty" error              | High     |
+| CreateBucket               | ✅      | ✅    | ✅       | mc: FIXED after GetBucketLocation fix        | High     |
+| DeleteBucket               | ✅      | ✅    | ✅       | mc: FIXED after GetBucketLocation fix        | High     |
 | ListBuckets                | ✅      | ✅    | ✅       |                                              | High     |
-| HeadBucket                 | ✅      | ✅    | ❌       | AWS CLI shows x-amz-bucket-region now        | High     |
-| GetBucketLocation          | ✅      | ✅    | ❌       | FIXED! mc: "key cannot be empty"             | High     |
-| PutObject                  | ✅      | ✅    | ❌       | mc: "key cannot be empty" error              | High     |
-| GetObject                  | ✅      | ✅    | ❌       | mc: "key cannot be empty" error              | High     |
-| HeadObject                 | ✅      | ✅    | ❌       | mc: "key cannot be empty" error              | High     |
-| DeleteObject               | ✅      | ✅    | ❌       | mc: "key cannot be empty" error              | High     |
-| ListObjectsV2 (basic)      | ✅      | ✅    | ❌       | mc: "key cannot be empty" error              | High     |
-| ListObjectsV2 (prefix)     | ✅      | ✅    | ❌       |                                              | High     |
+| HeadBucket                 | ✅      | ✅    | ?        | AWS CLI shows x-amz-bucket-region now        | High     |
+| GetBucketLocation          | ✅      | ✅    | ?        | FIXED! Added x-amz-bucket-region to HeadBucket | High     |
+| PutObject                  | ✅      | ✅    | ❌       | mc: "Insufficient permissions" error         | High     |
+| GetObject                  | ✅      | ✅    | ❌       | mc: "Object does not exist"                  | High     |
+| HeadObject                 | ✅      | ✅    | ❌       | mc: "Object does not exist" (stat)           | High     |
+| DeleteObject               | ✅      | ✅    | ❌       | mc: "Object does not exist"                  | High     |
+| ListObjectsV2 (basic)      | ✅      | ✅    | ✅       | mc: FIXED after GetBucketLocation fix        | High     |
+| ListObjectsV2 (prefix)     | ✅      | ✅    | ?        |                                              | High     |
 | ListObjectsV2 (delimiter)  | ❌      | ❌    | ❌       | CommonPrefixes not returned                  | High     |
 | ListObjectsV2 (max-keys)   | ❌      | ❌    | ❌       | MaxKeys parameter ignored, returns all       | Medium   |
-| ListObjectsV1              | ✅      | ✅    | ❌       |                                              | Medium   |
+| ListObjectsV1              | ✅      | ✅    | ?        |                                              | Medium   |
 | Range Requests             | ❌      | ❌    | ❌       | Returns full object instead of range         | High     |
-| Custom Metadata (set)      | ✅      | ✅    | ❌       | x-amz-meta-* headers accepted                | Medium   |
+| Custom Metadata (set)      | ✅      | ✅    | ?        | x-amz-meta-* headers accepted                | Medium   |
 | Custom Metadata (get)      | ❌      | ⚠️    | ❌       | boto3: 'Custom-Key' instead of 'custom-key'  | Medium   |
 | Pre-signed URLs            | ❌      | ❌    | ❌       | Returns 403 Forbidden                        | Medium   |
-| CopyObject                 | ?       | ❌    | ❌       | NOT IMPLEMENTED - creates empty file         | Medium   |
+| CopyObject                 | ?       | ❌    | ?        | NOT IMPLEMENTED - creates empty file         | Medium   |
 | Multipart Upload           | ?       | ❌    | ?        | 405 Method Not Allowed                       | Medium   |
 | Object Tagging             | ?       | ✅    | ?        | Works with boto3!                            | Low      |
 
@@ -272,8 +272,8 @@ Legend: ✅ Works | ❌ Fails | ⚠️ Partial | ? Untested
 **MinIO mc (2/10 passed - 20%):**
 - ✅ Configure alias works
 - ✅ List buckets works
-- ❌ **Critical blocker:** All bucket/object operations fail with "key cannot be empty"
-- Despite GetBucketLocation being fixed, mc still has routing issues
+- ❌ **Critical blocker:** All bucket/object operations fail with "key cannot be empty" - should be fixed now, recheck.
+- Despite GetBucketLocation being fixed, mc still has routing issues - should be fixed now, recheck.
 - mc appears to have additional incompatibilities beyond GetBucketLocation
 
 ### Recommended Priority for Phase 3 (based on findings):
