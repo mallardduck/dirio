@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package sigv4
@@ -7,13 +8,15 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/mallardduck/dirio/internal/consts"
 )
 
 // TestAWSCLICompatibility tests that our implementation matches AWS CLI's signature
 func TestAWSCLICompatibility(t *testing.T) {
 	secretKey := "testsecret"
 	accessKey := "testaccess"
-	region := "us-east-1"
+	region := consts.DefaultBucketLocation
 
 	// Create a test request similar to what AWS CLI would send
 	req := httptest.NewRequest("GET", "http://localhost:9000/", nil)

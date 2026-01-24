@@ -5,13 +5,15 @@ import (
 	"net/url"
 	"testing"
 	"time"
+
+	"github.com/mallardduck/dirio/internal/consts"
 )
 
 func TestParseAuthorizationHeader(t *testing.T) {
 	tests := []struct {
-		name        string
-		authHeader  string
-		wantErr     error
+		name          string
+		authHeader    string
+		wantErr       error
 		wantAccessKey string
 	}{
 		{
@@ -146,8 +148,8 @@ func TestBuildCanonicalHeaders(t *testing.T) {
 		{
 			name: "header not in signed list ignored",
 			headers: http.Header{
-				"Host":           {"example.com"},
-				"User-Agent":     {"MyClient/1.0"},
+				"Host":       {"example.com"},
+				"User-Agent": {"MyClient/1.0"},
 			},
 			signedHeaders: []string{"host"},
 			want:          "host:example.com\n",
@@ -204,7 +206,7 @@ func TestBuildCanonicalRequest(t *testing.T) {
 
 func TestBuildStringToSign(t *testing.T) {
 	timestamp := time.Date(2013, 5, 24, 0, 0, 0, 0, time.UTC)
-	region := "us-east-1"
+	region := consts.DefaultBucketLocation
 	canonicalRequest := "GET\n/\n\nhost:examplebucket.s3.amazonaws.com\n\nhost\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 	stringToSign := BuildStringToSign(timestamp, region, canonicalRequest)
@@ -224,7 +226,7 @@ func TestBuildStringToSign(t *testing.T) {
 func TestComputeSignature(t *testing.T) {
 	secretKey := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 	timestamp := time.Date(2013, 5, 24, 0, 0, 0, 0, time.UTC)
-	region := "us-east-1"
+	region := consts.DefaultBucketLocation
 	stringToSign := "AWS4-HMAC-SHA256\n20130524T000000Z\n20130524/us-east-1/s3/aws4_request\n3bfa292879f6447bbcda7001decf97f4a54dc650c8942174ae0a9121cf58ad04"
 
 	signature := ComputeSignature(secretKey, timestamp, region, stringToSign)
@@ -244,7 +246,7 @@ func TestComputeSignature(t *testing.T) {
 func TestVerifySignature(t *testing.T) {
 	secretKey := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 	timestamp := time.Date(2013, 5, 24, 0, 0, 0, 0, time.UTC)
-	region := "us-east-1"
+	region := consts.DefaultBucketLocation
 
 	// Create a test request
 	req, _ := http.NewRequest("GET", "https://examplebucket.s3.amazonaws.com/test.txt", nil)

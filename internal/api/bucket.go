@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/storage"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
@@ -81,7 +82,7 @@ func (h *Handler) GetBucketLocation(w http.ResponseWriter, r *http.Request, buck
 	}
 
 	response := s3types.LocationResponse{
-		Location: "us-east-1", // Hardcoded as discussed
+		Location: consts.DefaultBucketLocation, // Hardcoded as discussed
 	}
 
 	writeXMLResponse(w, http.StatusOK, response)
