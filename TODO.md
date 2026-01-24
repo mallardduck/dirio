@@ -1,6 +1,6 @@
 # DirIO Development Roadmap
 
-Current status: **Phase 1 - MVP Scaffold Complete**
+Current status: **Phase 2 Complete - Ready for Client Testing**
 
 ## Phase 1: MVP Core ✅ (Scaffolded)
 
@@ -93,36 +93,85 @@ Current status: **Phase 1 - MVP Scaffold Complete**
   - **Decision:** Skip bitrot/checksums - never implemented in MinIO FS mode, rely on underlying filesystem (ZFS/Btrfs/RAID)
   - All metadata now imported and stored in versioned compact JSON format, ready for future features 
 
-## Phase 3: Advanced Features
+## Phase 2.5: Client Testing & Validation
 
-### Bucket Policies
-- [ ] Parse and validate S3 bucket policies
-- [ ] Enforce public-read policies
-- [ ] Support more complex policy statements
+**Goal:** Test with real S3 clients, document what works/fails, use failures to drive Phase 3 priorities.
 
-### Additional S3 Operations
-- [ ] Multipart upload support
-- [ ] Pre-signed URLs
-- [ ] Range requests for GetObject
-- [ ] Copy object
-- [ ] Object tagging
-- [ ] ListObjects pagination (max-keys parameter)
+### Test Framework Setup
+- [ ] Create `tests/clients/` directory with test scripts
+- [ ] Document baseline: what currently works with basic operations
 
-### Metadata
-- [ ] Store custom metadata headers
+### Client Compatibility Testing
+- [ ] Test with AWS CLI - basic CRUD operations
+  - Expect: some operations work, others may fail on edge cases
+- [ ] Test with boto3 (Python) - programmatic access patterns
+  - Expect: may reveal missing headers, error format issues
+- [ ] Test with MinIO client (mc) - migration compatibility
+  - Expect: should mostly work given MinIO import support
+- [ ] Create S3 Compatibility Matrix (document ✅ ❌ ⚠️ for each feature/client)
 
-### Performance
-- [ ] Add caching for metadata
+### Real-World Scenarios
+- [ ] Test migration from actual MinIO instance
+- [ ] Test mDNS discovery from other machines on LAN
+- [ ] Test behind reverse proxy (nginx) with canonical domain
+
+**Output:** Prioritized list of missing features based on real client needs
+
+## Phase 3: Essential S3 Features
+
+**Prioritize based on Phase 2.5 findings. Default priorities below:**
+
+### High Priority (Core S3 compatibility)
+- [ ] Range requests for GetObject (resumable downloads, video streaming)
+- [ ] ListObjects pagination with max-keys and continuation tokens
+- [ ] Pre-signed URLs (temporary access sharing)
+- [ ] Copy object (CopyObject API)
+
+### Medium Priority
+- [ ] Multipart upload support (large files >5GB)
+- [ ] Object tagging (metadata beyond x-amz-meta)
+
+### Lower Priority
+- [ ] Bucket Policies (parse and validate)
+- [ ] Bucket Policies (enforce public-read)
+- [ ] Bucket Policies (complex policy statements)
+
+## Phase 3.5: Stability & Performance
+
+### Performance Optimization
+- [ ] Metadata caching strategy (based on profiling)
 - [ ] Optimize ListObjects for large buckets
-- [ ] Add concurrent request handling tests
+- [ ] Memory profiling and leak detection
 
-## Phase 4: Operations & Monitoring
+### Stability
+- [ ] Concurrent access testing
+- [ ] Error handling audit across all API handlers
+- [ ] Load testing with large files
+- [ ] Load testing with many small files
 
+## Phase 4: Production Readiness & Operations
+
+### Monitoring & Health (Elevated - needed for production)
 - [ ] Health check endpoint
-- [ ] Metrics endpoint (Prometheus?)
-- [ ] Graceful shutdown improvements
-- [ ] Log rotation for application logs
-- [ ] Admin commands via CLI (will need separate audit consideration)
+- [ ] Metrics endpoint (Prometheus format)
+- [ ] Readiness vs liveness probes
+
+### Operational Tools
+- [ ] Graceful shutdown improvements (if needed)
+- [ ] Admin commands via CLI (minimal set, needs audit consideration)
+
+### Deferred Operational Features
+- [ ] Log rotation for application logs (OS/container can handle)
+- [ ] HTTP Audit Logging (complex, lower value - see Phase 6)
+
+## Phase 5: Client CLI (Low Priority)
+
+- [ ] List buckets command
+- [ ] Upload/download commands
+- [ ] Sync command
+- [ ] Configuration management
+
+## Phase 6: Advanced Features & Audit Logging
 
 ### HTTP Audit Logging
 - [ ] Design audit log middleware (streaming, queue-based)
@@ -133,14 +182,7 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 - [ ] Audit log rotation support
 - [ ] Document distinction: HTTP audit log vs full app audit log
 
-## Phase 5: Client CLI (Low Priority)
-
-- [ ] List buckets command
-- [ ] Upload/download commands
-- [ ] Sync command
-- [ ] Configuration management
-
-## Phase 6: Web UI (Lowest Priority)
+## Phase 7: Web UI (Lowest Priority)
 
 - [ ] Basic file browser
 - [ ] Upload interface
@@ -159,32 +201,45 @@ Current status: **Phase 1 - MVP Scaffold Complete**
 
 ## Known Issues / Questions
 
-1. Need to test msgpack decoding of MinIO Created timestamp
-2. Should we store per-object metadata separately or rely on fs.json import?
-3. Need to decide on object metadata caching strategy
-4. Need to implement proper ETag calculation for multipart uploads (future)
-5. Virtual-hosted-style buckets will require DNS wildcard or mDNS wildcard (investigate feasibility)
-6. Admin CLI and Web UI will need app-level audit logging beyond HTTP middleware
+1. ~~Need to test msgpack decoding of MinIO Created timestamp~~ ✅ Resolved in Phase 2
+2. ~~Should we store per-object metadata separately or rely on fs.json import?~~ ✅ Resolved - using fs.json
+3. Need to decide on object metadata caching strategy → Phase 3.5
+4. Need to implement proper ETag calculation for multipart uploads → Phase 3 (Medium Priority)
+5. Virtual-hosted-style buckets will require DNS wildcard or mDNS wildcard → Phase N+
+6. Admin CLI and Web UI will need app-level audit logging beyond HTTP middleware → Phase 6/7
 
-## Testing Checklist
+## S3 Client Compatibility Matrix
 
-- [ ] Test with AWS CLI
-- [ ] Test with boto3 (Python)
-- [ ] Test with MinIO client (mc)
-- [ ] Test migration from actual MinIO instance
-- [ ] Test mDNS discovery from other machines on LAN
-- [ ] Test behind reverse proxy (nginx) with canonical domain
-- [ ] Load testing with large files
-- [ ] Load testing with many small files
-- [ ] Concurrent access testing
+**To be filled in during Phase 2.5 testing**
+
+| Feature | AWS CLI | boto3 | MinIO mc | Notes | Priority |
+|---------|---------|-------|----------|-------|----------|
+| CreateBucket | ? | ? | ? | | High |
+| DeleteBucket | ? | ? | ? | | High |
+| ListBuckets | ? | ? | ? | | High |
+| PutObject | ? | ? | ? | | High |
+| GetObject | ? | ? | ? | | High |
+| HeadObject | ? | ? | ? | | High |
+| DeleteObject | ? | ? | ? | | High |
+| ListObjectsV2 (basic) | ? | ? | ? | | High |
+| ListObjectsV2 (pagination) | ? | ? | ? | | High |
+| Range Requests | ? | ? | ? | | High |
+| Custom Metadata | ? | ? | ? | x-amz-meta-* headers | Medium |
+| Pre-signed URLs | ? | ? | ? | | Medium |
+| CopyObject | ? | ? | ? | | Medium |
+| Multipart Upload | ? | ? | ? | | Medium |
+| Object Tagging | ? | ? | ? | | Low |
+
+Legend: ✅ Works | ❌ Fails | ⚠️ Partial | ? Untested
 
 ## Documentation
 
 - [ ] API documentation
 - [ ] Migration guide from MinIO
 - [ ] Configuration guide (CLI/ENV/YAML)
+- [ ] Client compatibility guide (AWS CLI, boto3, mc) - populate from Phase 2.5
 - [ ] mDNS setup and troubleshooting
 - [ ] Reverse proxy setup guide (nginx examples)
-- [ ] Audit logging guide
+- [ ] S3 API compliance status
 - [ ] Troubleshooting guide
 - [ ] Performance tuning guide
