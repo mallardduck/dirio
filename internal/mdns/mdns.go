@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net"
 
 	"github.com/mallardduck/dirio/internal/hostname"
 	"github.com/mallardduck/dirio/internal/logging"
@@ -16,10 +15,6 @@ import (
 // The service uses a unique hostname format: <service-name>-<unique-id>.local
 // This prevents conflicts with system mDNS responders (Bonjour/Avahi) and allows
 // us to safely run our own mDNS responder on all platforms.
-//
-// TODO: Future enhancement - implement Guest mode that interoperates with
-// native system mDNS responders (Bonjour on macOS, Avahi on Linux) by
-// registering through their APIs instead of running our own responder.
 type Service struct {
 	service *dnssd.Service
 	config  *Config
@@ -38,13 +33,6 @@ type Config struct {
 
 	// HTTPSPort is the HTTPS port (optional)
 	HTTPSPort int
-
-	// IPs are the IP addresses to advertise. If nil, auto-detected.
-	IPs []net.IP
-
-	// Interfaces are the network interface names to use (e.g., ["en0"]).
-	// If empty, uses the primary interface automatically.
-	Interfaces []string
 
 	// TXTRecords are additional TXT records for service discovery
 	TXTRecords map[string]string
@@ -91,41 +79,6 @@ func (s *Service) Start() error {
 		"hostname", hostnameStr,
 		"unique_id", uniqueID)
 
-	// Get IPs to advertise
-	ips := s.config.IPs
-	if len(ips) == 0 {
-		// Auto-detect primary interface IP
-		primary, err := dnssd.GetPrimaryInterface()
-		if err != nil {
-			return fmt.Errorf("failed to detect primary interface: %w", err)
-		}
-
-		addrs, err := primary.Addrs()
-		if err != nil {
-			return fmt.Errorf("failed to get interface addresses: %w", err)
-		}
-
-		// Get first IPv4 address
-		for _, addr := range addrs {
-			var ip net.IP
-			switch v := addr.(type) {
-			case *net.IPNet:
-				ip = v.IP
-			case *net.IPAddr:
-				ip = v.IP
-			}
-
-			if ip4 := ip.To4(); ip4 != nil && !ip.IsLoopback() {
-				ips = []net.IP{ip4}
-				break
-			}
-		}
-
-		if len(ips) == 0 {
-			return fmt.Errorf("no valid IPv4 address found on primary interface")
-		}
-	}
-
 	// Create context for service lifecycle
 	ctx, cancel := context.WithCancel(context.Background())
 	s.ctx = ctx
@@ -137,8 +90,6 @@ func (s *Service) Start() error {
 		Hostname:   hostnameStr,
 		Port:       s.config.Port,
 		HTTPSPort:  s.config.HTTPSPort,
-		IPs:        ips,
-		Interfaces: s.config.Interfaces,
 		TXTRecords: s.config.TXTRecords,
 	}
 
@@ -154,7 +105,6 @@ func (s *Service) Start() error {
 	s.log.Info("mdns service registered",
 		"service", s.config.ServiceName,
 		"hostname", hostnameStr+".local",
-		"ips", ips,
 		"port", s.config.Port)
 
 	return nil

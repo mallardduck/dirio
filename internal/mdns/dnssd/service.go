@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net"
 	"time"
 
 	"github.com/brutella/dnssd"
@@ -20,13 +19,6 @@ type ServiceConfig struct {
 
 	// Port is the service port
 	Port int
-
-	// IPs are the IP addresses to advertise (for A/AAAA records)
-	IPs []net.IP
-
-	// Interfaces are the network interface names to bind to (e.g., ["en0"])
-	// If empty, uses primary interface
-	Interfaces []string
 
 	// TXTRecords are additional TXT records for the service
 	TXTRecords map[string]string
@@ -65,34 +57,10 @@ func NewService(ctx context.Context, cfg *ServiceConfig, log *slog.Logger) (*Ser
 	log.Debug("creating dnssd service",
 		"name", cfg.Name,
 		"hostname", cfg.Hostname,
-		"port", cfg.Port,
-		"ips", cfg.IPs,
-		"interfaces", cfg.Interfaces)
-
-	// Resolve interfaces
-	interfaces := cfg.Interfaces
-	if len(interfaces) == 0 {
-		// Use primary interface by default
-		primary, err := GetPrimaryInterface()
-		if err != nil {
-			log.Warn("failed to detect primary interface, using all interfaces", "error", err)
-		} else {
-			interfaces = []string{primary.Name}
-			log.Debug("using primary interface", "interface", primary.Name)
-		}
-	} else {
-		// Validate requested interfaces
-		valid, invalid := ValidateInterfaces(interfaces)
-		if len(invalid) > 0 {
-			log.Warn("some requested interfaces are invalid and will be ignored",
-				"invalid", invalid,
-				"valid", valid)
-		}
-		interfaces = valid
-	}
+		"port", cfg.Port)
 
 	// Create dnssd configs for each service type
-	configs := createServiceConfigs(cfg, interfaces)
+	configs := createServiceConfigs(cfg)
 
 	// Create responder
 	responder, err := dnssd.NewResponder()
@@ -120,8 +88,7 @@ func NewService(ctx context.Context, cfg *ServiceConfig, log *slog.Logger) (*Ser
 			"name", service.Name,
 			"type", service.Type,
 			"host", service.Host,
-			"port", service.Port,
-			"interfaces", interfaces)
+			"port", service.Port)
 	}
 
 	// Create service context
@@ -176,12 +143,10 @@ func (s *Service) Stop() {
 }
 
 // createServiceConfigs creates dnssd.Config for each service type.
-func createServiceConfigs(cfg *ServiceConfig, interfaces []string) []dnssd.Config {
+func createServiceConfigs(cfg *ServiceConfig) []dnssd.Config {
 	baseConfig := dnssd.Config{
-		Host:   cfg.Hostname,
-		Port:   cfg.Port,
-		IPs:    cfg.IPs,
-		Ifaces: interfaces,
+		Host: cfg.Hostname,
+		Port: cfg.Port,
 	}
 
 	// Build TXT records
@@ -197,8 +162,6 @@ func createServiceConfigs(cfg *ServiceConfig, interfaces []string) []dnssd.Confi
 			Domain: "local",
 			Host:   baseConfig.Host,
 			Port:   baseConfig.Port,
-			IPs:    baseConfig.IPs,
-			Ifaces: baseConfig.Ifaces,
 			Text:   baseConfig.Text,
 		},
 		// HTTP service
@@ -208,8 +171,6 @@ func createServiceConfigs(cfg *ServiceConfig, interfaces []string) []dnssd.Confi
 			Domain: "local",
 			Host:   baseConfig.Host,
 			Port:   baseConfig.Port,
-			IPs:    baseConfig.IPs,
-			Ifaces: baseConfig.Ifaces,
 			Text:   baseConfig.Text,
 		},
 	}
@@ -222,8 +183,6 @@ func createServiceConfigs(cfg *ServiceConfig, interfaces []string) []dnssd.Confi
 			Domain: "local",
 			Host:   baseConfig.Host,
 			Port:   cfg.HTTPSPort,
-			IPs:    baseConfig.IPs,
-			Ifaces: baseConfig.Ifaces,
 			Text:   baseConfig.Text,
 		})
 	}
