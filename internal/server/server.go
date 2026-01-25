@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/mallardduck/dirio/internal/api"
 	"github.com/mallardduck/dirio/internal/auth"
 	"github.com/mallardduck/dirio/internal/logging"
@@ -20,12 +21,11 @@ import (
 	"github.com/mallardduck/dirio/internal/middleware"
 	"github.com/mallardduck/dirio/internal/path"
 	"github.com/mallardduck/dirio/internal/router"
+	"github.com/mallardduck/dirio/internal/server/favicon"
 	"github.com/mallardduck/dirio/internal/sigv4"
 	"github.com/mallardduck/dirio/internal/storage"
 	"github.com/mallardduck/dirio/internal/urlbuilder"
 	"github.com/mallardduck/dirio/pkg/s3types"
-
-	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
 // Config holds server configuration
@@ -111,7 +111,13 @@ func (s *Server) setupRoutes() {
 	s.router.Use(middleware.TraceID)
 	s.router.Use(middleware.RequestID)
 	s.router.Use(loggingHttp.PrepareAccessLogMiddleware(s.log))
-	s.router.Use(s.authMiddleware)
+
+	// Public Routes (no auth required)
+	s.router.MiddlewareGroup(func(r *router.Router) {
+		// Add any public routes here without auth middleware
+		// For example: health checks, public assets, etc.
+		r.Get("/favicon.ico", favicon.FaviconHandler, "favicon")
+	})
 
 	// Create URL builder
 	urlBuilder := urlbuilder.New(s.config.CanonicalDomain)
@@ -119,22 +125,27 @@ func (s *Server) setupRoutes() {
 	// Create API handler
 	apiHandler := api.New(s.storage, s.metadata, s.auth, urlBuilder)
 
-	// Root - ListBuckets
-	s.router.Get("/", apiHandler.ListBuckets, "index")
+	// Base Routes
+	s.router.MiddlewareGroup(func(r *router.Router) {
+		r.Use(s.authMiddleware)
 
-	// Bucket operations
-	bucketHandler := apiHandler.BucketResourceHandler()
-	s.router.Head("/{bucket}", bucketHandler.HeadHandler, "buckets.head")
-	s.router.Put("/{bucket}", bucketHandler.StoreHandler, "buckets.store")
-	s.router.Get("/{bucket}", bucketHandler.ShowHandler, "buckets.show")
-	s.router.Delete("/{bucket}", bucketHandler.DestroyHandler, "buckets.destroy")
+		// Root - ListBuckets
+		r.Get("/", apiHandler.ListBuckets, "index")
 
-	// Object operations (use /* for catch-all to match keys with slashes)
-	objectHandler := apiHandler.ObjectResourceHandler()
-	s.router.Head("/{bucket}/*", objectHandler.HeadHandler, "objects.head")
-	s.router.Put("/{bucket}/*", objectHandler.StoreHandler, "objects.create")
-	s.router.Get("/{bucket}/*", objectHandler.ShowHandler, "objects.show")
-	s.router.Delete("/{bucket}/*", objectHandler.DestroyHandler, "objects.destroy")
+		// Bucket operations
+		bucketHandler := apiHandler.BucketResourceHandler()
+		r.Head("/{bucket}", bucketHandler.HeadHandler, "buckets.head")
+		r.Put("/{bucket}", bucketHandler.StoreHandler, "buckets.store")
+		r.Get("/{bucket}", bucketHandler.ShowHandler, "buckets.show")
+		r.Delete("/{bucket}", bucketHandler.DestroyHandler, "buckets.destroy")
+
+		// Object operations (use /* for catch-all to match keys with slashes)
+		objectHandler := apiHandler.ObjectResourceHandler()
+		r.Head("/{bucket}/*", objectHandler.HeadHandler, "objects.head")
+		r.Put("/{bucket}/*", objectHandler.StoreHandler, "objects.create")
+		r.Get("/{bucket}/*", objectHandler.ShowHandler, "objects.show")
+		r.Delete("/{bucket}/*", objectHandler.DestroyHandler, "objects.destroy")
+	})
 }
 
 // authMiddleware validates authentication for all requests
