@@ -40,7 +40,7 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
   - A: Same approach - `GetLocalIP()` in `internal/mdns/ip.go` auto-detects the appropriate IP address.
 - [x] Add github.com/hashicorp/mdns dependency
 - [x] Implement mDNS service registration - `internal/mdns/mdns.go`
-- [x] Multi-instance support: mDNS name format `{service}.{hostname}.local` (e.g., `dirio-s3.macbook.local`)
+- [x] Multi-instance support: mDNS name format `{service}-{hostname}.local` (e.g., `dirio-s3-macbook.local`)
   - Allows multiple DirIO instances to coexist on the same network
   - `--mdns-name` flag configures service name (default: `dirio-s3`)
   - `--mdns-hostname` flag overrides hostname component (default: system hostname)
@@ -122,9 +122,7 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
 
 ### Real-World Scenarios
 - [x] Test mDNS discovery from other machines on LAN
-  - Results vary a lot based on client; windows has the most issues.
-  - We will leave as-is and revisit later - may need to build our own DNS-SD based on hashicorp/mdns after-all.
-  - Main issue is that windows has weird issues not resolving mDNS records - seemingly due to NSEC/TypeBitMap issues
+  - After removing lots of wrapper code it works on external machines
 
 **Output:** Prioritized list of missing features based on real client needs
 
