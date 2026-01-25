@@ -445,3 +445,94 @@ func TestURLParams(t *testing.T) {
 		t.Errorf("expected key 'my-key', got %q", capturedParams["key"])
 	}
 }
+
+func TestMiddlewareGroup(t *testing.T) {
+	r := New()
+
+	middlewareCalled := false
+	middleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			middlewareCalled = true
+			next.ServeHTTP(w, req)
+		})
+	}
+
+	// Route outside the group
+	r.Get("/public", dummyHandler, "public")
+
+	// Routes inside middleware group
+	r.MiddlewareGroup(func(r *Router) {
+		r.Use(middleware)
+		r.Get("/admin", dummyHandler, "admin")
+		r.Get("/settings", dummyHandler, "settings")
+	})
+
+	routes := r.Routes()
+
+	// Verify routes are registered with correct paths (no prefix)
+	if routes["admin"] != "/admin" {
+		t.Errorf("expected /admin, got %s", routes["admin"])
+	}
+	if routes["settings"] != "/settings" {
+		t.Errorf("expected /settings, got %s", routes["settings"])
+	}
+	if routes["public"] != "/public" {
+		t.Errorf("expected /public, got %s", routes["public"])
+	}
+
+	// Test that middleware is applied to grouped routes
+	middlewareCalled = false
+	req := httptest.NewRequest("GET", "/admin", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if !middlewareCalled {
+		t.Error("middleware was not called for /admin")
+	}
+
+	// Test that middleware is NOT applied to routes outside the group
+	middlewareCalled = false
+	req = httptest.NewRequest("GET", "/public", nil)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if middlewareCalled {
+		t.Error("middleware was called for /public (should not be)")
+	}
+}
+
+func TestMiddlewareGroupWithPathPrefix(t *testing.T) {
+	r := New()
+
+	middlewareCalled := false
+	middleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			middlewareCalled = true
+			next.ServeHTTP(w, req)
+		})
+	}
+
+	// Use MiddlewareGroup inside a Group with a path prefix
+	r.Group("/api", func(r *Router) {
+		r.MiddlewareGroup(func(r *Router) {
+			r.Use(middleware)
+			r.Get("/users", dummyHandler, "users.index")
+		})
+	})
+
+	routes := r.Routes()
+
+	// Verify route has the path prefix from Group
+	if routes["users.index"] != "/api/users" {
+		t.Errorf("expected /api/users, got %s", routes["users.index"])
+	}
+
+	// Test that middleware is applied
+	req := httptest.NewRequest("GET", "/api/users", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if !middlewareCalled {
+		t.Error("middleware was not called for /api/users")
+	}
+}

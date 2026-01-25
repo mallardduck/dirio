@@ -124,6 +124,30 @@ func (r *Router) NameGroup(pattern, name string, fn func(*Router)) {
 	r.nameStack = r.nameStack[:len(r.nameStack)-1]
 }
 
+// MiddlewareGroup creates a route group for applying middleware without a path prefix.
+// This is useful for segregating routes by middleware without changing their paths.
+// Routes registered within the group will still be tracked in the route registry.
+//
+// Example:
+//
+//	r.MiddlewareGroup(func(r *Router) {
+//	    r.Use(authMiddleware)
+//	    r.Get("/admin", adminHandler, "admin")
+//	})
+func (r *Router) MiddlewareGroup(fn func(*Router)) {
+	r.mux.Group(func(mux chi.Router) {
+		// Create a wrapper Router that uses the Chi group's mux
+		// but shares the same route registry and stacks
+		grouped := &Router{
+			mux:       mux,
+			routes:    r.routes,    // share the registry
+			pathStack: r.pathStack, // preserve current path
+			nameStack: r.nameStack, // preserve current name
+		}
+		fn(grouped)
+	})
+}
+
 // ResourceHandlers defines the handlers for a RESTful resource.
 // All fields are optional - only provided handlers will be registered.
 type ResourceHandlers struct {
