@@ -121,9 +121,10 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
 - [x] Create S3 Compatibility Matrix (document ✅ ❌ ⚠️ for each feature/client)
 
 ### Real-World Scenarios
-- [ ] Test migration from actual MinIO instance
-- [ ] Test mDNS discovery from other machines on LAN
-- [ ] Test behind reverse proxy (nginx) with canonical domain
+- [x] Test mDNS discovery from other machines on LAN
+  - Results vary a lot based on client; windows has the most issues.
+  - We will leave as-is and revisit later - may need to build our own DNS-SD based on hashicorp/mdns after-all.
+  - Main issue is that windows has weird issues not resolving mDNS records - seemingly due to NSEC/TypeBitMap issues
 
 **Output:** Prioritized list of missing features based on real client needs
 
@@ -148,6 +149,10 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
 - [ ] Bucket Policies (parse and validate)
 - [ ] Bucket Policies (enforce public-read)
 - [ ] Bucket Policies (complex policy statements)
+
+### Real-World Scenarios
+- [ ] Test migration from actual MinIO instance
+- [ ] Test behind reverse proxy (nginx) with canonical domain
 
 ## Phase 3.5: Stability & Performance
 
