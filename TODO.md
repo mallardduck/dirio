@@ -115,9 +115,10 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
   - Custom metadata set works, get returns wrong key case
   - Failed: delimiter, max-keys, range requests, CopyObject (empty file), pre-signed URLs, multipart
 - [x] Test with MinIO client (mc) - migration compatibility
-  - **Result:** 2/10 passed - 20% success rate (via testcontainers-go)
-  - **Root cause:** "key cannot be empty" errors despite GetBucketLocation fix
-  - Only alias configuration and list buckets work
+  - **Result:** 5/10 passed - 50% success rate (via testcontainers-go, Jan 26, 2026)
+  - **Current blocker:** "Insufficient permissions" errors on all object operations
+  - Bucket operations work: alias, list, create, delete
+  - Object operations fail: put, get, head, delete
 - [x] Create S3 Compatibility Matrix (document ✅ ❌ ⚠️ for each feature/client)
 
 ### Real-World Scenarios
@@ -226,62 +227,73 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
 
 ## S3 Client Compatibility Matrix
 
-**Updated: January 24, 2026 - After routing investigation**
+**Updated: January 26, 2026 - After HeadBucket test expansion**
 
-| Feature                    | AWS CLI | boto3 | MinIO mc | Notes                                        | Priority |
-|----------------------------|---------|-------|----------|----------------------------------------------|----------|
-| CreateBucket               | ✅      | ✅    | ✅       | mc: FIXED after GetBucketLocation fix        | High     |
-| DeleteBucket               | ✅      | ✅    | ✅       | mc: FIXED after GetBucketLocation fix        | High     |
-| ListBuckets                | ✅      | ✅    | ✅       |                                              | High     |
-| HeadBucket                 | ✅      | ✅    | ?        | AWS CLI shows x-amz-bucket-region now        | High     |
-| GetBucketLocation          | ✅      | ✅    | ?        | FIXED! Added x-amz-bucket-region to HeadBucket | High     |
-| PutObject                  | ✅      | ✅    | ❌       | mc: "Insufficient permissions" error         | High     |
-| GetObject                  | ✅      | ✅    | ❌       | mc: "Object does not exist"                  | High     |
-| HeadObject                 | ✅      | ✅    | ❌       | mc: "Object does not exist" (stat)           | High     |
-| DeleteObject               | ✅      | ✅    | ❌       | mc: "Object does not exist"                  | High     |
-| ListObjectsV2 (basic)      | ✅      | ✅    | ✅       | mc: FIXED after GetBucketLocation fix        | High     |
-| ListObjectsV2 (prefix)     | ✅      | ✅    | ?        |                                              | High     |
-| ListObjectsV2 (delimiter)  | ❌      | ❌    | ❌       | CommonPrefixes not returned                  | High     |
-| ListObjectsV2 (max-keys)   | ❌      | ❌    | ❌       | MaxKeys parameter ignored, returns all       | Medium   |
-| ListObjectsV1              | ✅      | ✅    | ?        |                                              | Medium   |
-| Range Requests             | ❌      | ❌    | ❌       | Returns full object instead of range         | High     |
-| Custom Metadata (set)      | ✅      | ✅    | ?        | x-amz-meta-* headers accepted                | Medium   |
-| Custom Metadata (get)      | ❌      | ⚠️    | ❌       | boto3: 'Custom-Key' instead of 'custom-key'  | Medium   |
-| Pre-signed URLs            | ❌      | ❌    | ❌       | Returns 403 Forbidden                        | Medium   |
-| CopyObject                 | ?       | ❌    | ?        | NOT IMPLEMENTED - creates empty file         | Medium   |
-| Multipart Upload           | ?       | ❌    | ?        | 405 Method Not Allowed                       | Medium   |
-| Object Tagging             | ?       | ✅    | ?        | Works with boto3!                            | Low      |
+| Feature                   | AWS CLI | boto3 | MinIO mc | Notes                                                 | Priority |
+|---------------------------|---------|-------|----------|-------------------------------------------------------|----------|
+| CreateBucket              | ✅       | ✅     | ✅        |                                                       | High     |
+| DeleteBucket              | ✅       | ✅     | ✅        |                                                       | High     |
+| ListBuckets               | ✅       | ✅     | ✅        |                                                       | High     |
+| HeadBucket                | ✅       | ✅     | ✅        | mc: via `stat --no-list`; returns x-amz-bucket-region | High     |
+| GetBucketLocation         | ✅       | ✅     | ❓        | Added x-amz-bucket-region to HeadBucket               | High     |
+| PutObject                 | ✅       | ✅     | ❌        | mc: "Insufficient permissions" error                  | High     |
+| GetObject                 | ✅       | ✅     | ❌        | mc: "Object does not exist"                           | High     |
+| HeadObject                | ✅       | ✅     | ❌        | mc: "Object does not exist" (stat)                    | High     |
+| DeleteObject              | ✅       | ✅     | ❌        | mc: "Object does not exist"                           | High     |
+| ListObjectsV2 (basic)     | ✅       | ✅     | ✅        |                                                       | High     |
+| ListObjectsV2 (prefix)    | ✅       | ✅     | ❓        |                                                       | High     |
+| ListObjectsV2 (delimiter) | ❌       | ❌     | ❌        | CommonPrefixes not returned                           | High     |
+| ListObjectsV2 (max-keys)  | ❌       | ❌     | ❌        | MaxKeys parameter ignored, returns all                | Medium   |
+| ListObjectsV1             | ✅       | ✅     | ❓        |                                                       | Medium   |
+| Range Requests            | ❌       | ❌     | ❌        | Returns full object instead of range                  | High     |
+| Custom Metadata (set)     | ✅       | ✅     | ❓        | x-amz-meta-* headers accepted                         | Medium   |
+| Custom Metadata (get)     | ❌       | ⚠️    | ❌        | boto3: 'Custom-Key' instead of 'custom-key'           | Medium   |
+| Pre-signed URLs           | ❌       | ❌     | ❌        | Returns 403 Forbidden                                 | Medium   |
+| CopyObject                | ❓       | ❌     | ❓        | NOT IMPLEMENTED - creates empty file                  | Medium   |
+| Multipart Upload          | ❓       | ❌     | ❓        | 405 Method Not Allowed                                | Medium   |
+| Object Tagging            | ❓       | ✅     | ❓        | Works with boto3!                                     | Low      |
 
-Legend: ✅ Works | ❌ Fails | ⚠️ Partial | ? Untested
+Legend: ✅ Works | ❌ Fails | ⚠️ Partial | ❓Untested
 
 ### Key Findings from Phase 2.5 Testing
 
-**Test Framework:** testcontainers-go running Docker containers for each client
+**Test Framework:** testcontainers-go running Docker containers for each client. Tests refactored to use canonical scripts from `tests/clients/scripts/` via go:embed.
 
-**AWS CLI (11/11 passed - 100%):**
+**S3 API Implementation Status (21 features tested):**
+- ✅ **Fully Working:** 14/21 (67%) - Works correctly with AWS CLI and boto3
+- ⚠️ **Partially Working:** 1/21 (5%) - Custom metadata get (wrong key case)
+- ❌ **Not Working:** 6/21 (29%) - ListObjectsV2 delimiter/max-keys, Range requests, Pre-signed URLs, CopyObject, Multipart uploads
+- ❓ **Not Tested:** 0/21 (0%) - All features tested with at least AWS CLI or boto3
+
+**Client Test Results:**
+
+**AWS CLI (11/11 tests passed - 100%):**
 - ✅ All core CRUD operations work perfectly
 - ✅ High-level `s3` commands (cp upload/download) work
-- ✅ HeadBucket now returns `x-amz-bucket-region` header
-- Tested: ListBuckets, CreateBucket, HeadBucket, PutObject, HeadObject, GetObject, ListObjectsV2, s3 cp upload, s3 cp download, DeleteObject, DeleteBucket
+- ✅ HeadBucket returns `x-amz-bucket-region` header
+- Tests cover: ListBuckets, CreateBucket, HeadBucket, PutObject, HeadObject, GetObject, ListObjectsV2, s3 cp upload, s3 cp download, DeleteObject, DeleteBucket
 
-**boto3 (14/21 passed - 67%):**
-- ✅ Core CRUD operations all work
-- ✅ **GetBucketLocation FIXED** - now works correctly
+**boto3 (14/21 tests passed - 67%):**
+- ✅ Core CRUD operations all work (Create, Read, Update, Delete)
+- ✅ GetBucketLocation works correctly
 - ✅ Object tagging works
 - ✅ Custom metadata set works
 - ⚠️ Custom metadata get returns Title-Case keys instead of lowercase
-- ❌ **Failed:** ListObjectsV2 delimiter (no CommonPrefixes), max-keys (ignored, returns all 5 instead of 2), Range requests (returns full object), CopyObject (creates empty file), Pre-signed URLs (403), Multipart (405 Method Not Allowed)
+- ❌ **Failed tests:** ListObjectsV2 delimiter (no CommonPrefixes), max-keys (ignored, returns all 5 instead of 2), Range requests (returns full object), CopyObject (creates empty file), Pre-signed URLs (403), Multipart (405 Method Not Allowed)
 
-**MinIO mc (2/10 passed - 20%):**
-- ✅ Configure alias works
-- ✅ List buckets works
-- ❌ **Critical blocker:** All bucket/object operations fail with "key cannot be empty" - should be fixed now, recheck.
-- Despite GetBucketLocation being fixed, mc still has routing issues - should be fixed now, recheck.
-- mc appears to have additional incompatibilities beyond GetBucketLocation
+**MinIO mc (6/11 tests passed - 55%):**
+- ✅ Bucket operations work: Configure alias, ListBuckets, CreateBucket (mc mb), HeadBucket (mc stat --no-list), ListObjectsV2 (mc ls), DeleteBucket (mc rb)
+- ❌ **Critical blocker:** All object operations fail with "Insufficient permissions" error
+  - PutObject (mc cp upload): "Insufficient permissions to access this path"
+  - HeadObject (mc stat): "Object does not exist"
+  - GetObject (mc cp download): "Object does not exist"
+  - GetObject (mc cat): "Object does not exist"
+  - DeleteObject (mc rm): "Object does not exist"
+- 🔍 **Note:** mc failures appear to be authentication/signature related rather than missing S3 API features, since AWS CLI and boto3 work fine
 
 ### Recommended Priority for Phase 3 (based on findings):
 
-1. **Investigate MinIO mc "key cannot be empty" errors** (Critical - mc still broken despite GetBucketLocation fix)
+1. **Investigate MinIO mc "Insufficient permissions" errors** (Critical - mc object operations still broken despite bucket operations working)
 2. **CommonPrefixes in ListObjectsV2** (delimiter support broken)
 3. **ListObjectsV2 max-keys/pagination** (MaxKeys parameter ignored, returns all objects)
 4. **Range requests** (video streaming, resumable downloads - returns full object)
@@ -292,6 +304,7 @@ Legend: ✅ Works | ❌ Fails | ⚠️ Partial | ? Untested
 **Already working:**
 - ✅ Object Tagging (boto3)
 - ✅ GetBucketLocation (AWS CLI and boto3) - FIXED Jan 24, 2026
+- ✅ HeadBucket (AWS CLI, boto3, MinIO mc)
 
 **Needs implementation:**
 - ❌ CopyObject - creates empty file instead of copying content

@@ -109,7 +109,12 @@ mkdir -p "${RESULTS_DIR}"
 run_awscli_tests() {
     print_header "Running AWS CLI Tests"
     if check_command aws; then
-        bash "${SCRIPT_DIR}/test_awscli.sh" 2>&1 | tee "${RESULTS_DIR}/awscli.log"
+        # Set up environment for AWS CLI
+        export AWS_ACCESS_KEY_ID="${DIRIO_ACCESS_KEY}"
+        export AWS_SECRET_ACCESS_KEY="${DIRIO_SECRET_KEY}"
+        export AWS_DEFAULT_REGION="${DIRIO_REGION}"
+
+        bash "${SCRIPT_DIR}/scripts/awscli.sh" 2>&1 | tee "${RESULTS_DIR}/awscli.log"
         return ${PIPESTATUS[0]}
     else
         echo "AWS CLI not installed. Skipping."
@@ -120,12 +125,19 @@ run_awscli_tests() {
 
 run_boto3_tests() {
     print_header "Running boto3 Tests"
-    if check_command python3 && python3 -c "import boto3" 2>/dev/null; then
-        python3 "${SCRIPT_DIR}/test_boto3.py" 2>&1 | tee "${RESULTS_DIR}/boto3.log"
+    if check_command python3 && python3 -c "import boto3, requests" 2>/dev/null; then
+        # boto3 script includes pip install, so just run it directly
+        bash -c "
+            export DIRIO_ENDPOINT='${DIRIO_ENDPOINT}'
+            export DIRIO_ACCESS_KEY='${DIRIO_ACCESS_KEY}'
+            export DIRIO_SECRET_KEY='${DIRIO_SECRET_KEY}'
+            export DIRIO_REGION='${DIRIO_REGION}'
+            python3 '${SCRIPT_DIR}/scripts/boto3.py'
+        " 2>&1 | tee "${RESULTS_DIR}/boto3.log"
         return ${PIPESTATUS[0]}
     else
-        echo "boto3 not installed. Skipping."
-        echo "Install with: pip install boto3"
+        echo "boto3 or requests not installed. Skipping."
+        echo "Install with: pip install boto3 requests"
         return 0
     fi
 }
@@ -133,7 +145,7 @@ run_boto3_tests() {
 run_mc_tests() {
     print_header "Running MinIO Client Tests"
     if check_command mc; then
-        bash "${SCRIPT_DIR}/test_minio_mc.sh" 2>&1 | tee "${RESULTS_DIR}/mc.log"
+        bash "${SCRIPT_DIR}/scripts/mc.sh" 2>&1 | tee "${RESULTS_DIR}/mc.log"
         return ${PIPESTATUS[0]}
     else
         echo "MinIO client (mc) not installed. Skipping."
