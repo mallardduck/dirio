@@ -14,7 +14,7 @@ FAILED=0
 pass() { echo "PASS: $1"; PASSED=$((PASSED+1)); }
 fail() { echo "FAIL: $1 - $2"; FAILED=$((FAILED+1)); }
 
-BUCKET="test-bucket-$(date +%s)"
+BUCKET="mc-test-bucket-$(date +%s)"
 ENDPOINT="${DIRIO_ENDPOINT}"
 MC_ALIAS="dirio"
 

@@ -24,7 +24,7 @@ access_key = os.environ.get("DIRIO_ACCESS_KEY")
 secret_key = os.environ.get("DIRIO_SECRET_KEY")
 region = os.environ.get("DIRIO_REGION", "us-east-1")
 
-config = Config(signature_version="s3v4", s3={"addressing_style": "path"})
+config = Config(signature_version="s3v4", s3={"addressing_style": "path"}, retries={'max_attempts': 1})
 s3 = boto3.client(
     "s3",
     endpoint_url=endpoint,
@@ -34,7 +34,7 @@ s3 = boto3.client(
     config=config,
 )
 
-bucket = f"test-bucket-{int(time.time())}"
+bucket = f"boto3-test-bucket-{int(time.time())}"
 
 print("=== boto3 Tests ===")
 print(f"Endpoint: {endpoint}")

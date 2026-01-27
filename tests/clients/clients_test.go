@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mallardduck/dirio/tests/clients"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -44,6 +45,13 @@ var (
 	cleanupContext     context.Context
 	cleanupCancelFunc  context.CancelFunc
 	cleanupInitialized bool
+)
+
+// Shared server for all client tests
+var (
+	sharedClientServer     *TestServer
+	sharedClientServerOnce sync.Once
+	sharedClientServerErr  error
 )
 
 // TestServer manages the DirIO server for testing
@@ -103,44 +111,6 @@ func TestMain(m *testing.M) {
 	performCleanup()
 
 	os.Exit(exitCode)
-}
-
-// registerContainer adds a container to the cleanup list
-func registerContainer(container testcontainers.Container) {
-	cleanupMutex.Lock()
-	defer cleanupMutex.Unlock()
-	activeContainers = append(activeContainers, container)
-}
-
-// registerServer adds a server to the cleanup list
-func registerServer(server *TestServer) {
-	cleanupMutex.Lock()
-	defer cleanupMutex.Unlock()
-	activeServers = append(activeServers, server)
-}
-
-// unregisterContainer removes a container from the cleanup list
-func unregisterContainer(container testcontainers.Container) {
-	cleanupMutex.Lock()
-	defer cleanupMutex.Unlock()
-	for i, c := range activeContainers {
-		if c == container {
-			activeContainers = append(activeContainers[:i], activeContainers[i+1:]...)
-			break
-		}
-	}
-}
-
-// unregisterServer removes a server from the cleanup list
-func unregisterServer(server *TestServer) {
-	cleanupMutex.Lock()
-	defer cleanupMutex.Unlock()
-	for i, s := range activeServers {
-		if s == server {
-			activeServers = append(activeServers[:i], activeServers[i+1:]...)
-			break
-		}
-	}
 }
 
 // performCleanup terminates all active containers and servers
@@ -288,17 +258,71 @@ func waitForServer(t *testing.T, port int, timeout time.Duration) bool {
 	return false
 }
 
+// getSharedClientServer returns a shared DirIO server for all client tests.
+// The server is started only once, regardless of how many tests call this function.
+func getSharedClientServer(t *testing.T) *TestServer {
+	t.Helper()
+
+	sharedClientServerOnce.Do(func() {
+		sharedClientServer = startTestServer(t)
+		registerServer(sharedClientServer)
+		t.Logf("Shared client test server started on port %d", sharedClientServer.port)
+	})
+
+	if sharedClientServerErr != nil {
+		t.Fatalf("Failed to start shared client server: %v", sharedClientServerErr)
+	}
+
+	return sharedClientServer
+}
+
+// registerContainer adds a container to the cleanup list
+func registerContainer(container testcontainers.Container) {
+	cleanupMutex.Lock()
+	defer cleanupMutex.Unlock()
+	activeContainers = append(activeContainers, container)
+}
+
+// registerServer adds a server to the cleanup list
+func registerServer(server *TestServer) {
+	cleanupMutex.Lock()
+	defer cleanupMutex.Unlock()
+	activeServers = append(activeServers, server)
+}
+
+// unregisterContainer removes a container from the cleanup list
+func unregisterContainer(container testcontainers.Container) {
+	cleanupMutex.Lock()
+	defer cleanupMutex.Unlock()
+	for i, c := range activeContainers {
+		if c == container {
+			activeContainers = append(activeContainers[:i], activeContainers[i+1:]...)
+			break
+		}
+	}
+}
+
+// unregisterServer removes a server from the cleanup list
+func unregisterServer(server *TestServer) {
+	cleanupMutex.Lock()
+	defer cleanupMutex.Unlock()
+	for i, s := range activeServers {
+		if s == server {
+			activeServers = append(activeServers[:i], activeServers[i+1:]...)
+			break
+		}
+	}
+}
+
 // TestAWSCLI runs AWS CLI compatibility tests
 func TestAWSCLI(t *testing.T) {
+	t.Parallel()
 	runSlowCheck(t)
 
 	ctx := context.Background()
 
-	// Start the DirIO server
-	server := startTestServer(t)
-	defer server.Stop(t)
-
-	t.Logf("DirIO server started on port %d", server.port)
+	// Use the shared DirIO server (started once for all client tests)
+	server := getSharedClientServer(t)
 
 	// Use alpine with AWS CLI installed (has proper shell)
 	req := testcontainers.ContainerRequest{
@@ -355,15 +379,13 @@ func TestAWSCLI(t *testing.T) {
 
 // TestBoto3 runs boto3 (Python) compatibility tests
 func TestBoto3(t *testing.T) {
+	t.Parallel()
 	runSlowCheck(t)
 
 	ctx := context.Background()
 
-	// Start the DirIO server
-	server := startTestServer(t)
-	defer server.Stop(t)
-
-	t.Logf("DirIO server started on port %d", server.port)
+	// Use the shared DirIO server (started once for all client tests)
+	server := getSharedClientServer(t)
 
 	// Create Python container with boto3
 	req := testcontainers.ContainerRequest{
@@ -419,32 +441,22 @@ func TestBoto3(t *testing.T) {
 
 // TestMinIOMC runs MinIO client compatibility tests
 func TestMinIOMC(t *testing.T) {
+	t.Parallel()
 	runSlowCheck(t)
 
 	ctx := context.Background()
 
-	// Start the DirIO server
-	server := startTestServer(t)
-	defer server.Stop(t)
+	// Use the shared DirIO server (started once for all client tests)
+	server := getSharedClientServer(t)
 
-	t.Logf("DirIO server started on port %d", server.port)
-
-	// Use alpine with mc installed (has proper shell)
-	// The official mc image doesn't have a shell
-	req := testcontainers.ContainerRequest{
-		Image: "alpine:3.19",
-		Env: map[string]string{
-			"DIRIO_ENDPOINT":   server.Endpoint(),
-			"DIRIO_ACCESS_KEY": testAccessKey,
-			"DIRIO_SECRET_KEY": testSecretKey,
-		},
-		Entrypoint: []string{"/bin/sh", "-c"},
-		Cmd: []string{
-			// Install mc first, then run tests
-			`apk add --no-cache curl && curl -sL https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc && chmod +x /usr/local/bin/mc && ` + minioMCTestScript(),
-		},
-		WaitingFor: wait.ForExit().WithExitTimeout(3 * time.Minute),
+	// Use pre-built mc container with mc installed
+	envMap := map[string]string{
+		"DIRIO_ENDPOINT":   server.Endpoint(),
+		"DIRIO_ACCESS_KEY": testAccessKey,
+		"DIRIO_SECRET_KEY": testSecretKey,
 	}
+
+	req := clients.MinioClientContainer(envMap, minioMCTestScript())
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
