@@ -49,6 +49,14 @@ else
   fail "HeadBucket (mc stat --no-list)"
 fi
 
+# GetBucketLocation (mc stat calls GetBucketInfo which uses GetBucketLocation)
+mc stat ${MC_ALIAS}/${BUCKET} 2>&1
+if [ $? -eq 0 ]; then
+  pass "GetBucketLocation (mc stat)"
+else
+  fail "GetBucketLocation (mc stat)"
+fi
+
 # PutObject
 echo "test content" > /tmp/test.txt
 mc cp /tmp/test.txt ${MC_ALIAS}/${BUCKET}/test.txt 2>&1

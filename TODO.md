@@ -114,9 +114,9 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
   - Custom metadata set works, get returns wrong key case
   - Failed: delimiter (0 prefixes), max-keys (returns all 5), range requests (returns full 100 bytes), CopyObject (0-byte file), pre-signed URLs (403), multipart (405), **Object Tagging (false positive fixed)** - corrupts object content with XML
 - [x] Test with MinIO client (mc) - migration compatibility
-  - **Result:** 6/11 passed - 55% success rate (via testcontainers-go, Jan 26, 2026)
+  - **Result:** 7/12 passed - 58% success rate (via testcontainers-go, Jan 26, 2026)
   - **Current blocker:** "Insufficient permissions" errors on all object operations
-  - Bucket operations work: alias, list, create, head, list objects, delete
+  - Bucket operations work: alias, list, create, head, GetBucketLocation (mc stat), list objects, delete
   - Object operations fail: put, get (cp), get (cat), head, delete
 - [x] Create S3 Compatibility Matrix (document ✅ ❌ ⚠️ for each feature/client)
 
@@ -234,7 +234,7 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
 | DeleteBucket              | ✅       | ✅     | ✅        |                                                       | High     |
 | ListBuckets               | ✅       | ✅     | ✅        |                                                       | High     |
 | HeadBucket                | ✅       | ✅     | ✅        | mc: via `stat --no-list`; returns x-amz-bucket-region | High     |
-| GetBucketLocation         | ✅       | ✅     | ❓        | Added x-amz-bucket-region to HeadBucket               | High     |
+| GetBucketLocation         | ✅       | ✅     | ✅        | mc: via `stat`; added x-amz-bucket-region to HeadBucket | High     |
 | PutObject                 | ✅       | ✅     | ❌        | mc: "Insufficient permissions" error                  | High     |
 | GetObject                 | ✅       | ✅     | ❌        | mc: "Object does not exist"                           | High     |
 | HeadObject                | ✅       | ✅     | ❌        | mc: "Object does not exist" (stat)                    | High     |
