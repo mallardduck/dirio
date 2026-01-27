@@ -108,17 +108,16 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
   - High-level s3 commands (cp upload/download) work
   - HeadBucket returns x-amz-bucket-region header
 - [x] Test with boto3 (Python) - programmatic access patterns
-  - **Result:** 14/21 passed - 67% success rate (via testcontainers-go)
+  - **Result:** 13/21 passed - 62% success rate (via testcontainers-go, Jan 26, 2026)
   - Core CRUD operations all work
   - GetBucketLocation now working
-  - Object Tagging works
   - Custom metadata set works, get returns wrong key case
-  - Failed: delimiter, max-keys, range requests, CopyObject (empty file), pre-signed URLs, multipart
+  - Failed: delimiter (0 prefixes), max-keys (returns all 5), range requests (returns full 100 bytes), CopyObject (0-byte file), pre-signed URLs (403), multipart (405), **Object Tagging (false positive fixed)** - corrupts object content with XML
 - [x] Test with MinIO client (mc) - migration compatibility
-  - **Result:** 5/10 passed - 50% success rate (via testcontainers-go, Jan 26, 2026)
+  - **Result:** 6/11 passed - 55% success rate (via testcontainers-go, Jan 26, 2026)
   - **Current blocker:** "Insufficient permissions" errors on all object operations
-  - Bucket operations work: alias, list, create, delete
-  - Object operations fail: put, get, head, delete
+  - Bucket operations work: alias, list, create, head, list objects, delete
+  - Object operations fail: put, get (cp), get (cat), head, delete
 - [x] Create S3 Compatibility Matrix (document ✅ ❌ ⚠️ for each feature/client)
 
 ### Real-World Scenarios
@@ -227,7 +226,7 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
 
 ## S3 Client Compatibility Matrix
 
-**Updated: January 26, 2026 - After HeadBucket test expansion**
+**Updated: January 26, 2026 - With defensive checks to prevent false positives**
 
 | Feature                   | AWS CLI | boto3 | MinIO mc | Notes                                                 | Priority |
 |---------------------------|---------|-------|----------|-------------------------------------------------------|----------|
@@ -243,15 +242,15 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
 | ListObjectsV2 (basic)     | ✅       | ✅     | ✅        |                                                       | High     |
 | ListObjectsV2 (prefix)    | ✅       | ✅     | ❓        |                                                       | High     |
 | ListObjectsV2 (delimiter) | ❌       | ❌     | ❌        | CommonPrefixes not returned                           | High     |
-| ListObjectsV2 (max-keys)  | ❌       | ❌     | ❌        | MaxKeys parameter ignored, returns all                | Medium   |
+| ListObjectsV2 (max-keys)  | ❌       | ❌     | ❌        | MaxKeys parameter ignored, returns all 5 objects      | Medium   |
 | ListObjectsV1             | ✅       | ✅     | ❓        |                                                       | Medium   |
-| Range Requests            | ❌       | ❌     | ❌        | Returns full object instead of range                  | High     |
+| Range Requests            | ❌       | ❌     | ❌        | Returns full 100 bytes instead of 10                  | High     |
 | Custom Metadata (set)     | ✅       | ✅     | ❓        | x-amz-meta-* headers accepted                         | Medium   |
-| Custom Metadata (get)     | ❌       | ⚠️    | ❌        | boto3: 'Custom-Key' instead of 'custom-key'           | Medium   |
+| Custom Metadata (get)     | ✅       | ⚠️    | ❌        | boto3: 'Custom-Key' instead of 'custom-key'           | Medium   |
 | Pre-signed URLs           | ❌       | ❌     | ❌        | Returns 403 Forbidden                                 | Medium   |
-| CopyObject                | ❓       | ❌     | ❓        | NOT IMPLEMENTED - creates empty file                  | Medium   |
+| CopyObject                | ❓       | ❌     | ❓        | Creates empty file (0 bytes) instead of copying       | Medium   |
 | Multipart Upload          | ❓       | ❌     | ❓        | 405 Method Not Allowed                                | Medium   |
-| Object Tagging            | ❓       | ✅     | ❓        | Works with boto3!                                     | Low      |
+| Object Tagging            | ❓       | ❌     | ❓        | **FALSE POSITIVE** - boto3 test passes incorrectly    | Medium   |
 
 Legend: ✅ Works | ❌ Fails | ⚠️ Partial | ❓Untested
 
@@ -259,10 +258,23 @@ Legend: ✅ Works | ❌ Fails | ⚠️ Partial | ❓Untested
 
 **Test Framework:** testcontainers-go running Docker containers for each client. Tests refactored to use canonical scripts from `tests/clients/scripts/` via go:embed.
 
+**Defensive Testing:** All boto3 tests now validate actual response content to prevent false positives from query parameter routing failures. This caught the Object Tagging false positive where DirIO was ignoring `?tagging` and treating requests as regular PUT/GET operations, corrupting object content with XML.
+
+**Sanity Testing & Defensive Checks:** Added comprehensive validation to prevent false positives:
+- ✅ **FailingServer test:** Returns 500 errors - all clients correctly fail
+- ✅ **DumbSuccessServer test:** Returns 200 OK with empty responses - all clients correctly fail
+- ✅ **Defensive boto3 checks:** Added content validation to detect query parameter routing issues:
+  - GetBucketLocation: Verify response contains `LocationConstraint` field
+  - ListObjectsV2: Verify actual object keys in results
+  - Custom Metadata: Verify object content not corrupted by metadata operations
+  - Object Tagging: Verify object content not overwritten by tagging XML
+  - Multipart Upload: Verify assembled content matches expected parts
+- These tests confirm passing tests are validating actual server functionality, not just status codes or accidental matches
+
 **S3 API Implementation Status (21 features tested):**
-- ✅ **Fully Working:** 14/21 (67%) - Works correctly with AWS CLI and boto3
-- ⚠️ **Partially Working:** 1/21 (5%) - Custom metadata get (wrong key case)
-- ❌ **Not Working:** 6/21 (29%) - ListObjectsV2 delimiter/max-keys, Range requests, Pre-signed URLs, CopyObject, Multipart uploads
+- ✅ **Fully Working:** 13/21 (62%) - Works correctly with AWS CLI and/or boto3
+- ⚠️ **Partially Working:** 1/21 (5%) - Custom metadata get (wrong key case in boto3)
+- ❌ **Not Working:** 7/21 (33%) - ListObjectsV2 delimiter/max-keys, Range requests, Pre-signed URLs, CopyObject, Multipart uploads, Object Tagging (false positive)
 - ❓ **Not Tested:** 0/21 (0%) - All features tested with at least AWS CLI or boto3
 
 **Client Test Results:**
@@ -273,41 +285,46 @@ Legend: ✅ Works | ❌ Fails | ⚠️ Partial | ❓Untested
 - ✅ HeadBucket returns `x-amz-bucket-region` header
 - Tests cover: ListBuckets, CreateBucket, HeadBucket, PutObject, HeadObject, GetObject, ListObjectsV2, s3 cp upload, s3 cp download, DeleteObject, DeleteBucket
 
-**boto3 (14/21 tests passed - 67%):**
+**boto3 (13/21 tests passed - 62% | with defensive checks):**
 - ✅ Core CRUD operations all work (Create, Read, Update, Delete)
 - ✅ GetBucketLocation works correctly
-- ✅ Object tagging works
 - ✅ Custom metadata set works
-- ⚠️ Custom metadata get returns Title-Case keys instead of lowercase
-- ❌ **Failed tests:** ListObjectsV2 delimiter (no CommonPrefixes), max-keys (ignored, returns all 5 instead of 2), Range requests (returns full object), CopyObject (creates empty file), Pre-signed URLs (403), Multipart (405 Method Not Allowed)
+- ⚠️ Custom metadata get returns Title-Case keys ('Custom-Key') instead of lowercase ('custom-key')
+- ❌ **Failed tests:**
+  - ListObjectsV2 delimiter: Returns 0 CommonPrefixes instead of 2+
+  - ListObjectsV2 max-keys: Ignores MaxKeys=2, returns all 5 objects
+  - Range request: Returns full 100 bytes instead of first 10 bytes
+  - CopyObject: Creates 0-byte empty file instead of copying content
+  - Pre-signed URLs: Returns 403 Forbidden
+  - Multipart: Returns 405 Method Not Allowed
+  - **Object Tagging: FALSE POSITIVE** - Test passes because DirIO stores tagging XML as object content and returns it on GET. Query parameter `?tagging` is ignored, causing `test.txt` to be overwritten with XML.
 
 **MinIO mc (6/11 tests passed - 55%):**
 - ✅ Bucket operations work: Configure alias, ListBuckets, CreateBucket (mc mb), HeadBucket (mc stat --no-list), ListObjectsV2 (mc ls), DeleteBucket (mc rb)
-- ❌ **Critical blocker:** All object operations fail with "Insufficient permissions" error
+- ❌ **Critical blocker:** All object operations still fail
   - PutObject (mc cp upload): "Insufficient permissions to access this path"
   - HeadObject (mc stat): "Object does not exist"
   - GetObject (mc cp download): "Object does not exist"
   - GetObject (mc cat): "Object does not exist"
   - DeleteObject (mc rm): "Object does not exist"
-- 🔍 **Note:** mc failures appear to be authentication/signature related rather than missing S3 API features, since AWS CLI and boto3 work fine
+- 🔍 **Note:** mc failures appear to be authentication/signature related rather than missing S3 API features, since AWS CLI and boto3 work fine for same operations
 
 ### Recommended Priority for Phase 3 (based on findings):
 
-1. **Investigate MinIO mc "Insufficient permissions" errors** (Critical - mc object operations still broken despite bucket operations working)
-2. **CommonPrefixes in ListObjectsV2** (delimiter support broken)
-3. **ListObjectsV2 max-keys/pagination** (MaxKeys parameter ignored, returns all objects)
-4. **Range requests** (video streaming, resumable downloads - returns full object)
-5. **Fix custom metadata key case** (returned as Title-Case instead of lowercase)
-6. **Pre-signed URL validation** (returns 403)
-7. **Multipart upload** (returns 405 Method Not Allowed)
+1. **Investigate MinIO mc "Insufficient permissions" errors** (Critical - mc object operations broken despite bucket operations working)
+2. **CommonPrefixes in ListObjectsV2** (delimiter support) - Returns 0 CommonPrefixes when it should return folder prefixes
+3. **ListObjectsV2 max-keys/pagination** - MaxKeys parameter ignored, returns all 5 objects instead of 2
+4. **Range requests** - Returns full 100 bytes instead of requested 10 bytes (blocks video streaming, resumable downloads)
+5. **CopyObject** - Creates 0-byte empty file instead of copying content
+6. **Fix custom metadata key case** - boto3 returns 'Custom-Key' instead of 'custom-key'
+7. **Pre-signed URL validation** - Returns 403 Forbidden
+8. **Multipart upload** - Returns 405 Method Not Allowed
+9. **Object Tagging** - Query parameter routing needed - Currently ignores `?tagging`, corrupting objects with XML
 
 **Already working:**
-- ✅ Object Tagging (boto3)
 - ✅ GetBucketLocation (AWS CLI and boto3) - FIXED Jan 24, 2026
 - ✅ HeadBucket (AWS CLI, boto3, MinIO mc)
-
-**Needs implementation:**
-- ❌ CopyObject - creates empty file instead of copying content
+- ✅ All core CRUD operations work perfectly with AWS CLI (100% pass rate)
 
 ## Documentation
 

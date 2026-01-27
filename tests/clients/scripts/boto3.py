@@ -56,7 +56,11 @@ except Exception as e:
 # GetBucketLocation
 try:
     response = s3.get_bucket_location(Bucket=bucket)
-    log_pass("GetBucketLocation")
+    # Verify response has LocationConstraint field (not bucket contents)
+    if "LocationConstraint" in response:
+        log_pass("GetBucketLocation")
+    else:
+        log_fail("GetBucketLocation", f"response missing LocationConstraint: {response}")
 except Exception as e:
     log_fail("GetBucketLocation", str(e))
 
@@ -94,8 +98,14 @@ except Exception as e:
 
 # ListObjectsV2 (basic)
 try:
-    s3.list_objects_v2(Bucket=bucket)
-    log_pass("ListObjectsV2 (basic)")
+    response = s3.list_objects_v2(Bucket=bucket)
+    contents = response.get("Contents", [])
+    # Verify it returns the test.txt object we created earlier
+    keys = [obj["Key"] for obj in contents]
+    if "test.txt" in keys:
+        log_pass("ListObjectsV2 (basic)")
+    else:
+        log_fail("ListObjectsV2 (basic)", f"test.txt not found in list: {keys}")
 except Exception as e:
     log_fail("ListObjectsV2 (basic)", str(e))
 
@@ -112,10 +122,12 @@ except Exception as e:
 try:
     response = s3.list_objects_v2(Bucket=bucket, Prefix="folder1/")
     contents = response.get("Contents", [])
-    if len(contents) == 2:
+    keys = [obj["Key"] for obj in contents]
+    # Verify we get exactly the folder1 objects
+    if len(contents) == 2 and "folder1/file1.txt" in keys and "folder1/file2.txt" in keys:
         log_pass("ListObjectsV2 (prefix)")
     else:
-        log_fail("ListObjectsV2 (prefix)", f"expected 2 objects, got {len(contents)}")
+        log_fail("ListObjectsV2 (prefix)", f"expected folder1 objects, got {keys}")
 except Exception as e:
     log_fail("ListObjectsV2 (prefix)", str(e))
 
@@ -150,10 +162,12 @@ except Exception as e:
 try:
     response = s3.list_objects(Bucket=bucket)
     contents = response.get("Contents", [])
-    if len(contents) > 0:
+    keys = [obj["Key"] for obj in contents]
+    # Verify it returns objects we created (at least test.txt should be there)
+    if len(contents) > 0 and "test.txt" in keys:
         log_pass("ListObjectsV1")
     else:
-        log_fail("ListObjectsV1", "no objects returned")
+        log_fail("ListObjectsV1", f"expected objects not found: {keys}")
 except Exception as e:
     log_fail("ListObjectsV1", str(e))
 
@@ -173,7 +187,14 @@ except Exception as e:
 try:
     response = s3.head_object(Bucket=bucket, Key="metadata.txt")
     metadata = response.get("Metadata", {})
-    if metadata.get("custom-key") == "custom-value":
+
+    # Also verify object content wasn't corrupted
+    obj_response = s3.get_object(Bucket=bucket, Key="metadata.txt")
+    content = obj_response["Body"].read()
+
+    if content != b"test with metadata":
+        log_fail("GetObject metadata", f"metadata corrupted object content: {content[:100]}")
+    elif metadata.get("custom-key") == "custom-value":
         log_pass("GetObject metadata")
     else:
         log_fail("GetObject metadata", f"metadata not returned correctly: {metadata}")
@@ -261,25 +282,44 @@ try:
         },
     )
 
-    # Verify object exists
-    s3.head_object(Bucket=bucket, Key="multipart.txt")
-    log_pass("Multipart upload")
+    # Verify object exists and has correct content (parts concatenated)
+    response = s3.get_object(Bucket=bucket, Key="multipart.txt")
+    content = response["Body"].read()
+    expected = b"part1 contentpart2 content"
+    if content == expected:
+        log_pass("Multipart upload")
+    else:
+        log_fail("Multipart upload", f"content mismatch: expected {expected}, got {content[:50]}")
 except Exception as e:
     log_fail("Multipart upload", str(e))
 
 # Object tagging
 try:
+    # First verify object exists and get its content
+    response_before = s3.get_object(Bucket=bucket, Key="test.txt")
+    content_before = response_before["Body"].read()
+
+    # Put tags on the object
     s3.put_object_tagging(
         Bucket=bucket,
         Key="test.txt",
         Tagging={"TagSet": [{"Key": "env", "Value": "test"}]},
     )
+
+    # Get tags back
     response = s3.get_object_tagging(Bucket=bucket, Key="test.txt")
     tags = response.get("TagSet", [])
-    if any(t["Key"] == "env" and t["Value"] == "test" for t in tags):
-        log_pass("Object tagging")
-    else:
+
+    # Verify object content wasn't corrupted by tagging
+    response_after = s3.get_object(Bucket=bucket, Key="test.txt")
+    content_after = response_after["Body"].read()
+
+    if content_before != content_after:
+        log_fail("Object tagging", f"tagging corrupted object content: was {content_before}, now {content_after[:100]}")
+    elif not any(t["Key"] == "env" and t["Value"] == "test" for t in tags):
         log_fail("Object tagging", f"tags not returned correctly: {tags}")
+    else:
+        log_pass("Object tagging")
 except Exception as e:
     log_fail("Object tagging", str(e))
 
