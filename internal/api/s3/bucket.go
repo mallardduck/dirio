@@ -1,12 +1,10 @@
-package api
+package s3
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/mallardduck/dirio/internal/consts"
-	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
-	"github.com/mallardduck/dirio/internal/middleware"
-	"github.com/mallardduck/dirio/internal/router"
 	"github.com/mallardduck/dirio/internal/storage"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
@@ -22,7 +20,7 @@ func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request, bucket, r
 	// TODO: Parse bucket configuration from request body if present
 
 	if err := h.storage.CreateBucket(bucket); err != nil {
-		if err == storage.ErrBucketExists {
+		if errors.Is(err, storage.ErrBucketExists) {
 			writeErrorResponse(w, requestID, s3types.ErrBucketAlreadyExists, err)
 			return
 		}
@@ -64,11 +62,11 @@ func (h *Handler) HeadBucket(w http.ResponseWriter, r *http.Request, bucket, req
 // DeleteBucket handles DELETE /{bucket}
 func (h *Handler) DeleteBucket(w http.ResponseWriter, r *http.Request, bucket, requestID string) {
 	if err := h.storage.DeleteBucket(bucket); err != nil {
-		if err == storage.ErrNoSuchBucket {
+		if errors.Is(err, storage.ErrNoSuchBucket) {
 			writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err)
 			return
 		}
-		if err == storage.ErrBucketNotEmpty {
+		if errors.Is(err, storage.ErrBucketNotEmpty) {
 			writeErrorResponse(w, requestID, s3types.ErrBucketNotEmpty, err)
 			return
 		}
@@ -109,7 +107,7 @@ func (h *Handler) ListObjects(w http.ResponseWriter, r *http.Request, bucket, re
 
 	objects, err := h.storage.ListObjects(bucket, prefix, delimiter, 1000)
 	if err != nil {
-		if err == storage.ErrNoSuchBucket {
+		if errors.Is(err, storage.ErrNoSuchBucket) {
 			writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err)
 			return
 		}
@@ -139,7 +137,7 @@ func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request, bucket, 
 
 	objects, err := h.storage.ListObjects(bucket, prefix, delimiter, 1000)
 	if err != nil {
-		if err == storage.ErrNoSuchBucket {
+		if errors.Is(err, storage.ErrNoSuchBucket) {
 			writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err)
 			return
 		}
@@ -159,71 +157,4 @@ func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request, bucket, 
 	}
 
 	writeXMLResponse(w, http.StatusOK, response)
-}
-
-func (h *Handler) BucketResourceHandler() routeHandler {
-	return routeHandler{
-		HeadHandler: func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			requestID := middleware.GetRequestID(ctx)
-			bucket := router.URLParam(r, "bucket")
-
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "HeadBucket"
-			}
-			h.HeadBucket(w, r, bucket, requestID)
-		}, // HeadBucket
-		StoreHandler: func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			requestID := middleware.GetRequestID(ctx)
-			bucket := router.URLParam(r, "bucket")
-
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "CreateBucket"
-			}
-
-			h.CreateBucket(w, r, bucket, requestID)
-		}, // CreateBucket
-		ShowHandler: func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			requestID := middleware.GetRequestID(ctx)
-			bucket := router.URLParam(r, "bucket")
-
-			// Check query parameters to determine operation
-			query := r.URL.Query()
-
-			// GetBucketLocation (backwards compatibility - AWS recommends HeadBucket instead)
-			if _, ok := query["location"]; ok {
-				if data, ok := loggingHttp.GetLogData(ctx); ok {
-					data.Action = "GetBucketLocation"
-				}
-				h.GetBucketLocation(w, r, bucket, requestID)
-				return
-			}
-
-			if query.Get("list-type") == "2" {
-				if data, ok := loggingHttp.GetLogData(ctx); ok {
-					data.Action = "ListObjectsV2"
-				}
-				h.ListObjectsV2(w, r, bucket, requestID)
-				return
-			}
-
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "ListObjects"
-			}
-			h.ListObjects(w, r, bucket, requestID)
-		}, // ListObjects, ListObjectsV2, GetBucketLocation
-		DestroyHandler: func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			requestID := middleware.GetRequestID(ctx)
-			bucket := router.URLParam(r, "bucket")
-
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "DeleteBucket"
-			}
-			h.DeleteBucket(w, r, bucket, requestID)
-		}, // DeleteBucket
-
-	}
 }

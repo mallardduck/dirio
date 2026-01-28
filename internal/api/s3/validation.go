@@ -1,4 +1,4 @@
-package api
+package s3
 
 import (
 	"fmt"

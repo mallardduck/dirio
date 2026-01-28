@@ -130,7 +130,7 @@ func (s *Server) setupRoutes() {
 		r.Use(s.authMiddleware)
 
 		// Root - ListBuckets
-		r.Get("/", apiHandler.ListBuckets, "index")
+		r.Get("/", apiHandler.S3Handler.ListBuckets, "index")
 
 		// Bucket operations
 		bucketHandler := apiHandler.BucketResourceHandler()

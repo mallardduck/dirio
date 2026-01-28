@@ -1,17 +1,15 @@
 package api
 
 import (
-	"encoding/xml"
 	"net/http"
-	"strings"
 
+	"github.com/mallardduck/dirio/internal/api/s3"
 	"github.com/mallardduck/dirio/internal/auth"
 	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/internal/middleware"
 	"github.com/mallardduck/dirio/internal/router"
 	"github.com/mallardduck/dirio/internal/storage"
-	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
 type routeHandler struct {
@@ -23,10 +21,7 @@ type routeHandler struct {
 
 // Handler handles S3 API requests
 type Handler struct {
-	storage    *storage.Storage
-	metadata   *metadata.Manager
-	auth       *auth.Authenticator
-	urlBuilder URLBuilder
+	S3Handler *s3.Handler
 }
 
 // URLBuilder defines the interface for generating URLs in S3 API responses
@@ -35,79 +30,134 @@ type URLBuilder interface {
 	ObjectURL(r *http.Request, bucket, key string) string
 }
 
-// New creates a new API handler
+// New creates a new DirIO API handler
 func New(storage *storage.Storage, metadata *metadata.Manager, auth *auth.Authenticator, urlBuilder URLBuilder) *Handler {
 	return &Handler{
-		storage:    storage,
-		metadata:   metadata,
-		auth:       auth,
-		urlBuilder: urlBuilder,
+		S3Handler: s3.New(
+			storage,
+			metadata,
+			auth,
+			urlBuilder,
+		),
 	}
 }
 
-// ListBuckets handles GET / (list all buckets; for the root index route)
-func (h *Handler) ListBuckets(w http.ResponseWriter, r *http.Request) {
-	if data, ok := loggingHttp.GetLogData(r.Context()); ok {
-		data.Action = "ListBuckets"
+// BucketResourceHandler routes bucket operations based on method
+func (h *Handler) BucketResourceHandler() routeHandler {
+	return routeHandler{
+		HeadHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			requestID := middleware.GetRequestID(ctx)
+			bucket := router.URLParam(r, "bucket")
+
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "HeadBucket"
+			}
+			h.S3Handler.HeadBucket(w, r, bucket, requestID)
+		}, // HeadBucket
+		StoreHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			requestID := middleware.GetRequestID(ctx)
+			bucket := router.URLParam(r, "bucket")
+
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "CreateBucket"
+			}
+
+			h.S3Handler.CreateBucket(w, r, bucket, requestID)
+		}, // CreateBucket
+		ShowHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			requestID := middleware.GetRequestID(ctx)
+			bucket := router.URLParam(r, "bucket")
+
+			// Check query parameters to determine operation
+			query := r.URL.Query()
+
+			// GetBucketLocation (backwards compatibility - AWS recommends HeadBucket instead)
+			if _, ok := query["location"]; ok {
+				if data, ok := loggingHttp.GetLogData(ctx); ok {
+					data.Action = "GetBucketLocation"
+				}
+				h.S3Handler.GetBucketLocation(w, r, bucket, requestID)
+				return
+			}
+
+			if query.Get("list-type") == "2" {
+				if data, ok := loggingHttp.GetLogData(ctx); ok {
+					data.Action = "ListObjectsV2"
+				}
+				h.S3Handler.ListObjectsV2(w, r, bucket, requestID)
+				return
+			}
+
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "ListObjects"
+			}
+			h.S3Handler.ListObjects(w, r, bucket, requestID)
+		}, // ListObjects, ListObjectsV2, GetBucketLocation
+		DestroyHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			requestID := middleware.GetRequestID(ctx)
+			bucket := router.URLParam(r, "bucket")
+
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "DeleteBucket"
+			}
+			h.S3Handler.DeleteBucket(w, r, bucket, requestID)
+		}, // DeleteBucket
 	}
-
-	requestID := middleware.GetRequestID(r.Context())
-
-	buckets, err := h.storage.ListBuckets()
-	if err != nil {
-		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
-		return
-	}
-
-	response := s3types.ListBucketsResponse{
-		Buckets: buckets,
-		Owner: s3types.Owner{
-			ID:          "root",
-			DisplayName: "root",
-		},
-	}
-
-	writeXMLResponse(w, http.StatusOK, response)
 }
 
-// Helper functions
+// ObjectResourceHandler routes object operations based on method
+func (h *Handler) ObjectResourceHandler() routeHandler {
+	return routeHandler{
+		HeadHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			requestID := middleware.GetRequestID(ctx)
+			bucket := router.URLParam(r, "bucket")
+			// Chi uses "*" for catch-all wildcard parameter
+			key := router.URLParam(r, "*")
 
-func writeXMLResponse(w http.ResponseWriter, statusCode int, data interface{}) {
-	w.Header().Set("Content-Type", "application/xml")
-	w.WriteHeader(statusCode)
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "HeadObject"
+			}
+			h.S3Handler.HeadObject(w, r, bucket, key, requestID)
+		}, // HeadObject
+		StoreHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			requestID := middleware.GetRequestID(ctx)
+			bucket := router.URLParam(r, "bucket")
+			// Chi uses "*" for catch-all wildcard parameter
+			key := router.URLParam(r, "*")
 
-	w.Write([]byte(xml.Header))
-	encoder := xml.NewEncoder(w)
-	encoder.Indent("", "  ")
-	encoder.Encode(data)
-}
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "PutObject"
+			}
+			h.S3Handler.PutObject(w, r, bucket, key, requestID)
+		}, // PutObject, TODO add CopyObject (x-amz-copy-source)
+		ShowHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			requestID := middleware.GetRequestID(ctx)
+			bucket := router.URLParam(r, "bucket")
+			// Chi uses "*" for catch-all wildcard parameter
+			key := router.URLParam(r, "*")
 
-func writeErrorResponse(w http.ResponseWriter, requestID string, errCode s3types.ErrorCode, err error) {
-	w.Header().Set("Content-Type", "application/xml")
-
-	statusCode := errCode.HTTPStatus()
-	w.WriteHeader(statusCode)
-
-	errMsg := errCode.Description()
-	if err != nil {
-		errMsg = err.Error()
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "GetObject"
+			}
+			h.S3Handler.GetObject(w, r, bucket, key, requestID)
+		}, // GetObject
+		DestroyHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			requestID := middleware.GetRequestID(ctx)
+			bucket := router.URLParam(r, "bucket")
+			// Chi uses "*" for catch-all wildcard parameter
+			key := router.URLParam(r, "*")
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "DeleteObject"
+			}
+			h.S3Handler.DeleteObject(w, r, bucket, key, requestID)
+		}, // DeleteObject
 	}
-
-	response := s3types.ErrorResponse{
-		Code:      errCode.String(),
-		Message:   errMsg,
-		RequestID: requestID,
-	}
-
-	w.Write([]byte(xml.Header))
-	xml.NewEncoder(w).Encode(response)
-}
-
-func getBucketAndKey(r *http.Request) (bucket, key string) {
-	bucket = router.URLParam(r, "bucket")
-	// Chi uses "*" for catch-all wildcard parameter
-	key = router.URLParam(r, "*")
-	// Remove leading slash if present
-	key = strings.TrimPrefix(key, "/")
-	return
 }
