@@ -156,10 +156,23 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 
 		requestID := middleware.GetRequestID(r.Context())
 
+		// Debug: log request details
+		if r.Method == "PUT" && r.URL.Path != "/" {
+			s.log.Debug("auth middleware processing request",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"r_host", r.Host,
+				"header_host", r.Header.Get("Host"),
+				"url", r.URL.String())
+		}
+
 		// Extract access key from Authorization header
 		accessKey, err := sigv4.GetAccessKey(r)
 		if err != nil {
 			// Missing or invalid Authorization header
+			if r.Method == "PUT" && r.URL.Path != "/" {
+				s.log.Debug("GetAccessKey failed", "error", err, "path", r.URL.Path)
+			}
 			s.writeAuthError(w, requestID, s3types.ErrAccessDenied)
 			return
 		}
@@ -167,18 +180,25 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 		// Look up user and get secret key
 		user, err := s.auth.GetUserForAccessKey(accessKey)
 		if err != nil || user == nil {
+			if r.Method == "PUT" && r.URL.Path != "/" {
+				s.log.Debug("GetUserForAccessKey failed", "error", err, "user_nil", user == nil, "path", r.URL.Path)
+			}
 			s.writeAuthError(w, requestID, s3types.ErrInvalidAccessKeyID)
 			return
 		}
 
 		// Check if user account is active
 		if user.Status != "on" {
+			if r.Method == "PUT" && r.URL.Path != "/" {
+				s.log.Debug("User status check failed", "status", user.Status, "path", r.URL.Path)
+			}
 			s.writeAuthError(w, requestID, s3types.ErrAccessDenied)
 			return
 		}
 
 		// Verify AWS Signature V4
 		if err := sigv4.VerifySignature(r, user.SecretKey); err != nil {
+			s.log.Debug("signature verification failed", "error", err, "method", r.Method, "path", r.URL.Path)
 			s.writeAuthError(w, requestID, s3types.ErrSignatureDoesNotMatch)
 			return
 		}
