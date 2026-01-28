@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/mallardduck/dirio/internal/sigv4"
+	"github.com/mallardduck/dirio/internal/auth"
 )
 
 func main() {
@@ -21,7 +21,7 @@ func main() {
 
 	// Try to verify with debug output
 	fmt.Println("Testing AWS CLI request...")
-	err := sigv4.DebugVerifySignature(req, secretKey)
+	err := auth.DebugVerifySignature(req, secretKey)
 	if err != nil {
 		fmt.Printf("FAILED: %v\n", err)
 	} else {

@@ -226,7 +226,7 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
 
 ## S3 Client Compatibility Matrix
 
-**Updated: January 26, 2026 - With defensive checks to prevent false positives**
+**Updated: January 27, 2026 - After auth/sigv4 refactor (unified auth package)**
 
 | Feature                   | AWS CLI | boto3 | MinIO mc | Notes                                                 | Priority |
 |---------------------------|---------|-------|----------|-------------------------------------------------------|----------|
@@ -299,15 +299,35 @@ Legend: ✅ Works | ❌ Fails | ⚠️ Partial | ❓Untested
   - Multipart: Returns 405 Method Not Allowed
   - **Object Tagging: FALSE POSITIVE** - Test passes because DirIO stores tagging XML as object content and returns it on GET. Query parameter `?tagging` is ignored, causing `test.txt` to be overwritten with XML.
 
-**MinIO mc (6/11 tests passed - 55%):**
-- ✅ Bucket operations work: Configure alias, ListBuckets, CreateBucket (mc mb), HeadBucket (mc stat --no-list), ListObjectsV2 (mc ls), DeleteBucket (mc rb)
+**MinIO mc (8/14 tests passed - 57.1%):**
+- ✅ Bucket operations work: Configure alias, ListBuckets, CreateBucket (mc mb), HeadBucket (mc stat --no-list), HeadBucket (mc stat), GetBucketLocation (mc stat), ListObjectsV2 (mc ls), DeleteBucket (mc rb)
 - ❌ **Critical blocker:** All object operations still fail
+  - PutObject (mc put upload): "Insufficient permissions to access this path"
   - PutObject (mc cp upload): "Insufficient permissions to access this path"
   - HeadObject (mc stat): "Object does not exist"
   - GetObject (mc cp download): "Object does not exist"
   - GetObject (mc cat): "Object does not exist"
   - DeleteObject (mc rm): "Object does not exist"
 - 🔍 **Note:** mc failures appear to be authentication/signature related rather than missing S3 API features, since AWS CLI and boto3 work fine for same operations
+- **Recent progress:** Added tests for GetBucketLocation and duplicate PutObject variations (mc put vs mc cp)
+
+### Architecture Improvements (January 27, 2026):
+
+**Auth Package Refactor:**
+- ✅ **Merged sigv4 into auth package** - `internal/sigv4/` → `internal/auth/signature.go`
+- ✅ **Unified authentication API** - Single `AuthenticateRequest(r)` method replaces 4-step orchestration
+- ✅ **Auth middleware encapsulation** - Moved from `server.go` to `auth.AuthMiddleware()` method
+- ✅ **Improved architecture**:
+  - Single package owns all authentication concerns (signature verification, user lookup, validation)
+  - Cleaner API: `user, err := auth.AuthenticateRequest(r)` instead of juggling sigv4 + auth packages
+  - Better testability and reusability
+  - User added to request context for downstream handlers
+- ✅ **No regressions** - All test results identical before/after refactor
+
+**Remaining MinIO mc Issues:**
+- Still investigating why bucket PUTs work but object PUTs fail with 403
+- Both operations use same signature verification code path
+- Likely difference in canonical request construction between bucket and object routes
 
 ### Recommended Priority for Phase 3 (based on findings):
 

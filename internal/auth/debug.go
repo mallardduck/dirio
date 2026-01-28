@@ -1,4 +1,4 @@
-package sigv4
+package auth
 
 import (
 	"fmt"

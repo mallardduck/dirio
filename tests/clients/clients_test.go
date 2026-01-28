@@ -149,7 +149,7 @@ func startTestServer(t *testing.T) *TestServer {
 		"--data-dir", dataDir,
 		"--access-key", testAccessKey,
 		"--secret-key", testSecretKey,
-		"--log-level", "debug",
+		"--log-level", "warn",
 	)
 	cmd.Dir = projectRoot
 	cmd.Stdout = os.Stdout

@@ -1,4 +1,4 @@
-// Package sigv4 implements AWS Signature Version 4 verification for HTTP requests.
+// AWS Signature Version 4 implementation for HTTP request authentication.
 //
 // This implementation is inspired by:
 // - MinIO (https://github.com/minio/minio) - Apache 2.0 License
@@ -6,7 +6,7 @@
 //
 // AWS Signature Version 4 specification:
 // https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
-package sigv4
+package auth
 
 import (
 	"crypto/hmac"
@@ -20,8 +20,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/mallardduck/dirio/internal/logging"
 )
 
 const (
@@ -288,20 +286,11 @@ func ComputeSignature(secretKey string, timestamp time.Time, region, stringToSig
 }
 
 // VerifySignature verifies the AWS Signature V4 signature for the given request
-// Returns the access key if verification succeeds, or an error otherwise
 func VerifySignature(r *http.Request, secretKey string) error {
-	log := logging.Component("sigv4")
-	if r.Method == "PUT" {
-		log.Debug("VerifySignature called", "method", r.Method, "path", r.URL.Path, "r_host", r.Host)
-	}
-
 	// Parse Authorization header
 	authHeader := r.Header.Get(authorizationHeader)
 	creds, err := ParseAuthorizationHeader(authHeader)
 	if err != nil {
-		if r.Method == "PUT" {
-			log.Debug("ParseAuthorizationHeader failed", "error", err)
-		}
 		return err
 	}
 
@@ -331,28 +320,8 @@ func VerifySignature(r *http.Request, secretKey string) error {
 	// Compute expected signature
 	expectedSignature := ComputeSignature(secretKey, timestamp, creds.Region, stringToSign)
 
-	// Debug logging for all PUT requests
-	if r.Method == "PUT" {
-		log.Debug("signature verification",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"r_host", r.Host,
-			"signed_headers", creds.SignedHeaders,
-			"match", subtle.ConstantTimeCompare([]byte(expectedSignature), []byte(creds.Signature)) == 1)
-	}
-
 	// Compare signatures using constant-time comparison to prevent timing attacks
 	if subtle.ConstantTimeCompare([]byte(expectedSignature), []byte(creds.Signature)) != 1 {
-		// Debug: log signature mismatch details
-		log.Debug("signature mismatch",
-			"r_host", r.Host,
-			"r_url_path", r.URL.Path,
-			"r_url_escaped_path", r.URL.EscapedPath(),
-			"signed_headers", creds.SignedHeaders,
-			"canonical_request", canonicalRequest,
-			"string_to_sign", stringToSign,
-			"expected_signature", expectedSignature,
-			"received_signature", creds.Signature)
 		return ErrSignatureMismatch
 	}
 

@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mallardduck/dirio/internal/auth"
 	"github.com/mallardduck/dirio/internal/server"
-	"github.com/mallardduck/dirio/internal/sigv4"
 )
 
 // TestServer wraps a dirio server for integration testing
@@ -170,14 +170,14 @@ func (ts *TestServer) SignRequest(req *http.Request, body []byte) {
 	sort.Strings(signedHeaders)
 
 	// Build canonical request
-	canonicalRequest := sigv4.BuildCanonicalRequest(req, signedHeaders, payloadHash)
+	canonicalRequest := auth.BuildCanonicalRequest(req, signedHeaders, payloadHash)
 
 	// Build string to sign
 	region := "us-east-1"
-	stringToSign := sigv4.BuildStringToSign(timestamp, region, canonicalRequest)
+	stringToSign := auth.BuildStringToSign(timestamp, region, canonicalRequest)
 
 	// Compute signature
-	signature := sigv4.ComputeSignature(ts.SecretKey, timestamp, region, stringToSign)
+	signature := auth.ComputeSignature(ts.SecretKey, timestamp, region, stringToSign)
 
 	// Build Authorization header
 	dateStamp := timestamp.Format("20060102")

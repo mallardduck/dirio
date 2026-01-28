@@ -1,7 +1,19 @@
 package auth
 
 import (
+	"errors"
+	"net/http"
+
 	"github.com/mallardduck/dirio/internal/metadata"
+)
+
+var (
+	// ErrAuthenticationFailed is returned when authentication fails
+	ErrAuthenticationFailed = errors.New("authentication failed")
+	// ErrUserNotFound is returned when the user doesn't exist
+	ErrUserNotFound = errors.New("user not found")
+	// ErrUserInactive is returned when the user account is not active
+	ErrUserInactive = errors.New("user account is not active")
 )
 
 // Authenticator handles authentication and authorization
@@ -64,5 +76,39 @@ func (a *Authenticator) GetUserForAccessKey(accessKey string) (*metadata.User, e
 	return user, nil
 }
 
-// TODO: Implement AWS Signature V4 authentication
-// This will be added in a future phase
+// AuthenticateRequest validates an HTTP request using AWS Signature V4 authentication.
+// This is the main entry point for request authentication.
+//
+// Returns the authenticated user if successful, or an error:
+// - ErrAuthenticationFailed: Missing or invalid Authorization header
+// - ErrUserNotFound: Access key doesn't exist
+// - ErrUserInactive: User account is not active
+// - ErrSignatureMismatch: Signature verification failed
+func (a *Authenticator) AuthenticateRequest(r *http.Request) (*metadata.User, error) {
+	// Extract access key from Authorization header
+	accessKey, err := GetAccessKey(r)
+	if err != nil {
+		return nil, ErrAuthenticationFailed
+	}
+
+	// Look up user and get secret key
+	user, err := a.GetUserForAccessKey(accessKey)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, ErrUserNotFound
+	}
+
+	// Check if user account is active
+	if user.Status != "on" {
+		return nil, ErrUserInactive
+	}
+
+	// Verify AWS Signature V4
+	if err := VerifySignature(r, user.SecretKey); err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
