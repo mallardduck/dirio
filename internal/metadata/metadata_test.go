@@ -19,10 +19,10 @@ func TestObjectMetadata_PutAndGet(t *testing.T) {
 
 	// Create test metadata
 	meta := &ObjectMetadata{
-		Version:     ObjectMetadataVersion,
-		ContentType: "text/plain",
-		Size:        1234,
-		ETag:        `"abcd1234"`,
+		Version:      ObjectMetadataVersion,
+		ContentType:  "text/plain",
+		Size:         1234,
+		ETag:         `"abcd1234"`,
 		LastModified: time.Now().Truncate(time.Second),
 		CustomMetadata: map[string]string{
 			"Cache-Control":       "max-age=3600",
@@ -56,10 +56,10 @@ func TestObjectMetadata_Delete(t *testing.T) {
 
 	// Create test metadata
 	meta := &ObjectMetadata{
-		Version:     ObjectMetadataVersion,
-		ContentType: "text/plain",
-		Size:        1234,
-		ETag:        `"abcd1234"`,
+		Version:      ObjectMetadataVersion,
+		ContentType:  "text/plain",
+		Size:         1234,
+		ETag:         `"abcd1234"`,
 		LastModified: time.Now(),
 	}
 
@@ -99,10 +99,10 @@ func TestObjectMetadata_CompactJSONFormat(t *testing.T) {
 
 	// Create test metadata
 	meta := &ObjectMetadata{
-		Version:     ObjectMetadataVersion,
-		ContentType: "text/plain",
-		Size:        1234,
-		ETag:        `"abcd1234"`,
+		Version:      ObjectMetadataVersion,
+		ContentType:  "text/plain",
+		Size:         1234,
+		ETag:         `"abcd1234"`,
 		LastModified: time.Now().Truncate(time.Second),
 		CustomMetadata: map[string]string{
 			"x-amz-meta-author": "Alice",

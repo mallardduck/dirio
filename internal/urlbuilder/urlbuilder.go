@@ -50,9 +50,9 @@ func (b *Builder) detectHost(r *http.Request) string {
 // Strategy:
 // - If CanonicalDomain is set → assume HTTPS
 // - Otherwise detect from request:
-//   1. Check X-Forwarded-Proto header (reverse proxy)
-//   2. Check TLS state
-//   3. Default to http
+//  1. Check X-Forwarded-Proto header (reverse proxy)
+//  2. Check TLS state
+//  3. Default to http
 func (b *Builder) detectScheme(r *http.Request) string {
 	// If canonical domain is configured, assume HTTPS
 	if b.canonicalDomain != "" {

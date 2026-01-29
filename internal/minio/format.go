@@ -10,11 +10,11 @@ import (
 
 // FormatInfo represents MinIO's format.json structure
 type FormatInfo struct {
-	Version string           `json:"version"`
-	Format  string           `json:"format"`
-	ID      string           `json:"id"`
-	FS      *FSFormatInfo    `json:"fs,omitempty"`
-	XL      *XLFormatInfo    `json:"xl,omitempty"`
+	Version string        `json:"version"`
+	Format  string        `json:"format"`
+	ID      string        `json:"id"`
+	FS      *FSFormatInfo `json:"fs,omitempty"`
+	XL      *XLFormatInfo `json:"xl,omitempty"`
 }
 
 // FSFormatInfo represents filesystem mode format info
@@ -24,10 +24,10 @@ type FSFormatInfo struct {
 
 // XLFormatInfo represents erasure coded mode format info
 type XLFormatInfo struct {
-	Version      string   `json:"version"`
-	Distributed  bool     `json:"distributed"`
-	DrivesPerSet int      `json:"drivesPerSet"`
-	Sets         [][]int  `json:"sets"`
+	Version      string  `json:"version"`
+	Distributed  bool    `json:"distributed"`
+	DrivesPerSet int     `json:"drivesPerSet"`
+	Sets         [][]int `json:"sets"`
 }
 
 // ValidateFormat checks if the MinIO data is in supported single-node FS mode.

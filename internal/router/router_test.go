@@ -88,10 +88,10 @@ func TestNameGroup(t *testing.T) {
 	routes := r.Routes()
 
 	expected := map[string]string{
-		"root":                         "/",
-		"admin.dashboard":              "/admin/dashboard",
-		"admin.users.index":            "/admin/users",
-		"admin.settings.general":       "/admin/settings/general",
+		"root":                   "/",
+		"admin.dashboard":        "/admin/dashboard",
+		"admin.users.index":      "/admin/users",
+		"admin.settings.general": "/admin/settings/general",
 	}
 
 	for name, pattern := range expected {
