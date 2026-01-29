@@ -269,7 +269,9 @@ func (s *Storage) DeleteObject(bucket, key string) error {
 	}
 
 	// Delete metadata
-	s.metadata.DeleteObjectMetadata(bucket, key)
+	if err := s.metadata.DeleteObjectMetadata(bucket, key); err != nil {
+		s.log.Error("failed to delete object metadata", "bucket", bucket, "key", key, "error", err)
+	}
 
 	// Clean up empty parent directories
 	s.cleanupEmptyDirs(bucketFS, filepath.Dir(objectPath))

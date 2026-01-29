@@ -88,7 +88,10 @@ func (s *Storage) CreateBucket(bucket string) error {
 
 	// Create bucket metadata
 	if err := s.metadata.CreateBucket(bucket); err != nil {
-		s.rootFS.Remove(bucket) // Cleanup on failure
+		// Cleanup on failure
+		if err := s.rootFS.Remove(bucket); err != nil {
+			s.log.Error("failed to cleanup bucket directory", "error", err)
+		}
 		return err
 	}
 
@@ -204,7 +207,7 @@ func (s *Storage) walkDir(bucket, dir string, fn func(key string, info fs.FileIn
 	}
 
 	for _, entry := range entries {
-		entryPath := dir
+		var entryPath string
 		if dir == "" {
 			entryPath = entry.Name()
 		} else {

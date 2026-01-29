@@ -4,14 +4,8 @@ import (
 	"context"
 	"net/http"
 	"time"
-)
 
-// contextKey for storing timing information
-type timingContextKey string
-
-const (
-	// RequestStartTimeKey is the context key for the request start timestamp
-	RequestStartTimeKey timingContextKey = "requestStartTime"
+	contextInt "github.com/mallardduck/dirio/internal/context"
 )
 
 // Timing is a middleware that captures the request start time as early as possible.
@@ -23,7 +17,7 @@ func Timing(next http.Handler) http.Handler {
 		startTime := time.Now()
 
 		// Add start time to context
-		ctx := context.WithValue(r.Context(), RequestStartTimeKey, startTime)
+		ctx := context.WithValue(r.Context(), contextInt.RequestStartTimeKey, startTime)
 
 		// Pass request with updated context to next handler
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -36,7 +30,7 @@ func GetRequestStartTime(ctx context.Context) (time.Time, bool) {
 	if ctx == nil {
 		return time.Time{}, false
 	}
-	if startTime, ok := ctx.Value(RequestStartTimeKey).(time.Time); ok {
+	if startTime, ok := ctx.Value(contextInt.RequestStartTimeKey).(time.Time); ok {
 		return startTime, true
 	}
 	return time.Time{}, false

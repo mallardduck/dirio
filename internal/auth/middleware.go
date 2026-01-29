@@ -8,12 +8,11 @@ import (
 	"fmt"
 	"net/http"
 
+	contextInt "github.com/mallardduck/dirio/internal/context"
 	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/internal/middleware"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
-
-const RequestUserKey = "requestUser"
 
 func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +45,7 @@ func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Add user to context
-		ctx := context.WithValue(r.Context(), RequestUserKey, user)
+		ctx := context.WithValue(r.Context(), contextInt.RequestUserKey, user)
 		// Authentication successful - proceed to next handler
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -76,7 +75,7 @@ func writeAuthError(w http.ResponseWriter, requestID string, errCode s3types.Err
 }
 
 func GetRequestUser(ctx context.Context) *metadata.User {
-	if user, ok := ctx.Value(RequestUserKey).(*metadata.User); ok {
+	if user, ok := ctx.Value(contextInt.RequestUserKey).(*metadata.User); ok {
 		return user
 	}
 	return nil

@@ -92,7 +92,7 @@ func (s *Service) Start() error {
 	}
 
 	// Add all services and store handles
-	var handles []dnssd.ServiceHandle
+	handles := make([]dnssd.ServiceHandle, 0, len(configs))
 	for _, config := range configs {
 		service, err := dnssd.NewService(config)
 		if err != nil {

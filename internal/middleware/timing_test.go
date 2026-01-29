@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	contextInt "github.com/mallardduck/dirio/internal/context"
 )
 
 func TestTiming(t *testing.T) {
@@ -115,7 +117,7 @@ func TestGetRequestStartTime(t *testing.T) {
 
 	t.Run("returns start time when present", func(t *testing.T) {
 		expectedTime := time.Now()
-		ctx := context.WithValue(context.Background(), RequestStartTimeKey, expectedTime)
+		ctx := context.WithValue(context.Background(), contextInt.RequestStartTimeKey, expectedTime)
 
 		actualTime, ok := GetRequestStartTime(ctx)
 		if !ok {

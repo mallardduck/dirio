@@ -4,14 +4,11 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+
+	contextInt "github.com/mallardduck/dirio/internal/context"
 )
 
-// contextKey is a private type for context keys to avoid collisions
-type contextKey string
-
 const (
-	// traceIDKey is the context key for trace IDs
-	traceIDKey contextKey = "traceID"
 	// TraceIDHeader is the HTTP header name for trace IDs (X-Trace-ID for simplicity)
 	TraceIDHeader = "X-Trace-ID"
 )
@@ -19,7 +16,7 @@ const (
 // WithTraceID returns a new context with the given trace ID attached.
 // Use this at entry points to create a new trace.
 func WithTraceID(ctx context.Context, traceID string) context.Context {
-	return context.WithValue(ctx, traceIDKey, traceID)
+	return context.WithValue(ctx, contextInt.TraceIDKey, traceID)
 }
 
 // FromContext extracts the trace ID from the context.
@@ -28,7 +25,7 @@ func FromContext(ctx context.Context) string {
 	if ctx == nil {
 		return "unknown"
 	}
-	if id, ok := ctx.Value(traceIDKey).(string); ok {
+	if id, ok := ctx.Value(contextInt.TraceIDKey).(string); ok {
 		return id
 	}
 	return "unknown"

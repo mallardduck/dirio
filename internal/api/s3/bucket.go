@@ -71,7 +71,7 @@ func (h *Handler) HeadBucket(w http.ResponseWriter, r *http.Request, bucket, req
 	// 	Request side:
 	// 		- `x-amz-expected-bucket-owner` - account ID of expected bucket owner. If not matching actual owner, 403.
 	// It needs to be an optional header we check since it is not always sent.
-	// Auth ACL things should already be blocking this, but if an admin level account tries to modify buckets with the same name owned by diffrent users it is helpful.
+	// Auth ACL things should already be blocking this, but if an admin level account tries to modify buckets with the same name owned by different users it is helpful.
 
 	// Set bucket region header (best practice per AWS documentation)
 	w.Header().Set("x-amz-bucket-region", consts.DefaultBucketLocation)

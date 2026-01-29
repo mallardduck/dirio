@@ -5,14 +5,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
+
+	contextInt "github.com/mallardduck/dirio/internal/context"
 )
 
-// contextKey is a private type for context keys to avoid collisions
-type contextKey string
-
 const (
-	// RequestIDKey is the context key for request IDs
-	RequestIDKey contextKey = "requestID"
 	// RequestIDHeader is the HTTP header name for request IDs
 	RequestIDHeader = "X-Request-Id"
 )
@@ -32,7 +29,7 @@ func RequestID(next http.Handler) http.Handler {
 		w.Header().Set(RequestIDHeader, requestID)
 
 		// Add request ID to context
-		ctx := context.WithValue(r.Context(), RequestIDKey, requestID)
+		ctx := context.WithValue(r.Context(), contextInt.RequestIDKey, requestID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -43,7 +40,7 @@ func GetRequestID(ctx context.Context) string {
 	if ctx == nil {
 		return ""
 	}
-	if id, ok := ctx.Value(RequestIDKey).(string); ok {
+	if id, ok := ctx.Value(contextInt.RequestIDKey).(string); ok {
 		return id
 	}
 	return ""
