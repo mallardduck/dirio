@@ -113,7 +113,7 @@ func (s *Server) setupRoutes() {
 	s.router.MiddlewareGroup(func(r *router.Router) {
 		// Add any public routes here without auth middleware
 		// For example: health checks, public assets, etc.
-		r.Get("/favicon.ico", favicon.FaviconHandler, "favicon")
+		r.Get("/favicon.ico", favicon.HandleFavicon, "favicon")
 	})
 
 	// Create URL builder

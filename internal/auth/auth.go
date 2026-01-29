@@ -4,8 +4,11 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/metadata"
 )
+
+var authLogger = logging.Component("auth")
 
 var (
 	// ErrAuthenticationFailed is returned when authentication fails

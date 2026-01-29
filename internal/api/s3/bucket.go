@@ -13,7 +13,11 @@ import (
 func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request, bucket, requestID string) {
 	// Validate bucket name according to S3 naming rules
 	if err := ValidateS3BucketName(bucket); err != nil {
-		writeErrorResponse(w, requestID, s3types.ErrInvalidBucketName, err)
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInvalidBucketName, err); writeErr != nil {
+			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error validating bucket name and additional error writing XML error response")
+			return
+		}
+		s3Logger.With("err", err).Warn("encountered error validating bucket name")
 		return
 	}
 
@@ -21,10 +25,18 @@ func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request, bucket, r
 
 	if err := h.storage.CreateBucket(bucket); err != nil {
 		if errors.Is(err, storage.ErrBucketExists) {
-			writeErrorResponse(w, requestID, s3types.ErrBucketAlreadyExists, err)
+			if writeErr := writeErrorResponse(w, requestID, s3types.ErrBucketAlreadyExists, err); writeErr != nil {
+				s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error creating bucket (already exists) and additional error writing XML error response")
+				return
+			}
+			s3Logger.With("err", err).Warn("encountered error creating bucket (already exists)")
 			return
 		}
-		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInternalError, err); writeErr != nil {
+			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error creating bucket and additional error writing XML error response")
+			return
+		}
+		s3Logger.With("err", err).Warn("encountered error creating bucket")
 		return
 	}
 
@@ -39,12 +51,19 @@ func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request, bucket, r
 func (h *Handler) HeadBucket(w http.ResponseWriter, r *http.Request, bucket, requestID string) {
 	exists, err := h.storage.BucketExists(bucket)
 	if err != nil {
-		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInternalError, err); writeErr != nil {
+			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error checking bucket existence and additional error writing XML error response")
+			return
+		}
+		s3Logger.With("err", err).Warn("encountered error checking bucket existence")
 		return
 	}
 
 	if !exists {
-		writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, nil)
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, nil); writeErr != nil {
+			s3Logger.With("write_err", writeErr).Warn("encountered error writing no such bucket error response")
+			return
+		}
 		return
 	}
 
@@ -63,14 +82,26 @@ func (h *Handler) HeadBucket(w http.ResponseWriter, r *http.Request, bucket, req
 func (h *Handler) DeleteBucket(w http.ResponseWriter, r *http.Request, bucket, requestID string) {
 	if err := h.storage.DeleteBucket(bucket); err != nil {
 		if errors.Is(err, storage.ErrNoSuchBucket) {
-			writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err)
+			if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err); writeErr != nil {
+				s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error deleting bucket (no such bucket) and additional error writing XML error response")
+				return
+			}
+			s3Logger.With("err", err).Warn("encountered error deleting bucket (no such bucket)")
 			return
 		}
 		if errors.Is(err, storage.ErrBucketNotEmpty) {
-			writeErrorResponse(w, requestID, s3types.ErrBucketNotEmpty, err)
+			if writeErr := writeErrorResponse(w, requestID, s3types.ErrBucketNotEmpty, err); writeErr != nil {
+				s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error deleting bucket (not empty) and additional error writing XML error response")
+				return
+			}
+			s3Logger.With("err", err).Warn("encountered error deleting bucket (not empty)")
 			return
 		}
-		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInternalError, err); writeErr != nil {
+			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error deleting bucket and additional error writing XML error response")
+			return
+		}
+		s3Logger.With("err", err).Warn("encountered error deleting bucket")
 		return
 	}
 
@@ -81,12 +112,19 @@ func (h *Handler) DeleteBucket(w http.ResponseWriter, r *http.Request, bucket, r
 func (h *Handler) GetBucketLocation(w http.ResponseWriter, r *http.Request, bucket, requestID string) {
 	exists, err := h.storage.BucketExists(bucket)
 	if err != nil {
-		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInternalError, err); writeErr != nil {
+			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error checking bucket existence and additional error writing XML error response")
+			return
+		}
+		s3Logger.With("err", err).Warn("encountered error checking bucket existence")
 		return
 	}
 
 	if !exists {
-		writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, nil)
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, nil); writeErr != nil {
+			s3Logger.With("write_err", writeErr).Warn("encountered error writing no such bucket error response")
+			return
+		}
 		return
 	}
 
@@ -94,7 +132,9 @@ func (h *Handler) GetBucketLocation(w http.ResponseWriter, r *http.Request, buck
 		Location: consts.DefaultBucketLocation, // Hardcoded as discussed
 	}
 
-	writeXMLResponse(w, http.StatusOK, response)
+	if writeErr := writeXMLResponse(w, http.StatusOK, response); writeErr != nil {
+		s3Logger.With("err", writeErr).Warn("encountered error writing XML OK response")
+	}
 }
 
 // ListObjects handles GET /{bucket} (ListObjectsV1)
@@ -108,10 +148,18 @@ func (h *Handler) ListObjects(w http.ResponseWriter, r *http.Request, bucket, re
 	objects, err := h.storage.ListObjects(bucket, prefix, delimiter, 1000)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoSuchBucket) {
-			writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err)
+			if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err); writeErr != nil {
+				s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error listing objects (no such bucket) and additional error writing XML error response")
+				return
+			}
+			s3Logger.With("err", err).Warn("encountered error listing objects (no such bucket)")
 			return
 		}
-		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInternalError, err); writeErr != nil {
+			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error listing objects and additional error writing XML error response")
+			return
+		}
+		s3Logger.With("err", err).Warn("encountered error listing objects")
 		return
 	}
 
@@ -125,7 +173,9 @@ func (h *Handler) ListObjects(w http.ResponseWriter, r *http.Request, bucket, re
 		Contents:    objects,
 	}
 
-	writeXMLResponse(w, http.StatusOK, response)
+	if writeErr := writeXMLResponse(w, http.StatusOK, response); writeErr != nil {
+		s3Logger.With("err", writeErr).Warn("encountered error writing XML OK response")
+	}
 }
 
 // ListObjectsV2 handles GET /{bucket}?list-type=2
@@ -138,10 +188,18 @@ func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request, bucket, 
 	objects, err := h.storage.ListObjects(bucket, prefix, delimiter, 1000)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoSuchBucket) {
-			writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err)
+			if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err); writeErr != nil {
+				s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error listing objects v2 (no such bucket) and additional error writing XML error response")
+				return
+			}
+			s3Logger.With("err", err).Warn("encountered error listing objects v2 (no such bucket)")
 			return
 		}
-		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInternalError, err); writeErr != nil {
+			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error listing objects v2 and additional error writing XML error response")
+			return
+		}
+		s3Logger.With("err", err).Warn("encountered error listing objects v2")
 		return
 	}
 
@@ -156,5 +214,7 @@ func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request, bucket, 
 		Contents:          objects,
 	}
 
-	writeXMLResponse(w, http.StatusOK, response)
+	if writeErr := writeXMLResponse(w, http.StatusOK, response); writeErr != nil {
+		s3Logger.With("err", writeErr).Warn("encountered error writing XML OK response")
+	}
 }

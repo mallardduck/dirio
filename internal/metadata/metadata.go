@@ -29,7 +29,7 @@ type Manager struct {
 
 // User represents a user with credentials
 type User struct {
-	Version        string    `json:"version"`                  // DirIO metadata version
+	Version        string    `json:"version"` // DirIO metadata version
 	AccessKey      string    `json:"accessKey"`
 	SecretKey      string    `json:"secretKey"`
 	Status         string    `json:"status"`
@@ -67,7 +67,7 @@ type BucketMetadata struct {
 
 // Policy represents an IAM policy
 type Policy struct {
-	Version    string    `json:"version"`    // DirIO metadata version
+	Version    string    `json:"version"` // DirIO metadata version
 	Name       string    `json:"name"`
 	PolicyJSON string    `json:"policyJson"` // IAM policy document (S3 format)
 	CreateDate time.Time `json:"createDate"`
@@ -76,7 +76,7 @@ type Policy struct {
 
 // ObjectMetadata represents object metadata
 type ObjectMetadata struct {
-	Version        string            `json:"version"`                  // DirIO metadata version
+	Version        string            `json:"version"` // DirIO metadata version
 	ContentType    string            `json:"contentType"`
 	Size           int64             `json:"size"`
 	ETag           string            `json:"etag"`
@@ -214,7 +214,9 @@ func (m *Manager) DeleteObjectMetadata(bucket, key string) error {
 		if err != nil || len(entries) > 0 {
 			break
 		}
-		m.metadataFS.Remove(dir)
+		if err := m.metadataFS.Remove(dir); err != nil {
+			return err
+		}
 		dir = filepath.Dir(dir)
 	}
 

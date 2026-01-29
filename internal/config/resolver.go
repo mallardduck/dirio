@@ -120,7 +120,7 @@ func (vr *ValueResolver) GetBool(o option.RegisteredOption) bool {
 
 func parseInt(s string) int {
 	var i int
-	fmt.Sscanf(s, "%d", &i)
+	_, _ = fmt.Sscanf(s, "%d", &i)
 	return i
 }
 

@@ -1,8 +1,11 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
+	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/mallardduck/dirio/internal/metadata"
@@ -21,20 +24,24 @@ func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 		if err != nil {
 			// Map auth errors to S3 error codes
 			var errCode s3types.ErrorCode
-			switch err {
-			case ErrAuthenticationFailed:
+			switch {
+			case errors.Is(err, ErrAuthenticationFailed):
 				errCode = s3types.ErrAccessDenied
-			case ErrUserNotFound:
+			case errors.Is(err, ErrUserNotFound):
 				errCode = s3types.ErrInvalidAccessKeyID
-			case ErrUserInactive:
+			case errors.Is(err, ErrUserInactive):
 				errCode = s3types.ErrAccessDenied
-			case ErrSignatureMismatch:
+			case errors.Is(err, ErrSignatureMismatch):
 				errCode = s3types.ErrSignatureDoesNotMatch
 			default:
 				// Other signature verification errors
 				errCode = s3types.ErrSignatureDoesNotMatch
 			}
-			writeAuthError(w, requestID, errCode)
+			if writeErr := writeAuthError(w, requestID, errCode); writeErr != nil {
+				authLogger.With("err", err, "error_code", errCode, "write_err", writeErr).Warn("encountered error authenticating request and additional error writing XML error response")
+				return
+			}
+			authLogger.With("err", err, "error_code", errCode).Warn("encountered error authenticating request")
 			return
 		}
 
@@ -46,18 +53,26 @@ func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 }
 
 // writeAuthError writes an S3 error response
-func writeAuthError(w http.ResponseWriter, requestID string, errCode s3types.ErrorCode) {
-	w.Header().Set("Content-Type", "application/xml")
-	w.WriteHeader(errCode.HTTPStatus())
-
+func writeAuthError(w http.ResponseWriter, requestID string, errCode s3types.ErrorCode) error {
 	response := s3types.ErrorResponse{
 		Code:      errCode.String(),
 		Message:   errCode.Description(),
 		RequestID: requestID,
 	}
 
-	w.Write([]byte(xml.Header))
-	xml.NewEncoder(w).Encode(response)
+	var buf bytes.Buffer
+	buf.Write([]byte(xml.Header))
+
+	encoder := xml.NewEncoder(&buf)
+	encoder.Indent("", "  ")
+	if err := encoder.Encode(response); err != nil {
+		return fmt.Errorf("failed to encode error response: %w", err)
+	}
+
+	w.Header().Set("Content-Type", "application/xml")
+	w.WriteHeader(errCode.HTTPStatus())
+	_, err := w.Write(buf.Bytes())
+	return err
 }
 
 func GetRequestUser(ctx context.Context) *metadata.User {
