@@ -1,63 +1,63 @@
+version: "2"
 run:
-  timeout: 5m
-  tests: true
   build-tags:
     - integration
-
+  tests: true
 linters:
   enable:
-    - gofmt
-    - govet
-    - errcheck
-    - staticcheck
-    - unused
-    - gosimple
-    - ineffassign
-    - typecheck
-    - exportloopref
-    - goimports
-    - revive
     - misspell
+    - prealloc
+    - revive
     - unconvert
     - unparam
-    - prealloc
-
-linters-settings:
-  errcheck:
-    check-type-assertions: false
-    check-blank: false
-
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment
-      - shadow
-
-  revive:
+  settings:
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+    govet:
+      disable:
+        - fieldalignment
+        - shadow
+      enable-all: true
+    revive:
+      rules:
+        - name: var-naming
+          disabled: true
+        - name: exported
+          disabled: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: var-naming
-        disabled: true
-      - name: exported
-        disabled: false
-
-  goimports:
-    local-prefixes: github.com/mallardduck/dirio
-
+      - linters:
+          - errcheck
+          - unparam
+        path: _test\.go
+      - linters:
+          - staticcheck
+        text: 'SA1019:'
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  exclude-rules:
-    # Exclude some linters from running on tests files
-    - path: _test\.go
-      linters:
-        - errcheck
-        - unparam
-
-    # Exclude known issues
-    - linters:
-        - staticcheck
-      text: "SA1019:" # Ignore deprecation warnings for now
-
   max-issues-per-linter: 0
   max-same-issues: 0
-
-output:
-  sort-results: true
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/mallardduck/dirio
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
