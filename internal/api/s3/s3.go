@@ -1,7 +1,9 @@
 package s3
 
 import (
+	"bytes"
 	"encoding/xml"
+	"fmt"
 	"net/http"
 
 	"github.com/mallardduck/dirio/internal/auth"
@@ -46,7 +48,11 @@ func (h *Handler) ListBuckets(w http.ResponseWriter, r *http.Request) {
 
 	buckets, err := h.storage.ListBuckets()
 	if err != nil {
-		writeErrorResponse(w, requestID, s3types.ErrInternalError, err)
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInternalError, err); writeErr != nil {
+			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error listing buckets and additional error writing XML error response")
+			return
+		}
+		s3Logger.With("err", err).Warn("encountered error listing buckets")
 		return
 	}
 
@@ -58,25 +64,33 @@ func (h *Handler) ListBuckets(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	writeXMLResponse(w, http.StatusOK, response)
+	if writeErr := writeXMLResponse(w, http.StatusOK, response); writeErr != nil {
+		s3Logger.With("err", writeErr).Warn("encountered error writing XML OK response")
+	}
 }
 
-func writeXMLResponse(w http.ResponseWriter, statusCode int, data interface{}) {
-	w.Header().Set("Content-Type", "application/xml")
-	w.WriteHeader(statusCode)
+func writeXMLResponse(w http.ResponseWriter, statusCode int, data interface{}) error {
+	var buf bytes.Buffer
+	buf.Write([]byte(xml.Header))
 
-	w.Write([]byte(xml.Header))
-	encoder := xml.NewEncoder(w)
+	encoder := xml.NewEncoder(&buf)
 	encoder.Indent("", "  ")
-	encoder.Encode(data)
+	if err := encoder.Encode(data); err != nil {
+		return err
+	}
+
+	// Optional: warn if response is unexpectedly large
+	if buf.Len() > 10*1024*1024 { // 10 MB
+		s3Logger.With("length", buf.Len()).Warn("Large XML response")
+	}
+
+	w.Header().Set("Content-Type", "application/xml")
+	w.WriteHeader(statusCode)
+	_, err := w.Write(buf.Bytes())
+	return err
 }
 
-func writeErrorResponse(w http.ResponseWriter, requestID string, errCode s3types.ErrorCode, err error) {
-	w.Header().Set("Content-Type", "application/xml")
-
-	statusCode := errCode.HTTPStatus()
-	w.WriteHeader(statusCode)
-
+func writeErrorResponse(w http.ResponseWriter, requestID string, errCode s3types.ErrorCode, err error) error {
 	errMsg := errCode.Description()
 	if err != nil {
 		errMsg = err.Error()
@@ -88,6 +102,17 @@ func writeErrorResponse(w http.ResponseWriter, requestID string, errCode s3types
 		RequestID: requestID,
 	}
 
-	w.Write([]byte(xml.Header))
-	xml.NewEncoder(w).Encode(response)
+	var buf bytes.Buffer
+	buf.Write([]byte(xml.Header))
+
+	encoder := xml.NewEncoder(&buf)
+	encoder.Indent("", "  ")
+	if err := encoder.Encode(response); err != nil {
+		return fmt.Errorf("failed to encode error response: %w", err)
+	}
+
+	w.Header().Set("Content-Type", "application/xml")
+	w.WriteHeader(errCode.HTTPStatus())
+	_, err = w.Write(buf.Bytes())
+	return err
 }
