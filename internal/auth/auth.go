@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/mallardduck/dirio/internal/logging"
@@ -91,7 +92,7 @@ func (a *Authenticator) AuthenticateRequest(r *http.Request) (*metadata.User, er
 	// Extract access key from Authorization header
 	accessKey, err := GetAccessKey(r)
 	if err != nil {
-		return nil, ErrAuthenticationFailed
+		return nil, fmt.Errorf("%w: %v", ErrAuthenticationFailed, err)
 	}
 
 	// Look up user and get secret key
