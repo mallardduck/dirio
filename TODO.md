@@ -208,6 +208,12 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
 
 ## Phase N+: Any future work
 
+### Optional Minio Compatibility Layer
+Using "Core + Sidecar" approach:
+
+1. **The Core (Port 9000)**: Keep this 100% strictly S3 compatible. No custom headers, no weird endpoints. This ensures rclone, boto3, and cyberduck never get confused.
+2. **The Management API (Port 9001)**: Put `datausageinfo`, `health`, and `user-management` here. This separates **Data Plane** (S3) from **Control Plane** (Admin).
+
 ### Virtual-Hosted-Style Buckets (Future)
 - [ ] Support `bucket.domain.com` style addressing
 - [ ] Subdomain routing logic
