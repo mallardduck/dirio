@@ -47,6 +47,12 @@ func TestParseAuthorizationHeader(t *testing.T) {
 			wantErr:       nil,
 			wantAccessKey: "AKIAIOSFODNN7EXAMPLE",
 		},
+		{
+			name:          "mc put auth error",
+			authHeader:    "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request,SignedHeaders=host;x-amz-date,Signature=abc123",
+			wantErr:       nil,
+			wantAccessKey: "AKIAIOSFODNN7EXAMPLE",
+		},
 	}
 
 	for _, tt := range tests {
