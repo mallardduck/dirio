@@ -114,10 +114,10 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
   - Custom metadata set works, get returns wrong key case
   - Failed: delimiter (0 prefixes), max-keys (returns all 5), range requests (returns full 100 bytes), CopyObject (0-byte file), pre-signed URLs (403), multipart (405), **Object Tagging (false positive fixed)** - corrupts object content with XML
 - [x] Test with MinIO client (mc) - migration compatibility
-  - **Result:** 7/12 passed - 58% success rate (via testcontainers-go, Jan 26, 2026)
-  - **Current blocker:** "Insufficient permissions" errors on all object operations
-  - Bucket operations work: alias, list, create, head, GetBucketLocation (mc stat), list objects, delete
-  - Object operations fail: put, get (cp), get (cat), head, delete
+  - **Result:** 12/14 passed - 85.7% success rate (bash script on Windows, Jan 29, 2026)
+  - **Major improvement:** Object operations now working! PutObject, HeadObject, GetObject all pass
+  - ✅ Working: alias, ListBuckets, CreateBucket, HeadBucket, GetBucketLocation, PutObject (mc put/cp), HeadObject (mc stat), GetObject (mc cp/cat), ListObjectsV2
+  - ❌ Failed: DeleteObject (405 Method Not Allowed), DeleteBucket (bucket not empty - expected if DeleteObject fails)
 - [x] Create S3 Compatibility Matrix (document ✅ ❌ ⚠️ for each feature/client)
 
 ### Real-World Scenarios
@@ -232,7 +232,7 @@ Using "Core + Sidecar" approach:
 
 ## S3 Client Compatibility Matrix
 
-**Updated: January 27, 2026 - After auth/sigv4 refactor (unified auth package)**
+**Updated: January 29, 2026 - After MinIO mc object operations fix (PutObject, GetObject, HeadObject now working)**
 
 | Feature                   | AWS CLI | boto3 | MinIO mc | Notes                                                 | Priority |
 |---------------------------|---------|-------|----------|-------------------------------------------------------|----------|
@@ -241,10 +241,10 @@ Using "Core + Sidecar" approach:
 | ListBuckets               | ✅       | ✅     | ✅        |                                                       | High     |
 | HeadBucket                | ✅       | ✅     | ✅        | mc: via `stat --no-list`; returns x-amz-bucket-region | High     |
 | GetBucketLocation         | ✅       | ✅     | ✅        | mc: via `stat`; added x-amz-bucket-region to HeadBucket | High     |
-| PutObject                 | ✅       | ✅     | ❌        | mc: "Insufficient permissions" error                  | High     |
-| GetObject                 | ✅       | ✅     | ❌        | mc: "Object does not exist"                           | High     |
-| HeadObject                | ✅       | ✅     | ❌        | mc: "Object does not exist" (stat)                    | High     |
-| DeleteObject              | ✅       | ✅     | ❌        | mc: "Object does not exist"                           | High     |
+| PutObject                 | ✅       | ✅     | ✅        | mc: mc put/cp both work                               | High     |
+| GetObject                 | ✅       | ✅     | ✅        | mc: mc cp/cat both work                               | High     |
+| HeadObject                | ✅       | ✅     | ✅        | mc: mc stat works                                     | High     |
+| DeleteObject              | ✅       | ✅     | ❌        | mc: 405 Method Not Allowed                            | High     |
 | ListObjectsV2 (basic)     | ✅       | ✅     | ✅        |                                                       | High     |
 | ListObjectsV2 (prefix)    | ✅       | ✅     | ❓        |                                                       | High     |
 | ListObjectsV2 (delimiter) | ❌       | ❌     | ❌        | CommonPrefixes not returned                           | High     |
@@ -305,17 +305,14 @@ Legend: ✅ Works | ❌ Fails | ⚠️ Partial | ❓Untested
   - Multipart: Returns 405 Method Not Allowed
   - **Object Tagging: FALSE POSITIVE** - Test passes because DirIO stores tagging XML as object content and returns it on GET. Query parameter `?tagging` is ignored, causing `test.txt` to be overwritten with XML.
 
-**MinIO mc (8/14 tests passed - 57.1%):**
-- ✅ Bucket operations work: Configure alias, ListBuckets, CreateBucket (mc mb), HeadBucket (mc stat --no-list), HeadBucket (mc stat), GetBucketLocation (mc stat), ListObjectsV2 (mc ls), DeleteBucket (mc rb)
-- ❌ **Critical blocker:** All object operations still fail
-  - PutObject (mc put upload): "Insufficient permissions to access this path"
-  - PutObject (mc cp upload): "Insufficient permissions to access this path"
-  - HeadObject (mc stat): "Object does not exist"
-  - GetObject (mc cp download): "Object does not exist"
-  - GetObject (mc cat): "Object does not exist"
-  - DeleteObject (mc rm): "Object does not exist"
-- 🔍 **Note:** mc failures appear to be authentication/signature related rather than missing S3 API features, since AWS CLI and boto3 work fine for same operations
-- **Recent progress:** Added tests for GetBucketLocation and duplicate PutObject variations (mc put vs mc cp)
+**MinIO mc (12/14 tests passed - 85.7% | via bash script on Windows, Jan 29, 2026):**
+- ✅ **Major improvement:** Object operations now working! All CRUD operations except delete
+- ✅ Bucket operations work: Configure alias, ListBuckets, CreateBucket (mc mb), HeadBucket (mc stat --no-list/stat), GetBucketLocation (mc stat)
+- ✅ Object operations work: PutObject (mc put/cp upload), HeadObject (mc stat), GetObject (mc cp download/cat), ListObjectsV2 (mc ls)
+- ❌ **Remaining failures:**
+  - DeleteObject (mc rm): 405 Method Not Allowed
+  - DeleteBucket (mc rb): Bucket not empty (expected, since DeleteObject fails)
+- 🎉 **Resolution:** Previous "Insufficient permissions" errors resolved - authentication now working correctly for object operations
 
 ### Architecture Improvements (January 27, 2026):
 
@@ -337,7 +334,7 @@ Legend: ✅ Works | ❌ Fails | ⚠️ Partial | ❓Untested
 
 ### Recommended Priority for Phase 3 (based on findings):
 
-1. **Investigate MinIO mc "Insufficient permissions" errors** (Critical - mc object operations broken despite bucket operations working)
+1. **DeleteObject implementation** (Critical - mc rm returns 405, blocking complete mc workflow)
 2. **CommonPrefixes in ListObjectsV2** (delimiter support) - Returns 0 CommonPrefixes when it should return folder prefixes
 3. **ListObjectsV2 max-keys/pagination** - MaxKeys parameter ignored, returns all 5 objects instead of 2
 4. **Range requests** - Returns full 100 bytes instead of requested 10 bytes (blocks video streaming, resumable downloads)
@@ -348,9 +345,10 @@ Legend: ✅ Works | ❌ Fails | ⚠️ Partial | ❓Untested
 9. **Object Tagging** - Query parameter routing needed - Currently ignores `?tagging`, corrupting objects with XML
 
 **Already working:**
-- ✅ GetBucketLocation (AWS CLI and boto3) - FIXED Jan 24, 2026
+- ✅ GetBucketLocation (AWS CLI, boto3, MinIO mc) - FIXED Jan 24, 2026
 - ✅ HeadBucket (AWS CLI, boto3, MinIO mc)
 - ✅ All core CRUD operations work perfectly with AWS CLI (100% pass rate)
+- ✅ MinIO mc object operations (PutObject, GetObject, HeadObject) - FIXED Jan 29, 2026
 
 ## Documentation
 
