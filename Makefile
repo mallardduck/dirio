@@ -47,7 +47,7 @@ test-coverage:
 	go tool cover -html=coverage.out -o coverage.html
 
 test-clients:
-	RUN_SLOW_TESTS=1 go test -v ./tests/clients/...
+	go test -v ./tests/clients/...
 
 # Run the server locally
 run:
