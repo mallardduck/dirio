@@ -257,8 +257,10 @@ func importUserPolicyMappings(minioFS billy.Filesystem, users map[string]*User) 
 
 		// Attach policy to user if user exists
 		if user, exists := users[username]; exists {
-			user.AttachedPolicy = mapping.Policy
-			fmt.Printf("Attached policy %s to user %s\n", mapping.Policy, username)
+			user.AttachedPolicy = []string(mapping.Policy)
+			if len(user.AttachedPolicy) > 0 {
+				fmt.Printf("Attached %d policy(ies) to user %s: %s\n", len(user.AttachedPolicy), username, mapping.Policy.String())
+			}
 		}
 	}
 

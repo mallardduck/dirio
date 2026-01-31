@@ -2,12 +2,12 @@ package metadata
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/go-git/go-billy/v5/util"
 	"github.com/mallardduck/dirio/internal/dataconfig"
+	"github.com/mallardduck/dirio/internal/jsonutil"
 	"github.com/mallardduck/dirio/internal/minio"
 	"github.com/mallardduck/dirio/internal/path"
 )
@@ -67,7 +67,7 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 		for _, minioPolicy := range result.Policies {
 			// Parse the policy JSON string into a PolicyDocument
 			var policyDoc PolicyDocument
-			if err := json.Unmarshal([]byte(minioPolicy.PolicyJSON), &policyDoc); err != nil {
+			if err := jsonutil.Unmarshal([]byte(minioPolicy.PolicyJSON), &policyDoc); err != nil {
 				fmt.Printf("Warning: failed to parse policy document for %s: %v\n", minioPolicy.Name, err)
 				continue
 			}
@@ -87,23 +87,23 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 		fmt.Printf("Imported %d policies\n", len(result.Policies))
 	}
 
-	// Convert and save users
+	// Convert and save users (one file per user)
 	if len(result.Users) > 0 {
-		dirioUsers := make(map[string]*User)
 		for username, minioUser := range result.Users {
-			dirioUsers[username] = &User{
-				Version:        UserMetadataVersion,
-				AccessKey:      minioUser.AccessKey,
-				SecretKey:      minioUser.SecretKey,
-				Status:         minioUser.Status,
-				UpdatedAt:      minioUser.UpdatedAt,
-				AttachedPolicy: minioUser.AttachedPolicy,
+			dirioUser := &User{
+				Version:          UserMetadataVersion,
+				AccessKey:        minioUser.AccessKey,
+				SecretKey:        minioUser.SecretKey,
+				Status:           minioUser.Status,
+				UpdatedAt:        minioUser.UpdatedAt,
+				AttachedPolicies: minioUser.AttachedPolicy,
+			}
+			if err := m.SaveUser(ctx, username, dirioUser); err != nil {
+				fmt.Printf("Warning: failed to save user %s: %v\n", username, err)
+				continue
 			}
 		}
-		if err := m.SaveUsers(ctx, dirioUsers); err != nil {
-			return fmt.Errorf("failed to save imported users: %w", err)
-		}
-		fmt.Printf("Imported %d users\n", len(dirioUsers))
+		fmt.Printf("Imported %d users\n", len(result.Users))
 	}
 
 	// Convert and save buckets
@@ -113,7 +113,7 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 			var bucketPolicy *PolicyDocument
 			if len(minioBucket.PolicyConfigJSON) > 0 {
 				var policyDoc PolicyDocument
-				if err := json.Unmarshal(minioBucket.PolicyConfigJSON, &policyDoc); err != nil {
+				if err := jsonutil.Unmarshal(minioBucket.PolicyConfigJSON, &policyDoc); err != nil {
 					fmt.Printf("Warning: failed to parse bucket policy for %s: %v\n", bucketName, err)
 				} else {
 					bucketPolicy = &policyDoc
@@ -222,7 +222,7 @@ func (m *Manager) getImportState() (*ImportState, error) {
 	}
 
 	var state ImportState
-	if err := json.Unmarshal(data, &state); err != nil {
+	if err := jsonutil.Unmarshal(data, &state); err != nil {
 		return nil, err
 	}
 
@@ -231,12 +231,7 @@ func (m *Manager) getImportState() (*ImportState, error) {
 
 // saveImportState saves the import state
 func (m *Manager) saveImportState(state *ImportState) error {
-	data, err := json.Marshal(state)
-	if err != nil {
-		return err
-	}
-
-	return util.WriteFile(m.metadataFS, ".import-state", data, 0644)
+	return jsonutil.MarshalToFile(m.metadataFS, ".import-state", state)
 }
 
 // getMinIOModTime gets the last modification time of MinIO data

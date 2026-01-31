@@ -151,7 +151,7 @@ func TestImport_WithUserPolicyMappings(t *testing.T) {
 	require.NoError(t, os.MkdirAll(policydbDir, 0755))
 	mapping := UserPolicyMapping{
 		Version: 1,
-		Policy:  "readwrite",
+		Policy:  PolicyList{"readwrite"},
 	}
 	mappingJSON, err := json.Marshal(mapping)
 	require.NoError(t, err)
@@ -164,7 +164,7 @@ func TestImport_WithUserPolicyMappings(t *testing.T) {
 	assert.Len(t, result.Users, 1)
 
 	user := result.Users["alice"]
-	assert.Equal(t, "readwrite", user.AttachedPolicy)
+	assert.Equal(t, []string{"readwrite"}, user.AttachedPolicy)
 }
 
 // TestImport_WithBucketsNoMetadata tests importing buckets without metadata
@@ -277,7 +277,7 @@ func TestImport_CompleteSetup(t *testing.T) {
 	// Create user-policy mappings
 	policydbDir := filepath.Join(minioSys, "config", "iam", "policydb", "users")
 	require.NoError(t, os.MkdirAll(policydbDir, 0755))
-	mappings := map[string]string{"alice": "alpha-rw", "bob": "beta-rw"}
+	mappings := map[string]PolicyList{"alice": {"alpha-rw"}, "bob": {"beta-rw"}}
 	for user, policy := range mappings {
 		mapping := UserPolicyMapping{Version: 1, Policy: policy}
 		mappingJSON, err := json.Marshal(mapping)
@@ -301,8 +301,8 @@ func TestImport_CompleteSetup(t *testing.T) {
 	assert.Len(t, result.Users, 2)
 	assert.Contains(t, result.Users, "alice")
 	assert.Contains(t, result.Users, "bob")
-	assert.Equal(t, "alpha-rw", result.Users["alice"].AttachedPolicy)
-	assert.Equal(t, "beta-rw", result.Users["bob"].AttachedPolicy)
+	assert.Equal(t, []string{"alpha-rw"}, result.Users["alice"].AttachedPolicy)
+	assert.Equal(t, []string{"beta-rw"}, result.Users["bob"].AttachedPolicy)
 
 	// Verify policies
 	assert.Len(t, result.Policies, 2)

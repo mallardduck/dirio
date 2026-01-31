@@ -26,6 +26,24 @@ Controls **how data must be handled** - settings that travel with the data and a
 
 **Location:** `<data-dir>/.dirio/config.json`
 
+**Directory Structure:**
+```
+.dirio/
+  config.json          # Data config (region, compression, credentials, etc.)
+  iam/                 # IAM resources (MinIO-style grouping)
+    users/
+      alice.json       # One file per user (atomic operations)
+      bob.json
+    policies/
+      alpha-rw.json    # One file per policy
+      beta-rw.json
+  buckets/
+    mybucket.json      # Bucket metadata
+  objects/
+    mybucket/
+      file.json        # Object metadata
+```
+
 **Settings:**
 - `credentials`: **Official admin credentials** for this data directory
 - `region`: AWS-style region (e.g., `us-east-1`)

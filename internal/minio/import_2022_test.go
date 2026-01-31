@@ -78,6 +78,30 @@ func TestImport_MinIO2022_RealData(t *testing.T) {
 		assert.Equal(t, "", result.DataConfig.Region)
 		assert.False(t, result.DataConfig.Compression.Enabled)
 	})
+
+	// Verify users and multi-policy support
+	t.Run("Users", func(t *testing.T) {
+		assert.Contains(t, result.Users, "alice", "Should have alice user")
+		assert.Contains(t, result.Users, "bob", "Should have bob user")
+
+		alice := result.Users["alice"]
+		assert.Equal(t, "alice", alice.AccessKey)
+		assert.Equal(t, []string{"alpha-rw"}, alice.AttachedPolicy, "Alice should have alpha-rw policy")
+
+		bob := result.Users["bob"]
+		assert.Equal(t, "bob", bob.AccessKey)
+		assert.Equal(t, []string{"beta-rw"}, bob.AttachedPolicy, "Bob should have beta-rw policy")
+
+		// Test multi-policy user (charlie) if present
+		if charlie, ok := result.Users["charlie"]; ok {
+			assert.Equal(t, "charlie", charlie.AccessKey)
+			assert.Len(t, charlie.AttachedPolicy, 2, "Charlie should have 2 policies")
+			assert.Contains(t, charlie.AttachedPolicy, "alpha-rw", "Charlie should have alpha-rw policy")
+			assert.Contains(t, charlie.AttachedPolicy, "beta-rw", "Charlie should have beta-rw policy")
+		} else {
+			t.Log("Charlie user not found - multi-policy test skipped (re-run minio-import-2019-to-2022.sh with updated script)")
+		}
+	})
 }
 
 func TestIsSpecialMinIODirectory(t *testing.T) {

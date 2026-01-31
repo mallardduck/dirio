@@ -36,6 +36,10 @@ ALICE_PASS="alicepass1234"
 BOB_USER="bob"
 BOB_PASS="bobpass1234"
 
+# Test user with multiple policies
+CHARLIE_USER="charlie"
+CHARLIE_PASS="charliepass1234"
+
 # -----------------------
 # Validation
 # -----------------------
@@ -59,6 +63,7 @@ docker rm -f "${MINIO_CONTAINER}" >/dev/null 2>&1 || true
 # -----------------------
 echo "📦 Copying 2019 data to new directory..."
 cp -r "${SOURCE_DATA_DIR}" "${DEST_DATA_DIR}"
+[ -d "${DEST_DATA_DIR}/.dirio" ] && rm -rf "${DEST_DATA_DIR}/.dirio"
 echo "✓ Copied ${SOURCE_DATA_DIR} → ${DEST_DATA_DIR}"
 
 # -----------------------
@@ -158,6 +163,10 @@ docker run --rm --network host -e MC_HOST_minio2022 \
 docker run --rm --network host -e MC_HOST_minio2022 \
   "${MC_IMAGE}" admin user add minio2022 "${BOB_USER}" "${BOB_PASS}"
 
+# Create test user for multi-policy attachment
+docker run --rm --network host -e MC_HOST_minio2022 \
+  "${MC_IMAGE}" admin user add minio2022 "${CHARLIE_USER}" "${CHARLIE_PASS}"
+
 # -----------------------
 # Attach policies to users (2022 syntax: separate step)
 # -----------------------
@@ -167,6 +176,12 @@ docker run --rm --network host -e MC_HOST_minio2022 \
 
 docker run --rm --network host -e MC_HOST_minio2022 \
   "${MC_IMAGE}" admin policy set minio2022 beta-rw user="${BOB_USER}"
+
+# Attach MULTIPLE policies to charlie (testing multi-policy support)
+# NOTE: Multiple policies must be comma-separated in a single call
+echo "🧪 Testing multi-policy attachment for user '${CHARLIE_USER}'..."
+docker run --rm --network host -e MC_HOST_minio2022 \
+  "${MC_IMAGE}" admin policy set minio2022 alpha-rw,beta-rw user="${CHARLIE_USER}"
 
 # -----------------------
 # Recreate public-read bucket policies
@@ -222,8 +237,9 @@ echo "Original 2019 data: ${SOURCE_DATA_DIR} (unchanged)"
 echo "Migrated 2022 data: ${DEST_DATA_DIR} (format auto-upgraded by MinIO)"
 echo
 echo "Users (recreated for 2022 IAM):"
-echo "  alice / alicepass1234 → RW on bucket alpha"
-echo "  bob   / bobpass1234   → RW on bucket beta"
+echo "  alice   / alicepass1234   → alpha-rw policy"
+echo "  bob     / bobpass1234     → beta-rw policy"
+echo "  charlie / charliepass1234 → alpha-rw + beta-rw (multi-policy test)"
 echo
 echo "Buckets (migrated from 2019):"
 echo "  alpha → folder structure, metadata objects, simulated tagged objects"

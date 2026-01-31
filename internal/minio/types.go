@@ -146,9 +146,9 @@ type LegacyUserIdentity struct {
 
 // UserPolicyMapping represents MinIO's policydb user policy mapping
 type UserPolicyMapping struct {
-	Version   int       `json:"version"`
-	Policy    string    `json:"policy"` // Name of the attached policy
-	UpdatedAt time.Time `json:"updatedAt"`
+	Version   int        `json:"version"`
+	Policy    PolicyList `json:"policy"` // Policy name(s) attached to this user (can be single or multiple)
+	UpdatedAt time.Time  `json:"updatedAt"`
 }
 
 // PolicyFile represents MinIO's IAM policy file format
@@ -179,7 +179,7 @@ type User struct {
 	SecretKey      string
 	Status         string
 	UpdatedAt      time.Time
-	AttachedPolicy string // Policy name attached to this user (from policydb)
+	AttachedPolicy []string // Policy names attached to this user (from policydb, supports multiple policies)
 }
 
 // Bucket represents an imported MinIO bucket

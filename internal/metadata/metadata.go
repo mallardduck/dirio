@@ -2,7 +2,6 @@ package metadata
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/util"
+	"github.com/mallardduck/dirio/internal/jsonutil"
 	"github.com/mallardduck/dirio/internal/path"
 )
 
@@ -30,12 +30,12 @@ type Manager struct {
 
 // User represents a user with credentials
 type User struct {
-	Version        string    `json:"version"` // DirIO metadata version
-	AccessKey      string    `json:"accessKey"`
-	SecretKey      string    `json:"secretKey"`
-	Status         string    `json:"status"`
-	UpdatedAt      time.Time `json:"updatedAt"`
-	AttachedPolicy string    `json:"attachedPolicy,omitempty"` // Name of attached IAM policy
+	Version          string    `json:"version"` // DirIO metadata version
+	AccessKey        string    `json:"accessKey"`
+	SecretKey        string    `json:"secretKey"`
+	Status           string    `json:"status"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+	AttachedPolicies []string  `json:"attachedPolicies,omitempty"` // Names of attached IAM policies (supports multiple)
 }
 
 // BucketMetadata represents bucket configuration
@@ -119,8 +119,11 @@ func New(rootFS billy.Filesystem) (*Manager, error) {
 	if err := metadataFS.MkdirAll("buckets", 0755); err != nil {
 		return nil, fmt.Errorf("failed to create buckets directory: %w", err)
 	}
-	if err := metadataFS.MkdirAll("policies", 0755); err != nil {
-		return nil, fmt.Errorf("failed to create policies directory: %w", err)
+	if err := metadataFS.MkdirAll("iam/users", 0755); err != nil {
+		return nil, fmt.Errorf("failed to create IAM users directory: %w", err)
+	}
+	if err := metadataFS.MkdirAll("iam/policies", 0755); err != nil {
+		return nil, fmt.Errorf("failed to create IAM policies directory: %w", err)
 	}
 	if err := metadataFS.MkdirAll("objects", 0755); err != nil {
 		return nil, fmt.Errorf("failed to create objects directory: %w", err)
@@ -172,7 +175,7 @@ func (m *Manager) GetBucketMetadata(ctx context.Context, bucket string) (*Bucket
 	}
 
 	var meta BucketMetadata
-	if err := json.Unmarshal(data, &meta); err != nil {
+	if err := jsonutil.Unmarshal(data, &meta); err != nil {
 		return nil, err
 	}
 
@@ -186,13 +189,7 @@ func (m *Manager) saveBucketMetadata(ctx context.Context, bucket string, meta *B
 	}
 
 	metaPath := filepath.Join("buckets", bucket+".json")
-
-	data, err := json.Marshal(meta)
-	if err != nil {
-		return err
-	}
-
-	return util.WriteFile(m.metadataFS, metaPath, data, 0644)
+	return jsonutil.MarshalToFile(m.metadataFS, metaPath, meta)
 }
 
 // GetObjectMetadata retrieves object metadata
@@ -212,7 +209,7 @@ func (m *Manager) GetObjectMetadata(ctx context.Context, bucket, key string) (*O
 	}
 
 	var meta ObjectMetadata
-	if err := json.Unmarshal(data, &meta); err != nil {
+	if err := jsonutil.Unmarshal(data, &meta); err != nil {
 		return nil, err
 	}
 
@@ -233,12 +230,7 @@ func (m *Manager) PutObjectMetadata(ctx context.Context, bucket, key string, met
 		return fmt.Errorf("failed to create metadata directory: %w", err)
 	}
 
-	data, err := json.Marshal(meta)
-	if err != nil {
-		return err
-	}
-
-	return util.WriteFile(m.metadataFS, metaPath, data, 0644)
+	return jsonutil.MarshalToFile(m.metadataFS, metaPath, meta)
 }
 
 // DeleteObjectMetadata removes object metadata
@@ -275,40 +267,105 @@ func (m *Manager) DeleteObjectMetadata(ctx context.Context, bucket, key string) 
 	return nil
 }
 
-// GetUsers retrieves all users
+// GetUser retrieves a single user by username
+func (m *Manager) GetUser(ctx context.Context, username string) (*User, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
+	userPath := filepath.Join("iam", "users", username+".json")
+	data, err := util.ReadFile(m.metadataFS, userPath)
+	if err != nil {
+		if isNotExist(err) {
+			return nil, nil // User doesn't exist
+		}
+		return nil, err
+	}
+
+	var user User
+	if err := jsonutil.Unmarshal(data, &user); err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+// SaveUser saves a single user (atomic operation)
+func (m *Manager) SaveUser(ctx context.Context, username string, user *User) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
+	userPath := filepath.Join("iam", "users", username+".json")
+
+	return jsonutil.MarshalToFile(m.metadataFS, userPath, user)
+}
+
+// DeleteUser removes a user
+func (m *Manager) DeleteUser(ctx context.Context, username string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
+	userPath := filepath.Join("iam", "users", username+".json")
+	err := m.metadataFS.Remove(userPath)
+	if err != nil && !isNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+// ListUsers returns a list of all usernames
+func (m *Manager) ListUsers(ctx context.Context) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
+	usersDir := filepath.Join("iam", "users")
+	entries, err := m.metadataFS.ReadDir(usersDir)
+	if err != nil {
+		if isNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+
+	var usernames []string
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		username := entry.Name()[:len(entry.Name())-5] // Remove .json
+		usernames = append(usernames, username)
+	}
+
+	return usernames, nil
+}
+
+// GetUsers retrieves all users (convenience method, loads all user files)
 func (m *Manager) GetUsers(ctx context.Context) (map[string]*User, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	data, err := util.ReadFile(m.metadataFS, "users.json")
+	usernames, err := m.ListUsers(ctx)
 	if err != nil {
-		if isNotExist(err) {
-			return make(map[string]*User), nil
-		}
 		return nil, err
 	}
 
-	var users map[string]*User
-	if err := json.Unmarshal(data, &users); err != nil {
-		return nil, err
+	users := make(map[string]*User)
+	for _, username := range usernames {
+		user, err := m.GetUser(ctx, username)
+		if err != nil {
+			fmt.Printf("Warning: failed to load user %s: %v\n", username, err)
+			continue
+		}
+		if user != nil {
+			users[username] = user
+		}
 	}
 
 	return users, nil
-}
-
-// SaveUsers saves all users
-func (m *Manager) SaveUsers(ctx context.Context, users map[string]*User) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("context cancelled: %w", err)
-	}
-
-	data, err := json.Marshal(users)
-	if err != nil {
-		return err
-	}
-
-	return util.WriteFile(m.metadataFS, "users.json", data, 0644)
 }
 
 // SavePolicy saves a single policy
@@ -317,14 +374,9 @@ func (m *Manager) SavePolicy(ctx context.Context, policy *Policy) error {
 		return fmt.Errorf("context cancelled: %w", err)
 	}
 
-	policyPath := filepath.Join("policies", policy.Name+".json")
+	policyPath := filepath.Join("iam", "policies", policy.Name+".json")
 
-	data, err := json.Marshal(policy)
-	if err != nil {
-		return err
-	}
-
-	return util.WriteFile(m.metadataFS, policyPath, data, 0644)
+	return jsonutil.MarshalToFile(m.metadataFS, policyPath, policy)
 }
 
 // GetPolicy retrieves a policy by name
@@ -333,7 +385,7 @@ func (m *Manager) GetPolicy(ctx context.Context, name string) (*Policy, error) {
 		return nil, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	policyPath := filepath.Join("policies", name+".json")
+	policyPath := filepath.Join("iam", "policies", name+".json")
 
 	data, err := util.ReadFile(m.metadataFS, policyPath)
 	if err != nil {
@@ -341,7 +393,7 @@ func (m *Manager) GetPolicy(ctx context.Context, name string) (*Policy, error) {
 	}
 
 	var policy Policy
-	if err := json.Unmarshal(data, &policy); err != nil {
+	if err := jsonutil.Unmarshal(data, &policy); err != nil {
 		return nil, err
 	}
 
@@ -354,7 +406,8 @@ func (m *Manager) GetPolicies(ctx context.Context) (map[string]*Policy, error) {
 		return nil, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	entries, err := m.metadataFS.ReadDir("policies")
+	policiesDir := filepath.Join("iam", "policies")
+	entries, err := m.metadataFS.ReadDir(policiesDir)
 	if err != nil {
 		if isNotExist(err) {
 			return make(map[string]*Policy), nil
