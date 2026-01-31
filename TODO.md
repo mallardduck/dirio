@@ -133,7 +133,7 @@ Current status: **Phase 2 Complete - Ready for Client Testing**
 
 ### High Priority (Core S3 compatibility)
 - [x] Fix GetBucketLocation for MinIO mc (Critical - unblocks mc client) - ✅ Fixed routing + added x-amz-bucket-region to HeadBucket
-- [ ] CommonPrefixes in ListObjectsV2 (delimiter support)
+- [ ] CommonPrefixes in ListObjectsV2 (delimiter support) - ⚠️ Partially implemented, works in integration tests but fails with boto3 client (returns 0 CommonPrefixes)
 - [ ] ListObjects pagination with max-keys and continuation tokens
 - [ ] Range requests for GetObject (resumable downloads, video streaming)
 - [ ] Pre-signed URLs (temporary access sharing)

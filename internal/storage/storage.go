@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/go-git/go-billy/v5"
 	"github.com/mallardduck/dirio/internal/logging"
@@ -283,6 +284,13 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 	var objects []s3types.Object
 	commonPrefixMap := make(map[string]bool)
 
+	s.log.Debug("listInternal processing",
+		"bucket", bucket,
+		"prefix", prefix,
+		"delimiter", delimiter,
+		"startAt", startAt,
+		"entryCount", len(allEntries))
+
 	for _, entry := range allEntries {
 		// Handle delimiter logic first
 		if delimiter != "" {
@@ -292,10 +300,18 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 				keyAfterPrefix = entry.key[len(prefix):]
 			}
 
-			delimiterPos := indexOf(keyAfterPrefix, delimiter)
+			delimiterPos := strings.Index(keyAfterPrefix, delimiter)
+			s.log.Debug("checking entry for delimiter",
+				"key", entry.key,
+				"keyAfterPrefix", keyAfterPrefix,
+				"delimiter", delimiter,
+				"delimiterPos", delimiterPos)
 			if delimiterPos >= 0 {
 				// This key contains delimiter - add to common prefixes
 				commonPrefix := prefix + keyAfterPrefix[:delimiterPos+len(delimiter)]
+				s.log.Debug("adding to common prefixes",
+					"key", entry.key,
+					"commonPrefix", commonPrefix)
 				commonPrefixMap[commonPrefix] = true
 				continue
 			}
@@ -342,6 +358,11 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 		})
 	}
 	sortCommonPrefixes(commonPrefixes)
+
+	s.log.Debug("listInternal after grouping and filtering",
+		"objectCount", len(objects),
+		"commonPrefixCount", len(commonPrefixes),
+		"commonPrefixMapSize", len(commonPrefixMap))
 
 	// Step 4: Apply maxKeys limit across both objects and common prefixes
 	// Per S3 spec: "each common prefix counts as a single return when calculating the number of returns"
@@ -411,6 +432,12 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 			nextMarker = lastPrefixKey
 		}
 	}
+
+	s.log.Debug("listInternal returning results",
+		"objectCount", len(objects),
+		"commonPrefixCount", len(commonPrefixes),
+		"isTruncated", isTruncated,
+		"nextMarker", nextMarker)
 
 	return InternalResult{
 		Objects:        objects,
