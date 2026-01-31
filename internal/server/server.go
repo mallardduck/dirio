@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -140,7 +141,14 @@ func (s *Server) setupRoutes() {
 
 	// Base Routes
 	s.router.MiddlewareGroup(func(r *router.Router) {
+		// Authentication middleware - verifies AWS SigV4 signatures
 		r.Use(s.auth.AuthMiddleware)
+
+		// Chunked encoding middleware - decodes AWS SigV4 chunked transfer encoding
+		// Must run AFTER auth middleware, BEFORE handlers
+		r.Use(middleware.ChunkedEncoding(func(r io.Reader) io.Reader {
+			return auth.NewChunkedReader(r)
+		}))
 
 		// Root - ListBuckets
 		r.Get("/", apiHandler.S3Handler.ListBuckets, "index")

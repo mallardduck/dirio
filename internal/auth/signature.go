@@ -20,12 +20,13 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/mallardduck/dirio/internal/consts"
 )
 
 const (
 	authorizationHeader = "Authorization"
 	dateHeader          = "X-Amz-Date"
-	contentSHA256Header = "X-Amz-Content-Sha256"
 	algorithmID         = "AWS4-HMAC-SHA256"
 	iso8601TimeFormat   = "20060102T150405Z"
 	shortDateFormat     = "20060102"
@@ -306,9 +307,9 @@ func VerifySignature(r *http.Request, secretKey string) error {
 	}
 
 	// Get payload hash from header (or use "UNSIGNED-PAYLOAD" for unsigned)
-	payloadHash := r.Header.Get(contentSHA256Header)
+	payloadHash := r.Header.Get(consts.HeaderContentSHA256)
 	if payloadHash == "" {
-		payloadHash = "UNSIGNED-PAYLOAD"
+		payloadHash = consts.ContentSHA256Unsigned
 	}
 
 	// Build canonical request

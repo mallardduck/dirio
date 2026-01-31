@@ -258,7 +258,7 @@ func TestVerifySignature(t *testing.T) {
 	req, _ := http.NewRequest("GET", "https://examplebucket.s3.amazonaws.com/test.txt", nil)
 	req.Header.Set("Host", "examplebucket.s3.amazonaws.com")
 	req.Header.Set("X-Amz-Date", timestamp.Format(iso8601TimeFormat))
-	req.Header.Set("X-Amz-Content-Sha256", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+	req.Header.Set(consts.HeaderContentSHA256, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 
 	// Build the signature
 	signedHeaders := []string{"host", "x-amz-content-sha256", "x-amz-date"}

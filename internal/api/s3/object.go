@@ -114,6 +114,7 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request, bucket, key,
 	}
 
 	// Read object content from request body
+	// Note: Chunked encoding is automatically decoded by middleware
 	etag, err := h.storage.PutObject(r.Context(), bucket, key, r.Body, contentType, customMetadata)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoSuchBucket) {

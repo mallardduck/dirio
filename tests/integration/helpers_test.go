@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/mallardduck/dirio/internal/auth"
+	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/server"
 )
 
@@ -162,7 +163,7 @@ func (ts *TestServer) SignRequest(req *http.Request, body []byte) {
 
 	// Set required headers
 	req.Header.Set("X-Amz-Date", timestamp.Format("20060102T150405Z"))
-	req.Header.Set("X-Amz-Content-Sha256", payloadHash)
+	req.Header.Set(consts.HeaderContentSHA256, payloadHash)
 	req.Header.Set("Host", req.Host)
 
 	// Signed headers (must be sorted)

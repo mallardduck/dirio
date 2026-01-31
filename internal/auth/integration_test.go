@@ -25,7 +25,7 @@ func TestAWSCLICompatibility(t *testing.T) {
 	timestamp := time.Date(2026, 1, 23, 12, 0, 0, 0, time.UTC)
 	req.Header.Set("Host", "localhost:9000")
 	req.Header.Set("X-Amz-Date", timestamp.Format(iso8601TimeFormat))
-	req.Header.Set("X-Amz-Content-Sha256", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855") // empty body
+	req.Header.Set(consts.HeaderContentSHA256, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855") // empty body
 
 	// Build signature like AWS CLI does
 	signedHeaders := []string{"host", "x-amz-content-sha256", "x-amz-date"}

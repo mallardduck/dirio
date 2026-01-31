@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/mallardduck/dirio/internal/consts"
 )
 
 // DebugVerifySignature is like VerifySignature but prints debug information
@@ -37,9 +39,9 @@ func DebugVerifySignature(r *http.Request, secretKey string) error {
 	}
 
 	// Get payload hash from header
-	payloadHash := r.Header.Get(contentSHA256Header)
+	payloadHash := r.Header.Get(consts.HeaderContentSHA256)
 	if payloadHash == "" {
-		payloadHash = "UNSIGNED-PAYLOAD"
+		payloadHash = consts.ContentSHA256Unsigned
 	}
 	fmt.Printf("DEBUG: Payload hash: %s\n", payloadHash)
 
