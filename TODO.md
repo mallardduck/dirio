@@ -129,6 +129,51 @@ Current status: **Phase 2.5 - Client Testing & Bug Discovery**
 
 **Output:** Prioritized list of missing features based on real client needs
 
+## Phase 2.75: Configuration Architecture Refactoring ✅ (In Progress)
+
+**Goal:** Separate data directory configuration from application configuration for proper data portability.
+
+### Data Directory Config (`internal/dataconfig`)
+- [x] Create `DataConfig` structure for `.dirio/config.json`
+- [x] Support region, credentials, compression, WORM, storage class
+- [x] Import MinIO config (both 2019 and 2022 formats)
+- [x] Save DataConfig during MinIO import
+- [ ] Init logic: CLI flags provide initial values for new data directories
+- [ ] Load logic: Data config takes precedence, warn when CLI differs (region only)
+- [ ] Support both data config admin AND CLI admin credentials simultaneously
+- [ ] Refactor Settings to remove data-level configs (keep only app-level)
+- [ ] Migration for existing installations
+- [ ] Update documentation and examples
+
+### Configuration Management TODOs
+- [ ] **Add explicit config update command** - Allow updating data config values explicitly
+  - `dirio config set region us-west-2`
+  - `dirio config set compression.enabled true`
+  - Currently: must manually edit `.dirio/config.json` or re-import
+- [ ] **API rate limits** - Add to DataConfig for per-data-directory rate limiting
+- [ ] **Storage path configurations** - Consider if paths should be configurable per data directory
+- [ ] **Validation strategy** - Experiment with different approaches for invalid/missing configs (see inline TODO in `internal/dataconfig/dataconfig.go`)
+  - Option A: Fail fast (current)
+  - Option B: Merge with defaults
+  - Option C: Warn and use defaults
+
+### Configuration Philosophy
+- **Data Config** (`.dirio/config.json`): Controls how data must be handled, travels with data, takes precedence
+- **App Config** (CLI flags/ENV/YAML): Controls how tool runs, local preferences
+- **Credentials Strategy**: Support both data config admin (official) and CLI admin (temporary/alternative) simultaneously
+- **Region Updates**: CLI flags ignored if data config exists (log warning), require explicit update command
+
+## Known Issues / Questions
+
+1. ~~Need to test msgpack decoding of MinIO Created timestamp~~ ✅ Resolved in Phase 2
+2. ~~Should we store per-object metadata separately or rely on fs.json import?~~ ✅ Resolved - using fs.json
+3. Need to decide on object metadata caching strategy → Phase 3.5
+4. Need to implement proper ETag calculation for multipart uploads → Phase 3 (Medium Priority)
+5. Virtual-hosted-style buckets will require DNS wildcard or mDNS wildcard → Phase N+
+6. Admin CLI and Web UI will need app-level audit logging beyond HTTP middleware → Phase 6/7
+7. ~~Need to decide data vs app config architecture~~ ✅ Resolved - Phase 2.75 (split into dataconfig + app config)
+
+
 ## Phase 3: Essential S3 Features
 
 **Prioritize based on Phase 2.5 findings:**
@@ -223,50 +268,6 @@ Using "Core + Sidecar" approach:
 - [ ] Update URL generation for virtual-hosted style
 - [ ] DNS/mDNS considerations for wildcard subdomains
 - [ ] Document virtual-hosted-style bucket support and configuration
-
-## Phase 2.75: Configuration Architecture Refactoring ✅ (In Progress)
-
-**Goal:** Separate data directory configuration from application configuration for proper data portability.
-
-### Data Directory Config (`internal/dataconfig`)
-- [x] Create `DataConfig` structure for `.dirio/config.json`
-- [x] Support region, credentials, compression, WORM, storage class
-- [x] Import MinIO config (both 2019 and 2022 formats)
-- [x] Save DataConfig during MinIO import
-- [ ] Init logic: CLI flags provide initial values for new data directories
-- [ ] Load logic: Data config takes precedence, warn when CLI differs (region only)
-- [ ] Support both data config admin AND CLI admin credentials simultaneously
-- [ ] Refactor Settings to remove data-level configs (keep only app-level)
-- [ ] Migration for existing installations
-- [ ] Update documentation and examples
-
-### Configuration Management TODOs
-- [ ] **Add explicit config update command** - Allow updating data config values explicitly
-  - `dirio config set region us-west-2`
-  - `dirio config set compression.enabled true`
-  - Currently: must manually edit `.dirio/config.json` or re-import
-- [ ] **API rate limits** - Add to DataConfig for per-data-directory rate limiting
-- [ ] **Storage path configurations** - Consider if paths should be configurable per data directory
-- [ ] **Validation strategy** - Experiment with different approaches for invalid/missing configs (see inline TODO in `internal/dataconfig/dataconfig.go`)
-  - Option A: Fail fast (current)
-  - Option B: Merge with defaults
-  - Option C: Warn and use defaults
-
-### Configuration Philosophy
-- **Data Config** (`.dirio/config.json`): Controls how data must be handled, travels with data, takes precedence
-- **App Config** (CLI flags/ENV/YAML): Controls how tool runs, local preferences
-- **Credentials Strategy**: Support both data config admin (official) and CLI admin (temporary/alternative) simultaneously
-- **Region Updates**: CLI flags ignored if data config exists (log warning), require explicit update command
-
-## Known Issues / Questions
-
-1. ~~Need to test msgpack decoding of MinIO Created timestamp~~ ✅ Resolved in Phase 2
-2. ~~Should we store per-object metadata separately or rely on fs.json import?~~ ✅ Resolved - using fs.json
-3. Need to decide on object metadata caching strategy → Phase 3.5
-4. Need to implement proper ETag calculation for multipart uploads → Phase 3 (Medium Priority)
-5. Virtual-hosted-style buckets will require DNS wildcard or mDNS wildcard → Phase N+
-6. Admin CLI and Web UI will need app-level audit logging beyond HTTP middleware → Phase 6/7
-7. ~~Need to decide data vs app config architecture~~ ✅ Resolved - Phase 2.75 (split into dataconfig + app config)
 
 ## S3 Client Compatibility Matrix
 
