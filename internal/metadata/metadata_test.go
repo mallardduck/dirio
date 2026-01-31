@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -32,11 +33,11 @@ func TestObjectMetadata_PutAndGet(t *testing.T) {
 	}
 
 	// Store metadata
-	err = mgr.PutObjectMetadata("test-bucket", "path/to/object.txt", meta)
+	err = mgr.PutObjectMetadata(context.Background(), "test-bucket", "path/to/object.txt", meta)
 	require.NoError(t, err)
 
 	// Retrieve metadata (this verifies it was actually saved)
-	retrieved, err := mgr.GetObjectMetadata("test-bucket", "path/to/object.txt")
+	retrieved, err := mgr.GetObjectMetadata(context.Background(), "test-bucket", "path/to/object.txt")
 	require.NoError(t, err)
 
 	// Verify metadata matches
@@ -64,15 +65,15 @@ func TestObjectMetadata_Delete(t *testing.T) {
 	}
 
 	// Store metadata
-	err = mgr.PutObjectMetadata("test-bucket", "test-object.txt", meta)
+	err = mgr.PutObjectMetadata(context.Background(), "test-bucket", "test-object.txt", meta)
 	require.NoError(t, err)
 
 	// Delete metadata
-	err = mgr.DeleteObjectMetadata("test-bucket", "test-object.txt")
+	err = mgr.DeleteObjectMetadata(context.Background(), "test-bucket", "test-object.txt")
 	require.NoError(t, err)
 
 	// Verify metadata is gone
-	_, err = mgr.GetObjectMetadata("test-bucket", "test-object.txt")
+	_, err = mgr.GetObjectMetadata(context.Background(), "test-bucket", "test-object.txt")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "object metadata not found")
 }
@@ -85,7 +86,7 @@ func TestObjectMetadata_GetNonExistent(t *testing.T) {
 	require.NoError(t, err)
 
 	// Try to get non-existent metadata
-	_, err = mgr.GetObjectMetadata("test-bucket", "nonexistent.txt")
+	_, err = mgr.GetObjectMetadata(context.Background(), "test-bucket", "nonexistent.txt")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "object metadata not found")
 }
@@ -110,7 +111,7 @@ func TestObjectMetadata_CompactJSONFormat(t *testing.T) {
 	}
 
 	// Store metadata
-	err = mgr.PutObjectMetadata("test-bucket", "test.txt", meta)
+	err = mgr.PutObjectMetadata(context.Background(), "test-bucket", "test.txt", meta)
 	require.NoError(t, err)
 
 	// Read raw JSON file directly

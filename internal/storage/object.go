@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
@@ -25,9 +26,14 @@ type Object struct {
 }
 
 // GetObject retrieves an object from storage
-func (s *Storage) GetObject(bucket, key string) (*Object, error) {
+func (s *Storage) GetObject(ctx context.Context, bucket, key string) (*Object, error) {
+	// Check if context is already cancelled
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
 	// Check bucket exists
-	if exists, err := s.BucketExists(bucket); err != nil {
+	if exists, err := s.BucketExists(ctx, bucket); err != nil {
 		return nil, err
 	} else if !exists {
 		return nil, ErrNoSuchBucket
@@ -36,6 +42,11 @@ func (s *Storage) GetObject(bucket, key string) (*Object, error) {
 	// Validate key for path safety
 	if err := path.ValidatePathSafe(key); err != nil {
 		return nil, fmt.Errorf("invalid key: %w", err)
+	}
+
+	// Check context before proceeding
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled before opening: %w", err)
 	}
 
 	// Get bucket filesystem
@@ -66,7 +77,7 @@ func (s *Storage) GetObject(bucket, key string) (*Object, error) {
 	}
 
 	// Get object metadata
-	meta, err := s.metadata.GetObjectMetadata(bucket, key)
+	meta, err := s.metadata.GetObjectMetadata(ctx, bucket, key)
 	if err != nil {
 		// If no metadata, create basic metadata
 		etag := s.calculateETag(bucketFS, objectPath)
@@ -91,9 +102,14 @@ func (s *Storage) GetObject(bucket, key string) (*Object, error) {
 }
 
 // PutObject stores an object
-func (s *Storage) PutObject(bucket, key string, content io.Reader, contentType string, customMetadata map[string]string) (string, error) {
+func (s *Storage) PutObject(ctx context.Context, bucket, key string, content io.Reader, contentType string, customMetadata map[string]string) (string, error) {
+	// Check if context is already cancelled
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("context cancelled: %w", err)
+	}
+
 	// Check bucket exists
-	if exists, err := s.BucketExists(bucket); err != nil {
+	if exists, err := s.BucketExists(ctx, bucket); err != nil {
 		return "", err
 	} else if !exists {
 		return "", ErrNoSuchBucket
@@ -102,6 +118,11 @@ func (s *Storage) PutObject(bucket, key string, content io.Reader, contentType s
 	// Validate key for path safety
 	if err := path.ValidatePathSafe(key); err != nil {
 		return "", fmt.Errorf("invalid key: %w", err)
+	}
+
+	// Check context before proceeding
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("context cancelled before writing: %w", err)
 	}
 
 	// Get bucket filesystem
@@ -139,8 +160,24 @@ func (s *Storage) PutObject(bucket, key string, content io.Reader, contentType s
 	hash := md5.New()
 	multiWriter := io.MultiWriter(tmpFile, hash)
 
-	// Copy content to temp file
-	size, err := io.Copy(multiWriter, content)
+	// Create a context-aware reader that checks for cancellation
+	type contextReader struct {
+		ctx context.Context
+		r   io.Reader
+	}
+	ctxReader := &contextReader{ctx: ctx, r: content}
+
+	// Copy content to temp file with context checking
+	size, err := io.Copy(multiWriter, io.LimitReader(
+		readerFunc(func(p []byte) (int, error) {
+			// Check for context cancellation during read
+			if err := ctxReader.ctx.Err(); err != nil {
+				return 0, fmt.Errorf("context cancelled during write: %w", err)
+			}
+			return ctxReader.r.Read(p)
+		}),
+		1<<63-1, // max int64
+	))
 	if err != nil {
 		tmpFile.Close()
 		return "", fmt.Errorf("failed to write object: %w", err)
@@ -152,6 +189,11 @@ func (s *Storage) PutObject(bucket, key string, content io.Reader, contentType s
 
 	// Calculate ETag (MD5 hash)
 	etag := `"` + hex.EncodeToString(hash.Sum(nil)) + `"`
+
+	// Check context before finalizing
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("context cancelled before finalizing: %w", err)
+	}
 
 	// Atomically rename temp file to final location
 	if err := bucketFS.Rename(tmpPath, objectPath); err != nil {
@@ -167,7 +209,7 @@ func (s *Storage) PutObject(bucket, key string, content io.Reader, contentType s
 		LastModified:   time.Now(),
 		CustomMetadata: customMetadata,
 	}
-	if err := s.metadata.PutObjectMetadata(bucket, key, meta); err != nil {
+	if err := s.metadata.PutObjectMetadata(ctx, bucket, key, meta); err != nil {
 		// Log error but don't fail the operation
 		// Metadata can be regenerated if needed
 		s.log.Warn("failed to save object metadata", "bucket", bucket, "key", key, "error", err)
@@ -176,10 +218,22 @@ func (s *Storage) PutObject(bucket, key string, content io.Reader, contentType s
 	return etag, nil
 }
 
+// readerFunc is a helper type to create an io.Reader from a function
+type readerFunc func([]byte) (int, error)
+
+func (rf readerFunc) Read(p []byte) (int, error) {
+	return rf(p)
+}
+
 // GetObjectMetadata retrieves metadata for an object
-func (s *Storage) GetObjectMetadata(bucket, key string) (*metadata.ObjectMetadata, error) {
+func (s *Storage) GetObjectMetadata(ctx context.Context, bucket, key string) (*metadata.ObjectMetadata, error) {
+	// Check if context is already cancelled
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
 	// Check bucket exists
-	if exists, err := s.BucketExists(bucket); err != nil {
+	if exists, err := s.BucketExists(ctx, bucket); err != nil {
 		return nil, err
 	} else if !exists {
 		return nil, ErrNoSuchBucket
@@ -188,6 +242,11 @@ func (s *Storage) GetObjectMetadata(bucket, key string) (*metadata.ObjectMetadat
 	// Validate key for path safety
 	if err := path.ValidatePathSafe(key); err != nil {
 		return nil, fmt.Errorf("invalid key: %w", err)
+	}
+
+	// Check context before proceeding
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled before reading metadata: %w", err)
 	}
 
 	// Get bucket filesystem
@@ -212,7 +271,7 @@ func (s *Storage) GetObjectMetadata(bucket, key string) (*metadata.ObjectMetadat
 	}
 
 	// Try to get metadata from metadata store
-	meta, err := s.metadata.GetObjectMetadata(bucket, key)
+	meta, err := s.metadata.GetObjectMetadata(ctx, bucket, key)
 	if err != nil {
 		// If no metadata, create basic metadata
 		etag := s.calculateETag(bucketFS, objectPath)
@@ -229,9 +288,14 @@ func (s *Storage) GetObjectMetadata(bucket, key string) (*metadata.ObjectMetadat
 }
 
 // DeleteObject removes an object
-func (s *Storage) DeleteObject(bucket, key string) error {
+func (s *Storage) DeleteObject(ctx context.Context, bucket, key string) error {
+	// Check if context is already cancelled
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
 	// Check bucket exists
-	if exists, err := s.BucketExists(bucket); err != nil {
+	if exists, err := s.BucketExists(ctx, bucket); err != nil {
 		return err
 	} else if !exists {
 		return ErrNoSuchBucket
@@ -240,6 +304,11 @@ func (s *Storage) DeleteObject(bucket, key string) error {
 	// Validate key for path safety
 	if err := path.ValidatePathSafe(key); err != nil {
 		return fmt.Errorf("invalid key: %w", err)
+	}
+
+	// Check context before proceeding
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled before deletion: %w", err)
 	}
 
 	// Get bucket filesystem
@@ -269,7 +338,7 @@ func (s *Storage) DeleteObject(bucket, key string) error {
 	}
 
 	// Delete metadata
-	if err := s.metadata.DeleteObjectMetadata(bucket, key); err != nil {
+	if err := s.metadata.DeleteObjectMetadata(ctx, bucket, key); err != nil {
 		s.log.Error("failed to delete object metadata", "bucket", bucket, "key", key, "error", err)
 	}
 

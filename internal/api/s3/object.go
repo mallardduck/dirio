@@ -24,7 +24,7 @@ func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request, bucket, key,
 		return
 	}
 
-	obj, err := h.storage.GetObject(bucket, key)
+	obj, err := h.storage.GetObject(r.Context(), bucket, key)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoSuchKey) {
 			if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchKey, err); writeErr != nil {
@@ -114,7 +114,7 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request, bucket, key,
 	}
 
 	// Read object content from request body
-	etag, err := h.storage.PutObject(bucket, key, r.Body, contentType, customMetadata)
+	etag, err := h.storage.PutObject(r.Context(), bucket, key, r.Body, contentType, customMetadata)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoSuchBucket) {
 			if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err); writeErr != nil {
@@ -149,7 +149,7 @@ func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request, bucket, key
 		return
 	}
 
-	meta, err := h.storage.GetObjectMetadata(bucket, key)
+	meta, err := h.storage.GetObjectMetadata(r.Context(), bucket, key)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoSuchKey) {
 			if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchKey, err); writeErr != nil {
@@ -202,7 +202,7 @@ func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request, bucket, k
 		return
 	}
 
-	err := h.storage.DeleteObject(bucket, key)
+	err := h.storage.DeleteObject(r.Context(), bucket, key)
 	if err != nil {
 		// S3 returns 204 even if object doesn't exist
 		if !errors.Is(err, storage.ErrNoSuchKey) {

@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -114,7 +115,11 @@ func New(rootFS billy.Filesystem) (*Manager, error) {
 }
 
 // CreateBucket creates metadata for a new bucket
-func (m *Manager) CreateBucket(bucket string) error {
+func (m *Manager) CreateBucket(ctx context.Context, bucket string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
 	meta := BucketMetadata{
 		Version: BucketMetadataVersion,
 		Name:    bucket,
@@ -122,17 +127,25 @@ func (m *Manager) CreateBucket(bucket string) error {
 		Created: time.Now(),
 	}
 
-	return m.saveBucketMetadata(bucket, &meta)
+	return m.saveBucketMetadata(ctx, bucket, &meta)
 }
 
 // DeleteBucket removes bucket metadata
-func (m *Manager) DeleteBucket(bucket string) error {
+func (m *Manager) DeleteBucket(ctx context.Context, bucket string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
 	metaPath := filepath.Join("buckets", bucket+".json")
 	return m.metadataFS.Remove(metaPath)
 }
 
 // GetBucketMetadata retrieves bucket metadata
-func (m *Manager) GetBucketMetadata(bucket string) (*BucketMetadata, error) {
+func (m *Manager) GetBucketMetadata(ctx context.Context, bucket string) (*BucketMetadata, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
 	metaPath := filepath.Join("buckets", bucket+".json")
 
 	data, err := util.ReadFile(m.metadataFS, metaPath)
@@ -149,7 +162,11 @@ func (m *Manager) GetBucketMetadata(bucket string) (*BucketMetadata, error) {
 }
 
 // saveBucketMetadata saves bucket metadata to disk
-func (m *Manager) saveBucketMetadata(bucket string, meta *BucketMetadata) error {
+func (m *Manager) saveBucketMetadata(ctx context.Context, bucket string, meta *BucketMetadata) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
 	metaPath := filepath.Join("buckets", bucket+".json")
 
 	data, err := json.Marshal(meta)
@@ -161,7 +178,11 @@ func (m *Manager) saveBucketMetadata(bucket string, meta *BucketMetadata) error 
 }
 
 // GetObjectMetadata retrieves object metadata
-func (m *Manager) GetObjectMetadata(bucket, key string) (*ObjectMetadata, error) {
+func (m *Manager) GetObjectMetadata(ctx context.Context, bucket, key string) (*ObjectMetadata, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
 	metaPath := filepath.Join("objects", bucket, key+".json")
 
 	data, err := util.ReadFile(m.metadataFS, metaPath)
@@ -181,7 +202,11 @@ func (m *Manager) GetObjectMetadata(bucket, key string) (*ObjectMetadata, error)
 }
 
 // PutObjectMetadata stores object metadata
-func (m *Manager) PutObjectMetadata(bucket, key string, meta *ObjectMetadata) error {
+func (m *Manager) PutObjectMetadata(ctx context.Context, bucket, key string, meta *ObjectMetadata) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
 	metaPath := filepath.Join("objects", bucket, key+".json")
 
 	// Create parent directories
@@ -199,7 +224,11 @@ func (m *Manager) PutObjectMetadata(bucket, key string, meta *ObjectMetadata) er
 }
 
 // DeleteObjectMetadata removes object metadata
-func (m *Manager) DeleteObjectMetadata(bucket, key string) error {
+func (m *Manager) DeleteObjectMetadata(ctx context.Context, bucket, key string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
 	metaPath := filepath.Join("objects", bucket, key+".json")
 
 	err := m.metadataFS.Remove(metaPath)
@@ -210,6 +239,11 @@ func (m *Manager) DeleteObjectMetadata(bucket, key string) error {
 	// Clean up empty parent directories
 	dir := filepath.Dir(metaPath)
 	for dir != "." && dir != "" && dir != "/" && dir != "objects" {
+		// Check for cancellation during cleanup
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("context cancelled during cleanup: %w", err)
+		}
+
 		entries, err := m.metadataFS.ReadDir(dir)
 		if err != nil || len(entries) > 0 {
 			break
@@ -224,7 +258,11 @@ func (m *Manager) DeleteObjectMetadata(bucket, key string) error {
 }
 
 // GetUsers retrieves all users
-func (m *Manager) GetUsers() (map[string]*User, error) {
+func (m *Manager) GetUsers(ctx context.Context) (map[string]*User, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
 	data, err := util.ReadFile(m.metadataFS, "users.json")
 	if err != nil {
 		if isNotExist(err) {
@@ -242,7 +280,11 @@ func (m *Manager) GetUsers() (map[string]*User, error) {
 }
 
 // SaveUsers saves all users
-func (m *Manager) SaveUsers(users map[string]*User) error {
+func (m *Manager) SaveUsers(ctx context.Context, users map[string]*User) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
 	data, err := json.Marshal(users)
 	if err != nil {
 		return err
@@ -252,7 +294,11 @@ func (m *Manager) SaveUsers(users map[string]*User) error {
 }
 
 // SavePolicy saves a single policy
-func (m *Manager) SavePolicy(policy *Policy) error {
+func (m *Manager) SavePolicy(ctx context.Context, policy *Policy) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
 	policyPath := filepath.Join("policies", policy.Name+".json")
 
 	data, err := json.Marshal(policy)
@@ -264,7 +310,11 @@ func (m *Manager) SavePolicy(policy *Policy) error {
 }
 
 // GetPolicy retrieves a policy by name
-func (m *Manager) GetPolicy(name string) (*Policy, error) {
+func (m *Manager) GetPolicy(ctx context.Context, name string) (*Policy, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
 	policyPath := filepath.Join("policies", name+".json")
 
 	data, err := util.ReadFile(m.metadataFS, policyPath)
@@ -281,7 +331,11 @@ func (m *Manager) GetPolicy(name string) (*Policy, error) {
 }
 
 // GetPolicies retrieves all policies
-func (m *Manager) GetPolicies() (map[string]*Policy, error) {
+func (m *Manager) GetPolicies(ctx context.Context) (map[string]*Policy, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
 	entries, err := m.metadataFS.ReadDir("policies")
 	if err != nil {
 		if isNotExist(err) {
@@ -292,12 +346,17 @@ func (m *Manager) GetPolicies() (map[string]*Policy, error) {
 
 	policies := make(map[string]*Policy)
 	for _, entry := range entries {
+		// Check for cancellation during iteration
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("context cancelled during policy loading: %w", err)
+		}
+
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
 		}
 
 		policyName := entry.Name()[:len(entry.Name())-5] // Remove .json
-		policy, err := m.GetPolicy(policyName)
+		policy, err := m.GetPolicy(ctx, policyName)
 		if err != nil {
 			fmt.Printf("Warning: failed to load policy %s: %v\n", policyName, err)
 			continue

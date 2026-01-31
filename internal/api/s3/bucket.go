@@ -23,7 +23,7 @@ func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request, bucket, r
 
 	// TODO: Parse bucket configuration from request body if present
 
-	if err := h.storage.CreateBucket(bucket); err != nil {
+	if err := h.storage.CreateBucket(r.Context(), bucket); err != nil {
 		if errors.Is(err, storage.ErrBucketExists) {
 			if writeErr := writeErrorResponse(w, requestID, s3types.ErrBucketAlreadyExists, err); writeErr != nil {
 				s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error creating bucket (already exists) and additional error writing XML error response")
@@ -49,7 +49,7 @@ func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request, bucket, r
 
 // HeadBucket handles HEAD /{bucket}
 func (h *Handler) HeadBucket(w http.ResponseWriter, r *http.Request, bucket, requestID string) {
-	exists, err := h.storage.BucketExists(bucket)
+	exists, err := h.storage.BucketExists(r.Context(), bucket)
 	if err != nil {
 		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInternalError, err); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error checking bucket existence and additional error writing XML error response")
@@ -80,7 +80,7 @@ func (h *Handler) HeadBucket(w http.ResponseWriter, r *http.Request, bucket, req
 
 // DeleteBucket handles DELETE /{bucket}
 func (h *Handler) DeleteBucket(w http.ResponseWriter, r *http.Request, bucket, requestID string) {
-	if err := h.storage.DeleteBucket(bucket); err != nil {
+	if err := h.storage.DeleteBucket(r.Context(), bucket); err != nil {
 		if errors.Is(err, storage.ErrNoSuchBucket) {
 			if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err); writeErr != nil {
 				s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error deleting bucket (no such bucket) and additional error writing XML error response")
@@ -110,7 +110,7 @@ func (h *Handler) DeleteBucket(w http.ResponseWriter, r *http.Request, bucket, r
 
 // GetBucketLocation handles GET /{bucket}?location
 func (h *Handler) GetBucketLocation(w http.ResponseWriter, r *http.Request, bucket, requestID string) {
-	exists, err := h.storage.BucketExists(bucket)
+	exists, err := h.storage.BucketExists(r.Context(), bucket)
 	if err != nil {
 		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInternalError, err); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error checking bucket existence and additional error writing XML error response")
@@ -145,7 +145,7 @@ func (h *Handler) ListObjects(w http.ResponseWriter, r *http.Request, bucket, re
 	marker := query.Get("marker")
 	_ = query.Get("max-keys") // TODO: use for pagination
 
-	objects, err := h.storage.ListObjects(bucket, prefix, delimiter, 1000)
+	objects, err := h.storage.ListObjects(r.Context(), bucket, prefix, delimiter, 1000)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoSuchBucket) {
 			if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err); writeErr != nil {
@@ -181,11 +181,16 @@ func (h *Handler) ListObjects(w http.ResponseWriter, r *http.Request, bucket, re
 // ListObjectsV2 handles GET /{bucket}?list-type=2
 func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request, bucket, requestID string) {
 	query := r.URL.Query()
-	prefix := query.Get("prefix")
-	delimiter := query.Get("delimiter")
 	continuationToken := query.Get("continuation-token")
+	delimiter := query.Get("delimiter")
+	// encoding-type
+	// fetch-owner
+	// max-keys
+	prefix := query.Get("prefix")
+	startAfter := query.Get("start-after")
+	fetchOwner := query.Get("fetch-owner") == "true"
 
-	objects, err := h.storage.ListObjects(bucket, prefix, delimiter, 1000)
+	objects, err := h.storage.ListObjectsV2(r.Context(), bucket, prefix, continuationToken, startAfter, delimiter, 1000, fetchOwner)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoSuchBucket) {
 			if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err); writeErr != nil {
@@ -208,10 +213,11 @@ func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request, bucket, 
 		Prefix:            prefix,
 		Delimiter:         delimiter,
 		MaxKeys:           1000,
-		KeyCount:          len(objects),
-		IsTruncated:       false,
+		KeyCount:          len(objects.Objects),
+		IsTruncated:       objects.IsTruncated,
 		ContinuationToken: continuationToken,
-		Contents:          objects,
+		Contents:          objects.Objects,
+		CommonPrefixes:    objects.CommonPrefixes,
 	}
 
 	if writeErr := writeXMLResponse(w, http.StatusOK, response); writeErr != nil {

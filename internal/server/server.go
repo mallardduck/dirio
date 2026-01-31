@@ -70,7 +70,7 @@ func New(config *Config) (*Server, error) {
 	}
 
 	// Check for MinIO migration
-	if err := metaMgr.CheckAndImportMinIO(); err != nil {
+	if err := metaMgr.CheckAndImportMinIO(context.Background()); err != nil {
 		log.Warn("minio data check & import failed", "error", err)
 	}
 

@@ -46,7 +46,7 @@ func (h *Handler) ListBuckets(w http.ResponseWriter, r *http.Request) {
 
 	requestID := middleware.GetRequestID(r.Context())
 
-	buckets, err := h.storage.ListBuckets()
+	buckets, err := h.storage.ListBuckets(r.Context())
 	if err != nil {
 		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInternalError, err); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error listing buckets and additional error writing XML error response")

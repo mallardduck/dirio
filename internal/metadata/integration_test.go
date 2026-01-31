@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -46,7 +47,7 @@ func TestMinIOImport_CreatesMetadataFiles(t *testing.T) {
 				}
 			}
 
-			err := mgr.PutObjectMetadata(bucketName, objectKey, dirioMeta)
+			err := mgr.PutObjectMetadata(context.Background(), bucketName, objectKey, dirioMeta)
 			require.NoError(t, err, "Failed to save metadata for %s/%s", bucketName, objectKey)
 
 			t.Logf("✓ Saved metadata for %s/%s", bucketName, objectKey)

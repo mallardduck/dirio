@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -19,7 +20,10 @@ type ImportState struct {
 }
 
 // CheckAndImportMinIO checks for MinIO data and imports if needed
-func (m *Manager) CheckAndImportMinIO() error {
+func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
 	// Check if .minio.sys exists
 	if _, err := m.rootFS.Stat(path.MinIODir); err != nil {
 		if isNotExist(err) {
@@ -67,7 +71,7 @@ func (m *Manager) CheckAndImportMinIO() error {
 				CreateDate: minioPolicy.CreateDate,
 				UpdateDate: minioPolicy.UpdateDate,
 			}
-			if err := m.SavePolicy(policy); err != nil {
+			if err := m.SavePolicy(ctx, policy); err != nil {
 				fmt.Printf("Warning: failed to save policy %s: %v\n", minioPolicy.Name, err)
 				continue
 			}
@@ -88,7 +92,7 @@ func (m *Manager) CheckAndImportMinIO() error {
 				AttachedPolicy: minioUser.AttachedPolicy,
 			}
 		}
-		if err := m.SaveUsers(dirioUsers); err != nil {
+		if err := m.SaveUsers(ctx, dirioUsers); err != nil {
 			return fmt.Errorf("failed to save imported users: %w", err)
 		}
 		fmt.Printf("Imported %d users\n", len(dirioUsers))
@@ -123,7 +127,7 @@ func (m *Manager) CheckAndImportMinIO() error {
 				ReplicationConfigUpdatedAt:  minioBucket.ReplicationConfigUpdatedAt,
 				VersioningConfigUpdatedAt:   minioBucket.VersioningConfigUpdatedAt,
 			}
-			if err := m.saveBucketMetadata(bucketName, meta); err != nil {
+			if err := m.saveBucketMetadata(ctx, bucketName, meta); err != nil {
 				fmt.Printf("Warning: failed to save metadata for bucket %s: %v\n", bucketName, err)
 				continue
 			}
@@ -151,7 +155,7 @@ func (m *Manager) CheckAndImportMinIO() error {
 			}
 
 			// Save the object metadata
-			if err := m.PutObjectMetadata(bucketName, objectKey, dirioMeta); err != nil {
+			if err := m.PutObjectMetadata(ctx, bucketName, objectKey, dirioMeta); err != nil {
 				fmt.Printf("Warning: failed to save metadata for %s/%s: %v\n", bucketName, objectKey, err)
 				continue
 			}

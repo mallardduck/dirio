@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -37,14 +38,14 @@ func New(metadata *metadata.Manager, rootAccessKey, rootSecretKey string) *Authe
 }
 
 // ValidateCredentials checks if access key and secret key are valid
-func (a *Authenticator) ValidateCredentials(accessKey, secretKey string) bool {
+func (a *Authenticator) ValidateCredentials(ctx context.Context, accessKey, secretKey string) bool {
 	// Check root credentials
 	if accessKey == a.rootAccessKey && secretKey == a.rootSecretKey {
 		return true
 	}
 
 	// Check user credentials
-	users, err := a.metadata.GetUsers()
+	users, err := a.metadata.GetUsers(ctx)
 	if err != nil {
 		return false
 	}
@@ -58,7 +59,7 @@ func (a *Authenticator) ValidateCredentials(accessKey, secretKey string) bool {
 }
 
 // GetUserForAccessKey retrieves user information for an access key
-func (a *Authenticator) GetUserForAccessKey(accessKey string) (*metadata.User, error) {
+func (a *Authenticator) GetUserForAccessKey(ctx context.Context, accessKey string) (*metadata.User, error) {
 	if accessKey == a.rootAccessKey {
 		return &metadata.User{
 			AccessKey: a.rootAccessKey,
@@ -67,7 +68,7 @@ func (a *Authenticator) GetUserForAccessKey(accessKey string) (*metadata.User, e
 		}, nil
 	}
 
-	users, err := a.metadata.GetUsers()
+	users, err := a.metadata.GetUsers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +97,7 @@ func (a *Authenticator) AuthenticateRequest(r *http.Request) (*metadata.User, er
 	}
 
 	// Look up user and get secret key
-	user, err := a.GetUserForAccessKey(accessKey)
+	user, err := a.GetUserForAccessKey(r.Context(), accessKey)
 	if err != nil {
 		return nil, err
 	}
