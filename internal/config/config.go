@@ -2,20 +2,26 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 
+	"github.com/go-git/go-billy/v5/osfs"
+	"github.com/mallardduck/dirio/internal/dataconfig"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
 // Settings represents all configuration values that dirio relies on to run.
 // These values are resolved from: 1. Environment variables, 2. CLI flags, 3. Config file (YAML)
+//
+// Note: Some settings (credentials, region) may also come from data directory config (.dirio/config.json)
+// which takes precedence over CLI/app config for those values.
 type Settings struct {
 	// Server settings
 	DataDir   string
 	Port      int
-	AccessKey string
-	SecretKey string
+	AccessKey string // CLI admin credentials (coexists with data config credentials)
+	SecretKey string // CLI admin credentials (coexists with data config credentials)
 
 	// Logging settings
 	LogLevel  string
@@ -29,6 +35,9 @@ type Settings struct {
 	MDNSHostname    string
 	MDNSMode        string
 	CanonicalDomain string
+
+	// Data directory configuration (loaded from .dirio/config.json if exists)
+	DataConfig *dataconfig.DataConfig
 }
 
 // Validate checks that the configured settings are valid
@@ -93,8 +102,8 @@ func LoadConfig(flags *pflag.FlagSet, v *viper.Viper) (*Settings, error) {
 		// Server settings
 		DataDir:   resolver.Get(DataDir),
 		Port:      resolver.GetInt(Port),
-		AccessKey: resolver.Get(AccessKey),
-		SecretKey: resolver.Get(SecretKey),
+		AccessKey: resolver.Get(AccessKey), // CLI admin credentials
+		SecretKey: resolver.Get(SecretKey), // CLI admin credentials
 
 		// Logging settings
 		LogLevel:  resolver.Get(LogLevel),
@@ -115,12 +124,52 @@ func LoadConfig(flags *pflag.FlagSet, v *viper.Viper) (*Settings, error) {
 		settings.LogLevel = "debug"
 	}
 
+	// Try to load data config from data directory
+	if err := loadDataConfig(settings, flags); err != nil {
+		return nil, fmt.Errorf("failed to load data config: %w", err)
+	}
+
 	// Store as global config
 	mu.Lock()
 	currentConfig = settings
 	mu.Unlock()
 
 	return settings, nil
+}
+
+// loadDataConfig attempts to load data config from .dirio/config.json
+// If it exists, it populates settings.DataConfig
+func loadDataConfig(settings *Settings, flags *pflag.FlagSet) error {
+	// Create filesystem for data directory
+	fs := osfs.New(settings.DataDir)
+
+	// Check if data config exists
+	if !dataconfig.DataConfigExists(fs) {
+		slog.Debug("No data config found, will use CLI/app config values")
+		return nil
+	}
+
+	// Load data config
+	dc, err := dataconfig.LoadDataConfig(fs)
+	if err != nil {
+		return fmt.Errorf("data config exists but failed to load: %w", err)
+	}
+
+	settings.DataConfig = dc
+	slog.Info("Loaded data config from .dirio/config.json",
+		"region", dc.Region,
+		"compression", dc.Compression.Enabled,
+		"worm", dc.WORMEnabled,
+		"data_admin", dc.Credentials.AccessKey)
+
+	// TODO: Add region CLI flag and warning when it differs from data config
+	// TODO: Add explicit update command (dirio config set region <value>)
+
+	// Note: We do NOT warn about credentials - both CLI and data config credentials coexist
+	// CLI credentials (settings.AccessKey/SecretKey) provide temporary/alternative admin access
+	// Data config credentials (dc.Credentials) are the "official" admin for this data directory
+
+	return nil
 }
 
 // GetConfig returns the current global configuration.

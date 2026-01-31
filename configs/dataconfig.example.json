@@ -1,0 +1,29 @@
+{
+  "version": "1.0.0",
+  "credentials": {
+    "accessKey": "dirio-admin",
+    "secretKey": "dirio-admin-secret"
+  },
+  "region": "us-east-1",
+  "compression": {
+    "enabled": false,
+    "allowEncryption": false,
+    "extensions": [
+      ".txt",
+      ".log",
+      ".csv",
+      ".json"
+    ],
+    "mimeTypes": [
+      "text/*",
+      "application/json"
+    ]
+  },
+  "wormEnabled": false,
+  "storageClass": {
+    "standard": "",
+    "rrs": ""
+  },
+  "createdAt": "2026-01-31T12:00:00Z",
+  "updatedAt": "2026-01-31T12:00:00Z"
+}

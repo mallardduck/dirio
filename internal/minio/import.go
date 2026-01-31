@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/util"
+	"github.com/mallardduck/dirio/internal/dataconfig"
 )
 
 // ImportResult contains the results of a MinIO import operation
@@ -18,6 +19,7 @@ type ImportResult struct {
 	Buckets        map[string]*BucketMetadata
 	Policies       map[string]*Policy
 	ObjectMetadata map[string]map[string]*ObjectMetadata // bucket -> object key -> metadata
+	DataConfig     *dataconfig.DataConfig                // Data directory configuration
 }
 
 // Import reads MinIO data from the specified filesystem and returns parsed data.
@@ -39,6 +41,13 @@ func Import(minioFS billy.Filesystem) (*ImportResult, error) {
 		Policies:       make(map[string]*Policy),
 		ObjectMetadata: make(map[string]map[string]*ObjectMetadata),
 	}
+
+	// Import configuration
+	dataConfig, err := ImportConfig(minioFS)
+	if err != nil {
+		return nil, fmt.Errorf("failed to import config: %w", err)
+	}
+	result.DataConfig = dataConfig
 
 	// Import policies first
 	if err := importPolicies(minioFS, result.Policies); err != nil {

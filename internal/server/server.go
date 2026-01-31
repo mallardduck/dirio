@@ -13,6 +13,7 @@ import (
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/mallardduck/dirio/internal/api"
 	"github.com/mallardduck/dirio/internal/auth"
+	"github.com/mallardduck/dirio/internal/dataconfig"
 	"github.com/mallardduck/dirio/internal/logging"
 	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/mdns"
@@ -29,8 +30,8 @@ import (
 type Config struct {
 	DataDir   string
 	Port      int
-	AccessKey string
-	SecretKey string
+	AccessKey string // CLI admin credentials
+	SecretKey string // CLI admin credentials
 
 	// mDNS settings
 	MDNSEnabled  bool
@@ -40,6 +41,10 @@ type Config struct {
 
 	// URL generation
 	CanonicalDomain string
+
+	// Data directory configuration (optional)
+	// If present, provides alternative admin credentials from data config
+	DataConfig *dataconfig.DataConfig
 }
 
 // Server represents the S3-compatible HTTP server
@@ -80,8 +85,19 @@ func New(config *Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to initialize storage: %w", err)
 	}
 
-	// Initialize authenticator
+	// Initialize authenticator with CLI admin credentials
 	authenticator := auth.New(metaMgr, config.AccessKey, config.SecretKey)
+
+	// Add data config admin credentials if they exist
+	if config.DataConfig != nil {
+		authenticator = authenticator.WithAlternativeRoot(
+			config.DataConfig.Credentials.AccessKey,
+			config.DataConfig.Credentials.SecretKey,
+		)
+		log.Info("Configured dual admin access",
+			"cli_admin", config.AccessKey,
+			"data_admin", config.DataConfig.Credentials.AccessKey)
+	}
 
 	// Create server
 	srv := &Server{

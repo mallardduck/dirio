@@ -26,9 +26,14 @@ type Authenticator struct {
 	metadata      *metadata.Manager
 	rootAccessKey string
 	rootSecretKey string
+
+	// Additional root credentials (e.g., from data config)
+	// These provide an alternative admin account that coexists with CLI admin
+	altRootAccessKey string
+	altRootSecretKey string
 }
 
-// New creates a new authenticator
+// New creates a new authenticator with primary root credentials
 func New(metadata *metadata.Manager, rootAccessKey, rootSecretKey string) *Authenticator {
 	return &Authenticator{
 		metadata:      metadata,
@@ -37,10 +42,23 @@ func New(metadata *metadata.Manager, rootAccessKey, rootSecretKey string) *Authe
 	}
 }
 
+// WithAlternativeRoot adds alternative root credentials (e.g., from data config)
+// This allows both CLI admin and data config admin to coexist
+func (a *Authenticator) WithAlternativeRoot(accessKey, secretKey string) *Authenticator {
+	a.altRootAccessKey = accessKey
+	a.altRootSecretKey = secretKey
+	return a
+}
+
 // ValidateCredentials checks if access key and secret key are valid
 func (a *Authenticator) ValidateCredentials(ctx context.Context, accessKey, secretKey string) bool {
-	// Check root credentials
+	// Check primary root credentials (CLI admin)
 	if accessKey == a.rootAccessKey && secretKey == a.rootSecretKey {
+		return true
+	}
+
+	// Check alternative root credentials (data config admin)
+	if a.altRootAccessKey != "" && accessKey == a.altRootAccessKey && secretKey == a.altRootSecretKey {
 		return true
 	}
 
@@ -60,10 +78,20 @@ func (a *Authenticator) ValidateCredentials(ctx context.Context, accessKey, secr
 
 // GetUserForAccessKey retrieves user information for an access key
 func (a *Authenticator) GetUserForAccessKey(ctx context.Context, accessKey string) (*metadata.User, error) {
+	// Check primary root (CLI admin)
 	if accessKey == a.rootAccessKey {
 		return &metadata.User{
 			AccessKey: a.rootAccessKey,
 			SecretKey: a.rootSecretKey,
+			Status:    "on",
+		}, nil
+	}
+
+	// Check alternative root (data config admin)
+	if a.altRootAccessKey != "" && accessKey == a.altRootAccessKey {
+		return &metadata.User{
+			AccessKey: a.altRootAccessKey,
+			SecretKey: a.altRootSecretKey,
 			Status:    "on",
 		}, nil
 	}

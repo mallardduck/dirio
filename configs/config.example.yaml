@@ -1,15 +1,73 @@
-# DirIO Configuration
+# DirIO Application Configuration
+#
+# This file configures HOW THE TOOL RUNS (operational preferences).
+# For data-specific settings (region, compression, etc.), see .dirio/config.json
+# in your data directory.
+#
+# See docs/configuration.md for full documentation.
+
+# ============================================================================
+# SERVER SETTINGS
+# ============================================================================
 
 # Data directory where buckets and metadata are stored
 data_dir: /data
 
-# Server port
+# HTTP server port (1-65535)
 port: 9000
 
-# Root credentials (default: minioadmin/minioadmin)
-# Change these in production!
-access_key: minioadmin
-secret_key: minioadmin
+# ============================================================================
+# CLI ADMIN CREDENTIALS (Optional)
+# ============================================================================
+# These provide ALTERNATIVE admin access alongside the official admin
+# credentials stored in .dirio/config.json (if it exists).
+#
+# Use case: Temporary access, testing, admin rotation
+# Note: Both CLI admin AND data config admin work simultaneously
 
-# Enable debug logging
+access_key: dirio-admin
+secret_key: dirio-admin-secret
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+
+# Log level: debug, info, warn, error
+log_level: info
+
+# Log format: text, json
+log_format: text
+
+# Verbosity: quiet, normal, verbose
+verbosity: normal
+
+# Debug mode (overrides log_level to debug)
 debug: false
+
+# ============================================================================
+# mDNS SERVICE DISCOVERY
+# ============================================================================
+
+# Enable mDNS service discovery (.local domain)
+mdns_enabled: false
+
+# Service name (advertised as: {mdns_name}.{hostname}.local)
+mdns_name: dirio-s3
+
+# Override hostname component (default: system hostname)
+# mdns_hostname: myhost
+
+# mDNS mode: auto, guest, master
+# - auto: Detect via port 5353 probe (recommended)
+# - guest: PTR/SRV only, delegate A/AAAA to system
+# - master: Full A/AAAA + PTR/SRV stack
+mdns_mode: auto
+
+# ============================================================================
+# URL GENERATION
+# ============================================================================
+
+# Canonical domain for URL generation (optional)
+# Example: s3.example.com
+# This is a HINT only - the app works behind any proxy/domain
+canonical_domain: ""

@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/mallardduck/dirio/internal/config"
+	"github.com/mallardduck/dirio/internal/dataconfig"
 	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/server"
 	"github.com/spf13/cobra"
@@ -91,17 +93,23 @@ func runServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid data directory: %w", err)
 	}
 
+	// Migrate existing installations: create data config if missing
+	if err := migrateDataConfig(settings); err != nil {
+		return fmt.Errorf("failed to migrate data config: %w", err)
+	}
+
 	// Create server configuration from settings
 	serverConfig := &server.Config{
 		DataDir:         settings.DataDir,
 		Port:            settings.Port,
-		AccessKey:       settings.AccessKey,
-		SecretKey:       settings.SecretKey,
+		AccessKey:       settings.AccessKey, // CLI admin
+		SecretKey:       settings.SecretKey, // CLI admin
 		MDNSEnabled:     settings.MDNSEnabled,
 		MDNSName:        settings.MDNSName,
 		MDNSHostname:    settings.MDNSHostname,
 		MDNSMode:        settings.MDNSMode,
 		CanonicalDomain: settings.CanonicalDomain,
+		DataConfig:      settings.DataConfig, // Data admin (if exists)
 	}
 
 	// Initialize and start server
@@ -134,5 +142,51 @@ func validateDataDir(path string) error {
 	if !info.IsDir() {
 		return fmt.Errorf("path exists but is not a directory")
 	}
+	return nil
+}
+
+// migrateDataConfig creates data config for existing installations
+// that don't have .dirio/config.json yet
+func migrateDataConfig(settings *config.Settings) error {
+	log := logging.Component("migration")
+
+	// If data config already exists (either loaded or from MinIO import), skip migration
+	if settings.DataConfig != nil {
+		return nil
+	}
+
+	// Create filesystem for data directory
+	fs := osfs.New(settings.DataDir)
+
+	// Check if .dirio/config.json already exists
+	if dataconfig.DataConfigExists(fs) {
+		// Should have been loaded, but wasn't - this might indicate a problem
+		log.Warn("Data config file exists but wasn't loaded - skipping migration")
+		return nil
+	}
+
+	// Check if this looks like an existing installation (has .metadata directory)
+	if _, err := fs.Stat(".metadata"); err == nil {
+		// Existing installation found - create data config from current settings
+		log.Info("Migrating existing installation - creating data config from CLI settings")
+
+		dc := dataconfig.DefaultDataConfig()
+		dc.Credentials.AccessKey = settings.AccessKey
+		dc.Credentials.SecretKey = settings.SecretKey
+		// Region defaults to us-east-1 (set in DefaultDataConfig)
+		// Other settings use defaults
+
+		if err := dataconfig.SaveDataConfig(fs, dc); err != nil {
+			return fmt.Errorf("failed to save migrated data config: %w", err)
+		}
+
+		// Update settings to use the new data config
+		settings.DataConfig = dc
+
+		log.Info("Migration complete - data config created",
+			"admin", dc.Credentials.AccessKey,
+			"region", dc.Region)
+	}
+
 	return nil
 }
