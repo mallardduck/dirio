@@ -3,6 +3,7 @@ package s3
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/storage"
@@ -143,9 +144,9 @@ func (h *Handler) ListObjects(w http.ResponseWriter, r *http.Request, bucket, re
 	prefix := query.Get("prefix")
 	delimiter := query.Get("delimiter")
 	marker := query.Get("marker")
-	_ = query.Get("max-keys") // TODO: use for pagination
+	maxKeys := parseMaxKeys(query.Get("max-keys"))
 
-	objects, err := h.storage.ListObjects(r.Context(), bucket, prefix, delimiter, 1000)
+	objects, err := h.storage.ListObjects(r.Context(), bucket, prefix, delimiter, maxKeys)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoSuchBucket) {
 			if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err); writeErr != nil {
@@ -168,7 +169,7 @@ func (h *Handler) ListObjects(w http.ResponseWriter, r *http.Request, bucket, re
 		Prefix:      prefix,
 		Delimiter:   delimiter,
 		Marker:      marker,
-		MaxKeys:     1000,
+		MaxKeys:     maxKeys,
 		IsTruncated: false,
 		Contents:    objects,
 	}
@@ -184,13 +185,12 @@ func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request, bucket, 
 	continuationToken := query.Get("continuation-token")
 	delimiter := query.Get("delimiter")
 	// encoding-type
-	// fetch-owner
-	// max-keys
+	fetchOwner := query.Get("fetch-owner") == "true"
+	maxKeys := parseMaxKeys(query.Get("max-keys"))
 	prefix := query.Get("prefix")
 	startAfter := query.Get("start-after")
-	fetchOwner := query.Get("fetch-owner") == "true"
 
-	objects, err := h.storage.ListObjectsV2(r.Context(), bucket, prefix, continuationToken, startAfter, delimiter, 1000, fetchOwner)
+	objects, err := h.storage.ListObjectsV2(r.Context(), bucket, prefix, continuationToken, startAfter, delimiter, maxKeys, fetchOwner)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoSuchBucket) {
 			if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err); writeErr != nil {
@@ -212,7 +212,7 @@ func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request, bucket, 
 		Name:              bucket,
 		Prefix:            prefix,
 		Delimiter:         delimiter,
-		MaxKeys:           1000,
+		MaxKeys:           maxKeys,
 		KeyCount:          len(objects.Objects),
 		IsTruncated:       objects.IsTruncated,
 		ContinuationToken: continuationToken,
@@ -223,4 +223,34 @@ func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request, bucket, 
 	if writeErr := writeXMLResponse(w, http.StatusOK, response); writeErr != nil {
 		s3Logger.With("err", writeErr).Warn("encountered error writing XML OK response")
 	}
+}
+
+// parseMaxKeys parses the max-keys query parameter with S3-compatible defaults and limits
+func parseMaxKeys(maxKeysStr string) int {
+	const (
+		defaultMaxKeys = 1000
+		maxMaxKeys     = 1000
+	)
+
+	// Default to 1000 if not provided
+	if maxKeysStr == "" {
+		return defaultMaxKeys
+	}
+
+	// Parse the value
+	maxKeys, err := strconv.Atoi(maxKeysStr)
+	if err != nil {
+		// Invalid value, use default
+		return defaultMaxKeys
+	}
+
+	// Enforce S3 limits: minimum 1, maximum 1000
+	if maxKeys < 1 {
+		return 1
+	}
+	if maxKeys > maxMaxKeys {
+		return maxMaxKeys
+	}
+
+	return maxKeys
 }

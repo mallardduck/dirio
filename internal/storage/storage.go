@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"path/filepath"
+	"sort"
 
 	"github.com/go-git/go-billy/v5"
 	"github.com/mallardduck/dirio/internal/logging"
@@ -183,22 +184,60 @@ func (s *Storage) DeleteBucket(ctx context.Context, bucket string) error {
 	return s.metadata.DeleteBucket(ctx, bucket)
 }
 
-// ListObjects returns objects in a bucket with optional prefix and delimiter
+// ListObjects returns objects in a bucket with optional prefix and delimiter (V1 API)
 func (s *Storage) ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int) ([]s3types.Object, error) {
+	result, err := s.listInternal(ctx, bucket, prefix, "", delimiter, maxKeys, false)
+	if err != nil {
+		return nil, err
+	}
+	return result.Objects, nil
+}
+
+// ListObjectsV2 returns objects in a bucket with optional prefix and delimiter (V2 API)
+// The fetchOwner parameter determines whether to include owner information in each object.
+// Per S3 spec, owner is NOT included by default - set fetchOwner=true to include it.
+func (s *Storage) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, startAfter, delimiter string, maxKeys int, fetchOwner bool) (InternalResult, error) {
+	// V2 uses either continuation-token or start-after for pagination
+	startAt := continuationToken
+	if startAt == "" {
+		startAt = startAfter
+	}
+
+	return s.listInternal(ctx, bucket, prefix, startAt, delimiter, maxKeys, fetchOwner)
+}
+
+// listInternal is the core listing implementation used by both V1 and V2
+func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, delimiter string, maxKeys int, fetchOwner bool) (InternalResult, error) {
 	// Check if context is already cancelled
 	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+		return InternalResult{}, fmt.Errorf("context cancelled: %w", err)
 	}
 
 	// Check if bucket exists
 	if _, err := s.rootFS.Stat(bucket); err != nil {
 		if isNotExist(err) {
-			return nil, ErrNoSuchBucket
+			return InternalResult{}, ErrNoSuchBucket
 		}
-		return nil, err
+		return InternalResult{}, err
 	}
 
-	objects := make([]s3types.Object, 0)
+	// Get bucket owner if fetchOwner is requested
+	// Per S3 behavior: Owner info is only included when explicitly requested via fetchOwner=true
+	// This is used by ListObjectsV2 but not ListObjects (V1 always omits owner)
+	var bucketOwner *s3types.Owner
+	if fetchOwner {
+		bucketMeta, err := s.metadata.GetBucketMetadata(ctx, bucket)
+		if err == nil && bucketMeta.Owner != "" {
+			bucketOwner = &s3types.Owner{
+				ID:          bucketMeta.Owner,
+				DisplayName: bucketMeta.Owner,
+			}
+		}
+		// If we can't get bucket metadata, that's ok - owner will be nil
+	}
+
+	// Collect all matching objects
+	var allEntries []objectEntry
 
 	// Walk the bucket directory recursively
 	err := s.walkDir(ctx, bucket, "", func(key string, info fs.FileInfo) error {
@@ -223,44 +262,114 @@ func (s *Storage) ListObjects(ctx context.Context, bucket, prefix, delimiter str
 			}
 		}
 
-		objects = append(objects, s3types.Object{
-			Key:          key,
-			Size:         info.Size(),
-			LastModified: info.ModTime(),
-			ETag:         meta.ETag,
-			StorageClass: "STANDARD",
+		allEntries = append(allEntries, objectEntry{
+			key:  key,
+			info: info,
+			meta: meta,
 		})
 
 		return nil
 	})
 
 	if err != nil {
-		return nil, err
+		return InternalResult{}, err
 	}
 
-	return objects, nil
+	// Sort entries by key (S3 returns results in lexicographic order)
+	sortObjectEntries(allEntries)
+
+	// Process delimiter to create common prefixes
+	var objects []s3types.Object
+	commonPrefixMap := make(map[string]bool)
+
+	for _, entry := range allEntries {
+		// Skip entries before startAt marker
+		if startAt != "" && entry.key <= startAt {
+			continue
+		}
+
+		// Check if we've hit maxKeys limit
+		if maxKeys > 0 && len(objects)+len(commonPrefixMap) >= maxKeys {
+			break
+		}
+
+		// Handle delimiter logic
+		if delimiter != "" {
+			// Find delimiter position after the prefix
+			keyAfterPrefix := entry.key
+			if prefix != "" {
+				keyAfterPrefix = entry.key[len(prefix):]
+			}
+
+			delimiterPos := indexOf(keyAfterPrefix, delimiter)
+			if delimiterPos >= 0 {
+				// This key contains delimiter - add to common prefixes
+				commonPrefix := prefix + keyAfterPrefix[:delimiterPos+len(delimiter)]
+				commonPrefixMap[commonPrefix] = true
+				continue
+			}
+		}
+
+		// Add as regular object
+		obj := s3types.Object{
+			Key:          entry.key,
+			Size:         entry.info.Size(),
+			LastModified: entry.info.ModTime(),
+			ETag:         entry.meta.ETag,
+			StorageClass: "STANDARD",
+		}
+
+		// Include owner if fetchOwner is true
+		if fetchOwner && bucketOwner != nil {
+			obj.Owner = bucketOwner
+		}
+
+		objects = append(objects, obj)
+	}
+
+	// Convert common prefix map to sorted slice
+	var commonPrefixes []s3types.CommonPrefix
+	for prefix := range commonPrefixMap {
+		commonPrefixes = append(commonPrefixes, s3types.CommonPrefix{
+			Prefix: prefix,
+		})
+	}
+	sortCommonPrefixes(commonPrefixes)
+
+	// Determine if results are truncated
+	totalResults := len(objects) + len(commonPrefixes)
+	isTruncated := maxKeys > 0 && totalResults >= maxKeys
+
+	// Determine next marker
+	var nextMarker string
+	if isTruncated && len(objects) > 0 {
+		nextMarker = objects[len(objects)-1].Key
+	}
+
+	return InternalResult{
+		Objects:        objects,
+		CommonPrefixes: commonPrefixes,
+		IsTruncated:    isTruncated,
+		NextMarker:     nextMarker,
+	}, nil
 }
 
-// ListObjectsV2 returns objects in a bucket with optional prefix and delimiter
-func (s *Storage) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, startAfter, delimiter string, maxKeys int, fetchOwner bool) (InternalResult, error) {
-	// TODO v2
-	return InternalResult{}, nil
+// Type aliases for clarity
+type (
+	Prefix            string
+	Delimiter         string
+	Marker            string
+	ContinuationToken string
+)
+
+// objectEntry represents an object during the listing process
+type objectEntry struct {
+	key  string
+	info fs.FileInfo
+	meta *metadata.ObjectMetadata
 }
 
-func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, delimiter string, maxKeys int, fetchOwner bool) (InternalResult, error) {
-	// 1. Validate the bucket exists first
-	// if !s.bucketExists(bucket) {
-	// 	return InternalResult{}, ErrNoSuchBucket
-	// }
-
-	// 2. Formulate the scan range
-	// Your DB 'Seek' will likely look for: bucket + "/" + startAt
-
-	// 3. Execute the scan...
-	// 4. Return the unified result
-	return InternalResult{}, nil
-}
-
+// InternalResult contains the unified listing result used by both V1 and V2
 type InternalResult struct {
 	Objects        []s3types.Object
 	CommonPrefixes []s3types.CommonPrefix
@@ -324,4 +433,28 @@ func isNotExist(err error) bool {
 
 func hasPrefix(s, prefix string) bool {
 	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+}
+
+// indexOf returns the index of the first occurrence of substr in s, or -1 if not found
+func indexOf(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}
+
+// sortObjectEntries sorts object entries by key in lexicographic order
+func sortObjectEntries(entries []objectEntry) {
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].key < entries[j].key
+	})
+}
+
+// sortCommonPrefixes sorts common prefixes in lexicographic order
+func sortCommonPrefixes(prefixes []s3types.CommonPrefix) {
+	sort.Slice(prefixes, func(i, j int) bool {
+		return prefixes[i].Prefix < prefixes[j].Prefix
+	})
 }
