@@ -29,20 +29,27 @@ TEST_SUITE="${1:-all}"
 # Server process ID
 SERVER_PID=""
 
+# Track whether we created the data dir (for cleanup)
+CREATED_DATA_DIR=false
+
 # Cleanup function
 cleanup() {
     echo ""
     echo "Cleaning up..."
 
+    # Stop the server (will use stop_server function defined later)
     if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
         echo "Stopping DirIO server (PID: $SERVER_PID)..."
         kill "$SERVER_PID" 2>/dev/null || true
         wait "$SERVER_PID" 2>/dev/null || true
     fi
 
-    if [ -n "$DIRIO_DATA_DIR" ] && [ -d "$DIRIO_DATA_DIR" ]; then
+    # Only remove the data directory if we created it
+    if [ "$CREATED_DATA_DIR" = true ] && [ -n "$DIRIO_DATA_DIR" ] && [ -d "$DIRIO_DATA_DIR" ]; then
         echo "Removing test data directory: $DIRIO_DATA_DIR"
         rm -rf "$DIRIO_DATA_DIR"
+    elif [ -n "$DIRIO_DATA_DIR" ]; then
+        echo "Preserving user-provided data directory: $DIRIO_DATA_DIR"
     fi
 
     echo "Cleanup complete."
@@ -69,35 +76,69 @@ fi
 echo "Build successful: ${PROJECT_ROOT}/bin/dirio"
 
 # ============================================================================
-# Create test data directory
+# Create base test data directory
 # ============================================================================
 
-export DIRIO_DATA_DIR=$(mktemp -d -t dirio-client-test-XXXXXX)
-echo "Test data directory: ${DIRIO_DATA_DIR}"
-
-# ============================================================================
-# Start the server
-# ============================================================================
-
-echo ""
-echo "Starting DirIO server on port ${DIRIO_PORT}..."
-
-"${PROJECT_ROOT}/bin/dirio" serve \
-    --port "${DIRIO_PORT}" \
-    --data-dir "${DIRIO_DATA_DIR}" \
-    --access-key "${DIRIO_ACCESS_KEY}" \
-    --secret-key "${DIRIO_SECRET_KEY}" \
-    --log-level info \
-    &
-
-SERVER_PID=$!
-echo "Server started with PID: $SERVER_PID"
-
-# Wait for server to be ready
-if ! wait_for_server; then
-    echo "Server failed to start"
-    exit 1
+if [ -z "$DIRIO_DATA_DIR" ]; then
+    export DIRIO_DATA_DIR=$(mktemp -d -t dirio-client-test-XXXXXX)
+    CREATED_DATA_DIR=true
+    echo "Created temporary test data directory: ${DIRIO_DATA_DIR}"
+else
+    CREATED_DATA_DIR=false
+    echo "Using provided test data directory: ${DIRIO_DATA_DIR}"
+    # Create it if it doesn't exist
+    mkdir -p "$DIRIO_DATA_DIR"
 fi
+
+# Track current server data directory
+CURRENT_SERVER_DATA_DIR=""
+
+# ============================================================================
+# Server management functions
+# ============================================================================
+
+stop_server() {
+    if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
+        echo "Stopping DirIO server (PID: $SERVER_PID)..."
+        kill "$SERVER_PID" 2>/dev/null || true
+        wait "$SERVER_PID" 2>/dev/null || true
+        SERVER_PID=""
+    fi
+}
+
+start_server() {
+    local data_dir="$1"
+
+    # Stop any existing server
+    stop_server
+
+    echo ""
+    echo "Starting DirIO server on port ${DIRIO_PORT}..."
+    echo "Data directory: ${data_dir}"
+
+    # Create the data directory if it doesn't exist
+    mkdir -p "$data_dir"
+    CURRENT_SERVER_DATA_DIR="$data_dir"
+
+    "${PROJECT_ROOT}/bin/dirio" serve \
+        --port "${DIRIO_PORT}" \
+        --data-dir "${data_dir}" \
+        --access-key "${DIRIO_ACCESS_KEY}" \
+        --secret-key "${DIRIO_SECRET_KEY}" \
+        --log-level info \
+        &
+
+    SERVER_PID=$!
+    echo "Server started with PID: $SERVER_PID"
+
+    # Wait for server to be ready
+    if ! wait_for_server; then
+        echo "Server failed to start"
+        return 1
+    fi
+
+    return 0
+}
 
 # ============================================================================
 # Run tests
@@ -109,6 +150,13 @@ mkdir -p "${RESULTS_DIR}"
 run_awscli_tests() {
     print_header "Running AWS CLI Tests"
     if check_command aws; then
+        # Start server with awscli-specific data directory
+        local test_data_dir="${DIRIO_DATA_DIR}/awscli"
+        if ! start_server "$test_data_dir"; then
+            echo "Failed to start server for AWS CLI tests"
+            return 1
+        fi
+
         # Set up environment for AWS CLI
         export AWS_ACCESS_KEY_ID="${DIRIO_ACCESS_KEY}"
         export AWS_SECRET_ACCESS_KEY="${DIRIO_SECRET_KEY}"
@@ -126,6 +174,13 @@ run_awscli_tests() {
 run_boto3_tests() {
     print_header "Running boto3 Tests"
     if check_command python3 && python3 -c "import boto3, requests" 2>/dev/null; then
+        # Start server with boto3-specific data directory
+        local test_data_dir="${DIRIO_DATA_DIR}/boto3"
+        if ! start_server "$test_data_dir"; then
+            echo "Failed to start server for boto3 tests"
+            return 1
+        fi
+
         # boto3 script includes pip install, so just run it directly
         bash -c "
             export DIRIO_ENDPOINT='${DIRIO_ENDPOINT}'
@@ -145,6 +200,13 @@ run_boto3_tests() {
 run_mc_tests() {
     print_header "Running MinIO Client Tests"
     if check_command mc; then
+        # Start server with mc-specific data directory
+        local test_data_dir="${DIRIO_DATA_DIR}/mc"
+        if ! start_server "$test_data_dir"; then
+            echo "Failed to start server for MinIO client tests"
+            return 1
+        fi
+
         bash "${SCRIPT_DIR}/scripts/mc.sh" 2>&1 | tee "${RESULTS_DIR}/mc.log"
         return ${PIPESTATUS[0]}
     else
@@ -168,17 +230,7 @@ case "$TEST_SUITE" in
         ;;
     all)
         run_awscli_tests || EXIT_CODE=$?
-
-        # Reset server state between test suites
-        echo "Resetting test data..."
-        rm -rf "${DIRIO_DATA_DIR:?}"/*
-
         run_boto3_tests || EXIT_CODE=$?
-
-        # Reset server state
-        echo "Resetting test data..."
-        rm -rf "${DIRIO_DATA_DIR:?}"/*
-
         run_mc_tests || EXIT_CODE=$?
         ;;
     *)

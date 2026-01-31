@@ -37,6 +37,11 @@ const (
 	testRegion    = "us-east-1"
 )
 
+// preserveTestData returns true if test data should be preserved (not cleaned up)
+func preserveTestData() bool {
+	return os.Getenv("DIRIO_PRESERVE_TEST_DATA") != ""
+}
+
 // Global cleanup tracking
 var (
 	activeContainers   = make([]testcontainers.Container, 0)
@@ -64,6 +69,9 @@ type TestServer struct {
 func TestMain(m *testing.M) {
 	if tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0); err == nil {
 		fmt.Fprintln(tty, "Running slow client tests...")
+		if preserveTestData() {
+			fmt.Fprintln(tty, "⚠️  DIRIO_PRESERVE_TEST_DATA is set - test data will be preserved")
+		}
 		tty.Close()
 	}
 
@@ -110,13 +118,18 @@ func performCleanup() {
 	activeContainers = nil
 
 	// Cleanup servers
+	preserve := preserveTestData()
 	for _, server := range activeServers {
 		if server != nil && server.cmd != nil && server.cmd.Process != nil {
 			server.cmd.Process.Kill()
 			server.cmd.Wait()
 		}
 		if server != nil && server.dataDir != "" {
-			os.RemoveAll(server.dataDir)
+			if preserve {
+				fmt.Fprintf(os.Stderr, "PRESERVED TEST DATA: %s\n", server.dataDir)
+			} else {
+				os.RemoveAll(server.dataDir)
+			}
 		}
 	}
 	activeServers = nil
@@ -138,6 +151,11 @@ func startTestServer(t *testing.T) *TestServer {
 	// Create temp data directory
 	dataDir, err := os.MkdirTemp("", "dirio-client-test-*")
 	require.NoError(t, err)
+
+	t.Logf("Test server data directory: %s", dataDir)
+	if preserveTestData() {
+		t.Logf("⚠️  DIRIO_PRESERVE_TEST_DATA is set - data will NOT be cleaned up")
+	}
 
 	// Find available port
 	port := findAvailablePort(t)
@@ -179,7 +197,11 @@ func (ts *TestServer) Stop(t *testing.T) {
 	}
 
 	if ts.dataDir != "" {
-		os.RemoveAll(ts.dataDir)
+		if preserveTestData() {
+			t.Logf("PRESERVED TEST DATA: %s", ts.dataDir)
+		} else {
+			os.RemoveAll(ts.dataDir)
+		}
 	}
 }
 

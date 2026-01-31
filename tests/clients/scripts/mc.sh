@@ -212,8 +212,21 @@ else
   fail "Pre-signed URL upload (mc share upload)" "Failed to generate upload URL"
 fi
 
+# Object Tagging - comprehensive test
+# First, upload a fresh object with known content for tagging test
+echo "tagging test content" > /tmp/tagging-test.txt
+mc cp /tmp/tagging-test.txt ${MC_ALIAS}/${BUCKET}/tagging-test.txt 2>&1 >/dev/null
+
+# Verify initial content before tagging
+CONTENT_BEFORE=$(mc cat ${MC_ALIAS}/${BUCKET}/tagging-test.txt 2>&1)
+if [ "$CONTENT_BEFORE" = "tagging test content" ]; then
+  pass "Object Tagging - verify content before tagging"
+else
+  fail "Object Tagging - verify content before tagging" "Expected 'tagging test content', got: $CONTENT_BEFORE"
+fi
+
 # Object Tagging (set)
-mc tag set ${MC_ALIAS}/${BUCKET}/test.txt "key1=value1&key2=value2" 2>&1
+mc tag set ${MC_ALIAS}/${BUCKET}/tagging-test.txt "key1=value1&key2=value2" 2>&1
 if [ $? -eq 0 ]; then
   pass "Object Tagging set (mc tag set)"
 else
@@ -221,28 +234,53 @@ else
 fi
 
 # Object Tagging (get)
-mc tag list ${MC_ALIAS}/${BUCKET}/test.txt 2>&1 | grep -q "key1"
+mc tag list ${MC_ALIAS}/${BUCKET}/tagging-test.txt 2>&1 | grep -q "key1"
 if [ $? -eq 0 ]; then
   pass "Object Tagging get (mc tag list)"
 else
   fail "Object Tagging get (mc tag list)" "Tags not returned or incorrect"
 fi
 
-# Multipart Upload (large file >5MB)
+# CRITICAL: Verify object content is still intact after tagging
+CONTENT_AFTER=$(mc cat ${MC_ALIAS}/${BUCKET}/tagging-test.txt 2>&1)
+if [ "$CONTENT_AFTER" = "tagging test content" ]; then
+  pass "Object Tagging - content preserved after tagging"
+else
+  fail "Object Tagging - content preserved after tagging" "Expected 'tagging test content', got: $CONTENT_AFTER"
+fi
+
+# Multipart Upload (large file >5MB) - comprehensive test
 dd if=/dev/zero of=/tmp/large-file.dat bs=1M count=10 2>/dev/null
+
+# Upload the large file
 mc cp /tmp/large-file.dat ${MC_ALIAS}/${BUCKET}/large-file.dat 2>&1
 if [ $? -eq 0 ]; then
-  # Verify file size
-  SIZE=$(mc stat ${MC_ALIAS}/${BUCKET}/large-file.dat 2>&1 | grep "Size" | awk '{print $3}')
-  if [ "$SIZE" = "10" ]; then
-    pass "Multipart Upload (mc cp large file)"
-  else
-    fail "Multipart Upload (mc cp large file)" "File size mismatch: expected 10 MiB, got $SIZE"
-  fi
+  pass "Multipart Upload - upload completed (mc cp large file)"
 else
-  fail "Multipart Upload (mc cp large file)" "Upload failed"
+  fail "Multipart Upload - upload completed (mc cp large file)" "Upload failed"
 fi
-rm -f /tmp/large-file.dat
+
+# Verify file size in metadata
+SIZE=$(mc stat ${MC_ALIAS}/${BUCKET}/large-file.dat 2>&1 | grep "Size" | awk '{print $3}')
+if [ "$SIZE" = "10" ]; then
+  pass "Multipart Upload - size metadata correct"
+else
+  fail "Multipart Upload - size metadata correct" "Expected 10 MiB, got $SIZE"
+fi
+
+# CRITICAL: Download and verify actual content matches original
+mc cp ${MC_ALIAS}/${BUCKET}/large-file.dat /tmp/large-file-downloaded.dat 2>&1 >/dev/null
+if cmp -s /tmp/large-file.dat /tmp/large-file-downloaded.dat; then
+  pass "Multipart Upload - content integrity verified"
+else
+  # Get actual sizes for debugging
+  ORIG_SIZE=$(stat -c%s /tmp/large-file.dat 2>/dev/null || stat -f%z /tmp/large-file.dat 2>/dev/null)
+  DOWN_SIZE=$(stat -c%s /tmp/large-file-downloaded.dat 2>/dev/null || stat -f%z /tmp/large-file-downloaded.dat 2>/dev/null)
+  fail "Multipart Upload - content integrity verified" "Downloaded file differs from original (orig: $ORIG_SIZE bytes, downloaded: $DOWN_SIZE bytes)"
+fi
+
+# Cleanup
+rm -f /tmp/large-file.dat /tmp/large-file-downloaded.dat
 
 # Range Requests (partial download)
 # mc doesn't have direct range request support, but we can test via curl with mc share
