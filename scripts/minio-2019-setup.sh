@@ -51,10 +51,13 @@ validate_secret "${BOB_USER}" "${BOB_PASS}"
 # -----------------------
 # Cleanup
 # -----------------------
+set -x
 echo "🧹 Cleaning up old containers and data..."
 docker rm -f "${MINIO_CONTAINER}" >/dev/null 2>&1 || true
-rm -rf "${DATA_DIR}"
+[ -d "${DATA_DIR}" ] && rm -rf "${DATA_DIR}" || true
 mkdir -p "${DATA_DIR}"
+
+set +x
 
 # Note: In 2019, MinIO defaulted to FS mode for single-disk setups
 # No need to pre-create format.json - let MinIO create it naturally
@@ -104,20 +107,7 @@ for bucket in alpha beta gamma; do
 done
 
 # -----------------------
-# Create users (2019 syntax)
-# -----------------------
-echo "👥 Creating users..."
-# In 2019, command might be different - try both formats
-docker run --rm --network host -e MC_HOST_minio2019 \
-  "${MC_IMAGE}" admin user add minio2019 "${ALICE_USER}" "${ALICE_PASS}" || \
-  echo "⚠️  User creation might use different syntax in 2019"
-
-docker run --rm --network host -e MC_HOST_minio2019 \
-  "${MC_IMAGE}" admin user add minio2019 "${BOB_USER}" "${BOB_PASS}" || \
-  echo "⚠️  User creation might use different syntax in 2019"
-
-# -----------------------
-# Create policies
+# Create policies first (before users)
 # -----------------------
 echo "📋 Creating IAM policies..."
 cat > /tmp/alpha-rw.json <<'EOF'
@@ -154,37 +144,33 @@ EOF
 
 docker run --rm --network host -e MC_HOST_minio2019 \
   -v /tmp/alpha-rw.json:/policy.json \
-  "${MC_IMAGE}" admin policy add minio2019 alpha-rw /policy.json || \
-  echo "⚠️  Policy creation syntax might differ in 2019"
+  "${MC_IMAGE}" admin policy add minio2019 alpha-rw /policy.json
 
 docker run --rm --network host -e MC_HOST_minio2019 \
   -v /tmp/beta-rw.json:/policy.json \
-  "${MC_IMAGE}" admin policy add minio2019 beta-rw /policy.json || \
-  echo "⚠️  Policy creation syntax might differ in 2019"
+  "${MC_IMAGE}" admin policy add minio2019 beta-rw /policy.json
 
 # -----------------------
-# Attach policies (2019 syntax might differ)
+# Create users with policies (2019 syntax: requires POLICYNAME as 4th arg)
 # -----------------------
-echo "🔗 Attaching policies to users..."
+echo "👥 Creating users with policies..."
+# 2019 syntax: mc admin user add TARGET ACCESSKEY SECRETKEY POLICYNAME
 docker run --rm --network host -e MC_HOST_minio2019 \
-  "${MC_IMAGE}" admin policy set minio2019 alpha-rw user="${ALICE_USER}" || \
-  echo "⚠️  Policy attachment syntax might differ in 2019"
+  "${MC_IMAGE}" admin user add minio2019 "${ALICE_USER}" "${ALICE_PASS}" alpha-rw
 
 docker run --rm --network host -e MC_HOST_minio2019 \
-  "${MC_IMAGE}" admin policy set minio2019 beta-rw user="${BOB_USER}" || \
-  echo "⚠️  Policy attachment syntax might differ in 2019"
+  "${MC_IMAGE}" admin user add minio2019 "${BOB_USER}" "${BOB_PASS}" beta-rw
 
 # -----------------------
-# Public-read buckets
+# Public-read buckets (2019 syntax: no "set" subcommand)
 # -----------------------
 echo "🌐 Setting public-read on gamma and beta..."
+# 2019 syntax: mc policy download TARGET (not "mc policy set download")
 docker run --rm --network host -e MC_HOST_minio2019 \
-  "${MC_IMAGE}" policy set download "minio2019/gamma" || \
-  echo "⚠️  Public bucket policy syntax might differ in 2019"
+  "${MC_IMAGE}" policy download "minio2019/gamma"
 
 docker run --rm --network host -e MC_HOST_minio2019 \
-  "${MC_IMAGE}" policy set download "minio2019/beta" || \
-  echo "⚠️  Public bucket policy syntax might differ in 2019"
+  "${MC_IMAGE}" policy download "minio2019/beta"
 
 # -----------------------
 # Upload basic objects
@@ -211,6 +197,20 @@ upload_object beta bob-object.bin
 upload_object gamma public-object.bin
 
 # -----------------------
+# Folder Structure Objects (for delimiter/prefix testing)
+# -----------------------
+echo "📁 Creating folder structure for ListObjects delimiter testing..."
+upload_object alpha folder1/file1.txt
+upload_object alpha folder1/file2.txt
+upload_object alpha folder1/subfolder/deep.txt
+upload_object alpha folder2/file1.txt
+upload_object alpha root-file.txt
+
+upload_object beta prefix/test.txt
+upload_object beta prefix/data/nested.txt
+upload_object beta other/file.txt
+
+# -----------------------
 # Advanced Features Testing
 # -----------------------
 echo "🔬 Testing advanced FS mode features..."
@@ -221,42 +221,148 @@ docker run --rm --network host -e MC_HOST_minio2019 \
   "${MC_IMAGE}" version enable "minio2019/alpha" || \
   echo "  ⚠️  Versioning not available in 2019 FS mode"
 
-# Upload object with custom metadata
+# Upload object with custom metadata (2019 syntax: comma separator, simple values)
 echo "  Testing custom metadata..."
 tmpfile="$(mktemp)"
 head -c "${OBJECT_SIZE}" /dev/urandom > "${tmpfile}"
 
+# Note: 2019 MC has trouble with values containing '=' or complex syntax
+# Use simple key=value pairs only
 docker run --rm --network host \
   -e MC_HOST_minio2019 \
   -v "${tmpfile}:/file.bin:ro" \
   "${MC_IMAGE}" \
-  cp --attr "Cache-Control=max-age=3600;Content-Disposition=attachment;x-amz-meta-author=TestUser;x-amz-meta-project=DirIO" \
-  /file.bin "minio2019/alpha/metadata-test.bin" || \
-  echo "  ⚠️  Custom metadata syntax might differ in 2019"
+  cp --attr "x-amz-meta-author=TestUser,x-amz-meta-project=DirIO,x-amz-meta-version=1" \
+  /file.bin "minio2019/alpha/metadata-test.bin"
 
 rm -f "${tmpfile}"
 
-# Test lifecycle policy (if supported)
-echo "  Testing lifecycle policies..."
-cat > /tmp/lifecycle.json <<'EOF'
-{
-  "Rules": [
-    {
-      "ID": "expire-old",
-      "Status": "Enabled",
-      "Expiration": {
-        "Days": 30
-      }
-    }
-  ]
-}
-EOF
+# Note: Lifecycle policies (mc ilm) not available in 2019 FS mode
+
+# -----------------------
+# CopyObject (server-side copy) Testing
+# -----------------------
+echo "📋 Testing CopyObject (server-side copy)..."
+docker run --rm --network host -e MC_HOST_minio2019 \
+  "${MC_IMAGE}" \
+  cp "minio2019/alpha/alice-object.bin" "minio2019/alpha/alice-copy.bin" || \
+  echo "  ⚠️  Server-side copy might not work in 2019 FS mode"
 
 docker run --rm --network host -e MC_HOST_minio2019 \
-  -v /tmp/lifecycle.json:/lifecycle.json \
   "${MC_IMAGE}" \
-  ilm import "minio2019/beta" < /tmp/lifecycle.json || \
-  echo "  ⚠️  Lifecycle policies not available in 2019 FS mode"
+  cp "minio2019/alpha/folder1/file1.txt" "minio2019/beta/copied-from-alpha.txt" || \
+  echo "  ⚠️  Cross-bucket copy might not work in 2019 FS mode"
+
+# -----------------------
+# Object Tagging Testing
+# -----------------------
+echo "🏷️  Testing Object Tagging..."
+# First create a dedicated object for tagging
+tmpfile="$(mktemp)"
+echo "tagging test content" > "${tmpfile}"
+docker run --rm --network host \
+  -e MC_HOST_minio2019 \
+  -v "${tmpfile}:/tagging-test.txt:ro" \
+  "${MC_IMAGE}" \
+  cp /tagging-test.txt "minio2019/alpha/tagging-test.txt"
+rm -f "${tmpfile}"
+
+# Note: Object tagging (mc tag) was not available in 2019
+# We'll use custom metadata instead to simulate tagging
+echo "  ⚠️  Object tagging (mc tag) not available in 2019 - using custom metadata instead"
+tmpfile="$(mktemp)"
+echo "simulated tagged content" > "${tmpfile}"
+docker run --rm --network host \
+  -e MC_HOST_minio2019 \
+  -v "${tmpfile}:/tagged.txt:ro" \
+  "${MC_IMAGE}" \
+  cp --attr "x-amz-meta-environment=test,x-amz-meta-project=dirio,x-amz-meta-version=1.0" \
+  /tagged.txt "minio2019/alpha/simulated-tagged.txt"
+rm -f "${tmpfile}"
+
+# -----------------------
+# Multipart Upload (large file) Testing
+# -----------------------
+echo "📦 Testing Multipart Upload (large file >5MB)..."
+# Create a 10MB file for multipart upload testing
+largefile="$(mktemp)"
+dd if=/dev/zero of="${largefile}" bs=1M count=10 2>/dev/null
+
+docker run --rm --network host \
+  -e MC_HOST_minio2019 \
+  -v "${largefile}:/large-file.dat:ro" \
+  "${MC_IMAGE}" \
+  cp /large-file.dat "minio2019/alpha/large-file.dat" || \
+  echo "  ⚠️  Multipart upload might not work in 2019 FS mode"
+
+docker run --rm --network host \
+  -e MC_HOST_minio2019 \
+  -v "${largefile}:/large-file.dat:ro" \
+  "${MC_IMAGE}" \
+  cp /large-file.dat "minio2019/gamma/large-public.dat" || \
+  echo "  ⚠️  Multipart upload might not work in 2019 FS mode"
+
+rm -f "${largefile}"
+
+# -----------------------
+# Additional Metadata Variations (2019 syntax: comma separator, simple values)
+# -----------------------
+echo "🔖 Creating objects with various metadata combinations..."
+
+# Object with Content-Type only
+tmpfile="$(mktemp)"
+echo '{"test": "json data"}' > "${tmpfile}"
+docker run --rm --network host \
+  -e MC_HOST_minio2019 \
+  -v "${tmpfile}:/data.json:ro" \
+  "${MC_IMAGE}" \
+  cp --attr "Content-Type=application/json" \
+  /data.json "minio2019/alpha/data.json"
+rm -f "${tmpfile}"
+
+# Object with Content-Type and custom metadata
+tmpfile="$(mktemp)"
+echo "<html><body>Test</body></html>" > "${tmpfile}"
+docker run --rm --network host \
+  -e MC_HOST_minio2019 \
+  -v "${tmpfile}:/index.html:ro" \
+  "${MC_IMAGE}" \
+  cp --attr "Content-Type=text/html,x-amz-meta-page=index" \
+  /index.html "minio2019/gamma/index.html"
+rm -f "${tmpfile}"
+
+# Object with Content-Encoding
+tmpfile="$(mktemp)"
+echo "compressed data" | gzip > "${tmpfile}"
+docker run --rm --network host \
+  -e MC_HOST_minio2019 \
+  -v "${tmpfile}:/data.gz:ro" \
+  "${MC_IMAGE}" \
+  cp --attr "Content-Type=application/gzip,Content-Encoding=gzip" \
+  /data.gz "minio2019/beta/data.gz"
+rm -f "${tmpfile}"
+
+# Object with multiple custom metadata fields (x-amz-meta-*)
+tmpfile="$(mktemp)"
+echo "user data" > "${tmpfile}"
+docker run --rm --network host \
+  -e MC_HOST_minio2019 \
+  -v "${tmpfile}:/userdata.txt:ro" \
+  "${MC_IMAGE}" \
+  cp --attr "x-amz-meta-user-id=12345,x-amz-meta-department=engineering,x-amz-meta-uploaded-by=alice" \
+  /userdata.txt "minio2019/alpha/userdata.txt"
+rm -f "${tmpfile}"
+
+# Object with Content-Language
+tmpfile="$(mktemp)"
+echo "Bonjour le monde" > "${tmpfile}"
+docker run --rm --network host \
+  -e MC_HOST_minio2019 \
+  -v "${tmpfile}:/french.txt:ro" \
+  "${MC_IMAGE}" \
+  cp --attr "Content-Type=text/plain,Content-Language=fr" \
+  /french.txt "minio2019/alpha/french.txt"
+rm -f "${tmpfile}"
 
 # -----------------------
 # Examine what was created
@@ -288,13 +394,31 @@ echo "  alice / alicepass1234 → (attempted) RW on bucket alpha"
 echo "  bob   / bobpass1234   → (attempted) RW on bucket beta"
 echo
 echo "Buckets:"
-echo "  alpha → (attempted) versioning enabled"
-echo "  beta  → (attempted) lifecycle policy"
-echo "  gamma → (attempted) public-read"
+echo "  alpha → folder structure, metadata objects, simulated tagged objects"
+echo "  beta  → public-read, copied objects"
+echo "  gamma → public-read, large files"
+echo
+echo "Created objects include:"
+echo "  - Basic objects (alice-object.bin, bob-object.bin, public-object.bin)"
+echo "  - Folder structures (folder1/file1.txt, folder2/file1.txt, etc.)"
+echo "  - Objects with standard metadata (Content-Type, Content-Encoding, Content-Language)"
+echo "  - Objects with custom metadata (x-amz-meta-author, x-amz-meta-project, etc.)"
+echo "  - Simulated tagged objects (using x-amz-meta-* instead of real tags)"
+echo "  - Server-side copies (alice-copy.bin, copied-from-alpha.txt)"
+echo "  - Large multipart uploads (large-file.dat - 10MB)"
+echo
+echo "2019 MinIO MC limitations found:"
+echo "  - No 'mc tag' command (used x-amz-meta-* custom metadata instead)"
+echo "  - No 'mc version enable' command"
+echo "  - No 'mc ilm' (lifecycle) command"
+echo "  - Metadata separator: comma (,) not semicolon (;)"
+echo "  - Metadata values with '=' fail (e.g., Cache-Control=max-age=3600)"
+echo "  - Content-Disposition with filename parameters fails"
 echo
 echo "Next steps:"
 echo "  1. Examine ${DATA_DIR}/.minio.sys/ to see what metadata was created"
 echo "  2. Compare with modern MinIO data to identify differences"
 echo "  3. Import this data into DirIO to test compatibility"
+echo "  4. Run DirIO S3 API tests against imported data to verify correctness"
 echo
 echo "To stop: docker rm -f ${MINIO_CONTAINER}"
