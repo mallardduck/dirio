@@ -40,11 +40,11 @@ type User struct {
 
 // BucketMetadata represents bucket configuration
 type BucketMetadata struct {
-	Version string    `json:"version"` // DirIO metadata version
-	Name    string    `json:"name"`
-	Owner   string    `json:"owner"`
-	Created time.Time `json:"created"`
-	Policy  string    `json:"policy,omitempty"` // S3 bucket policy JSON
+	Version      string          `json:"version"` // DirIO metadata version
+	Name         string          `json:"name"`
+	Owner        string          `json:"owner"`
+	Created      time.Time       `json:"created"`
+	BucketPolicy *PolicyDocument `json:"bucketPolicy,omitempty"` // S3 bucket policy (resource-based)
 
 	// Extended MinIO metadata (imported but may not be actively used yet)
 	NotificationConfigXML       string    `json:"notificationConfig,omitempty"`
@@ -66,13 +66,31 @@ type BucketMetadata struct {
 	VersioningConfigUpdatedAt   time.Time `json:"versioningConfigUpdatedAt,omitempty"`
 }
 
-// Policy represents an IAM policy
+// PolicyDocument represents an AWS IAM Policy Document (used by both IAM policies and bucket policies)
+// See: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html
+type PolicyDocument struct {
+	Version   string            `json:"Version"`      // Policy language version (usually "2012-10-17")
+	Id        string            `json:"Id,omitempty"` // Optional policy ID
+	Statement []PolicyStatement `json:"Statement"`    // List of policy statements
+}
+
+// PolicyStatement represents a single statement in a policy document
+type PolicyStatement struct {
+	Sid       string                 `json:"Sid,omitempty"`       // Optional statement ID
+	Effect    string                 `json:"Effect"`              // "Allow" or "Deny"
+	Principal interface{}            `json:"Principal,omitempty"` // Who (can be string, map, or array)
+	Action    interface{}            `json:"Action"`              // What actions (string or []string)
+	Resource  interface{}            `json:"Resource,omitempty"`  // What resources (string or []string)
+	Condition map[string]interface{} `json:"Condition,omitempty"` // Optional conditions
+}
+
+// Policy represents an IAM policy (attached to users/roles)
 type Policy struct {
-	Version    string    `json:"version"` // DirIO metadata version
-	Name       string    `json:"name"`
-	PolicyJSON string    `json:"policyJson"` // IAM policy document (S3 format)
-	CreateDate time.Time `json:"createDate"`
-	UpdateDate time.Time `json:"updateDate"`
+	Version        string          `json:"version"`        // DirIO metadata version
+	Name           string          `json:"name"`           // Policy name
+	PolicyDocument *PolicyDocument `json:"policyDocument"` // The actual IAM policy
+	CreateDate     time.Time       `json:"createDate"`
+	UpdateDate     time.Time       `json:"updateDate"`
 }
 
 // ObjectMetadata represents object metadata

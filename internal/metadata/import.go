@@ -64,12 +64,19 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 	// Convert and save policies
 	if len(result.Policies) > 0 {
 		for _, minioPolicy := range result.Policies {
+			// Parse the policy JSON string into a PolicyDocument
+			var policyDoc PolicyDocument
+			if err := json.Unmarshal([]byte(minioPolicy.PolicyJSON), &policyDoc); err != nil {
+				fmt.Printf("Warning: failed to parse policy document for %s: %v\n", minioPolicy.Name, err)
+				continue
+			}
+
 			policy := &Policy{
-				Version:    PolicyMetadataVersion,
-				Name:       minioPolicy.Name,
-				PolicyJSON: minioPolicy.PolicyJSON,
-				CreateDate: minioPolicy.CreateDate,
-				UpdateDate: minioPolicy.UpdateDate,
+				Version:        PolicyMetadataVersion,
+				Name:           minioPolicy.Name,
+				PolicyDocument: &policyDoc,
+				CreateDate:     minioPolicy.CreateDate,
+				UpdateDate:     minioPolicy.UpdateDate,
 			}
 			if err := m.SavePolicy(ctx, policy); err != nil {
 				fmt.Printf("Warning: failed to save policy %s: %v\n", minioPolicy.Name, err)
@@ -101,12 +108,23 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 	// Convert and save buckets
 	if len(result.Buckets) > 0 {
 		for bucketName, minioBucket := range result.Buckets {
+			// Parse bucket policy if present
+			var bucketPolicy *PolicyDocument
+			if len(minioBucket.PolicyConfigJSON) > 0 {
+				var policyDoc PolicyDocument
+				if err := json.Unmarshal(minioBucket.PolicyConfigJSON, &policyDoc); err != nil {
+					fmt.Printf("Warning: failed to parse bucket policy for %s: %v\n", bucketName, err)
+				} else {
+					bucketPolicy = &policyDoc
+				}
+			}
+
 			meta := &BucketMetadata{
-				Version: BucketMetadataVersion,
-				Name:    minioBucket.Name,
-				Owner:   "root", // MinIO doesn't store owner in bucket metadata
-				Created: minioBucket.Created,
-				Policy:  string(minioBucket.PolicyConfigJSON),
+				Version:      BucketMetadataVersion,
+				Name:         minioBucket.Name,
+				Owner:        "root", // MinIO doesn't store owner in bucket metadata
+				Created:      minioBucket.Created,
+				BucketPolicy: bucketPolicy,
 
 				// Import all extended MinIO metadata fields
 				NotificationConfigXML:       string(minioBucket.NotificationConfigXML),

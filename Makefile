@@ -58,7 +58,11 @@ run-mdns:
 	go run ./cmd/server serve --mdns-enabled  --data-dir ./data --port 9000
 
 run-import:
-	go run ./cmd/server serve --log-level=debug --verbosity=verbose --mdns-enabled  --data-dir ./minio-data --port 9000
+	go run ./cmd/server serve --log-level=debug --verbosity=verbose --mdns-enabled  --data-dir ./minio-data-2019 --port 9000
+
+run-import-2022:
+	go run ./cmd/server serve --log-level=debug --verbosity=verbose --mdns-enabled  --data-dir ./minio-data-2022-import --port 9000
+
 
 run-mdns-debug:
 	go run ./cmd/server serve --log-level=debug --verbosity=verbose --mdns-enabled  --data-dir ./data --port 9000

@@ -61,7 +61,7 @@ func readLegacyBucketMetadata(bucketName string, readFileFunc func(string) ([]by
 	}
 
 	for _, file := range legacyConfigFiles {
-		filePath := path.Join(".minio.sys/buckets", bucketName, file)
+		filePath := path.Join("buckets", bucketName, file)
 		data, err := readFileFunc(filePath)
 		if err != nil {
 			// skip missing files
@@ -112,7 +112,7 @@ func readLegacyBucketMetadata(bucketName string, readFileFunc func(string) ([]by
 		case "bucket-targets.json":
 			b.BucketTargetsConfigJSON = data
 			// optionally parse metadata JSON if present
-			metaFile := path.Join(".minio.sys/buckets", bucketName, "bucket-targets-meta.json")
+			metaFile := path.Join("buckets", bucketName, "bucket-targets-meta.json")
 			metaBytes, _ := readFileFunc(metaFile)
 			b.BucketTargetsConfigMetaJSON = metaBytes
 		}
@@ -121,7 +121,7 @@ func readLegacyBucketMetadata(bucketName string, readFileFunc func(string) ([]by
 	return b, nil
 }
 
-// UserIdentity represents MinIO's user identity.json format
+// UserIdentity represents MinIO's user identity.json format (modern MinIO)
 type UserIdentity struct {
 	Version     int             `json:"version"`
 	Credentials UserCredentials `json:"credentials"`
@@ -134,6 +134,14 @@ type UserCredentials struct {
 	SecretKey  string    `json:"secretKey"`
 	Expiration time.Time `json:"expiration"`
 	Status     string    `json:"status"`
+}
+
+// LegacyUserIdentity represents MinIO 2019's user identity.json format
+// In 2019, the format was flat: {"secretKey": "...", "status": "enabled"}
+// The username/accessKey is the directory name, not in the file
+type LegacyUserIdentity struct {
+	SecretKey string `json:"secretKey"`
+	Status    string `json:"status"`
 }
 
 // UserPolicyMapping represents MinIO's policydb user policy mapping
