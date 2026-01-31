@@ -208,12 +208,16 @@ func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request, bucket, 
 		return
 	}
 
+	// Per S3 spec: KeyCount is the number of keys returned, including both objects and common prefixes
+	// "each common prefix counts as a single return when calculating the number of returns"
+	keyCount := len(objects.Objects) + len(objects.CommonPrefixes)
+
 	response := s3types.ListBucketV2Result{
 		Name:              bucket,
 		Prefix:            prefix,
 		Delimiter:         delimiter,
 		MaxKeys:           maxKeys,
-		KeyCount:          len(objects.Objects),
+		KeyCount:          keyCount,
 		IsTruncated:       objects.IsTruncated,
 		ContinuationToken: continuationToken,
 		Contents:          objects.Objects,

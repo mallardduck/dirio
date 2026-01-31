@@ -279,21 +279,12 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 	sortObjectEntries(allEntries)
 
 	// Process delimiter to create common prefixes
+	// Step 1: Group all entries into either objects or common prefixes
 	var objects []s3types.Object
 	commonPrefixMap := make(map[string]bool)
 
 	for _, entry := range allEntries {
-		// Skip entries before startAt marker
-		if startAt != "" && entry.key <= startAt {
-			continue
-		}
-
-		// Check if we've hit maxKeys limit
-		if maxKeys > 0 && len(objects)+len(commonPrefixMap) >= maxKeys {
-			break
-		}
-
-		// Handle delimiter logic
+		// Handle delimiter logic first
 		if delimiter != "" {
 			// Find delimiter position after the prefix
 			keyAfterPrefix := entry.key
@@ -310,7 +301,7 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 			}
 		}
 
-		// Add as regular object
+		// Add as regular object (no delimiter found or no delimiter specified)
 		obj := s3types.Object{
 			Key:          entry.key,
 			Size:         entry.info.Size(),
@@ -327,23 +318,98 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 		objects = append(objects, obj)
 	}
 
-	// Convert common prefix map to sorted slice
+	// Step 2: Filter objects by startAt marker
+	// Per S3 spec: skip objects not lexicographically greater than StartAfter
+	if startAt != "" {
+		filteredObjects := make([]s3types.Object, 0, len(objects))
+		for _, obj := range objects {
+			if obj.Key > startAt {
+				filteredObjects = append(filteredObjects, obj)
+			}
+		}
+		objects = filteredObjects
+	}
+
+	// Step 3: Convert common prefix map to sorted slice and filter by startAt
+	// Per S3 spec: CommonPrefixes is filtered out if not lexicographically greater than StartAfter
 	var commonPrefixes []s3types.CommonPrefix
-	for prefix := range commonPrefixMap {
+	for prefixKey := range commonPrefixMap {
+		if startAt != "" && prefixKey <= startAt {
+			continue
+		}
 		commonPrefixes = append(commonPrefixes, s3types.CommonPrefix{
-			Prefix: prefix,
+			Prefix: prefixKey,
 		})
 	}
 	sortCommonPrefixes(commonPrefixes)
+
+	// Step 4: Apply maxKeys limit across both objects and common prefixes
+	// Per S3 spec: "each common prefix counts as a single return when calculating the number of returns"
+	if maxKeys > 0 {
+		// Merge objects and prefixes into a single sorted list for limiting
+		type resultItem struct {
+			key      string
+			isPrefix bool
+			index    int // index in original slice
+		}
+
+		allItems := make([]resultItem, 0, len(objects)+len(commonPrefixes))
+		for i, obj := range objects {
+			allItems = append(allItems, resultItem{key: obj.Key, isPrefix: false, index: i})
+		}
+		for i, cp := range commonPrefixes {
+			allItems = append(allItems, resultItem{key: cp.Prefix, isPrefix: true, index: i})
+		}
+
+		// Sort by key to maintain lexicographic order
+		sort.Slice(allItems, func(i, j int) bool {
+			return allItems[i].key < allItems[j].key
+		})
+
+		// Limit to maxKeys items
+		if len(allItems) > maxKeys {
+			allItems = allItems[:maxKeys]
+
+			// Rebuild objects and commonPrefixes from limited set
+			newObjects := make([]s3types.Object, 0, maxKeys)
+			newCommonPrefixes := make([]s3types.CommonPrefix, 0, maxKeys)
+
+			for _, item := range allItems {
+				if item.isPrefix {
+					newCommonPrefixes = append(newCommonPrefixes, commonPrefixes[item.index])
+				} else {
+					newObjects = append(newObjects, objects[item.index])
+				}
+			}
+
+			objects = newObjects
+			commonPrefixes = newCommonPrefixes
+		}
+	}
 
 	// Determine if results are truncated
 	totalResults := len(objects) + len(commonPrefixes)
 	isTruncated := maxKeys > 0 && totalResults >= maxKeys
 
-	// Determine next marker
+	// Determine next marker (last key returned, could be object or prefix)
 	var nextMarker string
-	if isTruncated && len(objects) > 0 {
-		nextMarker = objects[len(objects)-1].Key
+	if isTruncated {
+		// Find the last item lexicographically (could be an object or common prefix)
+		lastObjectKey := ""
+		if len(objects) > 0 {
+			lastObjectKey = objects[len(objects)-1].Key
+		}
+		lastPrefixKey := ""
+		if len(commonPrefixes) > 0 {
+			lastPrefixKey = commonPrefixes[len(commonPrefixes)-1].Prefix
+		}
+
+		// Use the lexicographically greater of the two as the next marker
+		if lastObjectKey > lastPrefixKey {
+			nextMarker = lastObjectKey
+		} else {
+			nextMarker = lastPrefixKey
+		}
 	}
 
 	return InternalResult{
