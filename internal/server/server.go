@@ -169,65 +169,66 @@ func (s *Server) setupRoutes() {
 	})
 
 	// IAM API Routes (RESTful style - Phase 5)
-	// TODO: Implement IAM handlers in internal/api/iam package
-	s.router.MiddlewareGroup(func(r *router.Router) {
+	s.router.NameGroup("iam.", "/api/iam", func(r *router.Router) {
 		// Authentication required for IAM operations
 		r.Use(s.auth.AuthMiddleware)
+		// TODO maybe even an Admin level auth middleware? needed here
 
 		// User Management
-		r.Post("/api/iam/users", s.notImplemented, "iam.users.create")              // CreateUser
-		r.Get("/api/iam/users", s.notImplemented, "iam.users.list")                 // ListUsers
-		r.Get("/api/iam/users/{username}", s.notImplemented, "iam.users.get")       // GetUser
-		r.Put("/api/iam/users/{username}", s.notImplemented, "iam.users.update")    // UpdateUser
-		r.Delete("/api/iam/users/{username}", s.notImplemented, "iam.users.delete") // DeleteUser
+		r.Get("/users", s.notImplemented, "users.list")                 // ListUsers
+		r.Post("/users", s.notImplemented, "users.create")              // CreateUser(s3)/StoreUser
+		r.Get("/users/{username}", s.notImplemented, "users.get")       // GetUser
+		r.Put("/users/{username}", s.notImplemented, "users.update")    // UpdateUser
+		r.Delete("/users/{username}", s.notImplemented, "users.delete") // DeleteUser
+		// TODO: replace above with s.Resource based configs
 
 		// Group Management
-		r.Post("/api/iam/groups", s.notImplemented, "iam.groups.create")                                    // CreateGroup
-		r.Get("/api/iam/groups", s.notImplemented, "iam.groups.list")                                       // ListGroups
-		r.Get("/api/iam/groups/{groupname}", s.notImplemented, "iam.groups.get")                            // GetGroup
-		r.Delete("/api/iam/groups/{groupname}", s.notImplemented, "iam.groups.delete")                      // DeleteGroup
-		r.Post("/api/iam/groups/{groupname}/users/{username}", s.notImplemented, "iam.groups.adduser")      // AddUserToGroup
-		r.Delete("/api/iam/groups/{groupname}/users/{username}", s.notImplemented, "iam.groups.removeuser") // RemoveUserFromGroup
+		r.Post("/groups", s.notImplemented, "groups.create")                                    // CreateGroup
+		r.Get("/groups", s.notImplemented, "groups.list")                                       // ListGroups
+		r.Get("/groups/{groupname}", s.notImplemented, "groups.get")                            // GetGroup
+		r.Delete("/groups/{groupname}", s.notImplemented, "groups.delete")                      // DeleteGroup
+		r.Post("/groups/{groupname}/users/{username}", s.notImplemented, "groups.adduser")      // AddUserToGroup
+		r.Delete("/groups/{groupname}/users/{username}", s.notImplemented, "groups.removeuser") // RemoveUserFromGroup
 
 		// Role Management
-		r.Post("/api/iam/roles", s.notImplemented, "iam.roles.create")              // CreateRole
-		r.Get("/api/iam/roles", s.notImplemented, "iam.roles.list")                 // ListRoles
-		r.Get("/api/iam/roles/{rolename}", s.notImplemented, "iam.roles.get")       // GetRole
-		r.Delete("/api/iam/roles/{rolename}", s.notImplemented, "iam.roles.delete") // DeleteRole
+		r.Post("/roles", s.notImplemented, "roles.create")              // CreateRole
+		r.Get("/roles", s.notImplemented, "roles.list")                 // ListRoles
+		r.Get("/roles/{rolename}", s.notImplemented, "roles.get")       // GetRole
+		r.Delete("/roles/{rolename}", s.notImplemented, "roles.delete") // DeleteRole
 
 		// Policy Management
-		r.Post("/api/iam/policies", s.notImplemented, "iam.policies.create")               // CreatePolicy
-		r.Get("/api/iam/policies", s.notImplemented, "iam.policies.list")                  // ListPolicies
-		r.Get("/api/iam/policies/{policyarn}", s.notImplemented, "iam.policies.get")       // GetPolicy
-		r.Delete("/api/iam/policies/{policyarn}", s.notImplemented, "iam.policies.delete") // DeletePolicy
+		r.Post("/policies", s.notImplemented, "policies.create")               // CreatePolicy
+		r.Get("/policies", s.notImplemented, "policies.list")                  // ListPolicies
+		r.Get("/policies/{policyarn}", s.notImplemented, "policies.get")       // GetPolicy
+		r.Delete("/policies/{policyarn}", s.notImplemented, "policies.delete") // DeletePolicy
 
 		// Policy Attachments - Users
-		r.Post("/api/iam/users/{username}/policies/{policyarn}", s.notImplemented, "iam.users.attachpolicy")           // AttachUserPolicy
-		r.Delete("/api/iam/users/{username}/policies/{policyarn}", s.notImplemented, "iam.users.detachpolicy")         // DetachUserPolicy
-		r.Put("/api/iam/users/{username}/policies/inline/{policyname}", s.notImplemented, "iam.users.putpolicy")       // PutUserPolicy
-		r.Delete("/api/iam/users/{username}/policies/inline/{policyname}", s.notImplemented, "iam.users.deletepolicy") // DeleteUserPolicy
+		r.Post("/users/{username}/policies/{policyarn}", s.notImplemented, "users.attachpolicy")           // AttachUserPolicy
+		r.Delete("/users/{username}/policies/{policyarn}", s.notImplemented, "users.detachpolicy")         // DetachUserPolicy
+		r.Put("/users/{username}/policies/inline/{policyname}", s.notImplemented, "users.putpolicy")       // PutUserPolicy
+		r.Delete("/users/{username}/policies/inline/{policyname}", s.notImplemented, "users.deletepolicy") // DeleteUserPolicy
 
 		// Policy Attachments - Groups
-		r.Post("/api/iam/groups/{groupname}/policies/{policyarn}", s.notImplemented, "iam.groups.attachpolicy")           // AttachGroupPolicy
-		r.Delete("/api/iam/groups/{groupname}/policies/{policyarn}", s.notImplemented, "iam.groups.detachpolicy")         // DetachGroupPolicy
-		r.Put("/api/iam/groups/{groupname}/policies/inline/{policyname}", s.notImplemented, "iam.groups.putpolicy")       // PutGroupPolicy
-		r.Delete("/api/iam/groups/{groupname}/policies/inline/{policyname}", s.notImplemented, "iam.groups.deletepolicy") // DeleteGroupPolicy
+		r.Post("/groups/{groupname}/policies/{policyarn}", s.notImplemented, "groups.attachpolicy")           // AttachGroupPolicy
+		r.Delete("/groups/{groupname}/policies/{policyarn}", s.notImplemented, "groups.detachpolicy")         // DetachGroupPolicy
+		r.Put("/groups/{groupname}/policies/inline/{policyname}", s.notImplemented, "groups.putpolicy")       // PutGroupPolicy
+		r.Delete("/groups/{groupname}/policies/inline/{policyname}", s.notImplemented, "groups.deletepolicy") // DeleteGroupPolicy
 
 		// Policy Attachments - Roles
-		r.Post("/api/iam/roles/{rolename}/policies/{policyarn}", s.notImplemented, "iam.roles.attachpolicy")           // AttachRolePolicy
-		r.Delete("/api/iam/roles/{rolename}/policies/{policyarn}", s.notImplemented, "iam.roles.detachpolicy")         // DetachRolePolicy
-		r.Put("/api/iam/roles/{rolename}/policies/inline/{policyname}", s.notImplemented, "iam.roles.putpolicy")       // PutRolePolicy
-		r.Delete("/api/iam/roles/{rolename}/policies/inline/{policyname}", s.notImplemented, "iam.roles.deletepolicy") // DeleteRolePolicy
+		r.Post("/roles/{rolename}/policies/{policyarn}", s.notImplemented, "roles.attachpolicy")           // AttachRolePolicy
+		r.Delete("/roles/{rolename}/policies/{policyarn}", s.notImplemented, "roles.detachpolicy")         // DetachRolePolicy
+		r.Put("/roles/{rolename}/policies/inline/{policyname}", s.notImplemented, "roles.putpolicy")       // PutRolePolicy
+		r.Delete("/roles/{rolename}/policies/inline/{policyname}", s.notImplemented, "roles.deletepolicy") // DeleteRolePolicy
 
 		// Access Key Management
-		r.Post("/api/iam/users/{username}/access-keys", s.notImplemented, "iam.accesskeys.create")                 // CreateAccessKey
-		r.Get("/api/iam/users/{username}/access-keys", s.notImplemented, "iam.accesskeys.list")                    // ListAccessKeys
-		r.Put("/api/iam/users/{username}/access-keys/{accesskeyid}", s.notImplemented, "iam.accesskeys.update")    // UpdateAccessKey
-		r.Delete("/api/iam/users/{username}/access-keys/{accesskeyid}", s.notImplemented, "iam.accesskeys.delete") // DeleteAccessKey
+		r.Post("/users/{username}/access-keys", s.notImplemented, "accesskeys.create")                 // CreateAccessKey
+		r.Get("/users/{username}/access-keys", s.notImplemented, "accesskeys.list")                    // ListAccessKeys
+		r.Put("/users/{username}/access-keys/{accesskeyid}", s.notImplemented, "accesskeys.update")    // UpdateAccessKey
+		r.Delete("/users/{username}/access-keys/{accesskeyid}", s.notImplemented, "accesskeys.delete") // DeleteAccessKey
 
 		// Account & Authorization
-		r.Get("/api/iam/account/authorization-details", s.notImplemented, "iam.account.authdetails") // GetAccountAuthorizationDetails
-		r.Post("/api/iam/simulate-policy", s.notImplemented, "iam.simulate.policy")                  // SimulatePrincipalPolicy
+		r.Get("/account/authorization-details", s.notImplemented, "account.authdetails") // GetAccountAuthorizationDetails
+		r.Post("/simulate-policy", s.notImplemented, "simulate.policy")                  // SimulatePrincipalPolicy
 	})
 }
 

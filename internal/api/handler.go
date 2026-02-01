@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"github.com/mallardduck/dirio/internal/api/iam"
 	"github.com/mallardduck/dirio/internal/api/s3"
 	"github.com/mallardduck/dirio/internal/auth"
 	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
@@ -21,7 +22,8 @@ type routeHandler struct {
 
 // Handler handles S3 API requests
 type Handler struct {
-	S3Handler *s3.Handler
+	S3Handler  *s3.Handler
+	IAMHandler *iam.Handler
 }
 
 // URLBuilder defines the interface for generating URLs in S3 API responses
@@ -38,6 +40,11 @@ func New(storage *storage.Storage, metadata *metadata.Manager, auth *auth.Authen
 			metadata,
 			auth,
 			urlBuilder,
+		),
+		IAMHandler: iam.New(
+			storage,
+			metadata,
+			auth,
 		),
 	}
 }
