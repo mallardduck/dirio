@@ -14,6 +14,7 @@ bin/
 coverage.*
 /server
 tests/clients/results/*.log
+test-results.txt
 
 # Output of the go coverage tool
 *.out

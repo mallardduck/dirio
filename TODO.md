@@ -153,18 +153,6 @@ Current status: **Phase 2.5 - Client Testing & Bug Discovery**
 - [x] Migration for existing installations
 - [ ] Update documentation and examples
 
-### Configuration Management TODOs
-- [ ] **Add explicit config update command** - Allow updating data config values explicitly
-  - `dirio config set region us-west-2`
-  - `dirio config set compression.enabled true`
-  - Currently: must manually edit `.dirio/config.json` or re-import
-- [ ] **API rate limits** - Add to DataConfig for per-data-directory rate limiting
-- [ ] **Storage path configurations** - Consider if paths should be configurable per data directory
-- [ ] **Validation strategy** - Experiment with different approaches for invalid/missing configs (see inline TODO in `internal/dataconfig/dataconfig.go`)
-  - Option A: Fail fast (current)
-  - Option B: Merge with defaults
-  - Option C: Warn and use defaults
-
 ### Configuration Philosophy
 - **Data Config** (`.dirio/config.json`): Controls how data must be handled, travels with data, takes precedence
 - **App Config** (CLI flags/ENV/YAML): Controls how tool runs, local preferences
@@ -297,6 +285,19 @@ Based on client testing results (see [CLIENTS.md](CLIENTS.md)):
 ### Deferred Operational Features
 - [ ] Log rotation for application logs (OS/container can handle)
 - [ ] HTTP Audit Logging (complex, lower value - see Phase 6)
+
+### Configuration Management TODOs
+- [ ] **Add explicit config update command** - Allow updating data config values explicitly
+  - `dirio config set region us-west-2`
+  - `dirio config set compression.enabled true`
+  - Currently: must manually edit `.dirio/config.json` or re-import
+- [ ] **API rate limits** - Add to DataConfig for per-data-directory rate limiting
+- [ ] **Storage path configurations** - Consider if paths should be configurable per data directory
+- [ ] **Validation strategy** - Experiment with different approaches for invalid/missing configs (see inline TODO in `internal/dataconfig/dataconfig.go`)
+  - Option A: Fail fast (current)
+  - Option B: Merge with defaults
+  - Option C: Warn and use defaults
+
 
 ## Phase 5: MinIO-Style IAM & User Management
 
