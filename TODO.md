@@ -148,8 +148,7 @@ Current status: **Phase 2.5 - Client Testing & Bug Discovery**
 - [x] Save DataConfig during MinIO import
 - [x] Init logic: CLI flags provide initial values for new data directories
 - [ ] Load logic: Data config takes precedence, warn when CLI differs (region only)
-- [ ] Support both data config admin AND CLI admin credentials simultaneously
-- [ ] Refactor Settings to remove data-level configs (keep only app-level)
+- [x] Support both data config admin AND CLI admin credentials simultaneously
 - [x] Migration for existing installations
 - [ ] Update documentation and examples
 

@@ -47,6 +47,10 @@ type Config struct {
 	// Data directory configuration (optional)
 	// If present, provides alternative admin credentials from data config
 	DataConfig *dataconfig.DataConfig
+
+	// CLICredentialsExplicitlySet tracks whether AccessKey/SecretKey were
+	// explicitly provided (via env, flag, or config) vs using defaults
+	CLICredentialsExplicitlySet bool
 }
 
 // Server represents the S3-compatible HTTP server
@@ -87,18 +91,37 @@ func New(config *Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to initialize storage: %w", err)
 	}
 
-	// Initialize authenticator with CLI admin credentials
-	authenticator := auth.New(metaMgr, config.AccessKey, config.SecretKey)
+	// Initialize authenticator with appropriate credentials
+	var authenticator *auth.Authenticator
 
-	// Add data config admin credentials if they exist
 	if config.DataConfig != nil {
-		authenticator = authenticator.WithAlternativeRoot(
-			config.DataConfig.Credentials.AccessKey,
-			config.DataConfig.Credentials.SecretKey,
-		)
-		log.Info("Configured dual admin access",
-			"cli_admin", config.AccessKey,
-			"data_admin", config.DataConfig.Credentials.AccessKey)
+		// Data config exists - use smart credential selection
+		if config.CLICredentialsExplicitlySet {
+			// User explicitly configured CLI credentials - use dual admin mode
+			log.Info("Configured dual admin access",
+				"cli_admin", config.AccessKey,
+				"data_admin", config.DataConfig.Credentials.AccessKey)
+			authenticator = auth.New(metaMgr, config.AccessKey, config.SecretKey)
+			authenticator = authenticator.WithAlternativeRoot(
+				config.DataConfig.Credentials.AccessKey,
+				config.DataConfig.Credentials.SecretKey,
+			)
+		} else {
+			// CLI credentials not explicitly set - only use data config admin
+			log.Info("Using data config admin credentials only (CLI credentials not explicitly set)",
+				"data_admin", config.DataConfig.Credentials.AccessKey)
+			authenticator = auth.New(metaMgr,
+				config.DataConfig.Credentials.AccessKey,
+				config.DataConfig.Credentials.SecretKey,
+			)
+		}
+	} else {
+		// No data config exists - use CLI credentials (needed for initial setup)
+		if !config.CLICredentialsExplicitlySet {
+			log.Warn("Using default credentials - change these in production!",
+				"admin", config.AccessKey)
+		}
+		authenticator = auth.New(metaMgr, config.AccessKey, config.SecretKey)
 	}
 
 	// Create server

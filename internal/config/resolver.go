@@ -124,6 +124,34 @@ func parseInt(s string) int {
 	return i
 }
 
+// WasExplicitlySet returns true if the option value was set via env, flag, or config file
+// (i.e., not using the default value)
+func (vr *ValueResolver) WasExplicitlySet(o option.RegisteredOption) bool {
+	// Check environment variable
+	if o.AllowsEnv() {
+		if val := vr.envVars[o.GetEnvKey()]; val != "" {
+			return true
+		}
+	}
+
+	// Check CLI flags
+	if o.AllowsFlag() && vr.flagSet != nil {
+		flag := vr.flagSet.Lookup(o.GetFlagKey())
+		if flag != nil && flag.Changed {
+			return true
+		}
+	}
+
+	// Check viper (config file)
+	if o.AllowsViper() && vr.viper != nil {
+		if vr.viper.IsSet(o.GetViperKey()) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func parseBool(s string) bool {
 	switch s {
 	case "true", "1", "yes", "on":

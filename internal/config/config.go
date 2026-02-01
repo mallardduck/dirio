@@ -38,6 +38,10 @@ type Settings struct {
 
 	// Data directory configuration (loaded from .dirio/config.json if exists)
 	DataConfig *dataconfig.DataConfig
+
+	// CLICredentialsExplicitlySet tracks whether access_key/secret_key were
+	// explicitly provided (via env, flag, or config) vs using defaults
+	CLICredentialsExplicitlySet bool
 }
 
 // Validate checks that the configured settings are valid
@@ -117,6 +121,10 @@ func LoadConfig(flags *pflag.FlagSet, v *viper.Viper) (*Settings, error) {
 		MDNSHostname:    resolver.Get(MDNSHostname),
 		MDNSMode:        resolver.Get(MDNSMode),
 		CanonicalDomain: resolver.Get(CanonicalDomain),
+
+		// Track if credentials were explicitly set
+		CLICredentialsExplicitlySet: resolver.WasExplicitlySet(AccessKey) ||
+			resolver.WasExplicitlySet(SecretKey),
 	}
 
 	// Debug flag overrides log level

@@ -100,17 +100,18 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 	// Create server configuration from settings
 	serverConfig := &server.Config{
-		DataDir:         settings.DataDir,
-		Port:            settings.Port,
-		AccessKey:       settings.AccessKey, // CLI admin
-		SecretKey:       settings.SecretKey, // CLI admin
-		MDNSEnabled:     settings.MDNSEnabled,
-		MDNSName:        settings.MDNSName,
-		MDNSHostname:    settings.MDNSHostname,
-		MDNSMode:        settings.MDNSMode,
-		CanonicalDomain: settings.CanonicalDomain,
-		Debug:           settings.Debug,
-		DataConfig:      settings.DataConfig, // Data admin (if exists)
+		DataDir:                     settings.DataDir,
+		Port:                        settings.Port,
+		AccessKey:                   settings.AccessKey, // CLI admin
+		SecretKey:                   settings.SecretKey, // CLI admin
+		MDNSEnabled:                 settings.MDNSEnabled,
+		MDNSName:                    settings.MDNSName,
+		MDNSHostname:                settings.MDNSHostname,
+		MDNSMode:                    settings.MDNSMode,
+		CanonicalDomain:             settings.CanonicalDomain,
+		Debug:                       settings.Debug,
+		DataConfig:                  settings.DataConfig, // Data admin (if exists)
+		CLICredentialsExplicitlySet: settings.CLICredentialsExplicitlySet,
 	}
 
 	// Initialize and start server
