@@ -206,10 +206,44 @@ Current status: **Phase 2.5 - Client Testing & Bug Discovery**
 - [ ] Fix custom metadata key case in responses
 - [ ] Object tagging - ⚠️ Partially working, but corrupts content (tags replace object data)
 
-### Lower Priority
-- [ ] Bucket Policies (parse and validate)
-- [ ] Bucket Policies (enforce public-read)
-- [ ] Bucket Policies (complex policy statements)
+### Lower Priority - Bucket Policies & Policy System
+
+**Goal:** Build out a comprehensive policy system to enable public bucket access and lay groundwork for Phase 5 IAM.
+
+**Note:** This work will be tackled after completing remaining high/medium priority items above.
+
+#### PolicyService Architecture
+- [ ] Design PolicyService for managing policy cache and persistence
+  - In-memory cache of bucket policies for fast access
+  - Persistence to disk (.dirio/policies/ directory)
+  - Load policies on startup, update cache on policy changes
+  - Thread-safe concurrent access
+- [ ] Policy storage schema and file format
+  - JSON policy documents (S3-compatible format)
+  - Policy versioning and validation
+  - Import existing MinIO bucket policies during migration
+
+#### Conditional Auth Middleware
+- [ ] Implement conditional auth middleware for hybrid routes
+  - Support fully public routes (no auth required)
+  - Support hybrid routes (work both authed and non-authed)
+  - Example: ListBuckets non-authed shows only public buckets
+  - Example: ListBuckets authed shows public + user's allowed buckets
+- [ ] Integrate PolicyService with HTTP routing layer
+  - Router can query PolicyService for policy decisions
+  - Middleware uses policy info to filter responses based on auth state
+
+#### Bucket Policy Implementation
+- [ ] Parse and validate bucket policy documents
+- [ ] Enforce public-read bucket policies
+  - Non-authenticated requests can read from public buckets
+  - Policy evaluation for GetObject, HeadObject, ListObjects
+- [ ] Complex policy statement support
+  - Principal, Action, Resource, Effect, Condition
+  - Statement evaluation order and deny precedence
+  - Policy combination rules (bucket policy + IAM policy in Phase 5)
+
+**Connection to Phase 5:** This PolicyService will be extended in Phase 5 to handle IAM user/group policies in addition to bucket policies, creating a unified policy evaluation engine.
 
 ### Real-World Scenarios
 - [ ] Test migration from actual MinIO instance
