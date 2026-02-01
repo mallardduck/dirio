@@ -6,19 +6,16 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/mallardduck/dirio/internal/auth"
 	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
-	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/internal/middleware"
-	"github.com/mallardduck/dirio/internal/storage"
+	"github.com/mallardduck/dirio/internal/service"
+	svcs3 "github.com/mallardduck/dirio/internal/service/s3"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
-// Handler handles S3 API requests
-type Handler struct {
-	storage    *storage.Storage
-	metadata   *metadata.Manager
-	auth       *auth.Authenticator
+// HTTPHandler handles S3 API requests
+type HTTPHandler struct {
+	s3Service  *svcs3.Service
 	urlBuilder URLBuilder
 }
 
@@ -29,26 +26,24 @@ type URLBuilder interface {
 }
 
 // New creates a new S3 API handler
-func New(storage *storage.Storage, metadata *metadata.Manager, auth *auth.Authenticator, urlBuilder URLBuilder) *Handler {
-	return &Handler{
-		storage:    storage,
-		metadata:   metadata,
-		auth:       auth,
+func New(serviceFactory *service.ServicesFactory, urlBuilder URLBuilder) *HTTPHandler {
+	return &HTTPHandler{
+		s3Service:  serviceFactory.S3(),
 		urlBuilder: urlBuilder,
 	}
 }
 
 // ListBuckets handles GET / (list all buckets; for the root index route)
-func (h *Handler) ListBuckets(w http.ResponseWriter, r *http.Request) {
+func (h *HTTPHandler) ListBuckets(w http.ResponseWriter, r *http.Request) {
 	if data, ok := loggingHttp.GetLogData(r.Context()); ok {
 		data.Action = "ListBuckets"
 	}
 
 	requestID := middleware.GetRequestID(r.Context())
 
-	buckets, err := h.storage.ListBuckets(r.Context())
+	buckets, err := h.s3Service.ListBuckets(r.Context())
 	if err != nil {
-		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInternalError, err); writeErr != nil {
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error listing buckets and additional error writing XML error response")
 			return
 		}

@@ -250,76 +250,106 @@ Based on client testing results (see [CLIENTS.md](CLIENTS.md)):
 - [ ] Log rotation for application logs (OS/container can handle)
 - [ ] HTTP Audit Logging (complex, lower value - see Phase 6)
 
-## Phase 5: IAM & User Management
+## Phase 5: MinIO-Style IAM & User Management
 
-**Goal:** Implement AWS IAM-compatible user, role, group, and policy management for multi-user scenarios.
+**Goal:** Implement MinIO-compatible user, service account, group, and policy management for multi-user scenarios.
 
-### User/Group/Role Management
-- [ ] CreateUser - Create new IAM user with credentials
-- [ ] DeleteUser - Remove IAM user
-- [ ] ListUsers - List all IAM users
-- [ ] GetUser - Get IAM user details
-- [ ] UpdateUser - Modify IAM user properties
-- [ ] CreateGroup - Create user group
-- [ ] DeleteGroup - Remove user group
+**Strategy:** MinIO-style IAM (see [docs/MINIO-IAM-SUPPORT.md](docs/MINIO-IAM-SUPPORT.md)) - focused on self-hosted operational needs, NOT AWS IAM compatibility.
+
+**Compatibility Target:**
+- ✅ MinIO Admin API (subset)
+- ✅ `mc admin` commands (partial - core user/policy management)
+- ✅ Custom DirIO CLI (full functionality)
+- ❌ `aws iam` CLI (explicitly not supported)
+- ❌ Terraform AWS provider (explicitly not supported)
+
+### User Management
+- [ ] AddUser - Create new user with credentials (MinIO Admin API)
+- [ ] RemoveUser - Delete user
+- [ ] ListUsers - List all users
+- [ ] GetUserInfo - Get user details and policies
+- [ ] EnableUser - Enable disabled user
+- [ ] DisableUser - Disable user (soft delete)
+- [ ] SetUserStatus - Change user enabled/disabled state
+
+### Service Account Management
+- [ ] AddServiceAccount - Create service account for a user (long-lived credentials)
+- [ ] RemoveServiceAccount - Delete service account
+- [ ] ListServiceAccounts - List service accounts for a user
+- [ ] GetServiceAccountInfo - Get service account details
+- [ ] UpdateServiceAccount - Update service account policy/description
+
+### Group Management
+- [ ] AddGroup - Create user group
+- [ ] RemoveGroup - Delete group
 - [ ] ListGroups - List all groups
-- [ ] AddUserToGroup - Add user to group
-- [ ] RemoveUserFromGroup - Remove user from group
-- [ ] CreateRole - Create IAM role (for future assume-role support)
-- [ ] DeleteRole - Remove IAM role
-- [ ] ListRoles - List all roles
+- [ ] GetGroupInfo - Get group details and members
+- [ ] GroupAdd - Add user(s) to group
+- [ ] GroupRemove - Remove user(s) from group
 
 ### Policy Management
-- [ ] CreatePolicy - Define new access policy (JSON-based)
-- [ ] DeletePolicy - Remove policy
+- [ ] AddPolicy - Create new policy (JSON document, S3-style actions/resources)
+- [ ] RemovePolicy - Delete policy
 - [ ] ListPolicies - List all policies
 - [ ] GetPolicy - Retrieve policy document
-- [ ] AttachUserPolicy - Attach policy to user
-- [ ] DetachUserPolicy - Detach policy from user
-- [ ] AttachGroupPolicy - Attach policy to group
-- [ ] DetachGroupPolicy - Detach policy from group
-- [ ] AttachRolePolicy - Attach policy to role
-- [ ] DetachRolePolicy - Detach policy from role
-- [ ] PutUserPolicy - Inline policy for user
-- [ ] PutGroupPolicy - Inline policy for group
-- [ ] PutRolePolicy - Inline policy for role
+- [ ] SetPolicy - Attach policy to user or group
+- [ ] UnsetPolicy - Detach policy from user or group
+- [ ] Policy evaluation engine - Enforce policies on S3 operations
 
 ### Access Key Management
-- [ ] CreateAccessKey - Generate new access key pair for user
-- [ ] DeleteAccessKey - Revoke access key
-- [ ] ListAccessKeys - List user's access keys
-- [ ] UpdateAccessKey - Enable/disable access key
-
-### Authorization & Audit
-- [ ] GetAccountAuthorizationDetails - Retrieve all IAM resources
-- [ ] SimulatePrincipalPolicy - Test policy evaluation (debugging)
-- [ ] Policy evaluation engine - Enforce policies on S3 operations
+- [ ] User access keys (access key ID + secret key pairs)
+- [ ] Key rotation support
+- [ ] Multiple keys per user support
+- [ ] Key enable/disable (without deletion)
 
 ### Storage & Data Model
 - [ ] Design IAM metadata storage structure (.dirio/iam/)
-- [ ] User metadata schema (credentials, policies, group memberships)
+- [ ] User metadata schema (access keys, enabled status, policies, group memberships)
 - [ ] Group metadata schema (policies, members)
-- [ ] Role metadata schema (policies, trust policies)
-- [ ] Policy metadata schema (JSON policy documents)
-- [ ] Access key storage and rotation
+- [ ] Service account metadata schema (parent user, policies, description)
+- [ ] Policy metadata schema (JSON policy documents with S3 actions/resources)
+- [ ] Secure credential storage (encrypted access keys)
 
-### API Design Decision
-- [ ] **Option A:** Separate IAM API endpoint (e.g., port 9001, `/iam/*`) - Cleaner separation
-- [ ] **Option B:** Query parameter based (e.g., `/?Action=CreateUser`) - AWS-compatible
-- [ ] **Option C:** RESTful routes (e.g., `/api/iam/users`) - Modern, easier to implement
-- **Decision needed:** Which API style to implement?
+### API Design
+- [ ] **MinIO Admin API** - REST-based endpoints, configurable port strategy
+  - **Default (same port):** `/minio/admin/v3/*` on port 9000 - full `mc` compatibility
+    - POST `/minio/admin/v3/add-user`
+    - GET `/minio/admin/v3/list-users`
+    - POST `/minio/admin/v3/set-user-policy`
+    - etc.
+  - **Optional (separate port):** `/minio/admin/v3/*` on port 9001 - cleaner separation
+  - Path-based routing middleware (check prefix before S3 routing)
+- [ ] **Port binding:** If separate admin port, bind to same address as S3 port (both behind proxy typically)
+- [ ] **mDNS registration:**
+  - Same port: Single mDNS record for S3 API (admin accessible at same endpoint)
+  - Separate port: Register TWO mDNS services:
+    - `{mdns-name}-s3.{hostname}.local` → port 9000 (S3 API)
+    - `{mdns-name}-admin.{hostname}.local` → port 9001 (Admin API)
+- [ ] JSON request/response format (NOT XML Query API)
+- [ ] Standard HTTP methods (POST/GET/DELETE)
+- [ ] Configuration options:
+  ```yaml
+  admin_api:
+    enabled: true
+    port: 9000        # Same port (default), or separate (e.g., 9001)
+    path_prefix: "/minio/admin/v3"  # MinIO compatible path
+  ```
 
 ### Integration with Existing Auth
 - [ ] Refactor auth package to support multiple users (currently single admin)
-- [ ] Policy-based bucket access control
+- [ ] Multi-user credential lookup and validation
+- [ ] Policy-based bucket access control (read/write/list)
 - [ ] Policy-based object access control
-- [ ] Integrate with existing SigV4 authentication
+- [ ] Integrate with existing SigV4 authentication for S3 operations
+- [ ] Admin API authentication (separate or same credentials?)
 
 ### Testing
 - [ ] Unit tests for IAM operations
-- [ ] Integration tests with AWS CLI IAM commands
-- [ ] Policy evaluation test suite
-- [ ] Multi-user access scenarios
+- [ ] Integration tests with `mc admin` commands (user, policy, group operations)
+- [ ] Policy evaluation test suite (allow/deny scenarios)
+- [ ] Multi-user S3 access scenarios (user A can't access user B's buckets)
+- [ ] Service account delegation testing
+- [ ] Test migration from MinIO IAM metadata
 
 ## Phase 6: Client CLI (Low Priority)
 
@@ -372,6 +402,7 @@ Using "Core + Sidecar" approach:
 - [ ] Migration guide from MinIO
 - [ ] Configuration guide (CLI/ENV/YAML)
 - [x] Client compatibility guide - See [CLIENTS.md](CLIENTS.md)
+- [ ] IAM/Admin API design decision - See [MINIO-IAM-SUPPORT.md](docs/MINIO-IAM-SUPPORT.md)
 - [ ] mDNS setup and troubleshooting
 - [ ] Reverse proxy setup guide (nginx examples)
 - [ ] S3 API compliance status

@@ -2,10 +2,12 @@ package jsonutil
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 
 	"github.com/go-git/go-billy/v5"
 	"github.com/mallardduck/dirio/internal/config"
+	"github.com/minio/madmin-go/v3"
 )
 
 // isDebugMode determines whether to use pretty-printed JSON output.
@@ -73,4 +75,26 @@ func MarshalToFile(fs billy.Filesystem, path string, v interface{}) error {
 // It decodes JSON data into v.
 func Unmarshal(data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)
+}
+
+// DecryptAndUnmarshal decrypts MinIO admin API encrypted data and unmarshals it into v.
+// This is used for handling MinIO admin API requests that use encrypted payloads.
+// The password is typically the admin user's secret key.
+func DecryptAndUnmarshal(password string, data io.Reader, v interface{}) error {
+	decrypted, err := madmin.DecryptData(password, data)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(decrypted, v)
+}
+
+// MarshalAndEncrypt marshals v to JSON and encrypts it using MinIO admin API encryption.
+// This is used for returning encrypted responses to MinIO admin API clients.
+// The password is typically the admin user's secret key.
+func MarshalAndEncrypt(password string, v interface{}) ([]byte, error) {
+	jsonData, err := Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	return madmin.EncryptData(password, jsonData)
 }

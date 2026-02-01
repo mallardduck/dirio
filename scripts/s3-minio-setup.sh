@@ -8,9 +8,9 @@ set -euo pipefail
 # It uses the MinIO client (mc) which works with any S3 API.
 #
 # Usage:
-#   S3_ENDPOINT=http://localhost:8080 \
-#   S3_ACCESS_KEY=admin \
-#   S3_SECRET_KEY=password123 \
+#   S3_ENDPOINT=http://localhost:9000 \
+#   S3_ACCESS_KEY=dirio-admin \
+#   S3_SECRET_KEY=dirio-admin-secret \
 #   ./s3-generic-setup.sh
 #
 # Optional environment variables:
@@ -90,6 +90,53 @@ fi
 echo "✓ MinIO client (mc) found: $(which mc)"
 
 # -----------------------
+# Parse MC Version
+# -----------------------
+# mc --version outputs: "mc version RELEASE.2024-01-15T08-23-05Z (commit-id: ...)"
+# We need to extract the date portion (YYYY-MM-DD)
+MC_VERSION_INFO=$(mc --version 2>/dev/null || echo "unknown")
+MC_VERSION_DATE=""
+
+if [[ "${MC_VERSION_INFO}" =~ RELEASE\.([0-9]{4})-([0-9]{2})-([0-9]{2}) ]]; then
+  MC_VERSION_DATE="${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-${BASH_REMATCH[3]}"
+  echo "✓ Detected mc version date: ${MC_VERSION_DATE}"
+else
+  echo "⚠️  Could not parse mc version date, using latest syntax"
+  MC_VERSION_DATE="9999-99-99"  # Use latest syntax as fallback
+fi
+
+# -----------------------
+# Compatibility Functions
+# -----------------------
+# mc admin policy command changed from 'add' to 'create' on 2023-03-20
+# See: https://github.com/minio/mc/blob/master/RELEASE.md
+
+mc_admin_policy_create() {
+  local alias=$1
+  local policy_name=$2
+  local policy_file=$3
+
+  if [[ "${MC_VERSION_DATE}" < "2023-03-20" ]]; then
+    mc admin policy add "${alias}" "${policy_name}" "${policy_file}"
+  else
+    mc admin policy create "${alias}" "${policy_name}" "${policy_file}"
+  fi
+}
+
+mc_admin_policy_attach() {
+  local alias=$1
+  local policy_name=$2
+  local user_spec=$3
+
+  if [[ "${MC_VERSION_DATE}" < "2023-03-20" ]]; then
+    mc admin policy set "${alias}" "${policy_name}" "${user_spec}"
+  else
+    mc admin policy attach "${alias}" "${policy_name}" --user="${user_spec#user=}"
+  fi
+}
+
+
+# -----------------------
 # Setup mc alias
 # -----------------------
 echo "🔧 Configuring mc alias '${S3_ALIAS}'..."
@@ -125,7 +172,7 @@ done
 # -----------------------
 if [ "${SKIP_USERS}" != "true" ]; then
   echo "👥 Creating IAM users and policies..."
-  echo "  (This may fail if the S3 API doesn't support IAM)"
+  echo "  (This may fail if the MinIO Admin API doesn't support IAM)"
 
   # Create policies
   cat > /tmp/alpha-rw.json <<'EOF'
@@ -161,30 +208,43 @@ EOF
 EOF
 
   # Try to create policies (may fail on non-MinIO S3 APIs)
-  if mc admin policy add "${S3_ALIAS}" alpha-rw /tmp/alpha-rw.json 2>/dev/null; then
+
+  # Check if alpha-rw policy exists, create if not
+  if mc admin policy info "${S3_ALIAS}" alpha-rw >/dev/null 2>&1; then
+    echo "  ⚠️  Policy 'alpha-rw' already exists, skipping"
+  elif mc_admin_policy_create "${S3_ALIAS}" alpha-rw /tmp/alpha-rw.json 2>/dev/null; then
     echo "  ✓ Created policy 'alpha-rw'"
   else
     echo "  ⚠️  Failed to create policy 'alpha-rw' (IAM not supported?)"
   fi
 
-  if mc admin policy add "${S3_ALIAS}" beta-rw /tmp/beta-rw.json 2>/dev/null; then
+  # Check if beta-rw policy exists, create if not
+  if mc admin policy info "${S3_ALIAS}" beta-rw >/dev/null 2>&1; then
+    echo "  ⚠️  Policy 'beta-rw' already exists, skipping"
+  elif mc_admin_policy_create "${S3_ALIAS}" beta-rw /tmp/beta-rw.json 2>/dev/null; then
     echo "  ✓ Created policy 'beta-rw'"
   else
     echo "  ⚠️  Failed to create policy 'beta-rw' (IAM not supported?)"
   fi
 
   # Try to create users (may fail on non-MinIO S3 APIs)
-  if mc admin user add "${S3_ALIAS}" "${ALICE_USER}" "${ALICE_PASS}" 2>/dev/null; then
+  # Check if alice user exists, create if not
+  if mc admin user info "${S3_ALIAS}" "${ALICE_USER}" >/dev/null 2>&1; then
+    echo "  ⚠️  User '${ALICE_USER}' already exists, skipping"
+  elif mc admin user add "${S3_ALIAS}" "${ALICE_USER}" "${ALICE_PASS}" 2>/dev/null; then
     echo "  ✓ Created user '${ALICE_USER}'"
-    mc admin policy set "${S3_ALIAS}" alpha-rw "user=${ALICE_USER}" 2>/dev/null || \
+    mc_admin_policy_attach "${S3_ALIAS}" alpha-rw "user=${ALICE_USER}" 2>/dev/null || \
       echo "  ⚠️  Failed to attach policy to '${ALICE_USER}'"
   else
     echo "  ⚠️  Failed to create user '${ALICE_USER}' (IAM not supported?)"
   fi
 
-  if mc admin user add "${S3_ALIAS}" "${BOB_USER}" "${BOB_PASS}" 2>/dev/null; then
+  # Check if bob user exists, create if not
+  if mc admin user info "${S3_ALIAS}" "${BOB_USER}" >/dev/null 2>&1; then
+    echo "  ⚠️  User '${BOB_USER}' already exists, skipping"
+  elif mc admin user add "${S3_ALIAS}" "${BOB_USER}" "${BOB_PASS}" 2>/dev/null; then
     echo "  ✓ Created user '${BOB_USER}'"
-    mc admin policy set "${S3_ALIAS}" beta-rw "user=${BOB_USER}" 2>/dev/null || \
+    mc_admin_policy_attach "${S3_ALIAS}" beta-rw "user=${BOB_USER}" 2>/dev/null || \
       echo "  ⚠️  Failed to attach policy to '${BOB_USER}'"
   else
     echo "  ⚠️  Failed to create user '${BOB_USER}' (IAM not supported?)"

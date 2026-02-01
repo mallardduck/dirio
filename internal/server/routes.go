@@ -58,16 +58,69 @@ func SetupRoutes(r *router.Router, deps *RouteDependencies) {
 	// Public Routes (no auth required)
 	r.MiddlewareGroup(func(r *router.Router) {
 		r.Get("/favicon.ico", faviconHandler, "favicon")
+		r.Get("/healthz", notImplemented, "health")
+		// Debug routes (only when debug mode is enabled)
+		if deps != nil && deps.Debug {
+			r.Get("/.internal/routes", debugHandler, "debug.routes")
+		}
 	})
 
-	// Debug routes (only when debug mode is enabled)
-	if deps != nil && deps.Debug {
+	if deps != nil &&
+		deps.APIHandler != nil &&
+		deps.APIHandler.IAMHandler != nil {
+		userHandler := deps.APIHandler.IAMHandler.UserResourceHandler()
+		policyHandler := deps.APIHandler.IAMHandler.PolicyResourceHandler()
+
+		// MinIO Admin API Routes
+		// Configurable prefix, defaults to "/minio/admin/v3" for mc compatibility
+		// Can be configured to use same port (default) or separate admin port
 		r.MiddlewareGroup(func(r *router.Router) {
-			r.Get("/.internal/routes", debugHandler, "debug.routes")
+			r.Use(deps.Auth.AuthMiddleware)
+
+			// TODO: Make this prefix configurable via Settings (default: /minio/admin/v3)
+			r.NameGroup("/minio/admin/v3", "admin", func(r *router.Router) {
+				// User Management
+				r.Get("/list-users", userHandler.ListHandler, "users.list")
+				r.Put("/add-user", userHandler.AddHandler, "users.add")
+				r.Post("/remove-user", userHandler.RemoveHandler, "users.remove")
+				r.Get("/user-info", userHandler.InfoHandler, "users.info")
+				r.Post("/set-user-status", userHandler.StatusHandler, "users.setstatus")
+
+				// Service Account Management
+				r.Get("/list-service-accounts", notImplemented, "serviceaccounts.list")
+				r.Post("/add-service-account", notImplemented, "serviceaccounts.add")
+				r.Post("/delete-service-account", notImplemented, "serviceaccounts.delete")
+				r.Get("/info-service-account", notImplemented, "serviceaccounts.info")
+				r.Post("/update-service-account", notImplemented, "serviceaccounts.update")
+
+				// Group Management
+				r.Post("/update-group-members", notImplemented, "groups.updatemembers")
+				r.Get("/group", notImplemented, "groups.info")
+				r.Get("/groups", notImplemented, "groups.list")
+				r.Post("/set-group-status", notImplemented, "groups.setstatus")
+
+				// Policy Management (Canned Policies)
+				r.Get("/list-canned-policies", policyHandler.ListHandler, "policies.list")
+				r.Post("/add-canned-policy", policyHandler.AddHandler, "policies.add")
+				r.Put("/add-canned-policy", policyHandler.AddHandler, "policies.add")
+				r.Post("/remove-canned-policy", policyHandler.RemoveHandler, "policies.remove")
+				r.Get("/info-canned-policy", policyHandler.InfoHandler, "policies.info")
+
+				// Policy Attachments
+				// Old API: mc admin policy set (deprecated)
+				r.Post("/set-policy", policyHandler.SetHandler, "policies.set")
+				// New API: mc admin policy attach --user=...
+				r.Post("/idp/builtin/policy/attach", policyHandler.SetHandler, "policies.attach")
+				r.Get("/policy-entities", policyHandler.ListEntitiesHandler, "policies.entities")
+
+				// Server Info & Health (useful for mc admin)
+				r.Get("/info", notImplemented, "server.info")
+				r.Get("/health", notImplemented, "server.health")
+			})
 		})
 	}
 
-	// Authenticated Routes
+	// Authenticated Bucket and Object Routes - must go at end due to wildcards
 	r.MiddlewareGroup(func(r *router.Router) {
 		if deps != nil {
 			r.Use(deps.Auth.AuthMiddleware)
@@ -92,75 +145,13 @@ func SetupRoutes(r *router.Router, deps *RouteDependencies) {
 		r.Get("/{bucket}/*", objectShow, "objects.show")
 		r.Delete("/{bucket}/*", objectDestroy, "objects.destroy")
 	})
-
-	// IAM API Routes
-	r.MiddlewareGroup(func(r *router.Router) {
-		if deps != nil {
-			r.Use(deps.Auth.AuthMiddleware)
-		}
-
-		r.NameGroup("/api/iam", "iam", func(r *router.Router) {
-			// User Management
-			r.Get("/users", notImplemented, "users.list")
-			r.Post("/users", notImplemented, "users.create")
-			r.Get("/users/{username}", notImplemented, "users.get")
-			r.Put("/users/{username}", notImplemented, "users.update")
-			r.Delete("/users/{username}", notImplemented, "users.delete")
-
-			// Group Management
-			r.Post("/groups", notImplemented, "groups.create")
-			r.Get("/groups", notImplemented, "groups.list")
-			r.Get("/groups/{groupname}", notImplemented, "groups.get")
-			r.Delete("/groups/{groupname}", notImplemented, "groups.delete")
-			r.Post("/groups/{groupname}/users/{username}", notImplemented, "groups.adduser")
-			r.Delete("/groups/{groupname}/users/{username}", notImplemented, "groups.removeuser")
-
-			// Role Management
-			r.Post("/roles", notImplemented, "roles.create")
-			r.Get("/roles", notImplemented, "roles.list")
-			r.Get("/roles/{rolename}", notImplemented, "roles.get")
-			r.Delete("/roles/{rolename}", notImplemented, "roles.delete")
-
-			// Policy Management
-			r.Post("/policies", notImplemented, "policies.create")
-			r.Get("/policies", notImplemented, "policies.list")
-			r.Get("/policies/{policyarn}", notImplemented, "policies.get")
-			r.Delete("/policies/{policyarn}", notImplemented, "policies.delete")
-
-			// Policy Attachments - Users
-			r.Post("/users/{username}/policies/{policyarn}", notImplemented, "users.attachpolicy")
-			r.Delete("/users/{username}/policies/{policyarn}", notImplemented, "users.detachpolicy")
-			r.Put("/users/{username}/policies/inline/{policyname}", notImplemented, "users.putpolicy")
-			r.Delete("/users/{username}/policies/inline/{policyname}", notImplemented, "users.deletepolicy")
-
-			// Policy Attachments - Groups
-			r.Post("/groups/{groupname}/policies/{policyarn}", notImplemented, "groups.attachpolicy")
-			r.Delete("/groups/{groupname}/policies/{policyarn}", notImplemented, "groups.detachpolicy")
-			r.Put("/groups/{groupname}/policies/inline/{policyname}", notImplemented, "groups.putpolicy")
-			r.Delete("/groups/{groupname}/policies/inline/{policyname}", notImplemented, "groups.deletepolicy")
-
-			// Policy Attachments - Roles
-			r.Post("/roles/{rolename}/policies/{policyarn}", notImplemented, "roles.attachpolicy")
-			r.Delete("/roles/{rolename}/policies/{policyarn}", notImplemented, "roles.detachpolicy")
-			r.Put("/roles/{rolename}/policies/inline/{policyname}", notImplemented, "roles.putpolicy")
-			r.Delete("/roles/{rolename}/policies/inline/{policyname}", notImplemented, "roles.deletepolicy")
-
-			// Access Key Management
-			r.Post("/users/{username}/access-keys", notImplemented, "accesskeys.create")
-			r.Get("/users/{username}/access-keys", notImplemented, "accesskeys.list")
-			r.Put("/users/{username}/access-keys/{accesskeyid}", notImplemented, "accesskeys.update")
-			r.Delete("/users/{username}/access-keys/{accesskeyid}", notImplemented, "accesskeys.delete")
-
-			// Account & Authorization
-			r.Get("/account/authorization-details", notImplemented, "account.authdetails")
-			r.Post("/simulate-policy", notImplemented, "simulate.policy")
-		})
-	})
 }
 
-// notImplemented is a placeholder method needed for the route dependencies
+// notImplemented is a placeholder for MinIO Admin API endpoints
+// MinIO Admin API typically returns JSON responses
 func (d *RouteDependencies) notImplemented(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusNotImplemented)
-	w.Write([]byte(`{"error":"This IAM operation is not yet implemented","code":"NotImplemented"}`))
+	// MinIO Admin API error format
+	w.Write([]byte(`{"status":"error","error":"This Admin API operation is not yet implemented"}`))
 }

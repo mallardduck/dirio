@@ -24,16 +24,16 @@ func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 			var errCode s3types.ErrorCode
 			switch {
 			case errors.Is(err, ErrAuthenticationFailed):
-				errCode = s3types.ErrAccessDenied
+				errCode = s3types.ErrCodeAccessDenied
 			case errors.Is(err, ErrUserNotFound):
-				errCode = s3types.ErrInvalidAccessKeyID
+				errCode = s3types.ErrCodeInvalidAccessKeyID
 			case errors.Is(err, ErrUserInactive):
-				errCode = s3types.ErrAccessDenied
+				errCode = s3types.ErrCodeAccessDenied
 			case errors.Is(err, ErrSignatureMismatch):
-				errCode = s3types.ErrSignatureDoesNotMatch
+				errCode = s3types.ErrCodeSignatureDoesNotMatch
 			default:
 				// Other signature verification errors
-				errCode = s3types.ErrSignatureDoesNotMatch
+				errCode = s3types.ErrCodeSignatureDoesNotMatch
 			}
 			requestID := middleware.GetRequestID(r.Context())
 			if writeErr := writeAuthError(w, requestID, errCode); writeErr != nil {

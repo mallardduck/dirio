@@ -20,7 +20,7 @@ type RouteInfo struct {
 // Router wraps chi.Router with named route support and URL generation.
 type Router struct {
 	mux       chi.Router
-	routes    map[string]RouteInfo // name -> route info
+	routes    map[string]RouteInfo // "METHOD:name" -> route info
 	pathStack []string             // tracks path prefixes in nested groups
 	nameStack []string             // tracks name prefixes in nested groups
 }
@@ -53,11 +53,32 @@ func (r *Router) register(name, pattern, method string) {
 		fullName = prefix + "." + name
 	}
 	fullPattern := r.currentPath() + pattern
-	if existing, ok := r.routes[fullName]; ok {
-		panic(fmt.Sprintf("router: duplicate route name %q (existing: %s %s, new: %s %s)",
-			fullName, existing.Method, existing.Pattern, method, fullPattern))
+
+	// Use composite key to allow same name with different methods
+	key := method + ":" + fullName
+
+	// Check if this exact method+name combination already exists
+	if existing, ok := r.routes[key]; ok {
+		panic(fmt.Sprintf("router: duplicate route %s %q (existing: %s, new: %s)",
+			method, fullName, existing.Pattern, fullPattern))
 	}
-	r.routes[fullName] = RouteInfo{
+
+	// Validate that if the same name is used with a different method, the path must match
+	for existingKey, existingInfo := range r.routes {
+		// Extract the name part from existing key (format is "METHOD:name")
+		if idx := strings.Index(existingKey, ":"); idx > 0 {
+			existingName := existingKey[idx+1:]
+			if existingName == fullName && existingInfo.Method != method {
+				// Same name, different method - ensure paths match
+				if existingInfo.Pattern != fullPattern {
+					panic(fmt.Sprintf("router: route name %q used with different paths: %s %s vs %s %s",
+						fullName, existingInfo.Method, existingInfo.Pattern, method, fullPattern))
+				}
+			}
+		}
+	}
+
+	r.routes[key] = RouteInfo{
 		Method:  method,
 		Pattern: fullPattern,
 	}
@@ -249,9 +270,24 @@ var paramRegex = regexp.MustCompile(`\{([^}:]+)(?::[^}]*)?\}`)
 // URL generates a URL for a named route with parameter substitution.
 // Parameters are provided as key-value pairs: "key1", "value1", "key2", "value2", etc.
 // Returns an error if the route name is not found or if parameters are invalid.
+// If the same name is used with multiple HTTP methods, any matching route is used
+// (since they must all have the same path).
 func (r *Router) URL(name string, params ...string) (string, error) {
-	info, ok := r.routes[name]
-	if !ok {
+	// Search for a route with this name (format is "METHOD:name")
+	var info RouteInfo
+	var found bool
+	for key, routeInfo := range r.routes {
+		if idx := strings.Index(key, ":"); idx > 0 {
+			routeName := key[idx+1:]
+			if routeName == name {
+				info = routeInfo
+				found = true
+				break
+			}
+		}
+	}
+
+	if !found {
 		return "", fmt.Errorf("router: unknown route name %q", name)
 	}
 
@@ -293,15 +329,24 @@ func (r *Router) MustURL(name string, params ...string) string {
 
 // Routes returns a map of route names to patterns (without methods).
 // Kept for backward compatibility.
+// If a name is used with multiple methods, only one entry is returned.
 func (r *Router) Routes() map[string]string {
 	cpy := make(map[string]string, len(r.routes))
-	for name, info := range r.routes {
-		cpy[name] = info.Pattern
+	for key, info := range r.routes {
+		// Extract name from "METHOD:name" format
+		if idx := strings.Index(key, ":"); idx > 0 {
+			name := key[idx+1:]
+			// Only add if not already present (first method wins)
+			if _, exists := cpy[name]; !exists {
+				cpy[name] = info.Pattern
+			}
+		}
 	}
 	return cpy
 }
 
 // RoutesWithMethods returns a copy of the route registry with full metadata.
+// Keys are in the format "METHOD:name" to support the same name with different methods.
 func (r *Router) RoutesWithMethods() map[string]RouteInfo {
 	cpy := make(map[string]RouteInfo, len(r.routes))
 	maps.Copy(cpy, r.routes)

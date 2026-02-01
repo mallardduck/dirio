@@ -10,16 +10,22 @@ import (
 
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/util"
+
 	"github.com/mallardduck/dirio/internal/jsonutil"
 	"github.com/mallardduck/dirio/internal/path"
+	"github.com/mallardduck/dirio/pkg/iam"
 )
 
 // Metadata format versions
 const (
-	UserMetadataVersion   = "1.0.0"
 	BucketMetadataVersion = "1.0.0"
-	PolicyMetadataVersion = "1.0.0"
 	ObjectMetadataVersion = "1.0.0"
+)
+
+// Domain errors
+var (
+	ErrUserNotFound   = errors.New("user not found")
+	ErrPolicyNotFound = errors.New("policy not found")
 )
 
 // Manager handles metadata storage and retrieval
@@ -28,15 +34,11 @@ type Manager struct {
 	metadataFS billy.Filesystem
 }
 
-// User represents a user with credentials
-type User struct {
-	Version          string    `json:"version"` // DirIO metadata version
-	AccessKey        string    `json:"accessKey"`
-	SecretKey        string    `json:"secretKey"`
-	Status           string    `json:"status"`
-	UpdatedAt        time.Time `json:"updatedAt"`
-	AttachedPolicies []string  `json:"attachedPolicies,omitempty"` // Names of attached IAM policies (supports multiple)
-}
+// Type aliases for backward compatibility
+type User = iam.User
+type Policy = iam.Policy
+type PolicyDocument = iam.PolicyDocument
+type PolicyStatement = iam.Statement
 
 // BucketMetadata represents bucket configuration
 type BucketMetadata struct {
@@ -64,33 +66,6 @@ type BucketMetadata struct {
 	QuotaConfigUpdatedAt        time.Time `json:"quotaConfigUpdatedAt,omitempty"`
 	ReplicationConfigUpdatedAt  time.Time `json:"replicationConfigUpdatedAt,omitempty"`
 	VersioningConfigUpdatedAt   time.Time `json:"versioningConfigUpdatedAt,omitempty"`
-}
-
-// PolicyDocument represents an AWS IAM Policy Document (used by both IAM policies and bucket policies)
-// See: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html
-type PolicyDocument struct {
-	Version   string            `json:"Version"`      // Policy language version (usually "2012-10-17")
-	Id        string            `json:"Id,omitempty"` // Optional policy ID
-	Statement []PolicyStatement `json:"Statement"`    // List of policy statements
-}
-
-// PolicyStatement represents a single statement in a policy document
-type PolicyStatement struct {
-	Sid       string                 `json:"Sid,omitempty"`       // Optional statement ID
-	Effect    string                 `json:"Effect"`              // "Allow" or "Deny"
-	Principal interface{}            `json:"Principal,omitempty"` // Who (can be string, map, or array)
-	Action    interface{}            `json:"Action"`              // What actions (string or []string)
-	Resource  interface{}            `json:"Resource,omitempty"`  // What resources (string or []string)
-	Condition map[string]interface{} `json:"Condition,omitempty"` // Optional conditions
-}
-
-// Policy represents an IAM policy (attached to users/roles)
-type Policy struct {
-	Version        string          `json:"version"`        // DirIO metadata version
-	Name           string          `json:"name"`           // Policy name
-	PolicyDocument *PolicyDocument `json:"policyDocument"` // The actual IAM policy
-	CreateDate     time.Time       `json:"createDate"`
-	UpdateDate     time.Time       `json:"updateDate"`
 }
 
 // ObjectMetadata represents object metadata
@@ -277,7 +252,7 @@ func (m *Manager) GetUser(ctx context.Context, username string) (*User, error) {
 	data, err := util.ReadFile(m.metadataFS, userPath)
 	if err != nil {
 		if isNotExist(err) {
-			return nil, nil // User doesn't exist
+			return nil, ErrUserNotFound
 		}
 		return nil, err
 	}
@@ -287,7 +262,66 @@ func (m *Manager) GetUser(ctx context.Context, username string) (*User, error) {
 		return nil, err
 	}
 
+	// Backwards compatibility: populate Username from filename if not set
+	if user.Username == "" {
+		user.Username = username
+	}
+
 	return &user, nil
+}
+
+// CreateOrUpdateUser creates a new user or updates an existing one
+func (m *Manager) CreateOrUpdateUser(ctx context.Context, user *User) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
+	if user.AccessKey == "" {
+		return fmt.Errorf("accessKey is required")
+	}
+
+	// Use AccessKey as username (matches MinIO behavior)
+	username := user.AccessKey
+
+	// Set metadata fields
+	user.Version = iam.UserMetadataVersion
+	user.Username = username
+	user.UpdatedAt = time.Now()
+
+	return m.SaveUser(ctx, username, user)
+}
+
+// UpdateUser updates an existing user's mutable fields
+func (m *Manager) UpdateUser(ctx context.Context, username string, updates *User) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
+	// Get existing user
+	existing, err := m.GetUser(ctx, username)
+	if err != nil {
+		return fmt.Errorf("failed to get existing user: %w", err)
+	}
+	if existing == nil {
+		return fmt.Errorf("user not found: %s", username)
+	}
+
+	// Update mutable fields
+	if updates.SecretKey != "" {
+		existing.SecretKey = updates.SecretKey
+	}
+	if updates.Status != "" {
+		existing.Status = updates.Status
+	}
+	if updates.AttachedPolicies != nil {
+		existing.AttachedPolicies = updates.AttachedPolicies
+	}
+
+	// Update timestamp and version
+	existing.UpdatedAt = time.Now()
+	existing.Version = iam.UserMetadataVersion
+
+	return m.SaveUser(ctx, username, existing)
 }
 
 // SaveUser saves a single user (atomic operation)
@@ -330,7 +364,7 @@ func (m *Manager) ListUsers(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 
-	var usernames []string
+	usernames := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
@@ -389,6 +423,9 @@ func (m *Manager) GetPolicy(ctx context.Context, name string) (*Policy, error) {
 
 	data, err := util.ReadFile(m.metadataFS, policyPath)
 	if err != nil {
+		if isNotExist(err) {
+			return nil, ErrPolicyNotFound
+		}
 		return nil, err
 	}
 
@@ -398,6 +435,47 @@ func (m *Manager) GetPolicy(ctx context.Context, name string) (*Policy, error) {
 	}
 
 	return &policy, nil
+}
+
+// DeletePolicy removes a policy by name
+func (m *Manager) DeletePolicy(ctx context.Context, name string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
+	policyPath := filepath.Join("iam", "policies", name+".json")
+	err := m.metadataFS.Remove(policyPath)
+	if err != nil && !isNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+// ListPolicyNames returns all policy names
+func (m *Manager) ListPolicyNames(ctx context.Context) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
+	policiesDir := filepath.Join("iam", "policies")
+	entries, err := m.metadataFS.ReadDir(policiesDir)
+	if err != nil {
+		if isNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+
+	policyNames := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		policyName := entry.Name()[:len(entry.Name())-5] // Remove .json
+		policyNames = append(policyNames, policyName)
+	}
+
+	return policyNames, nil
 }
 
 // GetPolicies retrieves all policies
@@ -441,4 +519,52 @@ func (m *Manager) GetPolicies(ctx context.Context) (map[string]*Policy, error) {
 // isNotExist checks if an error is a "not exist" error
 func isNotExist(err error) bool {
 	return err != nil && fs.ErrNotExist != nil && (errors.Is(err, fs.ErrNotExist) || err.Error() == "file does not exist")
+}
+
+// ============================================================================
+// Bucket Policy Operations
+// ============================================================================
+
+// SetBucketPolicy sets or updates the bucket policy
+func (m *Manager) SetBucketPolicy(ctx context.Context, bucket string, policy *PolicyDocument) error {
+	// Load existing bucket metadata
+	meta, err := m.GetBucketMetadata(ctx, bucket)
+	if err != nil {
+		return err
+	}
+
+	// Update the policy
+	meta.BucketPolicy = policy
+	meta.PolicyConfigUpdatedAt = time.Now().UTC()
+
+	// Save the updated metadata
+	bucketPath := filepath.Join("buckets", bucket+".json")
+	return jsonutil.MarshalToFile(m.metadataFS, bucketPath, meta)
+}
+
+// GetBucketPolicy retrieves the bucket policy
+func (m *Manager) GetBucketPolicy(ctx context.Context, bucket string) (*PolicyDocument, error) {
+	meta, err := m.GetBucketMetadata(ctx, bucket)
+	if err != nil {
+		return nil, err
+	}
+
+	return meta.BucketPolicy, nil
+}
+
+// DeleteBucketPolicy removes the bucket policy
+func (m *Manager) DeleteBucketPolicy(ctx context.Context, bucket string) error {
+	// Load existing bucket metadata
+	meta, err := m.GetBucketMetadata(ctx, bucket)
+	if err != nil {
+		return err
+	}
+
+	// Clear the policy
+	meta.BucketPolicy = nil
+	meta.PolicyConfigUpdatedAt = time.Time{} // Zero time
+
+	// Save the updated metadata
+	bucketPath := filepath.Join("buckets", bucket+".json")
+	return jsonutil.MarshalToFile(m.metadataFS, bucketPath, meta)
 }

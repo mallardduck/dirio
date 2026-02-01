@@ -8,7 +8,7 @@ DirIO is built on a simple principle: **objects should be files**.
 
 Objects live in `buckets/bucket-name/path/to/object`. That's where your data is. Everything else (metadata, indexes, caches) is derived state that can be regenerated.
 
-If you delete `.metadata/`, DirIO should still work. It might be slower, but the data is there.
+If you delete `.dirio/`, DirIO should still work. It might be slower, but the data is there.
 
 ### 2. No Encoding, No Chunking
 
@@ -18,10 +18,10 @@ This makes debugging trivial: `ls` and `cat` work as expected.
 
 ### 3. Minimal Metadata
 
-Metadata lives in `.metadata/` as JSON files. Structure:
+Metadata lives in `.dirio/` as JSON files. Structure:
 
 ```
-.metadata/
+.dirio/
 ├── users.json              # All users, one file
 ├── buckets/
 │   └── mybucket.json      # Per-bucket: owner, policy, created timestamp
@@ -32,7 +32,7 @@ Object metadata (ETag, content-type) can be stored per-object if needed, but by 
 
 ### 4. Import, Don't Migrate
 
-When you point DirIO at MinIO data, we don't "migrate" it. We import the metadata into `.metadata/` and leave `.minio.sys/` alone.
+When you point DirIO at MinIO data, we don't "migrate" it. We import the metadata into `.dirio/` and leave `.minio.sys/` alone.
 
 Why? Because you might need to switch back. Or debug. Or compare. The cost is a few extra kilobytes.
 

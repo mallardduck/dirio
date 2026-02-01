@@ -29,6 +29,7 @@ minio-data*/
 *.swp
 *.swo
 *~
+NUL
 
 # OS
 .DS_Store

@@ -62,13 +62,73 @@ func TestEmptyNameNotRegistered(t *testing.T) {
 func TestDuplicateNamePanics(t *testing.T) {
 	defer func() {
 		if recover() == nil {
-			t.Error("expected panic for duplicate route name")
+			t.Error("expected panic for duplicate route name with same method")
 		}
 	}()
 
 	r := New()
 	r.Get("/users", dummyHandler, "users")
-	r.Get("/other", dummyHandler, "users") // duplicate name
+	r.Get("/other", dummyHandler, "users") // duplicate name with same method
+}
+
+func TestSameNameDifferentMethods(t *testing.T) {
+	r := New()
+
+	// Same name with different methods and same path should work
+	r.Post("/resource", dummyHandler, "resource.action")
+	r.Put("/resource", dummyHandler, "resource.action")
+	r.Patch("/resource", dummyHandler, "resource.action")
+
+	// Verify all routes are registered
+	routesWithMethods := r.RoutesWithMethods()
+	if len(routesWithMethods) != 3 {
+		t.Errorf("expected 3 routes, got %d", len(routesWithMethods))
+	}
+
+	// Verify each method is registered correctly
+	expectedRoutes := map[string]RouteInfo{
+		"POST:resource.action":  {Method: "POST", Pattern: "/resource"},
+		"PUT:resource.action":   {Method: "PUT", Pattern: "/resource"},
+		"PATCH:resource.action": {Method: "PATCH", Pattern: "/resource"},
+	}
+
+	for key, expected := range expectedRoutes {
+		if info, ok := routesWithMethods[key]; !ok {
+			t.Errorf("missing route %q", key)
+		} else if info.Method != expected.Method || info.Pattern != expected.Pattern {
+			t.Errorf("route %q: got %+v, want %+v", key, info, expected)
+		}
+	}
+
+	// URL generation should work with the name (returns path for any method)
+	url, err := r.URL("resource.action")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if url != "/resource" {
+		t.Errorf("expected /resource, got %s", url)
+	}
+
+	// Routes() should return only one entry for the name
+	routes := r.Routes()
+	if len(routes) != 1 {
+		t.Errorf("expected 1 route in Routes(), got %d", len(routes))
+	}
+	if routes["resource.action"] != "/resource" {
+		t.Errorf("expected /resource, got %s", routes["resource.action"])
+	}
+}
+
+func TestSameNameDifferentPathsPanics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("expected panic for same name with different paths")
+		}
+	}()
+
+	r := New()
+	r.Post("/resource1", dummyHandler, "resource.action")
+	r.Put("/resource2", dummyHandler, "resource.action") // same name, different path
 }
 
 func TestNameGroup(t *testing.T) {

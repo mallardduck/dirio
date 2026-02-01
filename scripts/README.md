@@ -12,9 +12,7 @@ This directory contains scripts to set up test data on S3-compatible storage sys
 
 ### Generic S3 Setup Scripts (New!)
 
-- **`s3-generic-setup.py`** - Python script using boto3 (recommended, truly generic)
-- **`s3-generic-setup.sh`** - Bash script for Linux/macOS/WSL (uses MinIO client)
-- **`s3-generic-setup.ps1`** - PowerShell script for Windows (uses MinIO client)
+- **`s3-minio-setup.sh`** - Bash script for Linux/macOS/WSL (uses MinIO client)
 
 These generic scripts can point at **any** S3-compatible API endpoint and create test data. This is useful for:
 
@@ -27,16 +25,7 @@ These generic scripts can point at **any** S3-compatible API endpoint and create
 
 ### Prerequisites
 
-**Option 1: Python with boto3 (Recommended)**
-
-This is the most generic option and works across all platforms:
-
-```bash
-# Install boto3
-pip install boto3
-```
-
-**Option 2: MinIO client (`mc`)**
+**MinIO client (`mc`)**
 
 If you prefer bash/PowerShell scripts:
 
@@ -56,7 +45,7 @@ Download from https://dl.min.io/client/mc/release/windows-amd64/mc.exe and add t
 
 ### Basic Usage
 
-**Python (All platforms - Recommended):**
+**Linux/macOS/WSL (Bash):**
 ```bash
 cd scripts
 
@@ -66,54 +55,8 @@ export S3_ACCESS_KEY="dirio-admin"
 export S3_SECRET_KEY="dirio-admin-secret"
 
 # Run the script
-python3 s3-generic-setup.py
+./s3-minio-setup.sh
 ```
-
-**Linux/macOS/WSL (Bash):**
-```bash
-cd scripts
-
-# Set environment variables
-export S3_ENDPOINT="http://localhost:8080"
-export S3_ACCESS_KEY="admin"
-export S3_SECRET_KEY="password123"
-
-# Run the script
-./s3-generic-setup.sh
-```
-
-**Windows (PowerShell):**
-```powershell
-cd scripts
-
-# Set environment variables
-$env:S3_ENDPOINT = "http://localhost:8080"
-$env:S3_ACCESS_KEY = "admin"
-$env:S3_SECRET_KEY = "password123"
-
-# Run the script
-.\s3-generic-setup.ps1
-```
-
-### Which Script Should I Use?
-
-**Use the Python script (`s3-generic-setup.py`)** if:
-- You want the most generic, S3-standard implementation
-- You're working across multiple platforms
-- You need SSL verification control
-- You have Python 3 and can install boto3
-
-**Use the Bash script (`s3-generic-setup.sh`)** if:
-- You're on Linux/macOS/WSL
-- You already have the MinIO client installed
-- You prefer shell scripting
-
-**Use the PowerShell script (`s3-generic-setup.ps1`)** if:
-- You're on Windows without WSL
-- You already have the MinIO client installed
-- You prefer PowerShell
-
-All three scripts create the same test data and have the same functionality.
 
 ### Configuration Options
 

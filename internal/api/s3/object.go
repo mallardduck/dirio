@@ -8,15 +8,15 @@ import (
 	"strings"
 
 	"github.com/mallardduck/dirio/internal/logging"
-	"github.com/mallardduck/dirio/internal/storage"
+	"github.com/mallardduck/dirio/internal/service/s3"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
 // GetObject handles GET /{bucket}/{key}
-func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request, bucket, key, requestID string) {
+func (h *HTTPHandler) GetObject(w http.ResponseWriter, r *http.Request, bucket, key, requestID string) {
 	// Validate key according to S3 naming rules
 	if err := ValidateS3Key(key); err != nil {
-		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInvalidObjectKey, err); writeErr != nil {
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeInvalidObjectKey, err); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error validating object key and additional error writing XML error response")
 			return
 		}
@@ -24,25 +24,29 @@ func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request, bucket, key,
 		return
 	}
 
-	obj, err := h.storage.GetObject(r.Context(), bucket, key)
+	objRequest := &s3.GetObjectRequest{
+		Bucket: bucket,
+		Key:    key,
+	}
+	obj, err := h.s3Service.GetObject(r.Context(), objRequest)
 	if err != nil {
-		if errors.Is(err, storage.ErrNoSuchKey) {
-			if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchKey, err); writeErr != nil {
+		if errors.Is(err, s3types.ErrObjectNotFound) {
+			if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeNoSuchKey, err); writeErr != nil {
 				s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error getting object (no such key) and additional error writing XML error response")
 				return
 			}
 			s3Logger.With("err", err).Warn("encountered error getting object (no such key)")
 			return
 		}
-		if errors.Is(err, storage.ErrNoSuchBucket) {
-			if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err); writeErr != nil {
+		if errors.Is(err, s3types.ErrBucketNotFound) {
+			if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeNoSuchBucket, err); writeErr != nil {
 				s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error getting object (no such bucket) and additional error writing XML error response")
 				return
 			}
 			s3Logger.With("err", err).Warn("encountered error getting object (no such bucket)")
 			return
 		}
-		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInternalError, err); writeErr != nil {
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error getting object and additional error writing XML error response")
 			return
 		}
@@ -73,10 +77,10 @@ func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request, bucket, key,
 }
 
 // PutObject handles PUT /{bucket}/{key}
-func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request, bucket, key, requestID string) {
+func (h *HTTPHandler) PutObject(w http.ResponseWriter, r *http.Request, bucket, key, requestID string) {
 	// Validate key according to S3 naming rules
 	if err := ValidateS3Key(key); err != nil {
-		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInvalidObjectKey, err); writeErr != nil {
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeInvalidObjectKey, err); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error validating object key and additional error writing XML error response")
 			return
 		}
@@ -113,19 +117,27 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request, bucket, key,
 		}
 	}
 
+	putRequest := &s3.PutObjectRequest{
+		Bucket:         bucket,
+		Key:            key,
+		Content:        r.Body,
+		ContentType:    contentType,
+		CustomMetadata: customMetadata,
+	}
+
 	// Read object content from request body
 	// Note: Chunked encoding is automatically decoded by middleware
-	etag, err := h.storage.PutObject(r.Context(), bucket, key, r.Body, contentType, customMetadata)
+	etag, err := h.s3Service.PutObject(r.Context(), putRequest)
 	if err != nil {
-		if errors.Is(err, storage.ErrNoSuchBucket) {
-			if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err); writeErr != nil {
+		if errors.Is(err, s3types.ErrBucketNotFound) {
+			if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeNoSuchBucket, err); writeErr != nil {
 				s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error putting object (no such bucket) and additional error writing XML error response")
 				return
 			}
 			s3Logger.With("err", err).Warn("encountered error putting object (no such bucket)")
 			return
 		}
-		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInternalError, err); writeErr != nil {
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error putting object and additional error writing XML error response")
 			return
 		}
@@ -139,10 +151,10 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request, bucket, key,
 }
 
 // HeadObject handles HEAD /{bucket}/{key}
-func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request, bucket, key, requestID string) {
+func (h *HTTPHandler) HeadObject(w http.ResponseWriter, r *http.Request, bucket, key, requestID string) {
 	// Validate key according to S3 naming rules
 	if err := ValidateS3Key(key); err != nil {
-		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInvalidObjectKey, err); writeErr != nil {
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeInvalidObjectKey, err); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error validating object key and additional error writing XML error response")
 			return
 		}
@@ -150,25 +162,29 @@ func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request, bucket, key
 		return
 	}
 
-	meta, err := h.storage.GetObjectMetadata(r.Context(), bucket, key)
+	headRequest := &s3.HeadObjectRequest{
+		Bucket: bucket,
+		Key:    key,
+	}
+	meta, err := h.s3Service.HeadObject(r.Context(), headRequest)
 	if err != nil {
-		if errors.Is(err, storage.ErrNoSuchKey) {
-			if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchKey, err); writeErr != nil {
+		if errors.Is(err, s3types.ErrObjectNotFound) {
+			if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeNoSuchKey, err); writeErr != nil {
 				s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error getting object metadata (no such key) and additional error writing XML error response")
 				return
 			}
 			s3Logger.With("err", err).Warn("encountered error getting object metadata (no such key)")
 			return
 		}
-		if errors.Is(err, storage.ErrNoSuchBucket) {
-			if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err); writeErr != nil {
+		if errors.Is(err, s3types.ErrBucketNotFound) {
+			if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeNoSuchBucket, err); writeErr != nil {
 				s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error getting object metadata (no such bucket) and additional error writing XML error response")
 				return
 			}
 			s3Logger.With("err", err).Warn("encountered error getting object metadata (no such bucket)")
 			return
 		}
-		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInternalError, err); writeErr != nil {
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error getting object metadata and additional error writing XML error response")
 			return
 		}
@@ -192,10 +208,10 @@ func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request, bucket, key
 }
 
 // DeleteObject handles DELETE /{bucket}/{key}
-func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request, bucket, key, requestID string) {
+func (h *HTTPHandler) DeleteObject(w http.ResponseWriter, r *http.Request, bucket, key, requestID string) {
 	// Validate key according to S3 naming rules
 	if err := ValidateS3Key(key); err != nil {
-		if writeErr := writeErrorResponse(w, requestID, s3types.ErrInvalidObjectKey, err); writeErr != nil {
+		if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeInvalidObjectKey, err); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error validating object key and additional error writing XML error response")
 			return
 		}
@@ -203,19 +219,23 @@ func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request, bucket, k
 		return
 	}
 
-	err := h.storage.DeleteObject(r.Context(), bucket, key)
+	deleteRequest := &s3.DeleteObjectRequest{
+		Bucket: bucket,
+		Key:    key,
+	}
+	err := h.s3Service.DeleteObject(r.Context(), deleteRequest)
 	if err != nil {
 		// S3 returns 204 even if object doesn't exist
-		if !errors.Is(err, storage.ErrNoSuchKey) {
-			if errors.Is(err, storage.ErrNoSuchBucket) {
-				if writeErr := writeErrorResponse(w, requestID, s3types.ErrNoSuchBucket, err); writeErr != nil {
+		if !errors.Is(err, s3types.ErrObjectNotFound) {
+			if errors.Is(err, s3types.ErrBucketNotFound) {
+				if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeNoSuchBucket, err); writeErr != nil {
 					s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error deleting object (no such bucket) and additional error writing XML error response")
 					return
 				}
 				s3Logger.With("err", err).Warn("encountered error deleting object (no such bucket)")
 				return
 			}
-			if writeErr := writeErrorResponse(w, requestID, s3types.ErrInternalError, err); writeErr != nil {
+			if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
 				s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error deleting object and additional error writing XML error response")
 				return
 			}

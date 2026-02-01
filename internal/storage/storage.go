@@ -17,11 +17,12 @@ import (
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
+// Use s3types errors for consistency across all layers
 var (
-	ErrBucketExists   = errors.New("bucket already exists")
-	ErrNoSuchBucket   = errors.New("no such bucket")
-	ErrBucketNotEmpty = errors.New("bucket not empty")
-	ErrNoSuchKey      = errors.New("no such key")
+	ErrBucketExists   = s3types.ErrBucketAlreadyExists
+	ErrNoSuchBucket   = s3types.ErrBucketNotFound
+	ErrBucketNotEmpty = s3types.ErrBucketNotEmpty
+	ErrNoSuchKey      = s3types.ErrObjectNotFound
 )
 
 // Storage handles filesystem operations for buckets and objects

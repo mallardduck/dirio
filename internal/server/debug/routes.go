@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"sort"
+	"strings"
 
+	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/router"
 )
 
@@ -23,11 +25,21 @@ type RoutesResponse struct {
 // HandleRoutes returns a handler that lists all registered routes as JSON
 func HandleRoutes(r *router.Router) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		ctx := req.Context()
+		if data, ok := loggingHttp.GetLogData(ctx); ok {
+			data.Action = "ListRoutes"
+		}
+
 		routes := r.RoutesWithMethods()
 
 		// Convert to sorted slice
 		entries := make([]RouteEntry, 0, len(routes))
-		for name, info := range routes {
+		for key, info := range routes {
+			// Extract name from "METHOD:name" format
+			name := key
+			if idx := strings.Index(key, ":"); idx > 0 {
+				name = key[idx+1:]
+			}
 			entries = append(entries, RouteEntry{
 				Name:    name,
 				Method:  info.Method,

@@ -10,6 +10,7 @@ import (
 	"github.com/mallardduck/dirio/internal/jsonutil"
 	"github.com/mallardduck/dirio/internal/minio"
 	"github.com/mallardduck/dirio/internal/path"
+	"github.com/mallardduck/dirio/pkg/iam"
 )
 
 // ImportState tracks MinIO import status
@@ -73,7 +74,7 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 			}
 
 			policy := &Policy{
-				Version:        PolicyMetadataVersion,
+				Version:        iam.PolicyMetadataVersion,
 				Name:           minioPolicy.Name,
 				PolicyDocument: &policyDoc,
 				CreateDate:     minioPolicy.CreateDate,
@@ -91,7 +92,7 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 	if len(result.Users) > 0 {
 		for username, minioUser := range result.Users {
 			dirioUser := &User{
-				Version:          UserMetadataVersion,
+				Version:          iam.UserMetadataVersion,
 				AccessKey:        minioUser.AccessKey,
 				SecretKey:        minioUser.SecretKey,
 				Status:           minioUser.Status,

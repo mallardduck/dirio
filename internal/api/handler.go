@@ -10,6 +10,7 @@ import (
 	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/internal/middleware"
 	"github.com/mallardduck/dirio/internal/router"
+	"github.com/mallardduck/dirio/internal/service"
 	"github.com/mallardduck/dirio/internal/storage"
 )
 
@@ -22,8 +23,10 @@ type routeHandler struct {
 
 // Handler handles S3 API requests
 type Handler struct {
-	S3Handler  *s3.Handler
-	IAMHandler *iam.Handler
+	auth           *auth.Authenticator
+	serviceFactory *service.ServicesFactory
+	S3Handler      *s3.HTTPHandler
+	IAMHandler     *iam.Handler
 }
 
 // URLBuilder defines the interface for generating URLs in S3 API responses
@@ -34,17 +37,16 @@ type URLBuilder interface {
 
 // New creates a new DirIO API handler
 func New(storage *storage.Storage, metadata *metadata.Manager, auth *auth.Authenticator, urlBuilder URLBuilder) *Handler {
+	serviceFactory := service.NewServiceFactory(storage, metadata)
 	return &Handler{
+		auth:           auth,
+		serviceFactory: serviceFactory,
 		S3Handler: s3.New(
-			storage,
-			metadata,
-			auth,
+			serviceFactory,
 			urlBuilder,
 		),
 		IAMHandler: iam.New(
-			storage,
-			metadata,
-			auth,
+			serviceFactory,
 		),
 	}
 }
@@ -67,12 +69,21 @@ func (h *Handler) BucketResourceHandler() routeHandler {
 			requestID := middleware.GetRequestID(ctx)
 			bucket := router.URLParam(r, "bucket")
 
+			// Check for bucket policy operation
+			if _, ok := r.URL.Query()["policy"]; ok {
+				if data, ok := loggingHttp.GetLogData(ctx); ok {
+					data.Action = "PutBucketPolicy"
+				}
+				h.S3Handler.PutBucketPolicy(w, r, bucket, requestID)
+				return
+			}
+
 			if data, ok := loggingHttp.GetLogData(ctx); ok {
 				data.Action = "CreateBucket"
 			}
 
 			h.S3Handler.CreateBucket(w, r, bucket, requestID)
-		}, // CreateBucket
+		}, // CreateBucket, PutBucketPolicy
 		ShowHandler: func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 			requestID := middleware.GetRequestID(ctx)
@@ -80,6 +91,15 @@ func (h *Handler) BucketResourceHandler() routeHandler {
 
 			// Check query parameters to determine operation
 			query := r.URL.Query()
+
+			// GetBucketPolicy
+			if _, ok := query["policy"]; ok {
+				if data, ok := loggingHttp.GetLogData(ctx); ok {
+					data.Action = "GetBucketPolicy"
+				}
+				h.S3Handler.GetBucketPolicy(w, r, bucket, requestID)
+				return
+			}
 
 			// GetBucketLocation (backwards compatibility - AWS recommends HeadBucket instead)
 			if _, ok := query["location"]; ok {
@@ -102,17 +122,26 @@ func (h *Handler) BucketResourceHandler() routeHandler {
 				data.Action = "ListObjects"
 			}
 			h.S3Handler.ListObjects(w, r, bucket, requestID)
-		}, // ListObjects, ListObjectsV2, GetBucketLocation
+		}, // ListObjects, ListObjectsV2, GetBucketLocation, GetBucketPolicy
 		DestroyHandler: func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 			requestID := middleware.GetRequestID(ctx)
 			bucket := router.URLParam(r, "bucket")
 
+			// Check for bucket policy deletion
+			if _, ok := r.URL.Query()["policy"]; ok {
+				if data, ok := loggingHttp.GetLogData(ctx); ok {
+					data.Action = "DeleteBucketPolicy"
+				}
+				h.S3Handler.DeleteBucketPolicy(w, r, bucket, requestID)
+				return
+			}
+
 			if data, ok := loggingHttp.GetLogData(ctx); ok {
 				data.Action = "DeleteBucket"
 			}
 			h.S3Handler.DeleteBucket(w, r, bucket, requestID)
-		}, // DeleteBucket
+		}, // DeleteBucket, DeleteBucketPolicy
 	}
 }
 
