@@ -21,9 +21,10 @@ Each bug is documented in a separate file with the naming convention:
 
 | ID | Title | File | Discovered | Status |
 |----|-------|------|------------|--------|
-| 001 | AWS SigV4 Chunked Encoding Corruption | [001-chunked-encoding-corruption.md](001-chunked-encoding-corruption.md) | 2026-01-31 | Open |
+| 001 | AWS SigV4 Chunked Encoding Corruption | [001-chunked-encoding-corruption.md](001-chunked-encoding-corruption.md) | 2026-01-31 | ❌ OPEN |
 
 **Impact:** All write operations store corrupted data with encoding headers. Affects PutObject, multipart uploads, object tagging.
+**Note:** Bug confirmed STILL PRESENT via client tests (Jan 31, 2026 18:30 UTC). GetObject returns chunked encoding markers in content.
 
 ### ⚠️ High Priority (Client Compatibility)
 
@@ -105,9 +106,11 @@ Links to related bugs or dependencies.
 
 ## Fixed Bugs (Archive)
 
-| ID | Title | Fixed Date | PR/Commit |
-|----|-------|------------|-----------|
-| - | - | - | - |
+| ID | Title | Fixed Date | PR/Commit | Verification Status |
+|----|-------|------------|-----------|---------------------|
+| - | - | - | - | - |
+
+**Note:** Bugs moved to `fixed/` directory are pending verification via client tests.
 
 ## Testing Coverage
 

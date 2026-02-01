@@ -93,9 +93,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid data directory: %w", err)
 	}
 
-	// Migrate existing installations: create data config if missing
-	if err := migrateDataConfig(settings); err != nil {
-		return fmt.Errorf("failed to migrate data config: %w", err)
+	// Initialize or migrate: create data config if missing
+	if err := initOrMigrateDataConfig(settings); err != nil {
+		return fmt.Errorf("failed to initialize data config: %w", err)
 	}
 
 	// Create server configuration from settings
@@ -145,12 +145,12 @@ func validateDataDir(path string) error {
 	return nil
 }
 
-// migrateDataConfig creates data config for existing installations
+// initOrMigrateDataConfig creates data config for new or existing installations
 // that don't have .dirio/config.json yet
-func migrateDataConfig(settings *config.Settings) error {
-	log := logging.Component("migration")
+func initOrMigrateDataConfig(settings *config.Settings) error {
+	log := logging.Component("init")
 
-	// If data config already exists (either loaded or from MinIO import), skip migration
+	// If data config already exists (either loaded or from MinIO import), skip
 	if settings.DataConfig != nil {
 		return nil
 	}
@@ -161,31 +161,47 @@ func migrateDataConfig(settings *config.Settings) error {
 	// Check if .dirio/config.json already exists
 	if dataconfig.DataConfigExists(fs) {
 		// Should have been loaded, but wasn't - this might indicate a problem
-		log.Warn("Data config file exists but wasn't loaded - skipping migration")
+		log.Warn("Data config file exists but wasn't loaded - skipping initialization")
 		return nil
 	}
 
 	// Check if this looks like an existing installation (has .metadata directory)
+	metadataExists := false
 	if _, err := fs.Stat(".metadata"); err == nil {
-		// Existing installation found - create data config from current settings
+		metadataExists = true
+	}
+
+	if metadataExists {
 		log.Info("Migrating existing installation - creating data config from CLI settings")
+	} else {
+		log.Info("Initializing new DirIO data directory")
+	}
 
-		dc := dataconfig.DefaultDataConfig()
-		dc.Credentials.AccessKey = settings.AccessKey
-		dc.Credentials.SecretKey = settings.SecretKey
-		// Region defaults to us-east-1 (set in DefaultDataConfig)
-		// Other settings use defaults
+	// Create data config with CLI-provided credentials
+	dc := dataconfig.DefaultDataConfig()
+	dc.Credentials.AccessKey = settings.AccessKey
+	dc.Credentials.SecretKey = settings.SecretKey
+	// Region defaults to us-east-1 (set in DefaultDataConfig)
+	// Compression settings use defaults (disabled)
+	// WORM defaults to disabled
 
-		if err := dataconfig.SaveDataConfig(fs, dc); err != nil {
-			return fmt.Errorf("failed to save migrated data config: %w", err)
-		}
+	if err := dataconfig.SaveDataConfig(fs, dc); err != nil {
+		return fmt.Errorf("failed to save data config: %w", err)
+	}
 
-		// Update settings to use the new data config
-		settings.DataConfig = dc
+	// Update settings to use the new data config
+	settings.DataConfig = dc
 
+	if metadataExists {
 		log.Info("Migration complete - data config created",
 			"admin", dc.Credentials.AccessKey,
 			"region", dc.Region)
+	} else {
+		log.Info("Initialization complete - core config files created",
+			"admin", dc.Credentials.AccessKey,
+			"region", dc.Region,
+			"compression", dc.Compression.Enabled,
+			"worm", dc.WORMEnabled)
 	}
 
 	return nil

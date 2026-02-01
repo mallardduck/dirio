@@ -16,7 +16,6 @@ import (
 
 func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID := middleware.GetRequestID(r.Context())
 
 		// Authenticate the request
 		user, err := a.AuthenticateRequest(r)
@@ -36,6 +35,7 @@ func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 				// Other signature verification errors
 				errCode = s3types.ErrSignatureDoesNotMatch
 			}
+			requestID := middleware.GetRequestID(r.Context())
 			if writeErr := writeAuthError(w, requestID, errCode); writeErr != nil {
 				authLogger.With("err", err, "error_code", errCode, "write_err", writeErr).Warn("encountered error authenticating request and additional error writing XML error response")
 				return

@@ -3,10 +3,21 @@
 **Discovered:** January 31, 2026
 **Status:** 🚨 CRITICAL - Blocks production use
 **Impact:** ALL write operations corrupted
+**Fix Status:** ⚠️ PARTIAL - Decoder implemented but not activating for real AWS clients
+
+## Current Status (January 31, 2026 18:36 UTC)
+
+- ✅ **Decoder implemented:** Full AWS SigV4 chunked encoding parser in `internal/auth/chunked.go`
+- ✅ **Middleware created:** `internal/middleware/chunked.go` wraps request body with decoder
+- ✅ **Integration tests pass:** All 6 chunked encoding tests pass with manual header
+- ❌ **Client tests still fail:** Real AWS clients (boto3, mc) still show chunked markers in output
+- ❌ **Middleware not activating:** Header detection failing for real client requests
+
+**The decoder works perfectly when triggered. The issue is detecting when to use it.**
 
 ## Summary
 
-AWS Signature V4 chunked transfer encoding headers are being written directly to object files instead of being parsed and removed. This causes data corruption in all write operations.
+AWS Signature V4 chunked transfer encoding headers are being written directly to object files instead of being parsed and removed. A decoder has been implemented and tested, but the middleware that activates it is not detecting chunked encoding from real AWS clients (boto3, MinIO mc). This causes data corruption in all write operations from these clients.
 
 ## Evidence
 
@@ -76,15 +87,30 @@ The server should:
 
 ## Test Results
 
-### Before Content Verification (False Positives)
+### Integration Tests (Manual Chunked Encoding) - January 31, 2026
+- ✅ **TestPutObject_ChunkedEncoding** - PASS: Single chunk decoded correctly
+- ✅ **TestPutObject_MultipleChunks** - PASS: Multiple chunks decoded correctly
+- ✅ **TestPutObject_LargeChunkedData** - PASS: 1KB chunk decoded correctly
+- ✅ **TestPutObject_NonChunkedStillWorks** - PASS: Normal uploads still work
+- ✅ **TestPutObject_EmptyChunkedUpload** - PASS: Empty chunks handled correctly
+- ✅ All tests verify no chunked markers in decoded content
+- ✅ All tests verify byte-for-byte content integrity
+
+**Conclusion:** The decoder implementation is correct and fully functional when activated.
+
+### Client Tests (Real AWS Clients) - January 31, 2026 18:30 UTC
+
+#### Before Content Verification (False Positives)
 - Multipart Upload: ✅ PASS (only checked metadata size)
 - Object Tagging: ✅ PASS (only checked operation succeeded)
 - GetObject: ✅ PASS (only checked data returned)
 
-### After Content Verification (Exposed Bugs)
+#### After Content Verification (Exposed Bugs)
 - Multipart Upload: ❌ FAIL - Downloaded 10,500,246 bytes instead of 10,485,760
 - Object Tagging: ❌ FAIL - Content replaced with XML tags
-- GetObject: ❌ FAIL - Content contains chunk markers like `15;chunk-signature=...`
+- GetObject: ❌ FAIL - Content contains chunk markers like `d;chunk-signature=...`
+
+**Conclusion:** Middleware is not activating for real AWS client requests. Chunked data is passing through un-decoded.
 
 ## Impact Assessment
 
@@ -104,22 +130,45 @@ The server should:
 - Cannot trust any PutObject operations
 - Cannot implement CopyObject (relies on content integrity)
 
-## Files to Investigate
+## Files Involved
 
-Based on the codebase structure, likely locations:
+### Already Implemented (Decoder)
 
-1. **Request body parsing:**
+1. **Chunked encoding decoder:**
+   - `internal/auth/chunked.go` - Full AWS SigV4 chunked encoding parser (303 lines)
+   - `internal/auth/chunked_test.go` - Unit tests for decoder
+   - ✅ Implementation complete and tested
+
+2. **Middleware:**
+   - `internal/middleware/chunked.go` - Middleware to activate decoder (53 lines)
+   - Checks for `X-Amz-Content-Sha256: STREAMING-AWS4-HMAC-SHA256-PAYLOAD`
+   - ⚠️ Not activating for real AWS clients
+
+3. **Server integration:**
+   - `internal/server/server.go` - Line 149-151: Middleware registered
+   - Placed after auth middleware, before handlers
+   - ✅ Correctly positioned in middleware chain
+
+4. **Integration tests:**
+   - `tests/integration/chunked_encoding_test.go` - 6 comprehensive tests
+   - ✅ All tests pass when header is manually set
+
+### Need Investigation (Why Not Activating)
+
+1. **Header detection:**
+   - `internal/middleware/chunked.go:25` - Header check logic
+   - Need to log what headers real clients send
+   - May need fallback detection mechanism
+
+2. **Request body parsing:**
    - `internal/api/handlers/object.go` - PutObject handler
    - `internal/api/handlers/multipart.go` - Multipart upload handlers
-   - Look for where request body is read and written to storage
+   - Verify middleware runs before these handlers
 
-2. **Authentication middleware:**
+3. **Authentication middleware:**
    - `internal/auth/signature.go` - AWS SigV4 verification
-   - May need to handle chunked encoding before/after signature verification
-
-3. **Storage layer:**
-   - `internal/storage/*.go` - Where data is written to disk
-   - Check if raw request body is being passed through without parsing
+   - May need to inspect headers during auth
+   - Check if auth modifies or removes relevant headers
 
 ## Reproduction Steps
 
@@ -134,6 +183,79 @@ Or for multipart:
 4. Compare sizes: `ls -l test.dat downloaded.dat`
 5. Observe: Downloaded file is ~14KB larger
 
+## Attempted Fix (Incomplete)
+
+### What Was Implemented
+
+A chunked encoding decoder was implemented with the following components:
+
+1. **Middleware** (`internal/middleware/chunked.go`):
+   - Checks for `X-Amz-Content-Sha256: STREAMING-AWS4-HMAC-SHA256-PAYLOAD` header
+   - If detected, wraps request body with decoder
+   - Registered in server middleware chain (line 149 of `internal/server/server.go`)
+
+2. **Decoder** (`internal/auth/chunked.go`):
+   - Full AWS SigV4 chunked encoding parser
+   - Parses chunk headers: `{size};chunk-signature={sig}\r\n`
+   - Extracts raw data chunks
+   - Optional signature verification support
+   - Handles multiple chunks, empty chunks, large data
+
+3. **Integration Tests** (`tests/integration/chunked_encoding_test.go`):
+   - 6 comprehensive tests covering various scenarios
+   - **ALL INTEGRATION TESTS PASS** ✅
+   - Tests verify decoded content has no encoding markers
+   - Tests verify byte-for-byte content integrity
+
+### Why It's Still Broken
+
+**The middleware only activates when the request includes:**
+```
+X-Amz-Content-Sha256: STREAMING-AWS4-HMAC-SHA256-PAYLOAD
+```
+
+**Problem:** Real AWS clients (boto3, MinIO mc, AWS CLI) appear to NOT be sending this header consistently, or are sending chunked data in a different format.
+
+**Evidence:**
+- Integration tests (manual header): ✅ PASS - Middleware activates, decoding works
+- Client tests (real AWS clients): ❌ FAIL - Chunked markers still in output
+
+### Root Cause Analysis (Updated)
+
+The issue has two possible explanations:
+
+1. **Header Detection Failure:**
+   - Real AWS clients may not send `X-Amz-Content-Sha256: STREAMING-AWS4-HMAC-SHA256-PAYLOAD`
+   - OR they send it only for specific operations (multipart uploads?)
+   - Middleware doesn't activate, raw chunked data passes through
+
+2. **Dual Chunking:**
+   - Clients might use HTTP Transfer-Encoding: chunked (standard HTTP)
+   - AND AWS SigV4 payload chunking (application-level)
+   - Go's HTTP server auto-decodes HTTP chunking
+   - But AWS SigV4 chunking still needs decoding
+
+### What Still Needs to Be Fixed
+
+1. **Investigate header detection:**
+   - Add logging to see what headers real clients send
+   - Check if `X-Amz-Content-Sha256` header is present
+   - Verify header value matches `STREAMING-AWS4-HMAC-SHA256-PAYLOAD`
+
+2. **Fallback detection mechanism:**
+   - If header isn't reliable, detect chunked encoding by inspecting body format
+   - Look for pattern: `{hex};chunk-signature=`
+   - Peek at first bytes of request body to detect encoding
+
+3. **Verify middleware placement:**
+   - Ensure middleware runs AFTER auth but BEFORE handlers
+   - Confirm middleware is actually executing for failing requests
+
+4. **Test with real clients:**
+   - Add debug logging to middleware
+   - Run client tests with logging enabled
+   - Verify why middleware isn't activating
+
 ## Fix Priority
 
 **This must be fixed before:**
@@ -142,16 +264,94 @@ Or for multipart:
 - Implementing multipart uploads properly
 - Claiming compatibility with any S3 client
 
-**Recommended approach:**
-1. Identify where request body is read in PutObject handler
-2. Add chunked transfer encoding parser
-3. Extract raw data chunks, verify signatures
-4. Write only decoded data to storage
-5. Add integration tests that verify byte-for-byte content integrity
-6. Re-run all client tests to verify fix
+**Current Status:**
+- ✅ Decoder implementation complete and tested
+- ✅ Middleware infrastructure in place
+- ❌ Middleware activation detection failing for real AWS clients
+- ❌ Client compatibility tests still failing
+
+**Next Steps:**
+1. Add debug logging to chunked encoding middleware
+2. Run client tests to capture what headers are actually sent
+3. Determine why `X-Amz-Content-Sha256` header detection isn't working
+4. Implement fallback detection if header is unreliable
+5. Re-run client tests to verify complete fix
+
+## Debugging Steps
+
+To diagnose why the middleware isn't activating for real AWS clients:
+
+### 1. Add Logging to Middleware
+
+```go
+// In internal/middleware/chunked.go:24
+func ChunkedEncoding(decoderFactory ChunkedDecoderFactory) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            contentSHA256 := r.Header.Get(consts.HeaderContentSHA256)
+
+            // DEBUG: Log header value
+            log.Printf("DEBUG: X-Amz-Content-Sha256 = %q", contentSHA256)
+            log.Printf("DEBUG: All headers: %+v", r.Header)
+
+            if contentSHA256 == consts.ContentSHA256Streaming {
+                log.Printf("DEBUG: Activating chunked encoding decoder")
+                // ... decoder activation
+            } else {
+                log.Printf("DEBUG: NOT activating decoder (header mismatch)")
+            }
+            next.ServeHTTP(w, r)
+        })
+    }
+}
+```
+
+### 2. Run Client Tests with Debugging
+
+```bash
+# Run MinIO mc test to see what headers are sent
+go test -v ./tests/clients/... -run TestMinIOMC 2>&1 | grep -A5 "DEBUG:"
+
+# Look for:
+# - What value is in X-Amz-Content-Sha256 header?
+# - Is the header present at all?
+# - Are there other headers that indicate chunked encoding?
+```
+
+### 3. Check for Alternative Headers
+
+AWS clients might use different indicators:
+- `Transfer-Encoding: chunked` (HTTP-level, auto-decoded by Go)
+- `Content-Encoding: aws-chunked` (alternative marker)
+- `x-amz-decoded-content-length` (present with chunked uploads)
+
+### 4. Inspect Raw Request Body
+
+Add logging to peek at first 100 bytes of request body:
+```go
+// Read first bytes to detect format
+buf := make([]byte, 100)
+n, _ := r.Body.Read(buf)
+log.Printf("DEBUG: First %d bytes: %q", n, buf[:n])
+// Create reader that includes the peeked bytes
+r.Body = io.MultiReader(bytes.NewReader(buf[:n]), r.Body)
+```
+
+Look for pattern: `{hex};chunk-signature=` at start of body
+
+### 5. Test with AWS CLI
+
+AWS CLI may behave differently than boto3/mc:
+```bash
+# Enable AWS CLI debug logging
+aws --debug s3 cp test.txt s3://bucket/test.txt 2>&1 | grep -i "chunk\|streaming"
+```
 
 ## References
 
 - AWS Signature Version 4 with chunked transfer encoding: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html
-- Related discussion in authentication code (if any)
-- Test evidence: `tests/clients/scripts/mc.sh` lines 215-243 (object tagging), 246-274 (multipart)
+- AWS SDK chunked upload behavior: https://github.com/aws/aws-sdk-go/issues/1816
+- MinIO client chunked encoding: https://github.com/minio/minio-go
+- Integration tests: `tests/integration/chunked_encoding_test.go` (all passing)
+- Client test evidence: `tests/clients/scripts/mc.sh` lines 215-243 (object tagging), 246-274 (multipart)
+- Test results: `bugs/TEST_RESULTS_2026-01-31.md`
