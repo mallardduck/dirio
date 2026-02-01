@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -22,7 +21,6 @@ import (
 	"github.com/mallardduck/dirio/internal/middleware"
 	"github.com/mallardduck/dirio/internal/path"
 	"github.com/mallardduck/dirio/internal/router"
-	"github.com/mallardduck/dirio/internal/server/favicon"
 	"github.com/mallardduck/dirio/internal/storage"
 	"github.com/mallardduck/dirio/internal/urlbuilder"
 )
@@ -42,6 +40,9 @@ type Config struct {
 
 	// URL generation
 	CanonicalDomain string
+
+	// Debug mode
+	Debug bool
 
 	// Data directory configuration (optional)
 	// If present, provides alternative admin credentials from data config
@@ -126,110 +127,20 @@ func (s *Server) setupRoutes() {
 	s.router.Use(middleware.RequestID)
 	s.router.Use(loggingHttp.PrepareAccessLogMiddleware(s.log))
 
-	// Public Routes (no auth required)
-	s.router.MiddlewareGroup(func(r *router.Router) {
-		// Add any public routes here without auth middleware
-		// For example: health checks, public assets, etc.
-		r.Get("/favicon.ico", favicon.HandleFavicon, "favicon")
-	})
-
 	// Create URL builder
 	urlBuilder := urlbuilder.New(s.config.CanonicalDomain)
 
 	// Create API handler
 	apiHandler := api.New(s.storage, s.metadata, s.auth, urlBuilder)
 
-	// Base Routes
-	s.router.MiddlewareGroup(func(r *router.Router) {
-		// Authentication middleware - verifies AWS SigV4 signatures
-		r.Use(s.auth.AuthMiddleware)
+	// Setup routes using shared function
+	deps := &RouteDependencies{
+		Auth:       s.auth,
+		APIHandler: apiHandler,
+		Debug:      s.config.Debug,
+	}
 
-		// Chunked encoding middleware - decodes AWS SigV4 chunked transfer encoding
-		// Must run AFTER auth middleware, BEFORE handlers
-		r.Use(middleware.ChunkedEncoding(func(r io.Reader) io.Reader {
-			return auth.NewChunkedReader(r)
-		}))
-
-		// Root - ListBuckets
-		r.Get("/", apiHandler.S3Handler.ListBuckets, "index")
-
-		// Bucket operations
-		bucketHandler := apiHandler.BucketResourceHandler()
-		r.Head("/{bucket}", bucketHandler.HeadHandler, "buckets.head")
-		r.Put("/{bucket}", bucketHandler.StoreHandler, "buckets.store")
-		r.Get("/{bucket}", bucketHandler.ShowHandler, "buckets.show")
-		r.Delete("/{bucket}", bucketHandler.DestroyHandler, "buckets.destroy")
-
-		// Object operations (use /* for catch-all to match keys with slashes)
-		objectHandler := apiHandler.ObjectResourceHandler()
-		r.Head("/{bucket}/*", objectHandler.HeadHandler, "objects.head")
-		r.Put("/{bucket}/*", objectHandler.StoreHandler, "objects.create")
-		r.Get("/{bucket}/*", objectHandler.ShowHandler, "objects.show")
-		r.Delete("/{bucket}/*", objectHandler.DestroyHandler, "objects.destroy")
-	})
-
-	// IAM API Routes (RESTful style - Phase 5)
-	s.router.NameGroup("iam.", "/api/iam", func(r *router.Router) {
-		// Authentication required for IAM operations
-		r.Use(s.auth.AuthMiddleware)
-		// TODO maybe even an Admin level auth middleware? needed here
-
-		// User Management
-		r.Get("/users", s.notImplemented, "users.list")                 // ListUsers
-		r.Post("/users", s.notImplemented, "users.create")              // CreateUser(s3)/StoreUser
-		r.Get("/users/{username}", s.notImplemented, "users.get")       // GetUser
-		r.Put("/users/{username}", s.notImplemented, "users.update")    // UpdateUser
-		r.Delete("/users/{username}", s.notImplemented, "users.delete") // DeleteUser
-		// TODO: replace above with s.Resource based configs
-
-		// Group Management
-		r.Post("/groups", s.notImplemented, "groups.create")                                    // CreateGroup
-		r.Get("/groups", s.notImplemented, "groups.list")                                       // ListGroups
-		r.Get("/groups/{groupname}", s.notImplemented, "groups.get")                            // GetGroup
-		r.Delete("/groups/{groupname}", s.notImplemented, "groups.delete")                      // DeleteGroup
-		r.Post("/groups/{groupname}/users/{username}", s.notImplemented, "groups.adduser")      // AddUserToGroup
-		r.Delete("/groups/{groupname}/users/{username}", s.notImplemented, "groups.removeuser") // RemoveUserFromGroup
-
-		// Role Management
-		r.Post("/roles", s.notImplemented, "roles.create")              // CreateRole
-		r.Get("/roles", s.notImplemented, "roles.list")                 // ListRoles
-		r.Get("/roles/{rolename}", s.notImplemented, "roles.get")       // GetRole
-		r.Delete("/roles/{rolename}", s.notImplemented, "roles.delete") // DeleteRole
-
-		// Policy Management
-		r.Post("/policies", s.notImplemented, "policies.create")               // CreatePolicy
-		r.Get("/policies", s.notImplemented, "policies.list")                  // ListPolicies
-		r.Get("/policies/{policyarn}", s.notImplemented, "policies.get")       // GetPolicy
-		r.Delete("/policies/{policyarn}", s.notImplemented, "policies.delete") // DeletePolicy
-
-		// Policy Attachments - Users
-		r.Post("/users/{username}/policies/{policyarn}", s.notImplemented, "users.attachpolicy")           // AttachUserPolicy
-		r.Delete("/users/{username}/policies/{policyarn}", s.notImplemented, "users.detachpolicy")         // DetachUserPolicy
-		r.Put("/users/{username}/policies/inline/{policyname}", s.notImplemented, "users.putpolicy")       // PutUserPolicy
-		r.Delete("/users/{username}/policies/inline/{policyname}", s.notImplemented, "users.deletepolicy") // DeleteUserPolicy
-
-		// Policy Attachments - Groups
-		r.Post("/groups/{groupname}/policies/{policyarn}", s.notImplemented, "groups.attachpolicy")           // AttachGroupPolicy
-		r.Delete("/groups/{groupname}/policies/{policyarn}", s.notImplemented, "groups.detachpolicy")         // DetachGroupPolicy
-		r.Put("/groups/{groupname}/policies/inline/{policyname}", s.notImplemented, "groups.putpolicy")       // PutGroupPolicy
-		r.Delete("/groups/{groupname}/policies/inline/{policyname}", s.notImplemented, "groups.deletepolicy") // DeleteGroupPolicy
-
-		// Policy Attachments - Roles
-		r.Post("/roles/{rolename}/policies/{policyarn}", s.notImplemented, "roles.attachpolicy")           // AttachRolePolicy
-		r.Delete("/roles/{rolename}/policies/{policyarn}", s.notImplemented, "roles.detachpolicy")         // DetachRolePolicy
-		r.Put("/roles/{rolename}/policies/inline/{policyname}", s.notImplemented, "roles.putpolicy")       // PutRolePolicy
-		r.Delete("/roles/{rolename}/policies/inline/{policyname}", s.notImplemented, "roles.deletepolicy") // DeleteRolePolicy
-
-		// Access Key Management
-		r.Post("/users/{username}/access-keys", s.notImplemented, "accesskeys.create")                 // CreateAccessKey
-		r.Get("/users/{username}/access-keys", s.notImplemented, "accesskeys.list")                    // ListAccessKeys
-		r.Put("/users/{username}/access-keys/{accesskeyid}", s.notImplemented, "accesskeys.update")    // UpdateAccessKey
-		r.Delete("/users/{username}/access-keys/{accesskeyid}", s.notImplemented, "accesskeys.delete") // DeleteAccessKey
-
-		// Account & Authorization
-		r.Get("/account/authorization-details", s.notImplemented, "account.authdetails") // GetAccountAuthorizationDetails
-		r.Post("/simulate-policy", s.notImplemented, "simulate.policy")                  // SimulatePrincipalPolicy
-	})
+	SetupRoutes(s.router, deps)
 }
 
 // notImplemented is a placeholder handler for IAM routes that returns 501 Not Implemented

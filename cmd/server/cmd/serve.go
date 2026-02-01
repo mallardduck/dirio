@@ -109,6 +109,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 		MDNSHostname:    settings.MDNSHostname,
 		MDNSMode:        settings.MDNSMode,
 		CanonicalDomain: settings.CanonicalDomain,
+		Debug:           settings.Debug,
 		DataConfig:      settings.DataConfig, // Data admin (if exists)
 	}
 

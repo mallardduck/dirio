@@ -11,19 +11,25 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// RouteInfo contains metadata about a registered route
+type RouteInfo struct {
+	Method  string `json:"method"`
+	Pattern string `json:"pattern"`
+}
+
 // Router wraps chi.Router with named route support and URL generation.
 type Router struct {
 	mux       chi.Router
-	routes    map[string]string // name -> pattern
-	pathStack []string          // tracks path prefixes in nested groups
-	nameStack []string          // tracks name prefixes in nested groups
+	routes    map[string]RouteInfo // name -> route info
+	pathStack []string             // tracks path prefixes in nested groups
+	nameStack []string             // tracks name prefixes in nested groups
 }
 
 // New creates a new Router instance.
 func New() *Router {
 	return &Router{
 		mux:    chi.NewRouter(),
-		routes: make(map[string]string),
+		routes: make(map[string]RouteInfo),
 	}
 }
 
@@ -38,7 +44,7 @@ func (r *Router) currentName() string {
 }
 
 // register adds a route to the registry with the current prefix.
-func (r *Router) register(name, pattern string) {
+func (r *Router) register(name, pattern, method string) {
 	if name == "" {
 		return
 	}
@@ -48,58 +54,86 @@ func (r *Router) register(name, pattern string) {
 	}
 	fullPattern := r.currentPath() + pattern
 	if existing, ok := r.routes[fullName]; ok {
-		panic(fmt.Sprintf("router: duplicate route name %q (existing: %s, new: %s)", fullName, existing, fullPattern))
+		panic(fmt.Sprintf("router: duplicate route name %q (existing: %s %s, new: %s %s)",
+			fullName, existing.Method, existing.Pattern, method, fullPattern))
 	}
-	r.routes[fullName] = fullPattern
+	r.routes[fullName] = RouteInfo{
+		Method:  method,
+		Pattern: fullPattern,
+	}
 }
 
 // Get registers a GET route with an optional name.
 // If name is empty, the route is not added to the registry.
+// If handler is nil, the route is registered but not bound to the mux (useful for route listing).
 func (r *Router) Get(pattern string, handler http.HandlerFunc, name string) {
-	r.register(name, pattern)
-	r.mux.Get(r.currentPath()+pattern, handler)
+	r.register(name, pattern, "GET")
+	if handler != nil {
+		r.mux.Get(r.currentPath()+pattern, handler)
+	}
 }
 
 // Post registers a POST route with an optional name.
+// If handler is nil, the route is registered but not bound to the mux (useful for route listing).
 func (r *Router) Post(pattern string, handler http.HandlerFunc, name string) {
-	r.register(name, pattern)
-	r.mux.Post(r.currentPath()+pattern, handler)
+	r.register(name, pattern, "POST")
+	if handler != nil {
+		r.mux.Post(r.currentPath()+pattern, handler)
+	}
 }
 
 // Put registers a PUT route with an optional name.
+// If handler is nil, the route is registered but not bound to the mux (useful for route listing).
 func (r *Router) Put(pattern string, handler http.HandlerFunc, name string) {
-	r.register(name, pattern)
-	r.mux.Put(r.currentPath()+pattern, handler)
+	r.register(name, pattern, "PUT")
+	if handler != nil {
+		r.mux.Put(r.currentPath()+pattern, handler)
+	}
 }
 
 // Patch registers a PATCH route with an optional name.
+// If handler is nil, the route is registered but not bound to the mux (useful for route listing).
 func (r *Router) Patch(pattern string, handler http.HandlerFunc, name string) {
-	r.register(name, pattern)
-	r.mux.Patch(r.currentPath()+pattern, handler)
+	r.register(name, pattern, "PATCH")
+	if handler != nil {
+		r.mux.Patch(r.currentPath()+pattern, handler)
+	}
 }
 
 // Delete registers a DELETE route with an optional name.
+// If handler is nil, the route is registered but not bound to the mux (useful for route listing).
 func (r *Router) Delete(pattern string, handler http.HandlerFunc, name string) {
-	r.register(name, pattern)
-	r.mux.Delete(r.currentPath()+pattern, handler)
+	r.register(name, pattern, "DELETE")
+	if handler != nil {
+		r.mux.Delete(r.currentPath()+pattern, handler)
+	}
 }
 
 // Head registers a HEAD route with an optional name.
+// If handler is nil, the route is registered but not bound to the mux (useful for route listing).
 func (r *Router) Head(pattern string, handler http.HandlerFunc, name string) {
-	r.register(name, pattern)
-	r.mux.Head(r.currentPath()+pattern, handler)
+	r.register(name, pattern, "HEAD")
+	if handler != nil {
+		r.mux.Head(r.currentPath()+pattern, handler)
+	}
 }
 
 // Options registers an OPTIONS route with an optional name.
+// If handler is nil, the route is registered but not bound to the mux (useful for route listing).
 func (r *Router) Options(pattern string, handler http.HandlerFunc, name string) {
-	r.register(name, pattern)
-	r.mux.Options(r.currentPath()+pattern, handler)
+	r.register(name, pattern, "OPTIONS")
+	if handler != nil {
+		r.mux.Options(r.currentPath()+pattern, handler)
+	}
 }
 
 // Method registers a route for a specific HTTP method with an optional name.
+// If handler is nil, the route is registered but not bound to the mux (useful for route listing).
 func (r *Router) Method(method, pattern string, handler http.HandlerFunc, name string) {
-	r.register(name, pattern)
-	r.mux.Method(method, r.currentPath()+pattern, handler)
+	r.register(name, pattern, method)
+	if handler != nil {
+		r.mux.Method(method, r.currentPath()+pattern, handler)
+	}
 }
 
 // Use appends middleware to the router's middleware stack.
@@ -216,7 +250,7 @@ var paramRegex = regexp.MustCompile(`\{([^}:]+)(?::[^}]*)?\}`)
 // Parameters are provided as key-value pairs: "key1", "value1", "key2", "value2", etc.
 // Returns an error if the route name is not found or if parameters are invalid.
 func (r *Router) URL(name string, params ...string) (string, error) {
-	pattern, ok := r.routes[name]
+	info, ok := r.routes[name]
 	if !ok {
 		return "", fmt.Errorf("router: unknown route name %q", name)
 	}
@@ -232,7 +266,7 @@ func (r *Router) URL(name string, params ...string) (string, error) {
 	}
 
 	// Replace all parameters in the pattern
-	result := paramRegex.ReplaceAllStringFunc(pattern, func(match string) string {
+	result := paramRegex.ReplaceAllStringFunc(info.Pattern, func(match string) string {
 		// Extract parameter name (without regex part)
 		submatch := paramRegex.FindStringSubmatch(match)
 		if len(submatch) < 2 {
@@ -257,9 +291,19 @@ func (r *Router) MustURL(name string, params ...string) string {
 	return url
 }
 
-// Routes returns a copy of the route registry for inspection.
+// Routes returns a map of route names to patterns (without methods).
+// Kept for backward compatibility.
 func (r *Router) Routes() map[string]string {
 	cpy := make(map[string]string, len(r.routes))
+	for name, info := range r.routes {
+		cpy[name] = info.Pattern
+	}
+	return cpy
+}
+
+// RoutesWithMethods returns a copy of the route registry with full metadata.
+func (r *Router) RoutesWithMethods() map[string]RouteInfo {
+	cpy := make(map[string]RouteInfo, len(r.routes))
 	maps.Copy(cpy, r.routes)
 	return cpy
 }
