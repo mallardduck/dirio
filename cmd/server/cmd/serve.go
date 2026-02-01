@@ -34,6 +34,7 @@ func init() {
 	// Server flags - using the option definitions for flag keys
 	serveCmd.Flags().StringP(config.DataDir.GetFlagKey(), "d", config.DataDir.GetDefaultAsString(), "Path to data directory")
 	serveCmd.Flags().IntP(config.Port.GetFlagKey(), "p", 9000, "Server port")
+	serveCmd.Flags().String(config.Region.GetFlagKey(), config.Region.GetDefaultAsString(), "AWS-style region (ignored if data config exists)")
 	serveCmd.Flags().String(config.AccessKey.GetFlagKey(), config.AccessKey.GetDefaultAsString(), "Root access key")
 	serveCmd.Flags().String(config.SecretKey.GetFlagKey(), config.SecretKey.GetDefaultAsString(), "Root secret key")
 
@@ -53,6 +54,7 @@ func init() {
 	// Bind flags to viper for config file support
 	_ = viper.BindPFlag(config.DataDir.GetViperKey(), serveCmd.Flags().Lookup(config.DataDir.GetFlagKey()))
 	_ = viper.BindPFlag(config.Port.GetViperKey(), serveCmd.Flags().Lookup(config.Port.GetFlagKey()))
+	_ = viper.BindPFlag(config.Region.GetViperKey(), serveCmd.Flags().Lookup(config.Region.GetFlagKey()))
 	_ = viper.BindPFlag(config.AccessKey.GetViperKey(), serveCmd.Flags().Lookup(config.AccessKey.GetFlagKey()))
 	_ = viper.BindPFlag(config.SecretKey.GetViperKey(), serveCmd.Flags().Lookup(config.SecretKey.GetFlagKey()))
 	_ = viper.BindPFlag(config.LogLevel.GetViperKey(), serveCmd.Flags().Lookup(config.LogLevel.GetFlagKey()))
@@ -179,11 +181,11 @@ func initOrMigrateDataConfig(settings *config.Settings) error {
 		log.Info("Initializing new DirIO data directory")
 	}
 
-	// Create data config with CLI-provided credentials
+	// Create data config with CLI-provided credentials and region
 	dc := dataconfig.DefaultDataConfig()
 	dc.Credentials.AccessKey = settings.AccessKey
 	dc.Credentials.SecretKey = settings.SecretKey
-	// Region defaults to us-east-1 (set in DefaultDataConfig)
+	dc.Region = settings.Region // Use CLI region for new data directories
 	// Compression settings use defaults (disabled)
 	// WORM defaults to disabled
 

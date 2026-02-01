@@ -16,6 +16,12 @@ data_dir: /data
 # HTTP server port (1-65535)
 port: 9000
 
+# AWS-style region (e.g., us-east-1, eu-west-1)
+# Note: If .dirio/config.json exists, this flag is INFORMATIONAL ONLY
+# The data config region takes precedence (ignored with warning if different)
+# For new installations, this sets the initial region in .dirio/config.json
+region: us-east-1
+
 # ============================================================================
 # CLI ADMIN CREDENTIALS (Optional)
 # ============================================================================

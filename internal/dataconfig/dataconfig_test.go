@@ -15,7 +15,7 @@ func TestDefaultDataConfig(t *testing.T) {
 	assert.Equal(t, DataConfigVersion, config.Version)
 	assert.Equal(t, "dirio-admin", config.Credentials.AccessKey)
 	assert.Equal(t, "dirio-admin-secret", config.Credentials.SecretKey)
-	assert.Equal(t, "", config.Region)
+	assert.Equal(t, "us-east-1", config.Region) // Default region is now us-east-1
 	assert.False(t, config.Compression.Enabled)
 	assert.False(t, config.WORMEnabled)
 	assert.NotZero(t, config.CreatedAt)

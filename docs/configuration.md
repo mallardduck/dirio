@@ -16,6 +16,7 @@ Controls **how the tool runs** - operational preferences that don't affect data 
 **Settings:**
 - `data-dir`: Path to data directory
 - `port`: HTTP server port
+- `region`: AWS-style region (informational only if data config exists)
 - `log-level`, `log-format`, `verbosity`, `debug`: Logging preferences
 - `mdns-enabled`, `mdns-name`, `mdns-hostname`, `mdns-mode`: Service discovery
 - `canonical-domain`: URL generation hint
@@ -83,7 +84,8 @@ DirIO supports **two admin accounts simultaneously**:
 
 ### For Region (and other data-bound settings)
 - **Data config takes precedence** if it exists
-- CLI flags are **ignored** (with warning logged)
+- CLI flags are **ignored** (with warning logged if explicitly set)
+- Warning example: `CLI region flag ignored - data config takes precedence (cli_region=us-west-2, data_config_region=us-east-1)`
 - To update: Edit `.dirio/config.json` manually
   - TODO: `dirio config set region <value>` command (not yet implemented)
 
@@ -98,6 +100,9 @@ DirIO supports **two admin accounts simultaneously**:
 # How the DirIO tool runs
 data_dir: /data
 port: 9000
+
+# Region (informational only if data config exists)
+region: us-east-1
 
 # CLI admin credentials (optional - provides alternative access)
 access_key: cli-admin
@@ -168,6 +173,7 @@ All app config settings support environment variables:
 ```bash
 export DIRIO_DATA_DIR=/data
 export DIRIO_PORT=9000
+export DIRIO_REGION=us-east-1
 export DIRIO_ACCESS_KEY=cli-admin
 export DIRIO_SECRET_KEY=cli-password
 export DIRIO_LOG_LEVEL=debug
@@ -176,7 +182,7 @@ export DIRIO_MDNS_ENABLED=true
 dirio serve
 ```
 
-**Note:** Data config settings (region, compression, etc.) are NOT configurable via environment variables - they must be set in `.dirio/config.json`.
+**Note:** Region can be set via environment variable for new installations, but if data config exists, the data config region takes precedence (CLI value is ignored with warning).
 
 ## CLI Flags
 
@@ -184,6 +190,7 @@ dirio serve
 dirio serve \
   --data-dir /data \
   --port 9000 \
+  --region us-east-1 \
   --access-key cli-admin \
   --secret-key cli-password \
   --log-level debug \
@@ -191,8 +198,8 @@ dirio serve \
 ```
 
 **Note:** If data config exists:
-- Region and data-bound settings are ignored (logged warning)
-- Credentials work alongside data config credentials
+- `--region` is ignored if explicitly set (logged warning shows both CLI and data config values)
+- Credentials work alongside data config credentials (both are valid)
 
 ## Future: Config Update Commands
 

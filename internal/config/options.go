@@ -54,4 +54,8 @@ var (
 
 	// CanonicalDomain is the canonical domain for URL generation
 	CanonicalDomain = option.NewOption("canonical-domain", "")
+
+	// Region is the AWS-style region for the data directory (e.g., us-east-1)
+	// Note: If data config exists, this flag is informational only
+	Region = option.NewOption("region", "us-east-1")
 )

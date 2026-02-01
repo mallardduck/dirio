@@ -20,6 +20,7 @@ type Settings struct {
 	// Server settings
 	DataDir   string
 	Port      int
+	Region    string // CLI region (informational if data config exists)
 	AccessKey string // CLI admin credentials (coexists with data config credentials)
 	SecretKey string // CLI admin credentials (coexists with data config credentials)
 
@@ -42,6 +43,9 @@ type Settings struct {
 	// CLICredentialsExplicitlySet tracks whether access_key/secret_key were
 	// explicitly provided (via env, flag, or config) vs using defaults
 	CLICredentialsExplicitlySet bool
+
+	// CLIRegionExplicitlySet tracks whether region was explicitly provided
+	CLIRegionExplicitlySet bool
 }
 
 // Validate checks that the configured settings are valid
@@ -106,6 +110,7 @@ func LoadConfig(flags *pflag.FlagSet, v *viper.Viper) (*Settings, error) {
 		// Server settings
 		DataDir:   resolver.Get(DataDir),
 		Port:      resolver.GetInt(Port),
+		Region:    resolver.Get(Region),
 		AccessKey: resolver.Get(AccessKey), // CLI admin credentials
 		SecretKey: resolver.Get(SecretKey), // CLI admin credentials
 
@@ -125,6 +130,9 @@ func LoadConfig(flags *pflag.FlagSet, v *viper.Viper) (*Settings, error) {
 		// Track if credentials were explicitly set
 		CLICredentialsExplicitlySet: resolver.WasExplicitlySet(AccessKey) ||
 			resolver.WasExplicitlySet(SecretKey),
+
+		// Track if region was explicitly set
+		CLIRegionExplicitlySet: resolver.WasExplicitlySet(Region),
 	}
 
 	// Debug flag overrides log level
@@ -170,8 +178,13 @@ func loadDataConfig(settings *Settings, flags *pflag.FlagSet) error {
 		"worm", dc.WORMEnabled,
 		"data_admin", dc.Credentials.AccessKey)
 
-	// TODO: Add region CLI flag and warning when it differs from data config
-	// TODO: Add explicit update command (dirio config set region <value>)
+	// Warn if CLI region differs from data config region
+	if settings.CLIRegionExplicitlySet && settings.Region != dc.Region {
+		slog.Warn("CLI region flag ignored - data config takes precedence",
+			"cli_region", settings.Region,
+			"data_config_region", dc.Region,
+			"hint", "To update region, edit .dirio/config.json or use 'dirio config set region <value>' (not yet implemented)")
+	}
 
 	// Note: We do NOT warn about credentials - both CLI and data config credentials coexist
 	// CLI credentials (settings.AccessKey/SecretKey) provide temporary/alternative admin access

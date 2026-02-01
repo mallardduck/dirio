@@ -1,12 +1,17 @@
 package config
 
 import (
+	"bytes"
+	"log/slog"
 	"os"
 	"testing"
 
+	"github.com/go-git/go-billy/v5/osfs"
+	"github.com/mallardduck/dirio/internal/dataconfig"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValueResolverPriority(t *testing.T) {
@@ -223,4 +228,119 @@ func TestGetIntAndBool(t *testing.T) {
 		val := resolver.GetBool(Debug)
 		assert.True(t, val)
 	})
+}
+
+func TestRegionWarning(t *testing.T) {
+	// Create a temporary directory for the test
+	tmpDir := t.TempDir()
+
+	// Create a data config with region us-east-1
+	fs := osfs.New(tmpDir)
+	dc := dataconfig.DefaultDataConfig()
+	dc.Region = "us-east-1"
+	dc.Credentials.AccessKey = "test-admin"
+	dc.Credentials.SecretKey = "test-secret"
+
+	err := dataconfig.SaveDataConfig(fs, dc)
+	require.NoError(t, err)
+
+	// Create flags with region us-west-2
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	flags.String("data-dir", tmpDir, "test data dir")
+	flags.Int("port", 9000, "test port")
+	flags.String("region", "us-west-2", "test region")
+	flags.String("access-key", "cli-admin", "test access key")
+	flags.String("secret-key", "cli-secret", "test secret key")
+	flags.String("log-level", "info", "test log level")
+	flags.String("log-format", "text", "test log format")
+	flags.String("verbosity", "normal", "test verbosity")
+	flags.Bool("debug", false, "test debug")
+	flags.Bool("mdns-enabled", false, "test mdns")
+	flags.String("mdns-name", "dirio-s3", "test mdns name")
+	flags.String("mdns-hostname", "", "test mdns hostname")
+	flags.String("mdns-mode", "auto", "test mdns mode")
+	flags.String("canonical-domain", "", "test canonical domain")
+
+	// Parse to mark region as explicitly set and set data-dir
+	err = flags.Parse([]string{"--data-dir=" + tmpDir, "--region=us-west-2"})
+	require.NoError(t, err)
+
+	// Capture log output to verify warning
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+	slog.SetDefault(logger)
+
+	// Load config - should trigger warning
+	settings, err := LoadConfig(flags, nil)
+	require.NoError(t, err)
+
+	// Verify data config was loaded
+	assert.NotNil(t, settings.DataConfig)
+	assert.Equal(t, "us-east-1", settings.DataConfig.Region)
+	assert.Equal(t, "us-west-2", settings.Region) // CLI region still in settings
+	assert.True(t, settings.CLIRegionExplicitlySet)
+
+	// Verify warning was logged
+	logOutput := logBuf.String()
+	assert.Contains(t, logOutput, "CLI region flag ignored")
+	assert.Contains(t, logOutput, "us-west-2") // CLI region
+	assert.Contains(t, logOutput, "us-east-1") // Data config region
+}
+
+func TestRegionNoWarningWhenNotExplicitlySet(t *testing.T) {
+	// Create a temporary directory for the test
+	tmpDir := t.TempDir()
+
+	// Create a data config with region us-east-1
+	fs := osfs.New(tmpDir)
+	dc := dataconfig.DefaultDataConfig()
+	dc.Region = "us-east-1"
+	dc.Credentials.AccessKey = "test-admin"
+	dc.Credentials.SecretKey = "test-secret"
+
+	err := dataconfig.SaveDataConfig(fs, dc)
+	require.NoError(t, err)
+
+	// Create flags without setting region (will use default)
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	flags.String("data-dir", tmpDir, "test data dir")
+	flags.Int("port", 9000, "test port")
+	flags.String("region", "us-east-1", "test region") // default value
+	flags.String("access-key", "cli-admin", "test access key")
+	flags.String("secret-key", "cli-secret", "test secret key")
+	flags.String("log-level", "info", "test log level")
+	flags.String("log-format", "text", "test log format")
+	flags.String("verbosity", "normal", "test verbosity")
+	flags.Bool("debug", false, "test debug")
+	flags.Bool("mdns-enabled", false, "test mdns")
+	flags.String("mdns-name", "dirio-s3", "test mdns name")
+	flags.String("mdns-hostname", "", "test mdns hostname")
+	flags.String("mdns-mode", "auto", "test mdns mode")
+	flags.String("canonical-domain", "", "test canonical domain")
+
+	// Parse data-dir but not region - region not explicitly set
+	err = flags.Parse([]string{"--data-dir=" + tmpDir})
+	require.NoError(t, err)
+
+	// Capture log output to verify NO warning
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+	slog.SetDefault(logger)
+
+	// Load config - should NOT trigger warning
+	settings, err := LoadConfig(flags, nil)
+	require.NoError(t, err)
+
+	// Verify data config was loaded
+	assert.NotNil(t, settings.DataConfig)
+	assert.Equal(t, "us-east-1", settings.DataConfig.Region)
+	assert.False(t, settings.CLIRegionExplicitlySet)
+
+	// Verify warning was NOT logged
+	logOutput := logBuf.String()
+	assert.NotContains(t, logOutput, "CLI region flag ignored")
 }

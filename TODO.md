@@ -1,6 +1,6 @@
 # DirIO Development Roadmap
 
-Current status: **Phase 2.5 - Client Testing & Bug Discovery**
+Current status: **Phase 3 - Essential S3 Features** (Remaining priorities after Phase 2.75 completion)
 
 **📁 Known Issues:** See [bugs/](bugs/) directory for detailed bug reports and tracking
 
@@ -137,7 +137,7 @@ Current status: **Phase 2.5 - Client Testing & Bug Discovery**
 
 **📊 Detailed Results:** See [CLIENTS.md](CLIENTS.md) for complete compatibility matrix, test results, and known issues
 
-## Phase 2.75: Configuration Architecture Refactoring ✅ (In Progress)
+## Phase 2.75: Configuration Architecture Refactoring ✅
 
 **Goal:** Separate data directory configuration from application configuration for proper data portability.
 
@@ -147,10 +147,10 @@ Current status: **Phase 2.5 - Client Testing & Bug Discovery**
 - [x] Import MinIO config (both 2019 and 2022 formats)
 - [x] Save DataConfig during MinIO import
 - [x] Init logic: CLI flags provide initial values for new data directories
-- [ ] Load logic: Data config takes precedence, warn when CLI differs (region only)
+- [x] Load logic: Data config takes precedence, warn when CLI differs (region only)
 - [x] Support both data config admin AND CLI admin credentials simultaneously
 - [x] Migration for existing installations
-- [ ] Update documentation and examples
+- [x] Update documentation and examples
 
 ### Configuration Philosophy
 - **Data Config** (`.dirio/config.json`): Controls how data must be handled, travels with data, takes precedence
@@ -199,8 +199,8 @@ Current status: **Phase 2.5 - Client Testing & Bug Discovery**
 
 **Note:** This work will be tackled after completing remaining high/medium priority items above.
 
-#### PolicyService Architecture
-- [ ] Design PolicyService for managing policy cache and persistence
+#### PolicyEngineService Architecture
+- [ ] Design PolicyEngineService for managing policy cache and persistence
   - In-memory cache of bucket policies for fast access
   - Persistence to disk (.dirio/policies/ directory)
   - Load policies on startup, update cache on policy changes
@@ -209,6 +209,12 @@ Current status: **Phase 2.5 - Client Testing & Bug Discovery**
   - JSON policy documents (S3-compatible format)
   - Policy versioning and validation
   - Import existing MinIO bucket policies during migration
+
+##### NOTES
+- **Policy Engine vs Policy Service:**
+  - Policy Engine is the core policy evaluation engine for S3 operations
+  - Policy Service is the persistence layer for policy documents and cache
+  - Policy Engine is used by HTTP routing layer to enforce bucket policies
 
 #### Conditional Auth Middleware
 - [ ] Implement conditional auth middleware for hybrid routes
