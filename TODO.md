@@ -178,26 +178,23 @@ Current status: **Phase 3 - Essential S3 Features** (Remaining priorities after 
 
 **Prioritize based on Phase 2.5 findings:**
 
-### High Priority (Core S3 compatibility)
-- [x] Fix GetBucketLocation for MinIO mc (Critical - unblocks mc client) - ✅ Fixed routing + added x-amz-bucket-region to HeadBucket
-- [x] CommonPrefixes in ListObjectsV2 (delimiter support) - ✅ Now working in boto3 and mc (Feb 1, 2026)
-- [x] ListObjects pagination with max-keys - ✅ Now working in boto3 (Feb 1, 2026)
-- [ ] ListObjects continuation tokens (for large result sets)
-- [ ] Range requests for GetObject (resumable downloads, video streaming)
-- [ ] Pre-signed URLs (temporary access sharing)
-- [ ] CopyObject (x-amz-copy-source header) - NOT implemented, creates empty file
-
-### Medium Priority
-- [x] Multipart upload support (large files >5GB) - ✅ Working in MinIO mc with verified content integrity (Feb 1, 2026)
-- [ ] Multipart upload for boto3 - Still returns 405 Method Not Allowed
-- [ ] Fix custom metadata key case in responses
-- [ ] Object tagging - ⚠️ Partially working, but corrupts content (tags replace object data)
-
-### Lower Priority - Bucket Policies & Policy System
+### **HIGHEST PRIORITY: Policy Engine Foundation** 🔴
 
 **Goal:** Build out a comprehensive policy system to enable public bucket access and lay groundwork for Phase 5 IAM.
 
-**Note:** This work will be tackled after completing remaining high/medium priority items above.
+**⚠️ CRITICAL:** Many Phase 3 features (Pre-signed URLs, CopyObject, DeleteObject/Bucket) require policy evaluation. Building the policy engine first prevents having to refactor all features later when adding proper authorization.
+
+#### Policy Evaluation Engine (Core)
+- [ ] **Policy evaluation engine** - Core authorization logic
+  - Statement evaluation (Effect: Allow/Deny)
+  - Action matching (s3:GetObject, s3:PutObject, s3:DeleteObject, etc.)
+  - Resource matching (arn:aws:s3:::bucket/key patterns)
+  - Principal matching (* for public, specific users/roles)
+  - Statement evaluation order (explicit Deny > Allow)
+- [ ] **Default policies** - Start simple, expand later
+  - Default admin policy: "authenticated admin can do everything"
+  - Default bucket policy: "authenticated users can access"
+  - Public bucket policy template: "anonymous read access"
 
 #### PolicyEngineService Architecture
 - [ ] Design PolicyEngineService for managing policy cache and persistence
@@ -226,8 +223,8 @@ Current status: **Phase 3 - Essential S3 Features** (Remaining priorities after 
   - Router can query PolicyService for policy decisions
   - Middleware uses policy info to filter responses based on auth state
 
-#### Bucket Policy Implementation
-- [ ] Parse and validate bucket policy documents
+#### Bucket Policy Enforcement
+- [ ] Parse and validate bucket policy documents (already have types in pkg/iam)
 - [ ] Enforce public-read bucket policies
   - Non-authenticated requests can read from public buckets
   - Policy evaluation for GetObject, HeadObject, ListObjects
@@ -238,13 +235,40 @@ Current status: **Phase 3 - Essential S3 Features** (Remaining priorities after 
 
 **Connection to Phase 5:** This PolicyService will be extended in Phase 5 to handle IAM user/group policies in addition to bucket policies, creating a unified policy evaluation engine.
 
+### High Priority (Core S3 compatibility - requires policy engine)
+
+**Note:** These features should be implemented AFTER the policy engine foundation above, as they all require permission checks.
+
+- [ ] **DeleteObject** for MinIO mc (High - currently 405 Method Not Allowed)
+  - Requires: `s3:DeleteObject` permission check
+- [ ] **DeleteBucket** for MinIO mc (High - currently 405 Method Not Allowed)
+  - Requires: `s3:DeleteBucket` permission check
+- [ ] **Pre-signed URLs** (temporary access sharing) 🔴 **CRITICAL DEPENDENCY**
+  - Requires: Full policy engine to embed/validate temporary permissions
+  - Must check if signer has permission to grant access
+  - Must embed policy decision in signed URL
+  - Must validate policy when URL is used
+- [ ] **CopyObject** (x-amz-copy-source header) - Currently creates empty file
+  - Requires: TWO permission checks (s3:GetObject on source + s3:PutObject on destination)
+- [ ] **Range requests** for GetObject (resumable downloads, video streaming)
+  - Requires: `s3:GetObject` permission check
+- [ ] **ListObjects continuation tokens** (for large result sets)
+  - Requires: `s3:ListBucket` permission check + filtering
+
+### Medium Priority (Less critical, but still need policy checks)
+- [ ] **Multipart upload for boto3** - Still returns 405 Method Not Allowed (mc works)
+  - Requires: `s3:PutObject` permission check
+- [ ] **Object tagging** - ⚠️ Partially working, but corrupts content (tags replace object data)
+  - Requires: `s3:PutObjectTagging`/`s3:GetObjectTagging` permission checks
+- [ ] **Fix custom metadata key case** in responses (simple bug fix, no policy needed)
+
 ### Real-World Scenarios
 - [ ] Test migration from actual MinIO instance
 - [ ] Test behind reverse proxy (nginx) with canonical domain
 
 ### Recommended Priority Order
 
-Based on client testing results (see [CLIENTS.md](CLIENTS.md)):
+Based on client testing results (see [CLIENTS.md](CLIENTS.md)) and architectural dependencies:
 
 **✅ COMPLETED:**
 1. ~~Fix AWS SigV4 Chunked Encoding Handling~~ - ✅ MOSTLY RESOLVED (Feb 1, 2026)
@@ -252,16 +276,30 @@ Based on client testing results (see [CLIENTS.md](CLIENTS.md)):
 3. ~~ListObjectsV2 max-keys/pagination~~ - ✅ Working in boto3 (Feb 1, 2026)
 4. ~~Multipart Upload~~ - ✅ Working in MinIO mc with content integrity (Feb 1, 2026)
 
-**REMAINING PRIORITIES:**
-1. **Fix DeleteObject for MinIO mc** (High - 405 Method Not Allowed)
-2. **Fix DeleteBucket for MinIO mc** (High - 405 Method Not Allowed)
-3. **Object Tagging Content Preservation** - Tags currently replace object content (Bug #001 remnant)
-4. **Multipart Upload for boto3** - Still returns 405 Method Not Allowed (mc works)
-5. **Range requests** - Returns full content instead of range
-6. **CopyObject** - Creates 0-byte file instead of copying
-7. **Pre-signed URL validation** - Returns 403 Forbidden
-8. **Fix custom metadata key case** - boto3 returns wrong case, mc doesn't return it
-9. **ListObjectsV2 continuation tokens** - For large result sets
+**🔴 REVISED PRIORITIES (Architecture-First Approach):**
+
+**Phase 3.1: Policy Engine Foundation** (Build once, use everywhere)
+1. **Policy Evaluation Engine** - Core authorization logic (Action/Resource/Principal/Effect matching)
+2. **PolicyEngineService** - Policy cache and persistence layer
+3. **Conditional Auth Middleware** - Support public/hybrid routes with policy-based filtering
+4. **Default Policies** - Simple "admin can do everything" to start
+
+**Phase 3.2: Features with Policy Integration** (Implement with proper authorization from day one)
+5. **DeleteObject for MinIO mc** - Requires `s3:DeleteObject` check
+6. **DeleteBucket for MinIO mc** - Requires `s3:DeleteBucket` check
+7. **Pre-signed URLs** 🔴 - CRITICAL: Requires full policy engine for permission embedding/validation
+8. **CopyObject** - Requires dual permission checks (source read + dest write)
+9. **Range requests** - Requires `s3:GetObject` check
+10. **ListObjectsV2 continuation tokens** - Requires `s3:ListBucket` check + filtering
+11. **Multipart Upload for boto3** - Requires `s3:PutObject` check
+12. **Object Tagging Content Preservation** - Requires `s3:*ObjectTagging` checks + fix Bug #001 remnant
+13. **Fix custom metadata key case** - Simple bug fix (no policy dependency)
+
+**Why This Order:**
+- Building policy engine first avoids refactoring all features later
+- Pre-signed URLs are impossible without policy evaluation
+- CopyObject, Delete operations need proper authorization
+- Creates clean foundation for Phase 5 (IAM) instead of accumulating technical debt
 
 ## Phase 3.5: Stability & Performance
 
