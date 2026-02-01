@@ -95,9 +95,11 @@ Current status: **Phase 2.5 - Client Testing & Bug Discovery**
   - **Decision:** Skip bitrot/checksums - never implemented in MinIO FS mode, rely on underlying filesystem (ZFS/Btrfs/RAID)
   - All metadata now imported and stored in versioned compact JSON format, ready for future features 
 
-## Phase 2.5: Client Testing & Validation
+## Phase 2.5: Client Testing & Validation ✅
 
 **Goal:** Test with real S3 clients, document what works/fails, use failures to drive Phase 3 priorities.
+
+**Status:** COMPLETE with significant improvements documented
 
 ### Test Framework Setup
 - [x] Create `tests/clients/` directory with test scripts
@@ -115,16 +117,18 @@ Current status: **Phase 2.5 - Client Testing & Bug Discovery**
   - HeadBucket returns x-amz-bucket-region header
   - DeleteObject and DeleteBucket both working
 - [x] Test with boto3 (Python) - programmatic access patterns
-  - **Result:** 13/21 passed - 62% success rate (via testcontainers-go, Jan 31, 2026)
+  - **Result:** 15/21 passed - 71.4% success rate (via testcontainers-go, Feb 1, 2026) - **IMPROVED from 62%**
+  - ✅ **NEW:** ListObjectsV2 delimiter and max-keys now working!
   - Core CRUD operations all work
-  - GetBucketLocation, ListObjectsV1, ListObjectsV2 (basic/prefix) working
+  - GetBucketLocation, ListObjectsV1, ListObjectsV2 (basic/prefix/delimiter/max-keys) working
   - Custom metadata set works, get returns wrong key case
-  - Failed: delimiter (0 prefixes), max-keys (returns all 5), range requests (returns full 100 bytes), CopyObject (0-byte file), pre-signed URLs (403), multipart (405), object tagging (corrupts object content with XML)
+  - Failed: range requests (returns full 100 bytes), CopyObject (0-byte file), pre-signed URLs (403), multipart (405), object tagging (corrupts object content with XML), metadata get (wrong case)
 - [x] Test with MinIO client (mc) - migration compatibility
-  - **Result:** 12/14 passed - 85.7% success rate (via testcontainers-go, Jan 31, 2026)
-  - **Major improvement:** Object operations now working! PutObject, HeadObject, GetObject all pass
-  - ✅ Working: alias, ListBuckets, CreateBucket, HeadBucket, GetBucketLocation, PutObject (mc put/cp), HeadObject (mc stat), GetObject (mc cp/cat), ListObjectsV2
-  - ❌ Failed: DeleteObject (405 Method Not Allowed), DeleteBucket (bucket not empty - expected if DeleteObject fails)
+  - **Result:** 22/30 passed - 73.3% success rate (via testcontainers-go, Feb 1, 2026) - **IMPROVED from 67%**
+  - ✅ **NEW:** Multipart upload content integrity verified and passing!
+  - **Major improvement:** Object operations working! PutObject, HeadObject, GetObject, Multipart all pass
+  - ✅ Working: alias, ListBuckets, CreateBucket, HeadBucket, GetBucketLocation, PutObject (mc put/cp), HeadObject (mc stat), GetObject (mc cp/cat), ListObjectsV2, Multipart uploads
+  - ❌ Failed: DeleteObject (405 Method Not Allowed), DeleteBucket (405), Custom metadata get, CopyObject, Pre-signed URLs, Object tagging (content corruption), Range requests
 - [x] Create S3 Compatibility Matrix (document ✅ ❌ ⚠️ for each feature/client)
 
 ### Real-World Scenarios
@@ -176,7 +180,10 @@ Current status: **Phase 2.5 - Client Testing & Bug Discovery**
 5. Virtual-hosted-style buckets will require DNS wildcard or mDNS wildcard → Phase N+
 6. Admin CLI and Web UI will need app-level audit logging beyond HTTP middleware → Phase 7
 7. ~~Need to decide data vs app config architecture~~ ✅ Resolved - Phase 2.75 (split into dataconfig + app config)
-8. **🚨 Bug #001: AWS SigV4 Chunked Encoding Corruption** - See [bugs/001-chunked-encoding-corruption.md](bugs/001-chunked-encoding-corruption.md) and [CLIENTS.md](CLIENTS.md) for detailed impact
+8. **🎉 Bug #001: MOSTLY RESOLVED** - AWS SigV4 Chunked Encoding Corruption (Feb 1, 2026)
+   - ✅ PutObject, GetObject, and Multipart uploads now working correctly
+   - ❌ Still affects object tagging operations only
+   - See [bugs/001-chunked-encoding-corruption.md](bugs/001-chunked-encoding-corruption.md) and [CLIENTS.md](CLIENTS.md) for detailed impact
 
 ## Phase 3: Essential S3 Features
 
@@ -186,16 +193,18 @@ Current status: **Phase 2.5 - Client Testing & Bug Discovery**
 
 ### High Priority (Core S3 compatibility)
 - [x] Fix GetBucketLocation for MinIO mc (Critical - unblocks mc client) - ✅ Fixed routing + added x-amz-bucket-region to HeadBucket
-- [ ] CommonPrefixes in ListObjectsV2 (delimiter support) - ⚠️ Partially implemented, works in integration tests but fails with boto3 client (returns 0 CommonPrefixes)
-- [ ] ListObjects pagination with max-keys and continuation tokens
+- [x] CommonPrefixes in ListObjectsV2 (delimiter support) - ✅ Now working in boto3 and mc (Feb 1, 2026)
+- [x] ListObjects pagination with max-keys - ✅ Now working in boto3 (Feb 1, 2026)
+- [ ] ListObjects continuation tokens (for large result sets)
 - [ ] Range requests for GetObject (resumable downloads, video streaming)
 - [ ] Pre-signed URLs (temporary access sharing)
 - [ ] CopyObject (x-amz-copy-source header) - NOT implemented, creates empty file
 
 ### Medium Priority
-- [ ] Multipart upload support (large files >5GB)
+- [x] Multipart upload support (large files >5GB) - ✅ Working in MinIO mc with verified content integrity (Feb 1, 2026)
+- [ ] Multipart upload for boto3 - Still returns 405 Method Not Allowed
 - [ ] Fix custom metadata key case in responses
-- [x] Object tagging - ✅ Already works!
+- [ ] Object tagging - ⚠️ Partially working, but corrupts content (tags replace object data)
 
 ### Lower Priority
 - [ ] Bucket Policies (parse and validate)
@@ -210,17 +219,22 @@ Current status: **Phase 2.5 - Client Testing & Bug Discovery**
 
 Based on client testing results (see [CLIENTS.md](CLIENTS.md)):
 
-1. **🚨 Fix AWS SigV4 Chunked Encoding Handling** (CRITICAL - Bug #001)
-2. **Fix DeleteObject for MinIO mc** (Critical - 405 Method Not Allowed)
-3. **Fix DeleteBucket for MinIO mc** (Critical - 405 Method Not Allowed)
-4. **Object Tagging** - Query parameter routing needed
-5. **Multipart Upload for boto3** - Proper multipart assembly
-6. **CommonPrefixes in ListObjectsV2** - delimiter support for boto3
-7. **ListObjectsV2 max-keys/pagination** - MaxKeys parameter ignored
-8. **Range requests** - Returns full content instead of range
-9. **CopyObject** - Creates 0-byte file instead of copying
-10. **Pre-signed URL validation** - Returns 403 Forbidden
-11. **Fix custom metadata key case** - boto3 returns wrong case, mc doesn't return it
+**✅ COMPLETED:**
+1. ~~Fix AWS SigV4 Chunked Encoding Handling~~ - ✅ MOSTLY RESOLVED (Feb 1, 2026)
+2. ~~CommonPrefixes in ListObjectsV2~~ - ✅ Working in boto3 and mc (Feb 1, 2026)
+3. ~~ListObjectsV2 max-keys/pagination~~ - ✅ Working in boto3 (Feb 1, 2026)
+4. ~~Multipart Upload~~ - ✅ Working in MinIO mc with content integrity (Feb 1, 2026)
+
+**REMAINING PRIORITIES:**
+1. **Fix DeleteObject for MinIO mc** (High - 405 Method Not Allowed)
+2. **Fix DeleteBucket for MinIO mc** (High - 405 Method Not Allowed)
+3. **Object Tagging Content Preservation** - Tags currently replace object content (Bug #001 remnant)
+4. **Multipart Upload for boto3** - Still returns 405 Method Not Allowed (mc works)
+5. **Range requests** - Returns full content instead of range
+6. **CopyObject** - Creates 0-byte file instead of copying
+7. **Pre-signed URL validation** - Returns 403 Forbidden
+8. **Fix custom metadata key case** - boto3 returns wrong case, mc doesn't return it
+9. **ListObjectsV2 continuation tokens** - For large result sets
 
 ## Phase 3.5: Stability & Performance
 

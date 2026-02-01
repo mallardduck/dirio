@@ -2,7 +2,7 @@
 
 This document tracks DirIO's compatibility with various S3 clients, test results, and known issues.
 
-**Latest Update: January 31, 2026 18:30 UTC**
+**Latest Update: February 1, 2026 08:59 UTC**
 **Test Framework:** testcontainers-go with Docker containers for each client
 **Test Location:** `tests/clients/` using canonical scripts from `tests/clients/scripts/`
 
@@ -11,11 +11,12 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 ## 🚨 Critical Issues
 
 **Bug #001: AWS SigV4 Chunked Encoding Corruption** - See [bugs/001-chunked-encoding-corruption.md](bugs/001-chunked-encoding-corruption.md)
-- **Status:** STILL PRESENT (verified Jan 31, 2026)
-- AWS Signature V4 chunked transfer encoding headers are being written directly to object files
-- **Impact:** Affects ALL write operations (PutObject, multipart uploads, object tagging)
-- **Evidence:** Object content contains `d;chunk-signature=...` markers followed by data chunks
-- **Priority:** CRITICAL - Must fix before any write operations can be considered working
+- **Status:** MOSTLY RESOLVED (Feb 1, 2026) - Only affects object tagging now!
+- ✅ **FIXED:** PutObject, GetObject, and Multipart uploads now work correctly
+- ❌ **Still broken:** Object tagging operations corrupt content (tags replace object data)
+- **Impact:** Limited to object tagging operations only
+- **Evidence:** PutObject and multipart uploads verified with content integrity checks
+- **Priority:** MEDIUM - Core write operations working, only tagging affected
 
 ---
 
@@ -34,9 +35,9 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 | DeleteObject              | ✅       | ✅     | ❌        | mc: 405 Method Not Allowed (mc rm)                    | High     |
 | ListObjectsV2 (basic)     | ✅       | ✅     | ✅        | mc: mc ls works                                       | High     |
 | ListObjectsV2 (prefix)    | ❓       | ✅     | ✅        | mc: mc ls prefix/ works                               | High     |
-| ListObjectsV2 (delimiter) | ❓       | ❌     | ✅        | boto3: returns 0 CommonPrefixes; mc: shows folders    | High     |
+| ListObjectsV2 (delimiter) | ❓       | ✅     | ✅        | boto3+mc: now working correctly                       | High     |
 | ListObjectsV2 (recursive) | ❓       | ❓     | ✅        | mc: mc ls -r works                                    | Medium   |
-| ListObjectsV2 (max-keys)  | ❓       | ❌     | ❓        | boto3: MaxKeys parameter ignored, returns all 5       | Medium   |
+| ListObjectsV2 (max-keys)  | ❓       | ✅     | ❓        | boto3: now working correctly                          | Medium   |
 | ListObjectsV1             | ❓       | ✅     | ❓        | boto3: works                                          | Medium   |
 | Range Requests            | ❓       | ❌     | ❌        | Returns full content instead of range                 | High     |
 | Custom Metadata (set)     | ❓       | ✅     | ✅        | mc: mc cp --attr works                                | Medium   |
@@ -44,7 +45,7 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 | Pre-signed URLs (down)    | ❓       | ❌     | ❌        | mc: mc share download fails                           | Medium   |
 | Pre-signed URLs (up)      | ❓       | ❓     | ❌        | mc: mc share upload fails                             | Medium   |
 | CopyObject                | ❓       | ❌     | ❌        | Creates 0-byte file; mc: mc cp s3-to-s3 fails         | Medium   |
-| Multipart Upload          | ❓       | ❌     | ⚠️       | boto3: 405; mc: uploads but corrupts content (+14KB)  | High     |
+| Multipart Upload          | ❓       | ❌     | ✅        | boto3: 405; mc: works with verified content integrity | High     |
 | Object Tagging (set)      | ❓       | ❌     | ⚠️       | boto3+mc: operation succeeds but corrupts content      | High     |
 | Object Tagging (get)      | ❓       | ❌     | ⚠️       | boto3+mc: returns tags but object content is XML       | High     |
 
@@ -55,10 +56,15 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 ## Test Results Summary
 
 **S3 API Implementation Status** (24 unique features tested across 3 clients):
-- ✅ **Fully Working:** 13/24 (54%) - Works correctly across all tested clients
-- ⚠️ **Partially Working:** 4/24 (17%) - ListObjectsV2 delimiter (boto3 fails, mc works), Custom metadata (set works, get has issues), Pre-signed URLs (partial failures), Multipart/Tagging (boto3 fails, mc works)
-- ❌ **Not Working:** 7/24 (29%) - DeleteObject/DeleteBucket for mc, Range requests, CopyObject, ListObjectsV2 max-keys, Pre-signed URLs, Custom metadata get
+- ✅ **Fully Working:** 15/24 (63%) - Works correctly across all tested clients
+- ⚠️ **Partially Working:** 3/24 (13%) - Custom metadata (set works, get has issues), Pre-signed URLs (partial failures), Object Tagging (mc works, boto3 corrupts)
+- ❌ **Not Working:** 6/24 (25%) - DeleteObject/DeleteBucket for mc, Range requests, CopyObject, Multipart for boto3, Pre-signed URLs
 - ❓ **Not Tested:** Many features only tested with subset of clients
+
+**Recent Improvements (Feb 1, 2026):**
+- ✅ ListObjectsV2 delimiter support now working in boto3
+- ✅ ListObjectsV2 max-keys pagination now working in boto3
+- ✅ Multipart upload content integrity verified and working in MinIO mc
 
 ---
 
@@ -88,34 +94,33 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 
 ---
 
-### boto3 (13/21 tests passed - 62%)
+### boto3 (15/21 tests passed - 71.4%)
 
-**Status:** ⚠️ **Partially Compatible**
+**Status:** ⚠️ **Partially Compatible** - IMPROVED from 62%
 
 **Working Features:**
 - ✅ Core CRUD operations (Create, Read, Update, Delete)
 - ✅ GetBucketLocation
 - ✅ ListObjectsV1
-- ✅ ListObjectsV2 (basic/prefix)
+- ✅ ListObjectsV2 (basic/prefix/delimiter/max-keys) - **IMPROVED: delimiter and max-keys now working!**
 - ✅ Custom metadata set
 
 **Issues:**
 - ⚠️ Custom metadata get returns Title-Case keys (`Custom-Key`) instead of lowercase (`custom-key`)
 
-**Failed Tests (8/21):**
-- ❌ ListObjectsV2 delimiter: Returns 0 CommonPrefixes instead of 2+
-- ❌ ListObjectsV2 max-keys: Ignores MaxKeys=2, returns all 5 objects
+**Failed Tests (6/21):**
 - ❌ Range request: Returns full 100 bytes instead of first 10 bytes
 - ❌ CopyObject: Creates 0-byte empty file instead of copying content
 - ❌ Pre-signed URLs: Returns 403 Forbidden
 - ❌ Multipart: Returns 405 Method Not Allowed
 - ❌ Object Tagging: Corrupts object content with XML (root cause: bug #001 + query parameter `?tagging` routing issue)
+- ❌ Custom metadata get: Wrong key case returned
 
 ---
 
-### MinIO mc (20/30 tests passed - 67%)
+### MinIO mc (22/30 tests passed - 73.3%)
 
-**Status:** ⚠️ **Partially Compatible**
+**Status:** ⚠️ **Partially Compatible** - IMPROVED from 67%
 
 **Expanded Test Coverage:** Now testing 30 features with comprehensive content verification
 
@@ -135,12 +140,13 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 - ✅ ListObjectsV2 (`mc ls` / `mc ls prefix/` / `mc ls -r`)
 - ✅ ListObjectsV2 with delimiter
 
-**Tagging/Multipart Operations (5/7):**
+**Tagging/Multipart Operations (6/7):**
 - ✅ Object tagging set/get work
 - ✅ Multipart upload completes
 - ✅ Size metadata correct
+- ✅ **Multipart content integrity verified** - IMPROVED: No corruption detected!
 
-**Failed Tests (10/30) - Bug #001 Confirmed:**
+**Failed Tests (8/30):**
 - ❌ DeleteObject (`mc rm`): 405 Method Not Allowed
 - ❌ DeleteBucket (`mc rb`): 405 Method Not Allowed (bucket not empty due to DeleteObject failure)
 - ❌ Custom Metadata get: Not returned in `mc stat`
@@ -149,8 +155,6 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 - ❌ Pre-signed URL upload: Failed to upload
 - ❌ Range Requests (curl): Returns 0 bytes instead of 10
 - ❌ **Object Tagging - content corruption**: Tags stored as object content (XML replaces original) - Root cause: bug #001 + query routing
-- ❌ **Multipart Upload - content corruption**: Downloaded 10,500,246 bytes instead of 10,485,760 bytes (bug #001)
-- ❌ **GetObject - chunked encoding leak**: AWS SigV4 chunk headers visible in content (bug #001) - Example: `d;chunk-signature=...`
 
 ---
 
@@ -222,11 +226,15 @@ Added comprehensive validation to prevent false positives:
 
 ---
 
-## Known Broken Features (Bug #001 Impact)
+## Known Broken Features
 
-**⚠️ Content Corruption - Bug #001 STILL PRESENT (Jan 31, 2026 18:30 UTC)**
+**⚠️ Partial Bug #001 Impact - SIGNIFICANTLY IMPROVED (Feb 1, 2026 08:59 UTC)**
 
-- ❌ **PutObject** - Uploads succeed but content includes chunked encoding artifacts (verified in mc cat output)
-- ❌ **GetObject** - Downloads succeed but return corrupted content with encoding markers like `d;chunk-signature=...`
-- ❌ **Multipart uploads** - Upload completes, wrong size (10,500,246 vs 10,485,760 bytes)
-- ❌ **Object tagging** - Operations succeed but tags replace object content (combined bug #001 + query routing issue)
+The AWS SigV4 chunked encoding bug (#001) appears to be **RESOLVED** for most operations:
+- ✅ **PutObject** - Now working correctly, no chunked encoding artifacts
+- ✅ **GetObject** - Now working correctly, no encoding markers
+- ✅ **Multipart uploads** - Now working correctly with verified content integrity (MinIO mc)
+
+**Remaining Issues:**
+- ❌ **Object tagging** - Operations succeed but tags replace object content (combined bug #001 + query routing issue) - boto3 and mc affected
+- ❌ **Multipart for boto3** - Still returns 405 Method Not Allowed (mc works fine)
