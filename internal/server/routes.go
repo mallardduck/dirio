@@ -75,8 +75,6 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 		// Configurable prefix, defaults to "/minio/admin/v3" for mc compatibility
 		// Can be configured to use same port (default) or separate admin port
 		r.MiddlewareGroup(func(r *teapot.Router) {
-			r.Use(deps.Auth.AuthMiddleware)
-
 			// TODO: Make this prefix configurable via Settings (default: /minio/admin/v3)
 			r.NamedGroup("/minio/admin/v3", "admin", func(r *teapot.Router) {
 				// User Management
@@ -117,19 +115,23 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 				r.GET("/info", notImplemented).Name("server.info")
 				r.GET("/health", notImplemented).Name("server.health")
 			})
-		})
+		}, deps.Auth.AuthMiddleware)
 	}
 
 	// Authenticated Bucket and Object Routes - must go at end due to wildcards
-	r.MiddlewareGroup(func(r *teapot.Router) {
-		if deps != nil {
-			r.Use(deps.Auth.AuthMiddleware)
+	// Build middleware list conditionally
+	var s3Middlewares []func(http.Handler) http.Handler
+	if deps != nil {
+		s3Middlewares = []func(http.Handler) http.Handler{
+			deps.Auth.AuthMiddleware,
 			// Chunked encoding middleware
-			r.Use(middleware.ChunkedEncoding(func(r io.Reader) io.Reader {
+			middleware.ChunkedEncoding(func(r io.Reader) io.Reader {
 				return auth.NewChunkedReader(r)
-			}))
+			}),
 		}
+	}
 
+	r.MiddlewareGroup(func(r *teapot.Router) {
 		// Root - ListBuckets
 		r.GET("/", listBuckets).Name("index")
 
@@ -144,7 +146,7 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 		r.PUT("/{bucket}/{key:.*}", objectStore).Name("objects.create")
 		r.GET("/{bucket}/{key:.*}", objectShow).Name("objects.show")
 		r.DELETE("/{bucket}/{key:.*}", objectDestroy).Name("objects.destroy")
-	})
+	}, s3Middlewares...)
 }
 
 // notImplemented is a placeholder for MinIO Admin API endpoints
