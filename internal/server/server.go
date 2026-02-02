@@ -20,9 +20,9 @@ import (
 	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/internal/middleware"
 	"github.com/mallardduck/dirio/internal/path"
-	"github.com/mallardduck/dirio/internal/router"
 	"github.com/mallardduck/dirio/internal/storage"
-	"github.com/mallardduck/dirio/internal/urlbuilder"
+	"github.com/mallardduck/teapot-router/pkg/teapot"
+	"github.com/mallardduck/teapot-router/pkg/urlbuilder"
 )
 
 // Config holds server configuration
@@ -56,7 +56,7 @@ type Config struct {
 // Server represents the S3-compatible HTTP server
 type Server struct {
 	config   *Config
-	router   *router.Router
+	router   *teapot.Router
 	storage  *storage.Storage
 	metadata *metadata.Manager
 	auth     *auth.Authenticator
@@ -141,7 +141,7 @@ func New(config *Config) (*Server, error) {
 
 // setupRoutes configures HTTP routing
 func (s *Server) setupRoutes() {
-	s.router = router.New()
+	s.router = teapot.New()
 
 	// Add middleware (timing first for accurate timestamps, then trace ID, request ID, logging, auth)
 	s.router.Use(chiMiddleware.StripSlashes)
