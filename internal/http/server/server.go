@@ -14,14 +14,15 @@ import (
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 	"github.com/mallardduck/teapot-router/pkg/urlbuilder"
 
+	"github.com/mallardduck/dirio/internal/http/api"
+	"github.com/mallardduck/dirio/internal/http/auth"
+	middleware2 "github.com/mallardduck/dirio/internal/http/middleware"
+
 	"github.com/mallardduck/dirio/internal/config/data"
 
-	"github.com/mallardduck/dirio/internal/api"
-	"github.com/mallardduck/dirio/internal/auth"
 	"github.com/mallardduck/dirio/internal/logging"
 	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/mdns"
-	"github.com/mallardduck/dirio/internal/middleware"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/persistence/path"
 	"github.com/mallardduck/dirio/internal/persistence/storage"
@@ -147,9 +148,9 @@ func (s *Server) setupRoutes() {
 
 	// Add middleware (timing first for accurate timestamps, then trace ID, request ID, logging, auth)
 	s.router.Use(chiMiddleware.StripSlashes)
-	s.router.Use(middleware.Timing)
-	s.router.Use(middleware.TraceID)
-	s.router.Use(middleware.RequestID)
+	s.router.Use(middleware2.Timing)
+	s.router.Use(middleware2.TraceID)
+	s.router.Use(middleware2.RequestID)
 	s.router.Use(loggingHttp.PrepareAccessLogMiddleware(s.log))
 
 	// Create URL builder

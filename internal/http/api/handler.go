@@ -3,15 +3,16 @@ package api
 import (
 	"net/http"
 
-	"github.com/mallardduck/dirio/internal/api/iam"
-	"github.com/mallardduck/dirio/internal/api/s3"
-	"github.com/mallardduck/dirio/internal/auth"
+	"github.com/mallardduck/teapot-router/pkg/teapot"
+
+	"github.com/mallardduck/dirio/internal/http/api/iam"
+	"github.com/mallardduck/dirio/internal/http/api/s3"
+	"github.com/mallardduck/dirio/internal/http/auth"
+	"github.com/mallardduck/dirio/internal/http/middleware"
 	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
-	"github.com/mallardduck/dirio/internal/middleware"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/persistence/storage"
 	"github.com/mallardduck/dirio/internal/service"
-	"github.com/mallardduck/teapot-router/pkg/teapot"
 )
 
 type routeHandler struct {

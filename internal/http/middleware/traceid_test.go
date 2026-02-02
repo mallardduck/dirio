@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/mallardduck/dirio/internal/trace"
+	"github.com/mallardduck/dirio/internal/http/trace"
 )
 
 func TestTraceID(t *testing.T) {

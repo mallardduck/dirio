@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/mallardduck/dirio/internal/trace"
+	"github.com/mallardduck/dirio/internal/http/trace"
 )
 
 // TraceID is a middleware that generates or accepts a trace ID for each request.

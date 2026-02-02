@@ -16,10 +16,11 @@ import (
 
 	"github.com/go-git/go-billy/v5/osfs"
 
-	"github.com/mallardduck/dirio/internal/auth"
+	"github.com/mallardduck/dirio/internal/http/auth"
+	"github.com/mallardduck/dirio/internal/http/server"
+
 	"github.com/mallardduck/dirio/internal/config/data"
 	"github.com/mallardduck/dirio/internal/consts"
-	"github.com/mallardduck/dirio/internal/server"
 )
 
 // TestServer wraps a dirio server for integration testing

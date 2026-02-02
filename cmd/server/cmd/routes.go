@@ -3,9 +3,10 @@ package cmd
 import (
 	"os"
 
-	"github.com/mallardduck/dirio/internal/server"
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 	"github.com/spf13/cobra"
+
+	"github.com/mallardduck/dirio/internal/http/server"
 )
 
 var routesCmd = &cobra.Command{

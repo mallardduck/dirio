@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/mallardduck/dirio/internal/middleware"
-	"github.com/mallardduck/dirio/internal/trace"
+	"github.com/mallardduck/dirio/internal/http/middleware"
+	"github.com/mallardduck/dirio/internal/http/trace"
 )
 
 // FromContext returns a logger with the trace_id automatically included from context.

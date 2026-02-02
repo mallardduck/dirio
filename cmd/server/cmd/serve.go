@@ -8,10 +8,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/mallardduck/dirio/internal/http/server"
+
 	"github.com/mallardduck/dirio/internal/config"
 	"github.com/mallardduck/dirio/internal/config/data"
 	"github.com/mallardduck/dirio/internal/logging"
-	"github.com/mallardduck/dirio/internal/server"
 )
 
 var serveCmd = &cobra.Command{

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/mallardduck/dirio/internal/http/middleware"
 	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
-	"github.com/mallardduck/dirio/internal/middleware"
 	"github.com/mallardduck/dirio/internal/service"
 	svcs3 "github.com/mallardduck/dirio/internal/service/s3"
 	"github.com/mallardduck/dirio/pkg/s3types"

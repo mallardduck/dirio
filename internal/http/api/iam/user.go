@@ -9,13 +9,13 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 
+	"github.com/mallardduck/dirio/internal/http/auth"
+
 	"github.com/mallardduck/dirio/internal/service/policy"
 	"github.com/mallardduck/dirio/internal/service/user"
 
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
 	svcuser "github.com/mallardduck/dirio/internal/service/user"
-
-	"github.com/mallardduck/dirio/internal/auth"
 )
 
 type userHTTPService struct {

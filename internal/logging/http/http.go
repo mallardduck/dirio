@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/mallardduck/dirio/internal/http/middleware"
 	"github.com/mallardduck/dirio/internal/logging"
-	"github.com/mallardduck/dirio/internal/middleware"
 )
 
 // contextKey for storing response writer in context

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mallardduck/dirio/internal/trace"
+	"github.com/mallardduck/dirio/internal/http/trace"
 )
 
 func TestFromContext(t *testing.T) {

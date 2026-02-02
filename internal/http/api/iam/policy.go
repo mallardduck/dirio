@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/mallardduck/dirio/internal/auth"
+	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/jsonutil"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
 	"github.com/mallardduck/dirio/internal/service/policy"

@@ -4,17 +4,18 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/mallardduck/dirio/internal/api"
-	"github.com/mallardduck/dirio/internal/auth"
-	"github.com/mallardduck/dirio/internal/middleware"
-	"github.com/mallardduck/dirio/internal/server/debug"
-	"github.com/mallardduck/dirio/internal/server/favicon"
 	"github.com/mallardduck/teapot-router/pkg/teapot"
+
+	"github.com/mallardduck/dirio/internal/http/api"
+	auth2 "github.com/mallardduck/dirio/internal/http/auth"
+	"github.com/mallardduck/dirio/internal/http/middleware"
+	"github.com/mallardduck/dirio/internal/http/server/debug"
+	"github.com/mallardduck/dirio/internal/http/server/favicon"
 )
 
 // RouteDependencies contains all dependencies needed for route handlers
 type RouteDependencies struct {
-	Auth       *auth.Authenticator
+	Auth       *auth2.Authenticator
 	APIHandler *api.Handler
 	Debug      bool
 }
@@ -126,7 +127,7 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 			deps.Auth.AuthMiddleware,
 			// Chunked encoding middleware
 			middleware.ChunkedEncoding(func(r io.Reader) io.Reader {
-				return auth.NewChunkedReader(r)
+				return auth2.NewChunkedReader(r)
 			}),
 		}
 	}

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/mallardduck/dirio/internal/auth"
+	"github.com/mallardduck/dirio/internal/http/auth"
 )
 
 func main() {

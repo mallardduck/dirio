@@ -9,10 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mallardduck/dirio/internal/auth"
-	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mallardduck/dirio/internal/consts"
+	"github.com/mallardduck/dirio/internal/http/auth"
 )
 
 // signStreamingRequest signs a request with STREAMING-AWS4-HMAC-SHA256-PAYLOAD
