@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/mallardduck/dirio/internal/metadata"
+	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

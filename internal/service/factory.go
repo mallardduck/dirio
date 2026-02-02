@@ -1,11 +1,11 @@
 package service
 
 import (
-	"github.com/mallardduck/dirio/internal/metadata"
+	"github.com/mallardduck/dirio/internal/persistence/metadata"
+	"github.com/mallardduck/dirio/internal/persistence/storage"
 	"github.com/mallardduck/dirio/internal/service/policy"
 	"github.com/mallardduck/dirio/internal/service/s3"
 	"github.com/mallardduck/dirio/internal/service/user"
-	"github.com/mallardduck/dirio/internal/storage"
 )
 
 // ServicesFactory provides access to all service instances

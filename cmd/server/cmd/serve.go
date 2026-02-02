@@ -5,12 +5,13 @@ import (
 	"os"
 
 	"github.com/go-git/go-billy/v5/osfs"
-	"github.com/mallardduck/dirio/internal/config"
-	"github.com/mallardduck/dirio/internal/dataconfig"
-	"github.com/mallardduck/dirio/internal/logging"
-	"github.com/mallardduck/dirio/internal/server"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/mallardduck/dirio/internal/config"
+	"github.com/mallardduck/dirio/internal/config/data"
+	"github.com/mallardduck/dirio/internal/logging"
+	"github.com/mallardduck/dirio/internal/server"
 )
 
 var serveCmd = &cobra.Command{
@@ -163,7 +164,7 @@ func initOrMigrateDataConfig(settings *config.Settings) error {
 	fs := osfs.New(settings.DataDir)
 
 	// Check if .dirio/config.json already exists
-	if dataconfig.DataConfigExists(fs) {
+	if data.DataConfigExists(fs) {
 		// Should have been loaded, but wasn't - this might indicate a problem
 		log.Warn("Data config file exists but wasn't loaded - skipping initialization")
 		return nil
@@ -182,14 +183,14 @@ func initOrMigrateDataConfig(settings *config.Settings) error {
 	}
 
 	// Create data config with CLI-provided credentials and region
-	dc := dataconfig.DefaultDataConfig()
+	dc := data.DefaultDataConfig()
 	dc.Credentials.AccessKey = settings.AccessKey
 	dc.Credentials.SecretKey = settings.SecretKey
 	dc.Region = settings.Region // Use CLI region for new data directories
 	// Compression settings use defaults (disabled)
 	// WORM defaults to disabled
 
-	if err := dataconfig.SaveDataConfig(fs, dc); err != nil {
+	if err := data.SaveDataConfig(fs, dc); err != nil {
 		return fmt.Errorf("failed to save data config: %w", err)
 	}
 

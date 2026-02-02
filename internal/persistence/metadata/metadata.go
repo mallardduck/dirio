@@ -11,8 +11,9 @@ import (
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/util"
 
+	"github.com/mallardduck/dirio/internal/persistence/path"
+
 	"github.com/mallardduck/dirio/internal/jsonutil"
-	"github.com/mallardduck/dirio/internal/path"
 	"github.com/mallardduck/dirio/pkg/iam"
 )
 

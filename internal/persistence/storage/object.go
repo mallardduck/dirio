@@ -10,8 +10,9 @@ import (
 	"time"
 
 	"github.com/go-git/go-billy/v5"
-	"github.com/mallardduck/dirio/internal/metadata"
-	"github.com/mallardduck/dirio/internal/path"
+
+	"github.com/mallardduck/dirio/internal/persistence/metadata"
+	"github.com/mallardduck/dirio/internal/persistence/path"
 )
 
 // Object represents an S3 object with content

@@ -6,9 +6,10 @@ import (
 	"sync"
 
 	"github.com/go-git/go-billy/v5/osfs"
-	"github.com/mallardduck/dirio/internal/dataconfig"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+
+	"github.com/mallardduck/dirio/internal/config/data"
 )
 
 // Settings represents all configuration values that dirio relies on to run.
@@ -38,7 +39,7 @@ type Settings struct {
 	CanonicalDomain string
 
 	// Data directory configuration (loaded from .dirio/config.json if exists)
-	DataConfig *dataconfig.DataConfig
+	DataConfig *data.DataConfig
 
 	// CLICredentialsExplicitlySet tracks whether access_key/secret_key were
 	// explicitly provided (via env, flag, or config) vs using defaults
@@ -160,13 +161,13 @@ func loadDataConfig(settings *Settings, flags *pflag.FlagSet) error {
 	fs := osfs.New(settings.DataDir)
 
 	// Check if data config exists
-	if !dataconfig.DataConfigExists(fs) {
+	if !data.DataConfigExists(fs) {
 		slog.Debug("No data config found, will use CLI/app config values")
 		return nil
 	}
 
 	// Load data config
-	dc, err := dataconfig.LoadDataConfig(fs)
+	dc, err := data.LoadDataConfig(fs)
 	if err != nil {
 		return fmt.Errorf("data config exists but failed to load: %w", err)
 	}

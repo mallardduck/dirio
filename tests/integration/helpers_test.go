@@ -15,9 +15,10 @@ import (
 	"time"
 
 	"github.com/go-git/go-billy/v5/osfs"
+
 	"github.com/mallardduck/dirio/internal/auth"
+	"github.com/mallardduck/dirio/internal/config/data"
 	"github.com/mallardduck/dirio/internal/consts"
-	"github.com/mallardduck/dirio/internal/dataconfig"
 	"github.com/mallardduck/dirio/internal/server"
 )
 
@@ -304,10 +305,10 @@ func NewTestServerWithExplicitCredentialsAndDataConfig(t *testing.T, cliAccessKe
 
 	// Create data config BEFORE starting server
 	fs := osfs.New(dataDir)
-	dc := dataconfig.DefaultDataConfig()
+	dc := data.DefaultDataConfig()
 	dc.Credentials.AccessKey = dataAccessKey
 	dc.Credentials.SecretKey = dataSecretKey
-	if err := dataconfig.SaveDataConfig(fs, dc); err != nil {
+	if err := data.SaveDataConfig(fs, dc); err != nil {
 		os.RemoveAll(dataDir)
 		t.Fatalf("Failed to save data config: %v", err)
 	}
@@ -417,10 +418,10 @@ func NewTestServerWithDefaultsAndDataConfig(t *testing.T, dataAccessKey, dataSec
 
 	// Create data config BEFORE starting server
 	fs := osfs.New(dataDir)
-	dc := dataconfig.DefaultDataConfig()
+	dc := data.DefaultDataConfig()
 	dc.Credentials.AccessKey = dataAccessKey
 	dc.Credentials.SecretKey = dataSecretKey
-	if err := dataconfig.SaveDataConfig(fs, dc); err != nil {
+	if err := data.SaveDataConfig(fs, dc); err != nil {
 		os.RemoveAll(dataDir)
 		t.Fatalf("Failed to save data config: %v", err)
 	}
@@ -470,11 +471,11 @@ func NewTestServerWithDefaultsAndDataConfig(t *testing.T, dataAccessKey, dataSec
 func CreateDataConfigWithCredentials(ts *TestServer, accessKey, secretKey string) {
 	fs := osfs.New(ts.DataDir)
 
-	dc := dataconfig.DefaultDataConfig()
+	dc := data.DefaultDataConfig()
 	dc.Credentials.AccessKey = accessKey
 	dc.Credentials.SecretKey = secretKey
 
-	if err := dataconfig.SaveDataConfig(fs, dc); err != nil {
+	if err := data.SaveDataConfig(fs, dc); err != nil {
 		panic(fmt.Sprintf("Failed to save data config: %v", err))
 	}
 }

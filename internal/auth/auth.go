@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"github.com/mallardduck/dirio/internal/logging"
-	"github.com/mallardduck/dirio/internal/metadata"
+	"github.com/mallardduck/dirio/internal/persistence/metadata"
 )
 
 var authLogger = logging.Component("auth")

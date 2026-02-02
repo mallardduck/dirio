@@ -6,9 +6,9 @@ import (
 	"io"
 
 	"github.com/mallardduck/dirio/internal/consts"
-	"github.com/mallardduck/dirio/internal/metadata"
+	"github.com/mallardduck/dirio/internal/persistence/metadata"
+	"github.com/mallardduck/dirio/internal/persistence/storage"
 	"github.com/mallardduck/dirio/internal/service/validation"
-	"github.com/mallardduck/dirio/internal/storage"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
 

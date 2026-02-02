@@ -11,18 +11,20 @@ import (
 	"time"
 
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/mallardduck/teapot-router/pkg/teapot"
+	"github.com/mallardduck/teapot-router/pkg/urlbuilder"
+
+	"github.com/mallardduck/dirio/internal/config/data"
+
 	"github.com/mallardduck/dirio/internal/api"
 	"github.com/mallardduck/dirio/internal/auth"
-	"github.com/mallardduck/dirio/internal/dataconfig"
 	"github.com/mallardduck/dirio/internal/logging"
 	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/mdns"
-	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/internal/middleware"
-	"github.com/mallardduck/dirio/internal/path"
-	"github.com/mallardduck/dirio/internal/storage"
-	"github.com/mallardduck/teapot-router/pkg/teapot"
-	"github.com/mallardduck/teapot-router/pkg/urlbuilder"
+	"github.com/mallardduck/dirio/internal/persistence/metadata"
+	"github.com/mallardduck/dirio/internal/persistence/path"
+	"github.com/mallardduck/dirio/internal/persistence/storage"
 )
 
 // Config holds server configuration
@@ -46,7 +48,7 @@ type Config struct {
 
 	// Data directory configuration (optional)
 	// If present, provides alternative admin credentials from data config
-	DataConfig *dataconfig.DataConfig
+	DataConfig *data.DataConfig
 
 	// CLICredentialsExplicitlySet tracks whether AccessKey/SecretKey were
 	// explicitly provided (via env, flag, or config) vs using defaults

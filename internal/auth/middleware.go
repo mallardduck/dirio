@@ -9,8 +9,8 @@ import (
 	"net/http"
 
 	contextInt "github.com/mallardduck/dirio/internal/context"
-	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/internal/middleware"
+	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
 

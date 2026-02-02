@@ -4,7 +4,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/mallardduck/dirio/internal/metadata"
+	"github.com/mallardduck/dirio/internal/persistence/metadata"
 )
 
 // ============================================================================

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/mallardduck/dirio/internal/metadata"
+	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
 	validation2 "github.com/mallardduck/dirio/internal/service/validation"
 	"github.com/mallardduck/dirio/pkg/iam"

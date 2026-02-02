@@ -7,7 +7,8 @@ import (
 
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/util"
-	"github.com/mallardduck/dirio/internal/dataconfig"
+
+	configdata "github.com/mallardduck/dirio/internal/config/data"
 )
 
 // MinIO 2019 config.json structure (format version 33)
@@ -51,14 +52,14 @@ type MinIOConfig2022KV struct {
 }
 
 // ImportConfig reads MinIO's config.json and converts it to DirIO DataConfig
-func ImportConfig(minioFS billy.Filesystem) (*dataconfig.DataConfig, error) {
+func ImportConfig(minioFS billy.Filesystem) (*configdata.DataConfig, error) {
 	configPath := "config/config.json"
 
 	data, err := util.ReadFile(minioFS, configPath)
 	if err != nil {
 		if isNotExist(err) {
 			// No config.json - return default config
-			return dataconfig.DefaultDataConfig(), nil
+			return configdata.DefaultDataConfig(), nil
 		}
 		return nil, fmt.Errorf("failed to read config.json: %w", err)
 	}
@@ -82,8 +83,8 @@ func ImportConfig(minioFS billy.Filesystem) (*dataconfig.DataConfig, error) {
 }
 
 // convertConfig2019 converts MinIO 2019 config to DirIO DataConfig
-func convertConfig2019(minioConfig MinIOConfig2019) *dataconfig.DataConfig {
-	config := dataconfig.DefaultDataConfig()
+func convertConfig2019(minioConfig MinIOConfig2019) *configdata.DataConfig {
+	config := configdata.DefaultDataConfig()
 
 	// Credentials
 	if minioConfig.Credential.AccessKey != "" {
@@ -115,8 +116,8 @@ func convertConfig2019(minioConfig MinIOConfig2019) *dataconfig.DataConfig {
 }
 
 // convertConfig2022 converts MinIO 2022 config to DirIO DataConfig
-func convertConfig2022(minioConfig MinIOConfig2022) *dataconfig.DataConfig {
-	config := dataconfig.DefaultDataConfig()
+func convertConfig2022(minioConfig MinIOConfig2022) *configdata.DataConfig {
+	config := configdata.DefaultDataConfig()
 
 	// Credentials
 	for _, kv := range minioConfig.Credentials.Underscore {

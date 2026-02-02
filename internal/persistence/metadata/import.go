@@ -6,10 +6,12 @@ import (
 	"time"
 
 	"github.com/go-git/go-billy/v5/util"
-	"github.com/mallardduck/dirio/internal/dataconfig"
+
+	"github.com/mallardduck/dirio/internal/config/data"
+
 	"github.com/mallardduck/dirio/internal/jsonutil"
 	"github.com/mallardduck/dirio/internal/minio"
-	"github.com/mallardduck/dirio/internal/path"
+	"github.com/mallardduck/dirio/internal/persistence/path"
 	"github.com/mallardduck/dirio/pkg/iam"
 )
 
@@ -188,7 +190,7 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 
 	// Save data config from MinIO import
 	if result.DataConfig != nil {
-		if err := dataconfig.SaveDataConfig(m.rootFS, result.DataConfig); err != nil {
+		if err := data.SaveDataConfig(m.rootFS, result.DataConfig); err != nil {
 			return fmt.Errorf("failed to save data config: %w", err)
 		}
 		fmt.Printf("Saved data config (region=%s, compression=%v, worm=%v)\n",

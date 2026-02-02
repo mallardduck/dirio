@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/go-git/go-billy/v5/osfs"
-	"github.com/mallardduck/dirio/internal/dataconfig"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mallardduck/dirio/internal/config/data"
 )
 
 func TestValueResolverPriority(t *testing.T) {
@@ -236,12 +237,12 @@ func TestRegionWarning(t *testing.T) {
 
 	// Create a data config with region us-east-1
 	fs := osfs.New(tmpDir)
-	dc := dataconfig.DefaultDataConfig()
+	dc := data.DefaultDataConfig()
 	dc.Region = "us-east-1"
 	dc.Credentials.AccessKey = "test-admin"
 	dc.Credentials.SecretKey = "test-secret"
 
-	err := dataconfig.SaveDataConfig(fs, dc)
+	err := data.SaveDataConfig(fs, dc)
 	require.NoError(t, err)
 
 	// Create flags with region us-west-2
@@ -295,12 +296,12 @@ func TestRegionNoWarningWhenNotExplicitlySet(t *testing.T) {
 
 	// Create a data config with region us-east-1
 	fs := osfs.New(tmpDir)
-	dc := dataconfig.DefaultDataConfig()
+	dc := data.DefaultDataConfig()
 	dc.Region = "us-east-1"
 	dc.Credentials.AccessKey = "test-admin"
 	dc.Credentials.SecretKey = "test-secret"
 
-	err := dataconfig.SaveDataConfig(fs, dc)
+	err := data.SaveDataConfig(fs, dc)
 	require.NoError(t, err)
 
 	// Create flags without setting region (will use default)

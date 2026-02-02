@@ -7,10 +7,10 @@ import (
 	"github.com/mallardduck/dirio/internal/api/s3"
 	"github.com/mallardduck/dirio/internal/auth"
 	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
-	"github.com/mallardduck/dirio/internal/metadata"
 	"github.com/mallardduck/dirio/internal/middleware"
+	"github.com/mallardduck/dirio/internal/persistence/metadata"
+	"github.com/mallardduck/dirio/internal/persistence/storage"
 	"github.com/mallardduck/dirio/internal/service"
-	"github.com/mallardduck/dirio/internal/storage"
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 )
 
