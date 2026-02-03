@@ -39,10 +39,9 @@ func (h *HTTPHandler) ListBuckets(w http.ResponseWriter, r *http.Request) {
 		data.Action = "ListBuckets"
 	}
 
-	requestID := middleware.GetRequestID(r.Context())
-
 	buckets, err := h.s3Service.ListBuckets(r.Context())
 	if err != nil {
+		requestID := middleware.GetRequestID(r.Context())
 		if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error listing buckets and additional error writing XML error response")
 			return
