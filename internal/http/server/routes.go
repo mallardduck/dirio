@@ -7,14 +7,14 @@ import (
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 
 	"github.com/mallardduck/dirio/internal/http/api"
-	auth2 "github.com/mallardduck/dirio/internal/http/auth"
+	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/http/middleware"
 	"github.com/mallardduck/dirio/internal/http/server/favicon"
 )
 
 // RouteDependencies contains all dependencies needed for route handlers
 type RouteDependencies struct {
-	Auth       *auth2.Authenticator
+	Auth       *auth.Authenticator
 	APIHandler *api.Handler
 	Debug      bool
 }
@@ -36,18 +36,29 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 		policyHandler := deps.APIHandler.IAMHandler.PolicyResourceHandler()
 
 		adminDeps = &adminRouteDeps{
-			listUsers:           userHandler.ListHandler,
-			addUser:             userHandler.AddHandler,
-			removeUser:          userHandler.RemoveHandler,
-			getUserInfo:         userHandler.InfoHandler,
-			setUserStatus:       userHandler.StatusHandler,
-			listCannedPolicies:  policyHandler.ListHandler,
-			addCannedPolicy:     policyHandler.AddHandler,
-			deleteCannedPolicy:  policyHandler.RemoveHandler,
-			getCannedPolicyInfo: policyHandler.InfoHandler,
-			setPolicy:           policyHandler.SetHandler,
-			attachPolicy:        policyHandler.AddHandler,
-			listPolicyEntities:  policyHandler.ListEntitiesHandler,
+			listUsers:             userHandler.ListHandler,
+			addUser:               userHandler.AddHandler,
+			removeUser:            userHandler.RemoveHandler,
+			getUserInfo:           userHandler.InfoHandler,
+			setUserStatus:         userHandler.StatusHandler,
+			listServiceAccounts:   RouteNotImplemented,
+			addServiceAccount:     RouteNotImplemented,
+			deleteServiceAccount:  RouteNotImplemented,
+			getServiceAccountInfo: RouteNotImplemented,
+			updateServiceAccount:  RouteNotImplemented,
+			updateGroupMembers:    RouteNotImplemented,
+			getGroupInfo:          RouteNotImplemented,
+			listGroups:            RouteNotImplemented,
+			setGroupStatus:        RouteNotImplemented,
+			listCannedPolicies:    policyHandler.ListHandler,
+			addCannedPolicy:       policyHandler.AddHandler,
+			deleteCannedPolicy:    policyHandler.RemoveHandler,
+			getCannedPolicyInfo:   policyHandler.InfoHandler,
+			setPolicy:             policyHandler.SetHandler,
+			attachPolicy:          policyHandler.AddHandler,
+			listPolicyEntities:    policyHandler.ListEntitiesHandler,
+			Info:                  RouteNotImplemented,
+			Health:                RouteNotImplemented,
 		}
 
 		adminMW = []func(http.Handler) http.Handler{deps.Auth.AuthMiddleware}
@@ -63,26 +74,40 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 	var s3MW []func(http.Handler) http.Handler
 	if deps != nil {
 		s3Deps = &s3RouteDeps{
-			listBuckets:       deps.APIHandler.S3Handler.ListBuckets,
-			headBucket:        bucket(deps.APIHandler.S3Handler.HeadBucket),
-			createBucket:      bucket(deps.APIHandler.S3Handler.CreateBucket),
-			listObjects:       bucket(deps.APIHandler.S3Handler.ListObjects),
-			deleteBucket:      bucket(deps.APIHandler.S3Handler.DeleteBucket),
-			listObjectsV2:     bucket(deps.APIHandler.S3Handler.ListObjectsV2),
-			getBucketLocation: bucket(deps.APIHandler.S3Handler.GetBucketLocation),
-			getBucketPolicy:   bucket(deps.APIHandler.S3Handler.GetBucketPolicy),
-			putBucketPolicy:   bucket(deps.APIHandler.S3Handler.PutBucketPolicy),
-			delBucketPolicy:   bucket(deps.APIHandler.S3Handler.DeleteBucketPolicy),
-			headObject:        object(deps.APIHandler.S3Handler.HeadObject),
-			putObject:         object(deps.APIHandler.S3Handler.PutObject),
-			getObject:         object(deps.APIHandler.S3Handler.GetObject),
-			deleteObject:      object(deps.APIHandler.S3Handler.DeleteObject),
+			listBuckets:          deps.APIHandler.S3Handler.ListBuckets,
+			headBucket:           bucket(deps.APIHandler.S3Handler.HeadBucket),
+			createBucket:         bucket(deps.APIHandler.S3Handler.CreateBucket),
+			listObjects:          bucket(deps.APIHandler.S3Handler.ListObjects),
+			deleteBucket:         bucket(deps.APIHandler.S3Handler.DeleteBucket),
+			listObjectsV2:        bucket(deps.APIHandler.S3Handler.ListObjectsV2),
+			getBucketLocation:    bucket(deps.APIHandler.S3Handler.GetBucketLocation),
+			getBucketPolicy:      bucket(deps.APIHandler.S3Handler.GetBucketPolicy),
+			putBucketPolicy:      bucket(deps.APIHandler.S3Handler.PutBucketPolicy),
+			delBucketPolicy:      bucket(deps.APIHandler.S3Handler.DeleteBucketPolicy),
+			getBucketVersioning:  RouteNotImplemented,
+			putBucketVersioning:  RouteNotImplemented,
+			getBucketACL:         RouteNotImplemented,
+			putBucketACL:         RouteNotImplemented,
+			listObjectVersions:   RouteNotImplemented,
+			listMultipartUploads: RouteNotImplemented,
+			deleteObjects:        RouteNotImplemented,
+			headObject:           object(deps.APIHandler.S3Handler.HeadObject),
+			putObject:            object(deps.APIHandler.S3Handler.PutObject),
+			getObject:            object(deps.APIHandler.S3Handler.GetObject),
+			deleteObject:         object(deps.APIHandler.S3Handler.DeleteObject),
+			getObjectACL:         RouteNotImplemented,
+			putObjectACL:         RouteNotImplemented,
+			multipartCreate:      RouteNotImplemented,
+			multipartUploadPart:  RouteNotImplemented,
+			multipartComplete:    RouteNotImplemented,
+			multipartAbort:       RouteNotImplemented,
+			multipartListParts:   RouteNotImplemented,
 		}
 
 		s3MW = []func(http.Handler) http.Handler{
 			deps.Auth.AuthMiddleware,
 			middleware.ChunkedEncoding(func(r io.Reader) io.Reader {
-				return auth2.NewChunkedReader(r)
+				return auth.NewChunkedReader(r)
 			}),
 		}
 	}
@@ -156,17 +181,17 @@ func setupAdminRoutes(r *teapot.Router, deps *adminRouteDeps) {
 	r.POST("/set-user-status", deps.setUserStatus).Name("users.setstatus")
 
 	// Service Account Management (not yet implemented)
-	r.GET("/list-service-accounts", RouteNotImplemented).Name("serviceaccounts.list")
-	r.POST("/add-service-account", RouteNotImplemented).Name("serviceaccounts.add")
-	r.POST("/delete-service-account", RouteNotImplemented).Name("serviceaccounts.delete")
-	r.GET("/info-service-account", RouteNotImplemented).Name("serviceaccounts.info")
-	r.POST("/update-service-account", RouteNotImplemented).Name("serviceaccounts.update")
+	r.GET("/list-service-accounts", deps.listServiceAccounts).Name("serviceaccounts.list")
+	r.POST("/add-service-account", deps.addServiceAccount).Name("serviceaccounts.add")
+	r.POST("/delete-service-account", deps.deleteServiceAccount).Name("serviceaccounts.delete")
+	r.GET("/info-service-account", deps.getServiceAccountInfo).Name("serviceaccounts.info")
+	r.POST("/update-service-account", deps.updateServiceAccount).Name("serviceaccounts.update")
 
 	// Group Management (not yet implemented)
-	r.POST("/update-group-members", RouteNotImplemented).Name("groups.updatemembers")
-	r.GET("/group", RouteNotImplemented).Name("groups.info")
-	r.GET("/groups", RouteNotImplemented).Name("groups.list")
-	r.POST("/set-group-status", RouteNotImplemented).Name("groups.setstatus")
+	r.POST("/update-group-members", deps.updateGroupMembers).Name("groups.updatemembers")
+	r.GET("/group", deps.getGroupInfo).Name("groups.info")
+	r.GET("/groups", deps.listGroups).Name("groups.list")
+	r.POST("/set-group-status", deps.setGroupStatus).Name("groups.setstatus")
 
 	// Policy Management
 	r.GET("/list-canned-policies", deps.listCannedPolicies).Name("policies.list")
@@ -181,8 +206,8 @@ func setupAdminRoutes(r *teapot.Router, deps *adminRouteDeps) {
 	r.GET("/policy-entities", deps.listPolicyEntities).Name("policies.entities")
 
 	// Server Info & Health (not yet implemented)
-	r.GET("/info", RouteNotImplemented).Name("server.info")
-	r.GET("/health", RouteNotImplemented).Name("server.health")
+	r.GET("/info", deps.Info).Name("server.info")
+	r.GET("/health", deps.Health).Name("server.health")
 }
 
 type s3RouteDeps struct {
