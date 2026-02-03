@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/mallardduck/teapot-router/pkg/teapot"
+
 	"github.com/mallardduck/dirio/internal/http/middleware"
 	"github.com/mallardduck/dirio/internal/logging"
 )
@@ -65,9 +67,10 @@ func PrepareAccessLogMiddleware(serverLogger *slog.Logger) func(next http.Handle
 
 			// Make the wrapped writer available to handlers through context
 			ctx := context.WithValue(r.Context(), logDataKey, data)
+			r = r.WithContext(ctx)
 
 			// Pass the new context down the chain
-			next.ServeHTTP(wrapped, r.WithContext(ctx))
+			next.ServeHTTP(wrapped, r)
 
 			// Capture response time and calculate duration
 			end := time.Now()
@@ -78,6 +81,8 @@ func PrepareAccessLogMiddleware(serverLogger *slog.Logger) func(next http.Handle
 
 			// Build log attributes
 			attrs := []any{
+				"route_name", teapot.GetRouteName(r),
+				"route_action", teapot.GetAction(r),
 				"method", r.Method,
 				"host", r.URL.Host,
 				"path", r.URL.Path,

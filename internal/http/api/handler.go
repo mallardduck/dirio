@@ -3,24 +3,13 @@ package api
 import (
 	"net/http"
 
-	"github.com/mallardduck/teapot-router/pkg/teapot"
-
 	"github.com/mallardduck/dirio/internal/http/api/iam"
 	"github.com/mallardduck/dirio/internal/http/api/s3"
 	"github.com/mallardduck/dirio/internal/http/auth"
-	"github.com/mallardduck/dirio/internal/http/middleware"
-	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/persistence/storage"
 	"github.com/mallardduck/dirio/internal/service"
 )
-
-type routeHandler struct {
-	HeadHandler    http.HandlerFunc
-	StoreHandler   http.HandlerFunc
-	ShowHandler    http.HandlerFunc
-	DestroyHandler http.HandlerFunc
-}
 
 // Handler handles S3 API requests
 type Handler struct {
@@ -49,148 +38,5 @@ func New(storage *storage.Storage, metadata *metadata.Manager, auth *auth.Authen
 		IAMHandler: iam.New(
 			serviceFactory,
 		),
-	}
-}
-
-// BucketResourceHandler routes bucket operations based on method
-func (h *Handler) BucketResourceHandler() routeHandler {
-	return routeHandler{
-		HeadHandler: func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			requestID := middleware.GetRequestID(ctx)
-			bucket := teapot.URLParam(r, "bucket")
-
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "HeadBucket"
-			}
-			h.S3Handler.HeadBucket(w, r, bucket, requestID)
-		}, // HeadBucket
-		StoreHandler: func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			requestID := middleware.GetRequestID(ctx)
-			bucket := teapot.URLParam(r, "bucket")
-
-			// Check for bucket policy operation
-			if _, ok := r.URL.Query()["policy"]; ok {
-				if data, ok := loggingHttp.GetLogData(ctx); ok {
-					data.Action = "PutBucketPolicy"
-				}
-				h.S3Handler.PutBucketPolicy(w, r, bucket, requestID)
-				return
-			}
-
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "CreateBucket"
-			}
-
-			h.S3Handler.CreateBucket(w, r, bucket, requestID)
-		}, // CreateBucket, PutBucketPolicy
-		ShowHandler: func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			requestID := middleware.GetRequestID(ctx)
-			bucket := teapot.URLParam(r, "bucket")
-
-			// Check query parameters to determine operation
-			query := r.URL.Query()
-
-			// GetBucketPolicy
-			if _, ok := query["policy"]; ok {
-				if data, ok := loggingHttp.GetLogData(ctx); ok {
-					data.Action = "GetBucketPolicy"
-				}
-				h.S3Handler.GetBucketPolicy(w, r, bucket, requestID)
-				return
-			}
-
-			// GetBucketLocation (backwards compatibility - AWS recommends HeadBucket instead)
-			if _, ok := query["location"]; ok {
-				if data, ok := loggingHttp.GetLogData(ctx); ok {
-					data.Action = "GetBucketLocation"
-				}
-				h.S3Handler.GetBucketLocation(w, r, bucket, requestID)
-				return
-			}
-
-			if query.Get("list-type") == "2" {
-				if data, ok := loggingHttp.GetLogData(ctx); ok {
-					data.Action = "ListObjectsV2"
-				}
-				h.S3Handler.ListObjectsV2(w, r, bucket, requestID)
-				return
-			}
-
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "ListObjects"
-			}
-			h.S3Handler.ListObjects(w, r, bucket, requestID)
-		}, // ListObjects, ListObjectsV2, GetBucketLocation, GetBucketPolicy
-		DestroyHandler: func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			requestID := middleware.GetRequestID(ctx)
-			bucket := teapot.URLParam(r, "bucket")
-
-			// Check for bucket policy deletion
-			if _, ok := r.URL.Query()["policy"]; ok {
-				if data, ok := loggingHttp.GetLogData(ctx); ok {
-					data.Action = "DeleteBucketPolicy"
-				}
-				h.S3Handler.DeleteBucketPolicy(w, r, bucket, requestID)
-				return
-			}
-
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "DeleteBucket"
-			}
-			h.S3Handler.DeleteBucket(w, r, bucket, requestID)
-		}, // DeleteBucket, DeleteBucketPolicy
-	}
-}
-
-// ObjectResourceHandler routes object operations based on method
-func (h *Handler) ObjectResourceHandler() routeHandler {
-	return routeHandler{
-		HeadHandler: func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			requestID := middleware.GetRequestID(ctx)
-			bucket := teapot.URLParam(r, "bucket")
-			key := teapot.URLParam(r, "key")
-
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "HeadObject"
-			}
-			h.S3Handler.HeadObject(w, r, bucket, key, requestID)
-		}, // HeadObject
-		StoreHandler: func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			requestID := middleware.GetRequestID(ctx)
-			bucket := teapot.URLParam(r, "bucket")
-			key := teapot.URLParam(r, "key")
-
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "PutObject"
-			}
-			h.S3Handler.PutObject(w, r, bucket, key, requestID)
-		}, // PutObject, TODO add CopyObject (x-amz-copy-source)
-		ShowHandler: func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			requestID := middleware.GetRequestID(ctx)
-			bucket := teapot.URLParam(r, "bucket")
-			key := teapot.URLParam(r, "key")
-
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "GetObject"
-			}
-			h.S3Handler.GetObject(w, r, bucket, key, requestID)
-		}, // GetObject
-		DestroyHandler: func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			requestID := middleware.GetRequestID(ctx)
-			bucket := teapot.URLParam(r, "bucket")
-			key := teapot.URLParam(r, "key")
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "DeleteObject"
-			}
-			h.S3Handler.DeleteObject(w, r, bucket, key, requestID)
-		}, // DeleteObject
 	}
 }

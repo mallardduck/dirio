@@ -95,7 +95,8 @@ func TestDefaultStateDir(t *testing.T) {
 
 		os.Setenv("XDG_CONFIG_HOME", "/tmp/test-config")
 		dir := defaultStateDir()
-		assert.Equal(t, "/tmp/test-config/dirio", dir)
+		// Normalize to forward slashes for cross-platform comparison
+		assert.Equal(t, "/tmp/test-config/dirio", filepath.ToSlash(dir))
 	})
 
 	t.Run("falls back to ~/.config when XDG not set", func(t *testing.T) {
@@ -111,8 +112,9 @@ func TestDefaultStateDir(t *testing.T) {
 		os.Unsetenv("XDG_CONFIG_HOME")
 		dir := defaultStateDir()
 
+		// Normalize to forward slashes for cross-platform comparison
 		// Should contain .config/dirio
-		assert.Contains(t, dir, ".config/dirio")
+		assert.Contains(t, filepath.ToSlash(dir), ".config/dirio")
 	})
 
 	t.Run("always returns non-empty path", func(t *testing.T) {

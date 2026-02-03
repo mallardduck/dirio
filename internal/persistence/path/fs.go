@@ -168,9 +168,13 @@ func ValidatePathSafe(path string) error {
 // Returns the cleaned path or an error if the path is unsafe.
 //
 // This uses filepath.Clean to normalize the path, then validates it.
+// Always returns forward slashes for consistency with S3 conventions.
 func CleanPath(path string) (string, error) {
-	// Clean the path
+	// Clean the path (OS-native separators)
 	cleaned := filepath.Clean(path)
+
+	// Convert to forward slashes for S3 consistency (cross-platform)
+	cleaned = filepath.ToSlash(cleaned)
 
 	// Validate the cleaned path
 	if err := ValidatePathSafe(cleaned); err != nil {

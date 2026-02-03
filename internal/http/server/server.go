@@ -16,7 +16,7 @@ import (
 
 	"github.com/mallardduck/dirio/internal/http/api"
 	"github.com/mallardduck/dirio/internal/http/auth"
-	middleware2 "github.com/mallardduck/dirio/internal/http/middleware"
+	"github.com/mallardduck/dirio/internal/http/middleware"
 
 	"github.com/mallardduck/dirio/internal/config/data"
 
@@ -148,16 +148,19 @@ func (s *Server) setupRoutes() {
 
 	// Add middleware (timing first for accurate timestamps, then trace ID, request ID, logging, auth)
 	s.router.Use(chiMiddleware.StripSlashes)
-	s.router.Use(middleware2.Timing)
-	s.router.Use(middleware2.TraceID)
-	s.router.Use(middleware2.RequestID)
+	s.router.Use(middleware.Timing)
+	s.router.Use(middleware.TraceID)
+	s.router.Use(middleware.RequestID)
+	s.router.Use(teapot.RouteContextMiddleware(s.router))
 	s.router.Use(loggingHttp.PrepareAccessLogMiddleware(s.log))
 
-	// Create URL builder
-	urlBuilder := urlbuilder.New(s.config.CanonicalDomain)
-
 	// Create API handler
-	apiHandler := api.New(s.storage, s.metadata, s.auth, urlBuilder)
+	apiHandler := api.New(
+		s.storage,
+		s.metadata,
+		s.auth,
+		urlbuilder.New(s.config.CanonicalDomain),
+	)
 
 	// Setup routes using shared function
 	deps := &RouteDependencies{
@@ -167,13 +170,6 @@ func (s *Server) setupRoutes() {
 	}
 
 	SetupRoutes(s.router, deps)
-}
-
-// notImplemented is a placeholder handler for IAM routes that returns 501 Not Implemented
-func (s *Server) notImplemented(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotImplemented)
-	w.Write([]byte(`{"error":"This IAM operation is not yet implemented","code":"NotImplemented"}`))
 }
 
 // Start begins serving HTTP requests with graceful shutdown support.
