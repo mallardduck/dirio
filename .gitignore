@@ -20,8 +20,8 @@ test-results.txt
 *.out
 
 # Data directory
-data/
-.data/
+/data
+/.data/
 minio-data*/
 
 # IDE
