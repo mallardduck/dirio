@@ -21,6 +21,18 @@ AWS="aws --endpoint-url ${ENDPOINT}"
 echo "=== AWS CLI Tests ==="
 echo "Endpoint: ${ENDPOINT}"
 
+# Network probe — plain curl, no AWS CLI.  Proves the container can reach the
+# server and that we are talking to a real DirIO instance.
+echo "--- Network Probe ---"
+PROBE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "${ENDPOINT}/healthz")
+if [ "${PROBE_CODE}" = "000" ]; then
+  echo "  FATAL: Cannot reach server at ${ENDPOINT}"
+  exit 1
+fi
+echo "  GET /healthz            -> HTTP ${PROBE_CODE}"
+QP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "${ENDPOINT}/healthz?probe=1")
+echo "  GET /healthz?probe=1    -> HTTP ${QP_CODE}"
+
 # ListBuckets
 $AWS s3api list-buckets && pass "ListBuckets" || fail "ListBuckets"
 

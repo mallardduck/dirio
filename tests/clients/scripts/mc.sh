@@ -21,6 +21,18 @@ MC_ALIAS="dirio"
 echo "=== MinIO mc Tests ==="
 echo "Endpoint: ${ENDPOINT}"
 
+# Network probe — plain curl, no mc.  Proves the container can reach the
+# server and that we are talking to a real DirIO instance.
+echo "--- Network Probe ---"
+PROBE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "${ENDPOINT}/healthz")
+if [ "${PROBE_CODE}" = "000" ]; then
+  echo "  FATAL: Cannot reach server at ${ENDPOINT}"
+  exit 1
+fi
+echo "  GET /healthz            -> HTTP ${PROBE_CODE}"
+QP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "${ENDPOINT}/healthz?probe=1")
+echo "  GET /healthz?probe=1    -> HTTP ${QP_CODE}"
+
 # Configure alias
 mc alias set ${MC_ALIAS} ${ENDPOINT} ${DIRIO_ACCESS_KEY} ${DIRIO_SECRET_KEY} --api S3v4 2>/dev/null
 if [ $? -eq 0 ]; then

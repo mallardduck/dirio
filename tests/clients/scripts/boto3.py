@@ -39,6 +39,18 @@ bucket = f"boto3-test-bucket-{int(time.time())}"
 print("=== boto3 Tests ===")
 print(f"Endpoint: {endpoint}")
 
+# Network probe — plain HTTP, no boto3.  Proves the container can reach the
+# server and that we are talking to a real DirIO instance.
+print("--- Network Probe ---")
+try:
+    _p = requests.get(f"{endpoint}/healthz", timeout=5)
+    print(f"  GET /healthz            -> HTTP {_p.status_code}  {_p.text}")
+    _p = requests.get(f"{endpoint}/healthz?probe=1", timeout=5)
+    print(f"  GET /healthz?probe=1    -> HTTP {_p.status_code}  {_p.text}")
+except Exception as e:
+    print(f"  FATAL: Cannot reach {endpoint}: {e}")
+    exit(1)
+
 # ListBuckets
 try:
     s3.list_buckets()
