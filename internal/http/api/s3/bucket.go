@@ -298,3 +298,11 @@ func parseMaxKeys(maxKeysStr string) int {
 
 	return maxKeys
 }
+
+func (h *HTTPHandler) DeleteObjects(w http.ResponseWriter, r *http.Request, bucket string) {
+	// TODO implemenet basic multiple object delete, will need to add service funcs
+	// something like: h.s3Service.DeleteObjects
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNotImplemented)
+	w.Write([]byte(`{"status":"error","error":"This operation is not yet implemented"}`))
+}

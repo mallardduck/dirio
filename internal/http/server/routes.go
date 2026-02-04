@@ -24,9 +24,9 @@ type RouteDependencies struct {
 func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 	// Public routes (no auth required)
 	r.GET("/favicon.ico", favicon.HandleFavicon).Name("favicon")
-	r.GET("/.internal/routes", teapot.NewListRoutesHandler(r, nil)).Name("debug.routes").Action("ListRoutes")
+	r.GET("/.internal/routes", teapot.NewListRoutesHandler(r, nil)).Name("debug.routes").Action("dirio:ListRoutes")
 
-	r.GET("/healthz", RouteNotImplemented).Name("health")
+	r.GET("/healthz", RouteNotImplemented).Name("health").Action("dirio:Health")
 
 	// MinIO Admin API routes (authenticated)
 	var adminDeps *adminRouteDeps
@@ -74,34 +74,40 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 	var s3MW []func(http.Handler) http.Handler
 	if deps != nil {
 		s3Deps = &s3RouteDeps{
-			listBuckets:          deps.APIHandler.S3Handler.ListBuckets,
-			headBucket:           bucket(deps.APIHandler.S3Handler.HeadBucket),
-			createBucket:         bucket(deps.APIHandler.S3Handler.CreateBucket),
-			listObjects:          bucket(deps.APIHandler.S3Handler.ListObjects),
-			deleteBucket:         bucket(deps.APIHandler.S3Handler.DeleteBucket),
-			listObjectsV2:        bucket(deps.APIHandler.S3Handler.ListObjectsV2),
-			getBucketLocation:    bucket(deps.APIHandler.S3Handler.GetBucketLocation),
-			getBucketPolicy:      bucket(deps.APIHandler.S3Handler.GetBucketPolicy),
-			putBucketPolicy:      bucket(deps.APIHandler.S3Handler.PutBucketPolicy),
-			delBucketPolicy:      bucket(deps.APIHandler.S3Handler.DeleteBucketPolicy),
-			getBucketVersioning:  RouteNotImplemented,
-			putBucketVersioning:  RouteNotImplemented,
-			getBucketACL:         RouteNotImplemented,
-			putBucketACL:         RouteNotImplemented,
-			listObjectVersions:   RouteNotImplemented,
-			listMultipartUploads: RouteNotImplemented,
-			deleteObjects:        RouteNotImplemented,
-			headObject:           object(deps.APIHandler.S3Handler.HeadObject),
-			putObject:            object(deps.APIHandler.S3Handler.PutObject),
-			getObject:            object(deps.APIHandler.S3Handler.GetObject),
-			deleteObject:         object(deps.APIHandler.S3Handler.DeleteObject),
-			getObjectACL:         RouteNotImplemented,
-			putObjectACL:         RouteNotImplemented,
-			multipartCreate:      RouteNotImplemented,
-			multipartUploadPart:  RouteNotImplemented,
-			multipartComplete:    RouteNotImplemented,
-			multipartAbort:       RouteNotImplemented,
-			multipartListParts:   RouteNotImplemented,
+			listBuckets:             deps.APIHandler.S3Handler.ListBuckets,
+			headBucket:              bucket(deps.APIHandler.S3Handler.HeadBucket),
+			createBucket:            bucket(deps.APIHandler.S3Handler.CreateBucket),
+			listObjects:             bucket(deps.APIHandler.S3Handler.ListObjects),
+			deleteBucket:            bucket(deps.APIHandler.S3Handler.DeleteBucket),
+			listObjectsV2:           bucket(deps.APIHandler.S3Handler.ListObjectsV2),
+			getBucketLocation:       bucket(deps.APIHandler.S3Handler.GetBucketLocation),
+			getBucketPolicy:         bucket(deps.APIHandler.S3Handler.GetBucketPolicy),
+			putBucketPolicy:         bucket(deps.APIHandler.S3Handler.PutBucketPolicy),
+			delBucketPolicy:         bucket(deps.APIHandler.S3Handler.DeleteBucketPolicy),
+			getBucketVersioning:     RouteNotImplemented,
+			putBucketVersioning:     RouteNotImplemented,
+			getBucketACL:            RouteNotImplemented,
+			putBucketACL:            RouteNotImplemented,
+			getBucketCors:           RouteNotImplemented,
+			putBucketCors:           RouteNotImplemented,
+			listObjectVersions:      RouteNotImplemented,
+			listMultipartUploads:    RouteNotImplemented,
+			deleteObjects:           bucket(deps.APIHandler.S3Handler.DeleteObjects),
+			headObject:              object(deps.APIHandler.S3Handler.HeadObject),
+			putObject:               object(deps.APIHandler.S3Handler.PutObject),
+			copyObject:              RouteNotImplemented,
+			getObject:               object(deps.APIHandler.S3Handler.GetObject),
+			deleteObject:            object(deps.APIHandler.S3Handler.DeleteObject),
+			getObjectACL:            RouteNotImplemented,
+			putObjectACL:            RouteNotImplemented,
+			getObjectTagging:        RouteNotImplemented,
+			putObjectTagging:        RouteNotImplemented,
+			multipartCreate:         RouteNotImplemented,
+			multipartUploadPart:     RouteNotImplemented,
+			multipartUploadPartCopy: RouteNotImplemented,
+			multipartComplete:       RouteNotImplemented,
+			multipartAbort:          RouteNotImplemented,
+			multipartListParts:      RouteNotImplemented,
 		}
 
 		s3MW = []func(http.Handler) http.Handler{
@@ -228,23 +234,29 @@ type s3RouteDeps struct {
 	putBucketVersioning  http.HandlerFunc
 	getBucketACL         http.HandlerFunc
 	putBucketACL         http.HandlerFunc
+	getBucketCors        http.HandlerFunc
+	putBucketCors        http.HandlerFunc
 	listObjectVersions   http.HandlerFunc
 	listMultipartUploads http.HandlerFunc
 	deleteObjects        http.HandlerFunc
 	// Object — direct routes (use {key:.*} to capture entire path including slashes)
 	headObject   http.HandlerFunc
 	putObject    http.HandlerFunc
+	copyObject   http.HandlerFunc
 	getObject    http.HandlerFunc
 	deleteObject http.HandlerFunc
 	// Object — query-dispatched operations
-	getObjectACL http.HandlerFunc
-	putObjectACL http.HandlerFunc
+	getObjectACL     http.HandlerFunc
+	putObjectACL     http.HandlerFunc
+	getObjectTagging http.HandlerFunc
+	putObjectTagging http.HandlerFunc
 	// Multipart upload operations
-	multipartCreate     http.HandlerFunc
-	multipartUploadPart http.HandlerFunc
-	multipartComplete   http.HandlerFunc
-	multipartAbort      http.HandlerFunc
-	multipartListParts  http.HandlerFunc
+	multipartCreate         http.HandlerFunc
+	multipartUploadPart     http.HandlerFunc
+	multipartUploadPartCopy http.HandlerFunc
+	multipartComplete       http.HandlerFunc
+	multipartAbort          http.HandlerFunc
+	multipartListParts      http.HandlerFunc
 }
 
 // setupS3Routes registers S3 API routes. Direct routes are registered first —
@@ -257,48 +269,86 @@ func setupS3Routes(r *teapot.Router, deps *s3RouteDeps) {
 	}
 
 	// Service
-	r.GET("/", deps.listBuckets).Name("index").Action("ListBuckets")
+	r.GET("/", deps.listBuckets).Name("index").Action("s3:ListBuckets")
 
 	// Bucket — direct routes (become fallbacks when query routes are added)
-	r.HEAD("/{bucket}", deps.headBucket).Name("buckets.head").Action("HeadBucket")
-	r.PUT("/{bucket}", deps.createBucket).Name("buckets.store").Action("CreateBucket")
-	r.GET("/{bucket}", deps.listObjects).Name("buckets.show").Action("ListObjects")
-	r.DELETE("/{bucket}", deps.deleteBucket).Name("buckets.destroy").Action("DeleteBucket")
+	r.HEAD("/{bucket}", deps.headBucket).Name("buckets.head").Action("s3:HeadBucket")
+	r.PUT("/{bucket}", deps.createBucket).Name("buckets.store").Action("s3:CreateBucket")
+	r.GET("/{bucket}", deps.listObjects).Name("buckets.show").Action("s3:ListObjects")
+	r.DELETE("/{bucket}", deps.deleteBucket).Name("buckets.destroy").Action("s3:DeleteBucket")
 
-	// Bucket — query-dispatched operations
-	r.QueryGET("/{bucket}", deps.listObjectsV2).QueryValue("list-type", "2").Name("buckets.listv2").Action("ListObjectsV2")
-	r.QueryGET("/{bucket}", deps.getBucketLocation).Query("location").Name("buckets.location").Action("GetBucketLocation")
-	r.QueryGET("/{bucket}", deps.getBucketPolicy).Query("policy").Name("buckets.policy.show").Action("GetBucketPolicy")
-	r.QueryPUT("/{bucket}", deps.putBucketPolicy).Query("policy").Name("buckets.policy.store").Action("PutBucketPolicy")
-	r.QueryDELETE("/{bucket}", deps.delBucketPolicy).Query("policy").Name("buckets.policy.destroy").Action("DeleteBucketPolicy")
-	r.QueryGET("/{bucket}", deps.getBucketVersioning).Query("versioning").Name("buckets.versioning.show").Action("GetBucketVersioning")
-	r.QueryPUT("/{bucket}", deps.putBucketVersioning).Query("versioning").Name("buckets.versioning.store").Action("PutBucketVersioning")
-	r.QueryGET("/{bucket}", deps.getBucketACL).Query("acl").Name("buckets.acl.show").Action("GetBucketAcl")
-	r.QueryPUT("/{bucket}", deps.putBucketACL).Query("acl").Name("buckets.acl.store").Action("PutBucketAcl")
-	r.QueryGET("/{bucket}", deps.listObjectVersions).Query("versions").Name("buckets.versions").Action("ListObjectVersions")
-	r.QueryGET("/{bucket}", deps.listMultipartUploads).Query("uploads").Name("buckets.uploads").Action("ListMultipartUploads")
-	r.QueryPOST("/{bucket}", deps.deleteObjects).Query("delete").Name("buckets.delete-objects").Action("DeleteObjects")
+	// Query-based bucket operations
+	// ListObjectsV2 (preferred over v1)
+	r.QueryGET("/{bucket}", deps.listObjectsV2).QueryValue("list-type", "2").Name("buckets.listv2").Action("s3:ListObjectsV2")
 
-	// Object — direct routes (use {key:.*} to capture entire path including slashes)
-	r.HEAD("/{bucket}/{key:.*}", deps.headObject).Name("objects.head").Action("HeadObject")
-	r.PUT("/{bucket}/{key:.*}", deps.putObject).Name("objects.store").Action("PutObject")
-	// Note: CopyObject shares PUT /{bucket}/{key} with PutObject; it is distinguished
-	// 			at the handler level by the presence of the x-amz-copy-source header.
-	r.GET("/{bucket}/{key:.*}", deps.getObject).Name("objects.show").Action("GetObject")
-	r.DELETE("/{bucket}/{key:.*}", deps.deleteObject).Name("objects.destroy").Action("DeleteObject")
+	// Bucket configuration endpoints
+	r.QueryGET("/{bucket}", deps.getBucketLocation).Query("location").Name("buckets.location").Action("s3:GetBucketLocation")
+	r.QueryGET("/{bucket}", deps.getBucketVersioning).Query("versioning").Name("buckets.versioning.show").Action("s3:GetBucketVersioning")
+	r.QueryPUT("/{bucket}", deps.putBucketVersioning).Query("versioning").Name("buckets.versioning.store").Action("s3:PutBucketVersioning")
+	r.QueryGET("/{bucket}", deps.getBucketACL).Query("acl").Name("buckets.acl.show").Action("s3:GetBucketAcl")
+	r.QueryPUT("/{bucket}", deps.putBucketACL).Query("acl").Name("buckets.acl.store").Action("s3:PutBucketAcl")
 
-	// Object — query-dispatched operations
-	r.QueryGET("/{bucket}/{key:.*}", deps.getObjectACL).Query("acl").Name("objects.acl.show").Action("GetObjectAcl")
-	r.QueryPUT("/{bucket}/{key:.*}", deps.putObjectACL).Query("acl").Name("objects.acl.store").Action("PutObjectAcl")
+	// Bucket policy endpoints
+	r.QueryGET("/{bucket}", deps.getBucketPolicy).Query("policy").Name("buckets.policy.show").Action("s3:GetBucketPolicy")
+	r.QueryPUT("/{bucket}", deps.putBucketPolicy).Query("policy").Name("buckets.policy.store").Action("s3:PutBucketPolicy")
+	r.QueryDELETE("/{bucket}", deps.delBucketPolicy).Query("policy").Name("buckets.policy.destroy").Action("s3:DeleteBucketPolicy")
+
+	// Bucket CORS endpoints
+	r.QueryGET("/{bucket}", deps.getBucketCors).Query("cors").Name("buckets.cors.show").Action("s3:GetBucketCors")
+	r.QueryPUT("/{bucket}", deps.putBucketCors).Query("cors").Name("buckets.cors.store").Action("s3:PutBucketCors")
+
+	// Bucket lifecycle configuration
+	// Note: Legacy GetBucketLifecycle/PutBucketLifecycle share the same path and query param
+	//       as the modern *Configuration variants; one route per method covers both.
+	r.QueryGET("/{bucket}", RouteNotImplemented).Query("lifecycle").Name("bucket.get-lifecycle-configuration").Action("s3:GetBucketLifecycleConfiguration")
+	r.QueryPUT("/{bucket}", RouteNotImplemented).Query("lifecycle").Name("bucket.put-lifecycle-configuration").Action("s3:PutBucketLifecycleConfiguration")
+
+	// Public access block
+	r.QueryGET("/{bucket}", RouteNotImplemented).Query("publicAccessBlock").Name("bucket.get-public-access-block").Action("s3:GetPublicAccessBlock")
+	r.QueryPUT("/{bucket}", RouteNotImplemented).Query("publicAccessBlock").Name("bucket.put-public-access-block").Action("s3:PutPublicAccessBlock")
+
+	// Object lock configuration
+	r.QueryPUT("/{bucket}", RouteNotImplemented).Query("object-lock").Name("bucket.put-object-lock-configuration").Action("s3:PutObjectLockConfiguration")
+
+	// List object versions (for versioned buckets)
+	r.QueryGET("/{bucket}", deps.listObjectVersions).Query("versions").Name("buckets.versions").Action("s3:ListObjectVersions")
+
+	// List multipart uploads in bucket
+	r.QueryGET("/{bucket}", deps.listMultipartUploads).Query("uploads").Name("buckets.uploads").Action("s3:ListMultipartUploads")
+
+	// Bulk delete objects
+	r.QueryPOST("/{bucket}", deps.deleteObjects).Query("delete").Name("buckets.delete-objects").Action("s3:DeleteObjects")
+
+	// ==================== OBJECT OPERATIONS ====================
+	r.GET("/{bucket}/{key:.*}", deps.getObject).Name("objects.show").Action("s3:GetObject")
+	r.DELETE("/{bucket}/{key:.*}", deps.deleteObject).Name("objects.destroy").Action("s3:DeleteObject")
+	r.HEAD("/{bucket}/{key:.*}", deps.headObject).Name("objects.head").Action("s3:HeadObject")
+
+	// PUT /{bucket}/{key} dispatches on X-Amz-Copy-Source header.
+	// UploadPart / UploadPartCopy also live here: same method+path, and header
+	// presence distinguishes the copy variant.  The remaining QueryPUT routes
+	// below (acl, tagging, …) are added to this same dispatcher automatically.
+	r.Dispatch("PUT", "/{bucket}/{key:.*}", func(d *teapot.DispatchBuilder, m teapot.Matchers) {
+		d.Default(deps.putObject).Name("object.put").Action("s3:PutObject")
+		d.When(m.HeaderExists("X-Amz-Copy-Source")).Do(deps.copyObject).Name("object.copy").Action("s3:CopyObject")
+
+		d.When(m.QueryExists("partNumber"), m.QueryExists("uploadId")).Do(deps.multipartUploadPart).Name("multipart.upload-part").Action("s3:UploadPart")
+		d.When(m.QueryExists("partNumber"), m.QueryExists("uploadId"), m.HeaderExists("X-Amz-Copy-Source")).Do(deps.multipartUploadPartCopy).Name("multipart.upload-part-copy").Action("s3:UploadPartCopy")
+	})
+
+	// Query-based object operations
+	r.QueryGET("/{bucket}/{key:.*}", deps.getObjectACL).Query("acl").Name("objects.acl.show").Action("s3:GetObjectAcl")
+	r.QueryPUT("/{bucket}/{key:.*}", deps.putObjectACL).Query("acl").Name("objects.acl.store").Action("s3:PutObjectAcl")
+
+	// Object tagging
+	r.QueryGET("/{bucket}/{key:.*}", deps.getObjectTagging).Query("tagging").Name("objects.tagging.show").Action("s3:GetObjectTagging")
+	r.QueryPUT("/{bucket}/{key:.*}", deps.putObjectTagging).Query("tagging").Name("objects.tagging.store").Action("s3:PutObjectTagging")
 
 	// Multipart upload operations
-	r.QueryPOST("/{bucket}/{key:.*}", deps.multipartCreate).Query("uploads").Name("multipart.create").Action("CreateMultipartUpload")
-	// Note: UploadPartCopy shares this route with UploadPart; it is distinguished
-	// 			at the handler level by the presence of the x-amz-copy-source header.
-	r.QueryPUT("/{bucket}/{key:.*}", deps.multipartUploadPart).Query("partNumber").Query("uploadId").Name("multipart.upload-part").Action("UploadPart")
-	r.QueryPOST("/{bucket}/{key:.*}", deps.multipartComplete).Query("uploadId").Name("multipart.complete").Action("CompleteMultipartUpload")
-	r.QueryDELETE("/{bucket}/{key:.*}", deps.multipartAbort).Query("uploadId").Name("multipart.abort").Action("AbortMultipartUpload")
-	r.QueryGET("/{bucket}/{key:.*}", deps.multipartListParts).Query("uploadId").Name("multipart.list-parts").Action("ListParts")
+	r.QueryPOST("/{bucket}/{key:.*}", deps.multipartCreate).Query("uploads").Name("multipart.create").Action("s3:CreateMultipartUpload")
+	r.QueryPOST("/{bucket}/{key:.*}", deps.multipartComplete).Query("uploadId").Name("multipart.complete").Action("s3:CompleteMultipartUpload")
+	r.QueryDELETE("/{bucket}/{key:.*}", deps.multipartAbort).Query("uploadId").Name("multipart.abort").Action("s3:AbortMultipartUpload")
+	r.QueryGET("/{bucket}/{key:.*}", deps.multipartListParts).Query("uploadId").Name("multipart.list-parts").Action("s3:ListParts")
 }
 
 // RouteNotImplemented is a placeholder handler for routes that are registered
