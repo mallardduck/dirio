@@ -1,6 +1,6 @@
 # DirIO Development Roadmap
 
-Current status: **Phase 3 - Essential S3 Features** (Remaining priorities after Phase 2.75 completion)
+Current status: **Phase 3.2 - Features with Policy Integration** (Policy Engine Foundation complete!)
 
 **📁 Known Issues:** See [bugs/](bugs/) directory for detailed bug reports and tracking
 
@@ -178,82 +178,93 @@ Current status: **Phase 3 - Essential S3 Features** (Remaining priorities after 
 
 **Prioritize based on Phase 2.5 findings:**
 
-### **HIGHEST PRIORITY: Policy Engine Foundation** 🔴
+### **HIGHEST PRIORITY: Policy Engine Foundation** ✅ COMPLETE (Feb 2026)
 
 **Goal:** Build out a comprehensive policy system to enable public bucket access and lay groundwork for Phase 5 IAM.
 
-**⚠️ CRITICAL:** Many Phase 3 features (Pre-signed URLs, CopyObject, DeleteObject/Bucket) require policy evaluation. Building the policy engine first prevents having to refactor all features later when adding proper authorization.
+**Status:** Core policy engine implemented and integrated. Public bucket access now works!
 
-#### Policy Evaluation Engine (Core)
-- [ ] **Policy evaluation engine** - Core authorization logic
+#### Policy Evaluation Engine (Core) ✅
+- [x] **Policy evaluation engine** - Core authorization logic (`internal/policy/`)
   - Statement evaluation (Effect: Allow/Deny)
-  - Action matching (s3:GetObject, s3:PutObject, s3:DeleteObject, etc.)
-  - Resource matching (arn:aws:s3:::bucket/key patterns)
-  - Principal matching (* for public, specific users/roles)
-  - Statement evaluation order (explicit Deny > Allow)
-- [ ] **Default policies** - Start simple, expand later
-  - Default admin policy: "authenticated admin can do everything"
-  - Default bucket policy: "authenticated users can access"
-  - Public bucket policy template: "anonymous read access"
+  - Action matching with wildcards (s3:GetObject, s3:*, s3:Get*, etc.)
+  - Resource matching with ARN patterns (arn:aws:s3:::bucket/*, arn:aws:s3:::bucket/prefix/*)
+  - Principal matching (* for public, specific users via ARN)
+  - Statement evaluation order (explicit Deny > Allow > implicit Deny)
+- [x] **Action-to-Permission Mapping** (`internal/policy/action_mapper.go`)
+  - S3 actions don't always match IAM permissions (HeadObject → s3:GetObject)
+  - Multi-resource operations (CopyObject → s3:GetObject + s3:PutObject)
+  - See `docs/action-permission-mapping.md` for complete specification
+- [x] **Default policies** - Start simple, expand later
+  - Admin bypass: authenticated admin can do everything
+  - Default deny: anonymous/non-admin denied unless bucket policy allows
+  - Public bucket support: bucket policies can grant anonymous access
 
-#### PolicyEngineService Architecture
-- [ ] Design PolicyEngineService for managing policy cache and persistence
+#### Policy Engine Architecture ✅
+- [x] **Thread-safe policy cache** (`internal/policy/cache.go`)
   - In-memory cache of bucket policies for fast access
-  - Persistence to disk (.dirio/policies/ directory)
+  - RWMutex for concurrent read/write safety
   - Load policies on startup, update cache on policy changes
-  - Thread-safe concurrent access
-- [ ] Policy storage schema and file format
-  - JSON policy documents (S3-compatible format)
-  - Policy versioning and validation
-  - Import existing MinIO bucket policies during migration
+- [x] **Policy persistence** - Uses existing bucket metadata
+  - Bucket policies stored in `.dirio/buckets/{bucket}.json`
+  - `GetAllBucketPolicies()` loads all policies at startup
+  - Service layer notifies engine on PutBucketPolicy/DeleteBucketPolicy
+- [x] **Server integration** (`internal/http/server/server.go`)
+  - Policy engine initialized at startup
+  - Bucket policies loaded from metadata
+  - Engine passed to route dependencies
 
-##### NOTES
-- **Policy Engine vs Policy Service:**
-  - Policy Engine is the core policy evaluation engine for S3 operations
-  - Policy Service is the persistence layer for policy documents and cache
-  - Policy Engine is used by HTTP routing layer to enforce bucket policies
+#### Conditional Auth Middleware ✅
+- [x] **Anonymous request support** (`internal/http/auth/middleware.go`)
+  - Requests without Authorization header pass through as anonymous
+  - Explicit `IsAnonymousRequestKey` set in context
+  - Authorization middleware decides based on bucket policies
+- [x] **Authorization middleware** (`internal/policy/middleware.go`)
+  - Evaluates all S3 requests against bucket policies
+  - Admin bypass for root access keys
+  - Multi-resource support for CopyObject/UploadPartCopy
+  - Returns 403 AccessDenied for unauthorized requests
 
-#### Conditional Auth Middleware
-- [ ] Implement conditional auth middleware for hybrid routes
-  - Support fully public routes (no auth required)
-  - Support hybrid routes (work both authed and non-authed)
-  - Example: ListBuckets non-authed shows only public buckets
-  - Example: ListBuckets authed shows public + user's allowed buckets
-- [ ] Integrate PolicyService with HTTP routing layer
-  - Router can query PolicyService for policy decisions
-  - Middleware uses policy info to filter responses based on auth state
-
-#### Bucket Policy Enforcement
-- [ ] Parse and validate bucket policy documents (already have types in pkg/iam)
-- [ ] Enforce public-read bucket policies
-  - Non-authenticated requests can read from public buckets
-  - Policy evaluation for GetObject, HeadObject, ListObjects
-- [ ] Complex policy statement support
-  - Principal, Action, Resource, Effect, Condition
+#### Bucket Policy Enforcement ✅
+- [x] Policy document parsing (uses existing `pkg/iam` types)
+- [x] Enforce public-read bucket policies
+  - Anonymous requests can read from public buckets
+  - Policy evaluation for GetObject, HeadObject, ListObjects, etc.
+- [x] Complex policy statement support
+  - Principal, Action, Resource, Effect matching
+  - Wildcard support in all fields
   - Statement evaluation order and deny precedence
-  - Policy combination rules (bucket policy + IAM policy in Phase 5)
 
-**Connection to Phase 5:** This PolicyService will be extended in Phase 5 to handle IAM user/group policies in addition to bucket policies, creating a unified policy evaluation engine.
+#### Remaining for Phase 3.2+
+- [ ] **Condition evaluation** - IpAddress, StringEquals, DateLessThan, etc.
+- [ ] **Result filtering for List* operations** - ListBuckets should filter by permission
+- [ ] **NotAction, NotResource, NotPrincipal** - Inverse matching
+- [ ] **Policy variables** - ${aws:username}, ${aws:userid}, etc.
 
-### High Priority (Core S3 compatibility - requires policy engine)
+**Connection to Phase 5:** This policy engine will be extended to handle IAM user/group policies in addition to bucket policies.
 
-**Note:** These features should be implemented AFTER the policy engine foundation above, as they all require permission checks.
+### High Priority (Core S3 compatibility - policy engine now ready! ✅)
+
+**Note:** Policy engine is now complete. These features have proper authorization infrastructure.
 
 - [ ] **DeleteObject** for MinIO mc (High - currently 405 Method Not Allowed)
-  - Requires: `s3:DeleteObject` permission check
+  - Policy check: ✅ Ready (`s3:DeleteObject` evaluated by middleware)
+  - Issue: Likely route/handler issue, not authorization
 - [ ] **DeleteBucket** for MinIO mc (High - currently 405 Method Not Allowed)
-  - Requires: `s3:DeleteBucket` permission check
-- [ ] **Pre-signed URLs** (temporary access sharing) 🔴 **CRITICAL DEPENDENCY**
-  - Requires: Full policy engine to embed/validate temporary permissions
-  - Must check if signer has permission to grant access
-  - Must embed policy decision in signed URL
-  - Must validate policy when URL is used
+  - Policy check: ✅ Ready (`s3:DeleteBucket` evaluated by middleware)
+  - Issue: Likely route/handler issue, not authorization
+- [ ] **Pre-signed URLs** (temporary access sharing) 🔴 **NEXT PRIORITY**
+  - Policy engine: ✅ Ready for permission validation
+  - Remaining: URL signing, expiration, embedded policy validation
 - [ ] **CopyObject** (x-amz-copy-source header) - Currently creates empty file
-  - Requires: TWO permission checks (s3:GetObject on source + s3:PutObject on destination)
+  - Policy check: ✅ Ready (dual permission check implemented in middleware)
+  - Issue: Handler implementation, not authorization
 - [ ] **Range requests** for GetObject (resumable downloads, video streaming)
-  - Requires: `s3:GetObject` permission check
+  - Policy check: ✅ Ready (`s3:GetObject` evaluated by middleware)
+  - Remaining: Storage layer range support
 - [ ] **ListObjects continuation tokens** (for large result sets)
-  - Requires: `s3:ListBucket` permission check + filtering
+  - Policy check: ✅ Ready (`s3:ListBucket` evaluated by middleware)
+  - Remaining: Continuation token implementation
 
 ### Medium Priority (Less critical, but still need policy checks)
 - [ ] **Multipart upload for boto3** - Still returns 405 Method Not Allowed (mc works)
@@ -278,28 +289,32 @@ Based on client testing results (see [CLIENTS.md](CLIENTS.md)) and architectural
 
 **🔴 REVISED PRIORITIES (Architecture-First Approach):**
 
-**Phase 3.1: Policy Engine Foundation** (Build once, use everywhere)
-1. **Policy Evaluation Engine** - Core authorization logic (Action/Resource/Principal/Effect matching)
-2. **PolicyEngineService** - Policy cache and persistence layer
-3. **Conditional Auth Middleware** - Support public/hybrid routes with policy-based filtering
-4. **Default Policies** - Simple "admin can do everything" to start
+**Phase 3.1: Policy Engine Foundation** ✅ COMPLETE (Feb 2026)
+1. ✅ **Policy Evaluation Engine** - Core authorization logic (Action/Resource/Principal/Effect matching)
+2. ✅ **Action Mapper** - S3 action to IAM permission translation (HeadObject→GetObject, CopyObject→Get+Put)
+3. ✅ **Policy Cache** - Thread-safe in-memory cache with startup loading
+4. ✅ **Authorization Middleware** - Enforces policies on all S3 routes
+5. ✅ **Anonymous Request Support** - Auth middleware allows unauthenticated requests through
+6. ✅ **Admin Bypass** - Root access keys skip all policy checks
+7. ✅ **Service Notifications** - PutBucketPolicy/DeleteBucketPolicy update cache immediately
 
-**Phase 3.2: Features with Policy Integration** (Implement with proper authorization from day one)
-5. **DeleteObject for MinIO mc** - Requires `s3:DeleteObject` check
-6. **DeleteBucket for MinIO mc** - Requires `s3:DeleteBucket` check
-7. **Pre-signed URLs** 🔴 - CRITICAL: Requires full policy engine for permission embedding/validation
-8. **CopyObject** - Requires dual permission checks (source read + dest write)
-9. **Range requests** - Requires `s3:GetObject` check
-10. **ListObjectsV2 continuation tokens** - Requires `s3:ListBucket` check + filtering
-11. **Multipart Upload for boto3** - Requires `s3:PutObject` check
-12. **Object Tagging Content Preservation** - Requires `s3:*ObjectTagging` checks + fix Bug #001 remnant
-13. **Fix custom metadata key case** - Simple bug fix (no policy dependency)
+**Phase 3.2: Features with Policy Integration** (Policy engine now ready!)
+1. **DeleteObject for MinIO mc** - Requires `s3:DeleteObject` check ← Should work now!
+2. **DeleteBucket for MinIO mc** - Requires `s3:DeleteBucket` check ← Should work now!
+3. **Pre-signed URLs** 🔴 - CRITICAL: Requires policy engine for permission embedding/validation
+4. **CopyObject** - Policy engine supports dual permission checks (source read + dest write)
+5. **Range requests** - Requires `s3:GetObject` check
+6. **ListBuckets/ListObjects result filtering** - Filter results per-item based on permissions
+7. **Multipart Upload for boto3** - Requires `s3:PutObject` check
+8. **Object Tagging Content Preservation** - Requires `s3:*ObjectTagging` checks + fix Bug #001 remnant
+9. **Fix custom metadata key case** - Simple bug fix (no policy dependency)
+10. **Condition evaluation** - IpAddress, StringEquals, DateLessThan, etc.
 
 **Why This Order:**
-- Building policy engine first avoids refactoring all features later
-- Pre-signed URLs are impossible without policy evaluation
-- CopyObject, Delete operations need proper authorization
-- Creates clean foundation for Phase 5 (IAM) instead of accumulating technical debt
+- ✅ Policy engine built first - all features get proper authorization from day one
+- Pre-signed URLs are next critical dependency
+- CopyObject, Delete operations now have authorization infrastructure
+- Clean foundation for Phase 5 (IAM) instead of accumulating technical debt
 
 ## Phase 3.5: Stability & Performance
 
