@@ -569,3 +569,43 @@ func (m *Manager) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	bucketPath := filepath.Join("buckets", bucket+".json")
 	return jsonutil.MarshalToFile(m.metadataFS, bucketPath, meta)
 }
+
+// GetAllBucketPolicies retrieves all bucket policies for loading into the policy engine.
+// Returns a map from bucket name to policy document (nil policies are excluded).
+func (m *Manager) GetAllBucketPolicies(ctx context.Context) (map[string]*PolicyDocument, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
+	bucketsDir := "buckets"
+	entries, err := m.metadataFS.ReadDir(bucketsDir)
+	if err != nil {
+		if isNotExist(err) {
+			return make(map[string]*PolicyDocument), nil
+		}
+		return nil, err
+	}
+
+	policies := make(map[string]*PolicyDocument)
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("context cancelled during policy loading: %w", err)
+		}
+
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+
+		bucketName := entry.Name()[:len(entry.Name())-5] // Remove .json
+		meta, err := m.GetBucketMetadata(ctx, bucketName)
+		if err != nil {
+			continue // Skip buckets we can't read
+		}
+
+		if meta.BucketPolicy != nil {
+			policies[bucketName] = meta.BucketPolicy
+		}
+	}
+
+	return policies, nil
+}

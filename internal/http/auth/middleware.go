@@ -16,6 +16,15 @@ import (
 
 func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check if request has authentication credentials
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			// No auth header - mark as anonymous and allow through
+			// Authorization middleware will decide based on bucket policies
+			ctx := contextInt.WithAnonymousRequest(r.Context())
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
 
 		// Authenticate the request
 		user, err := a.AuthenticateRequest(r)

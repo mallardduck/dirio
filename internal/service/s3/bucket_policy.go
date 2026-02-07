@@ -25,7 +25,16 @@ func (s *Service) PutBucketPolicy(ctx context.Context, req *PutBucketPolicyReque
 	}
 
 	// Store the policy in metadata
-	return s.metadata.SetBucketPolicy(ctx, req.Bucket, req.PolicyDocument)
+	if err := s.metadata.SetBucketPolicy(ctx, req.Bucket, req.PolicyDocument); err != nil {
+		return err
+	}
+
+	// Notify policy engine of the change
+	if s.policyEngine != nil {
+		s.policyEngine.UpdateBucketPolicy(req.Bucket, req.PolicyDocument)
+	}
+
+	return nil
 }
 
 // GetBucketPolicy retrieves the bucket policy
@@ -63,5 +72,14 @@ func (s *Service) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	}
 
 	// Delete the policy from metadata
-	return s.metadata.DeleteBucketPolicy(ctx, bucket)
+	if err := s.metadata.DeleteBucketPolicy(ctx, bucket); err != nil {
+		return err
+	}
+
+	// Notify policy engine of the deletion
+	if s.policyEngine != nil {
+		s.policyEngine.DeleteBucketPolicy(bucket)
+	}
+
+	return nil
 }

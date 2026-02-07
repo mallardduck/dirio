@@ -8,6 +8,7 @@ import (
 	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/persistence/storage"
+	"github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/service"
 )
 
@@ -26,8 +27,8 @@ type URLBuilder interface {
 }
 
 // New creates a new DirIO API handler
-func New(storage *storage.Storage, metadata *metadata.Manager, auth *auth.Authenticator, urlBuilder URLBuilder) *Handler {
-	serviceFactory := service.NewServiceFactory(storage, metadata)
+func New(storage *storage.Storage, metadata *metadata.Manager, auth *auth.Authenticator, urlBuilder URLBuilder, policyEngine *policy.Engine) *Handler {
+	serviceFactory := service.NewServiceFactory(storage, metadata, policyEngine)
 	return &Handler{
 		auth:           auth,
 		serviceFactory: serviceFactory,

@@ -10,13 +10,17 @@ import (
 	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/http/middleware"
 	"github.com/mallardduck/dirio/internal/http/server/favicon"
+	"github.com/mallardduck/dirio/internal/policy"
 )
 
 // RouteDependencies contains all dependencies needed for route handlers
 type RouteDependencies struct {
-	Auth       *auth.Authenticator
-	APIHandler *api.Handler
-	Debug      bool
+	Auth             *auth.Authenticator
+	PolicyEngine     *policy.Engine
+	RootAccessKey    string // Primary admin access key
+	AltRootAccessKey string // Alternative admin access key (from data config)
+	APIHandler       *api.Handler
+	Debug            bool
 }
 
 // SetupRoutes configures all application routes on the provided router.
@@ -110,8 +114,16 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 			multipartListParts:      RouteNotImplemented,
 		}
 
+		// Build authorization middleware config
+		authzConfig := &policy.AuthorizationConfig{
+			Engine:           deps.PolicyEngine,
+			RootAccessKey:    deps.RootAccessKey,
+			AltRootAccessKey: deps.AltRootAccessKey,
+		}
+
 		s3MW = []func(http.Handler) http.Handler{
 			deps.Auth.AuthMiddleware,
+			policy.AuthorizationMiddleware(authzConfig),
 			middleware.ChunkedEncoding(func(r io.Reader) io.Reader {
 				return auth.NewChunkedReader(r)
 			}),

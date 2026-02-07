@@ -8,21 +8,24 @@ import (
 	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/persistence/storage"
+	"github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/service/validation"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
 // Service provides S3 operations for buckets and objects
 type Service struct {
-	storage  *storage.Storage
-	metadata *metadata.Manager
+	storage      *storage.Storage
+	metadata     *metadata.Manager
+	policyEngine *policy.Engine
 }
 
 // NewService creates a new S3 service
-func NewService(storage *storage.Storage, metadata *metadata.Manager) *Service {
+func NewService(storage *storage.Storage, metadata *metadata.Manager, policyEngine *policy.Engine) *Service {
 	return &Service{
-		storage:  storage,
-		metadata: metadata,
+		storage:      storage,
+		metadata:     metadata,
+		policyEngine: policyEngine,
 	}
 }
 

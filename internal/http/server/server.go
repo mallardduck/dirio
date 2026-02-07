@@ -17,6 +17,7 @@ import (
 	"github.com/mallardduck/dirio/internal/http/api"
 	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/http/middleware"
+	"github.com/mallardduck/dirio/internal/policy"
 
 	"github.com/mallardduck/dirio/internal/config/data"
 
@@ -58,13 +59,14 @@ type Config struct {
 
 // Server represents the S3-compatible HTTP server
 type Server struct {
-	config   *Config
-	router   *teapot.Router
-	storage  *storage.Storage
-	metadata *metadata.Manager
-	auth     *auth.Authenticator
-	mdns     *mdns.Service
-	log      *slog.Logger
+	config       *Config
+	router       *teapot.Router
+	storage      *storage.Storage
+	metadata     *metadata.Manager
+	auth         *auth.Authenticator
+	policyEngine *policy.Engine
+	mdns         *mdns.Service
+	log          *slog.Logger
 }
 
 // New creates a new server instance
@@ -127,13 +129,26 @@ func New(config *Config) (*Server, error) {
 		authenticator = auth.New(metaMgr, config.AccessKey, config.SecretKey)
 	}
 
+	// Initialize policy engine
+	policyEngine := policy.New()
+
+	// Load all bucket policies from metadata at startup
+	bucketPolicies, err := metaMgr.GetAllBucketPolicies(context.Background())
+	if err != nil {
+		log.Warn("failed to load bucket policies", "error", err)
+	} else if len(bucketPolicies) > 0 {
+		policyEngine.LoadBucketPolicies(context.Background(), bucketPolicies)
+		log.Info("loaded bucket policies", "count", len(bucketPolicies))
+	}
+
 	// Create server
 	srv := &Server{
-		config:   config,
-		storage:  store,
-		metadata: metaMgr,
-		auth:     authenticator,
-		log:      log,
+		config:       config,
+		storage:      store,
+		metadata:     metaMgr,
+		auth:         authenticator,
+		policyEngine: policyEngine,
+		log:          log,
 	}
 
 	// Setup routes
@@ -160,13 +175,24 @@ func (s *Server) setupRoutes() {
 		s.metadata,
 		s.auth,
 		urlbuilder.New(s.config.CanonicalDomain),
+		s.policyEngine,
 	)
+
+	// Get root access keys for authorization middleware
+	rootAccessKey := s.config.AccessKey
+	altRootAccessKey := ""
+	if s.config.DataConfig != nil {
+		altRootAccessKey = s.config.DataConfig.Credentials.AccessKey
+	}
 
 	// Setup routes using shared function
 	deps := &RouteDependencies{
-		Auth:       s.auth,
-		APIHandler: apiHandler,
-		Debug:      s.config.Debug,
+		Auth:             s.auth,
+		PolicyEngine:     s.policyEngine,
+		RootAccessKey:    rootAccessKey,
+		AltRootAccessKey: altRootAccessKey,
+		APIHandler:       apiHandler,
+		Debug:            s.config.Debug,
 	}
 
 	SetupRoutes(s.router, deps)

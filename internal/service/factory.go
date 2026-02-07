@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/persistence/storage"
+	policyEngine "github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/service/policy"
 	"github.com/mallardduck/dirio/internal/service/s3"
 	"github.com/mallardduck/dirio/internal/service/user"
@@ -10,8 +11,9 @@ import (
 
 // ServicesFactory provides access to all service instances
 type ServicesFactory struct {
-	storage  *storage.Storage
-	metadata *metadata.Manager
+	storage      *storage.Storage
+	metadata     *metadata.Manager
+	policyEngine *policyEngine.Engine
 
 	// The actual services
 	userService   *user.Service
@@ -20,13 +22,14 @@ type ServicesFactory struct {
 }
 
 // NewServiceFactory creates a new service factory with dependency injection
-func NewServiceFactory(storage *storage.Storage, metadata *metadata.Manager) *ServicesFactory {
+func NewServiceFactory(storage *storage.Storage, metadata *metadata.Manager, engine *policyEngine.Engine) *ServicesFactory {
 	return &ServicesFactory{
 		storage:       storage,
 		metadata:      metadata,
+		policyEngine:  engine,
 		userService:   user.NewService(metadata),
 		policyService: policy.NewService(metadata),
-		s3Service:     s3.NewService(storage, metadata),
+		s3Service:     s3.NewService(storage, metadata, engine),
 	}
 }
 
