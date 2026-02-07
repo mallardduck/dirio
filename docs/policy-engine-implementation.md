@@ -69,7 +69,24 @@ Build a comprehensive Policy Engine for S3-compatible authorization to enable pu
    - Router middleware sets action in context
    - Authorization middleware reads from context (no inference)
 
-4. **Thread-Safe In-Memory Cache**
+4. **Action-to-Permission Mapping** 🔴 **CRITICAL**
+   - **S3 actions ≠ IAM permissions** in many cases
+   - `HeadObject` requires `s3:GetObject` permission (NOT `s3:HeadObject`)
+   - `CopyObject` requires BOTH `s3:GetObject` and `s3:PutObject`
+   - See [action-permission-mapping.md](action-permission-mapping.md) for complete specification
+   - ActionMapper component translates route actions to required permissions
+
+5. **Two Authorization Patterns** ⚠️ **IMPORTANT**
+   - **Binary Authorization** (default): Allow or deny the entire operation
+     - Used for: GetObject, PutObject, DeleteBucket, etc.
+     - Middleware blocks with 403 if denied
+   - **Result Filtering** (special cases): Allow operation, filter results per-item
+     - Used for: ListBuckets (Phase 3.2+)
+     - Handler filters results based on per-bucket permissions
+     - See [authorization-patterns.md](authorization-patterns.md) for complete specification
+   - **Phase 3.1 MVP**: Binary authorization only (ListBuckets requires auth, no filtering)
+
+6. **Thread-Safe In-Memory Cache**
    - `sync.RWMutex` for concurrent access
    - Optimized for fast reads (common case)
    - Nothing in cache that's not on disk (defensive)
@@ -78,18 +95,14 @@ Build a comprehensive Policy Engine for S3-compatible authorization to enable pu
 
 ```
 internal/
-├── middleware/
-│   ├── authorization.go      # NEW - Authorization middleware
-│   └── s3action.go           # NEW - Router middleware to set action from route
-├── router/
-│   └── router.go             # ENHANCE - Add S3Action field to RouteInfo
-├── context/
-│   └── context.go            # ENHANCE - Add S3ActionKey constant
-├── api/
-│   └── handler.go            # ENHANCE - Remove action setting (read from context instead)
-├── server/
-│   ├── server.go             # ENHANCE - Initialize PE, load policies
-│   └── routes.go             # ENHANCE - Tag routes with actions, add auth middleware
+├── http/
+│   ├── api/
+│   │   └── handler.go            # ENHANCE - Remove action setting (read from context instead)
+│   ├── middleware/
+│   │   └── authorization.go      # NEW - Authorization middleware
+│   └── server/
+│       ├── server.go             # ENHANCE - Initialize PE, load policies
+│       └── routes.go             # ENHANCE - Tag routes with actions, add auth middleware
 └── service/
     ├── s3/
     │   └── bucket_policy.go  # ENHANCE - Notify PE on policy changes
@@ -99,6 +112,8 @@ internal/
         ├── types.go              # RequestContext, Decision, Action, Resource, Principal
         ├── evaluator.go          # Statement evaluation logic
         ├── matcher.go            # Action/Resource/Principal matching
+        ├── action_mapper.go      # NEW - Translates S3 actions to IAM permissions
+        ├── action_mapper_test.go # Tests for action mapping logic
         └── cache.go              # Thread-safe in-memory cache
 ```
 
@@ -106,108 +121,17 @@ internal/
 
 ### 1. Router Enhancement - S3 Action Metadata
 
-**File:** `internal/router/router.go`
-
-Add S3 action metadata to routes:
-
-```go
-type RouteInfo struct {
-	Method   string `json:"method"`
-	Pattern  string `json:"pattern"`
-	S3Action string `json:"s3_action,omitempty"` // NEW - S3 action name
-}
-
-// register enhancement - accept s3Action parameter
-func (r *Router) register(name, pattern, method, s3Action string) {
-	// ... existing code ...
-
-	r.routes[key] = RouteInfo{
-		Method:   method,
-		Pattern:  fullPattern,
-		S3Action: s3Action, // NEW
-	}
-}
-
-// GetWithAction registers a GET route with S3 action metadata
-func (r *Router) GetWithAction(pattern string, handler http.HandlerFunc, name, s3Action string) {
-	r.register(name, pattern, "GET", s3Action)
-	if handler != nil {
-		r.mux.Get(r.currentPath()+pattern, handler)
-	}
-}
-
-// Similar for Put, Post, Delete, Head with action parameter
-```
+This is now done in the router package - teapot-router, so no change needed here.
 
 ### 2. Context Enhancement - S3 Action Key
 
-**File:** `internal/context/context.go`
-
-```go
-const (
-	RequestUserKey      KeyID = "requestUser"
-	RequestIDKey        KeyID = "requestID"
-	RequestStartTimeKey KeyID = "requestStartTime"
-	TraceIDKey          KeyID = "traceID"
-	S3ActionKey         KeyID = "s3Action"         // NEW
-	AuthzDecisionKey    KeyID = "authzDecision"    // NEW - for logging
-)
-
-// GetS3Action retrieves the S3 action from context
-func GetS3Action(ctx context.Context) string {
-	if action, ok := ctx.Value(S3ActionKey).(string); ok {
-		return action
-	}
-	return ""
-}
-```
+This is now done in the router package - teapot-router, so no change needed here.
 
 ### 3. Router Middleware - S3 Action Setter
 
 **File:** `internal/middleware/s3action.go` (NEW)
 
-```go
-package middleware
-
-import (
-	"context"
-	"net/http"
-
-	"github.com/go-chi/chi/v5"
-	contextInt "github.com/mallardduck/dirio/internal/context"
-)
-
-// S3Action middleware extracts S3 action from matched route and stores in context
-// This must run AFTER routing but BEFORE authorization
-func S3Action() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Get the route context from chi router
-			rctx := chi.RouteContext(r.Context())
-			if rctx == nil {
-				// No route matched, continue without action
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			// Extract S3 action from route pattern metadata
-			// The action is stored when routes are registered
-			// For now, we need to map route patterns to actions
-			// TODO: This needs route-level metadata storage in chi
-
-			// Store in context
-			ctx := context.WithValue(r.Context(), contextInt.S3ActionKey, action)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-}
-```
-
-**NOTE:** Chi router doesn't natively support custom route metadata. We have two options:
-1. **Build our own route pattern → action mapping** in the middleware
-2. **Enhance our router wrapper** to store action in a separate map and look it up
-
-**Recommended:** Option 2 - add `GetRouteAction(pattern, method)` to router package.
+This is now done in the router package - teapot-router, so no change needed here.
 
 ### 4. Policy Engine Types
 
@@ -312,7 +236,138 @@ func (d Decision) IsAllowed() bool {
 }
 ```
 
-### 5. Policy Engine Cache
+### 5. Action Mapper (S3 Action → IAM Permission Translation) 🔴
+
+**File:** `internal/policy/action_mapper.go` (NEW)
+
+**Purpose:** Translates S3 API action names (from routes) into the actual IAM permissions required. This is a critical component because S3 action names do NOT always match permission names.
+
+**Key Insight:** See [action-permission-mapping.md](action-permission-mapping.md) for complete specification and examples.
+
+```go
+package policy
+
+import (
+	"strings"
+)
+
+// ActionMapper translates S3 API actions to required IAM permissions
+type ActionMapper struct {
+	// Static mapping: action → permission(s)
+	mappings map[string][]string
+
+	// Multi-resource actions (like CopyObject)
+	multiResource map[string]bool
+}
+
+// NewActionMapper creates a new action mapper with static mappings
+func NewActionMapper() *ActionMapper {
+	return &ActionMapper{
+		mappings:      buildActionMappings(),
+		multiResource: buildMultiResourceActions(),
+	}
+}
+
+// GetRequiredPermissions returns the IAM permission(s) needed for an S3 action
+// Examples:
+//   "s3:HeadObject" → ["s3:GetObject"]
+//   "s3:CopyObject" → ["s3:GetObject", "s3:PutObject"]
+//   "s3:GetObject"  → ["s3:GetObject"]
+func (m *ActionMapper) GetRequiredPermissions(action string) []string {
+	if perms, ok := m.mappings[action]; ok {
+		return perms
+	}
+	// Default: assume 1:1 mapping if not in table
+	return []string{action}
+}
+
+// IsMultiResourceAction returns true if action requires checking multiple resources
+// Example: CopyObject requires checking both source and destination
+func (m *ActionMapper) IsMultiResourceAction(action string) bool {
+	return m.multiResource[action]
+}
+
+// buildActionMappings creates the static action-to-permission mapping table
+func buildActionMappings() map[string][]string {
+	return map[string][]string{
+		// Service Level
+		"s3:ListBuckets": {"s3:ListAllMyBuckets"},
+
+		// Bucket Operations - Different Names
+		"s3:HeadBucket":             {"s3:ListBucket"},
+		"s3:ListObjects":            {"s3:ListBucket"},
+		"s3:ListObjectsV2":          {"s3:ListBucket"},
+		"s3:ListObjectVersions":     {"s3:ListBucketVersions"},
+		"s3:ListMultipartUploads":   {"s3:ListBucketMultipartUploads"},
+		"s3:DeleteObjects":          {"s3:DeleteObject"}, // Bulk uses singular
+
+		// Object Operations - Different Names
+		"s3:HeadObject": {"s3:GetObject"},
+
+		// Multi-Resource Operations (require TWO permissions on different resources)
+		"s3:CopyObject":      {"s3:GetObject", "s3:PutObject"},
+		"s3:UploadPartCopy":  {"s3:GetObject", "s3:PutObject"},
+
+		// Multipart Upload - All use PutObject except Abort and ListParts
+		"s3:CreateMultipartUpload":   {"s3:PutObject"},
+		"s3:UploadPart":              {"s3:PutObject"},
+		"s3:CompleteMultipartUpload": {"s3:PutObject"},
+		"s3:ListParts":               {"s3:ListMultipartUploadParts"},
+		// "s3:AbortMultipartUpload" is 1:1, not in map
+
+		// All other operations are 1:1 (same name), so they don't need mapping entries
+		// Examples: GetObject, PutObject, DeleteObject, CreateBucket, etc.
+	}
+}
+
+// buildMultiResourceActions identifies actions that need multiple resource checks
+func buildMultiResourceActions() map[string]bool {
+	return map[string]bool{
+		"s3:CopyObject":     true,
+		"s3:UploadPartCopy": true,
+	}
+}
+
+// GetResourceARNs returns the resource ARN(s) to check for an action
+// Most operations: single ARN (bucket or object)
+// CopyObject: [sourceARN, destARN]
+func (m *ActionMapper) GetResourceARNs(action string, bucket, key, sourceKey string) []string {
+	if !m.IsMultiResourceAction(action) {
+		// Single resource
+		if key == "" {
+			return []string{"arn:aws:s3:::" + bucket}
+		}
+		return []string{"arn:aws:s3:::" + bucket + "/" + key}
+	}
+
+	// Multi-resource: CopyObject or UploadPartCopy
+	sourceARN := "arn:aws:s3:::" + bucket + "/" + sourceKey
+	destARN := "arn:aws:s3:::" + bucket + "/" + key
+	return []string{sourceARN, destARN}
+}
+```
+
+**Key Features:**
+- Static mapping table for all non-1:1 action-to-permission translations
+- Handles multi-resource operations (CopyObject needs TWO permission checks)
+- Falls back to 1:1 mapping if action not in table (safe default)
+- Pure function with no external dependencies (easy to test)
+
+**Testing Strategy:**
+```go
+// TestActionMapper_HeadObject
+mapper := NewActionMapper()
+perms := mapper.GetRequiredPermissions("s3:HeadObject")
+// Expected: ["s3:GetObject"]
+
+// TestActionMapper_CopyObject
+perms := mapper.GetRequiredPermissions("s3:CopyObject")
+// Expected: ["s3:GetObject", "s3:PutObject"]
+isMulti := mapper.IsMultiResourceAction("s3:CopyObject")
+// Expected: true
+```
+
+### 6. Policy Engine Cache
 
 **File:** `internal/policy/cache.go` (NEW)
 
@@ -370,7 +425,7 @@ func (c *Cache) LoadBucketPolicies(policies map[string]*iam.PolicyDocument) {
 }
 ```
 
-### 6. Policy Engine Core
+### 7. Policy Engine Core
 
 **File:** `internal/policy/engine.go` (NEW)
 
@@ -499,7 +554,7 @@ func (e *Engine) DeleteBucketPolicy(bucket string) {
 }
 ```
 
-### 7. Policy Matchers
+### 8. Policy Matchers
 
 **File:** `internal/policy/matcher.go` (NEW)
 
@@ -510,9 +565,11 @@ See the Plan agent's comprehensive matcher implementation for:
 - `matchSingleAction()` - Wildcard matching logic
 - `matchSingleResource()` - ARN pattern matching logic
 
-### 8. Authorization Middleware
+### 9. Authorization Middleware
 
 **File:** `internal/middleware/authorization.go` (NEW)
+
+**Important Change:** This middleware now uses the ActionMapper to translate S3 actions to IAM permissions before policy evaluation.
 
 ```go
 package middleware
@@ -521,16 +578,16 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/mallardduck/dirio/internal/auth"
 	contextInt "github.com/mallardduck/dirio/internal/context"
 	"github.com/mallardduck/dirio/internal/policy"
-	"github.com/mallardduck/dirio/internal/router"
-	"github.com/mallardduck/dirio/pkg/s3types"
+	"github.com/mallardduck/teapot-router/pkg/teapot"
 )
 
-// Authorization enforces policy-based authorization
-func Authorization(engine *policy.Engine, rootAccessKey string) func(http.Handler) http.Handler {
+// Authorization enforces policy-based authorization with action-to-permission mapping
+func Authorization(engine *policy.Engine, mapper *policy.ActionMapper, rootAccessKey string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Extract authenticated user from context (set by auth middleware)
@@ -543,17 +600,15 @@ func Authorization(engine *policy.Engine, rootAccessKey string) func(http.Handle
 				IsAdmin:     user != nil && user.AccessKey == rootAccessKey,
 			}
 
-			// Extract action from context (set by router middleware)
-			actionStr := contextInt.GetS3Action(r.Context())
-			action := policy.Action(actionStr)
+			// Extract S3 action from route context (set by teapot-router)
+			routeAction := contextInt.GetS3Action(r.Context())
+
+			// 🔴 CRITICAL: Translate S3 action to required IAM permission(s)
+			requiredPermissions := mapper.GetRequiredPermissions(routeAction)
 
 			// Extract resource from route params
-			bucket := router.URLParam(r, "bucket")
-			key := router.URLParam(r, "*")
-			resource := &policy.Resource{
-				Bucket: bucket,
-				Key:    key,
-			}
+			bucket := teapot.URLParam(r, "bucket")
+			key := teapot.URLParam(r, "key")
 
 			// Build condition context
 			conditions := &policy.ConditionContext{
@@ -563,31 +618,96 @@ func Authorization(engine *policy.Engine, rootAccessKey string) func(http.Handle
 				CurrentTime:     time.Now(),
 			}
 
-			// Build request context
-			reqCtx := &policy.RequestContext{
-				Principal:       principal,
-				Action:          action,
-				Resource:        resource,
-				Conditions:      conditions,
-				OriginalRequest: r,
+			// Check if multi-resource operation (e.g., CopyObject)
+			if mapper.IsMultiResourceAction(routeAction) {
+				// Handle CopyObject / UploadPartCopy
+				sourceKey := extractCopySource(r) // Parse x-amz-copy-source header
+
+				// Evaluate BOTH source and destination
+				sourceDecision := evaluatePermission(engine, principal, requiredPermissions[0], bucket, sourceKey, conditions, r)
+				destDecision := evaluatePermission(engine, principal, requiredPermissions[1], bucket, key, conditions, r)
+
+				if !sourceDecision.IsAllowed() || !destDecision.IsAllowed() {
+					writeAccessDeniedError(w, r)
+					return
+				}
+			} else {
+				// Single resource operation
+				// Use FIRST (and typically only) required permission
+				permission := requiredPermissions[0]
+
+				resource := &policy.Resource{
+					Bucket: bucket,
+					Key:    key,
+				}
+
+				// Build request context with MAPPED permission
+				reqCtx := &policy.RequestContext{
+					Principal:       principal,
+					Action:          policy.Action(permission), // Use mapped permission, not route action!
+					Resource:        resource,
+					Conditions:      conditions,
+					OriginalRequest: r,
+				}
+
+				// Evaluate policy
+				decision := engine.Evaluate(r.Context(), reqCtx)
+
+				if !decision.IsAllowed() {
+					writeAccessDeniedError(w, r)
+					return
+				}
+
+				// Store decision in context for logging
+				ctx := context.WithValue(r.Context(), contextInt.AuthzDecisionKey, decision)
+				r = r.WithContext(ctx)
 			}
-
-			// Evaluate policy
-			decision := engine.Evaluate(r.Context(), reqCtx)
-
-			if !decision.IsAllowed() {
-				// Return 403 Forbidden
-				writeAccessDeniedError(w, r)
-				return
-			}
-
-			// Store decision in context for logging
-			ctx := context.WithValue(r.Context(), contextInt.AuthzDecisionKey, decision)
 
 			// Authorization passed - proceed
-			next.ServeHTTP(w, r.WithContext(ctx))
+			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// evaluatePermission is a helper for multi-resource operations
+func evaluatePermission(
+	engine *policy.Engine,
+	principal *policy.Principal,
+	permission string,
+	bucket, key string,
+	conditions *policy.ConditionContext,
+	r *http.Request,
+) policy.Decision {
+	resource := &policy.Resource{
+		Bucket: bucket,
+		Key:    key,
+	}
+
+	reqCtx := &policy.RequestContext{
+		Principal:       principal,
+		Action:          policy.Action(permission),
+		Resource:        resource,
+		Conditions:      conditions,
+		OriginalRequest: r,
+	}
+
+	return engine.Evaluate(r.Context(), reqCtx)
+}
+
+// extractCopySource parses the x-amz-copy-source header
+// Example: "/source-bucket/source-key" → "source-key"
+func extractCopySource(r *http.Request) string {
+	copySource := r.Header.Get("X-Amz-Copy-Source")
+	if copySource == "" {
+		return ""
+	}
+	// Parse: /bucket/key or bucket/key
+	copySource = strings.TrimPrefix(copySource, "/")
+	parts := strings.SplitN(copySource, "/", 2)
+	if len(parts) == 2 {
+		return parts[1] // Return key part
+	}
+	return ""
 }
 
 // extractClientIP gets client IP from X-Forwarded-For or RemoteAddr
@@ -612,7 +732,7 @@ func writeAccessDeniedError(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-### 9. Server Integration
+### 10. Server Integration
 
 **File:** `internal/server/server.go`
 
@@ -659,7 +779,7 @@ func loadBucketPoliciesIntoEngine(ctx context.Context, meta *metadata.Manager, e
 }
 ```
 
-### 10. Routes Enhancement
+### 11. Routes Enhancement
 
 **File:** `internal/server/routes.go`
 
@@ -711,7 +831,7 @@ func SetupRoutes(r *router.Router, deps *RouteDependencies) {
 
 **Recommended:** Hybrid approach - simple routes get action from router, complex routes (with query params) update action in handler wrapper.
 
-### 11. Handler Enhancement
+### 12. Handler Enhancement
 
 **File:** `internal/api/handler.go`
 
@@ -755,9 +875,9 @@ func (h *Handler) BucketResourceHandler() routeHandler {
 
 **NOTE:** For MVP, handlers that check query params need to update action in context. In the future, we could use query param matchers in the router.
 
-### 12. Service Layer Notifications
+### 13. Service Layer Notifications
 
-**File:** `internal/service/s3/bucket_policy.go`
+**File:** `internal/service/s3/bucket_policy.go` (or equivalent bucket service layer)
 
 ```go
 // Service struct enhancement
@@ -804,13 +924,14 @@ func (s *Service) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 
 1. ✅ Core types (`types.go`) - RequestContext, Decision, Action, Resource, Principal
 2. ✅ Thread-safe cache (`cache.go`) - Bucket policies only
-3. ✅ Basic evaluation (`engine.go`, `evaluator.go`) - Admin bypass + bucket policy
-4. ✅ Simple matching (`matcher.go`) - Action/Resource/Principal (no conditions)
-5. ✅ Authorization middleware (`authorization.go`) - Policy enforcement
-6. ✅ Router enhancement (`router.go`) - S3 action metadata
-7. ✅ Server integration (`server.go`) - PE initialization, policy loading
-8. ✅ Routes wiring (`routes.go`) - Add authorization middleware
-9. ✅ Service notifications (`bucket_policy.go`) - Notify PE on changes
+3. 🔴 **Action mapper** (`action_mapper.go`) - Translates S3 actions to IAM permissions
+4. ✅ Basic evaluation (`engine.go`, `evaluator.go`) - Admin bypass + bucket policy
+5. ✅ Simple matching (`matcher.go`) - Action/Resource/Principal (no conditions)
+6. ✅ Authorization middleware (`authorization.go`) - Policy enforcement WITH action mapping
+7. ✅ Router enhancement (`router.go`) - S3 action metadata (DONE via teapot-router)
+8. ✅ Server integration (`server.go`) - PE initialization, policy loading
+9. ✅ Routes wiring (`routes.go`) - Add authorization middleware
+10. ✅ Service notifications (`bucket_policy.go`) - Notify PE on changes
 
 **What to Defer:**
 
@@ -824,10 +945,9 @@ func (s *Service) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 
 **Step-by-step build sequence:**
 
-1. **Router enhancement** (`internal/router/router.go`)
-   - Add `S3Action` field to `RouteInfo`
-   - Add `*WithAction()` methods (GetWithAction, etc.)
-   - Update `register()` to accept s3Action parameter
+1. **Router enhancement** (`internal/router/router.go`) ✅ **DONE**
+   - teapot-router already supports `.Action()` metadata on routes
+   - All routes in `routes.go` already tagged with S3 actions
 
 2. **Context enhancement** (`internal/context/context.go`)
    - Add `S3ActionKey` and `AuthzDecisionKey` constants
@@ -838,57 +958,73 @@ func (s *Service) DeleteBucketPolicy(ctx context.Context, bucket string) error {
    - Define action constants
    - Write ARN() method
 
-4. **Policy cache** (`internal/policy/cache.go`)
+4. 🔴 **Action mapper** (`internal/policy/action_mapper.go`) **CRITICAL - NEW**
+   - Implement ActionMapper struct with static mapping table
+   - Implement GetRequiredPermissions() - translates action to permission(s)
+   - Implement IsMultiResourceAction() - identifies CopyObject, etc.
+   - Implement GetResourceARNs() - handles multi-resource operations
+   - Write comprehensive unit tests covering:
+     - 1:1 same name (GetObject → s3:GetObject)
+     - 1:1 different name (HeadObject → s3:GetObject)
+     - 1:many (CopyObject → [s3:GetObject, s3:PutObject])
+     - Multipart operations (CreateMultipartUpload → s3:PutObject)
+
+5. **Policy cache** (`internal/policy/cache.go`)
    - Implement Cache struct with RWMutex
    - Implement Get/Set/Load methods
    - Write unit tests for thread-safety
 
-5. **Policy matcher** (`internal/policy/matcher.go`)
+6. **Policy matcher** (`internal/policy/matcher.go`)
    - Implement matchPrincipal (handle `*` only for MVP)
    - Implement matchAction with wildcards
    - Implement matchResource with ARN patterns
    - Write comprehensive unit tests
 
-6. **Policy evaluator** (`internal/policy/evaluator.go`)
+7. **Policy evaluator** (`internal/policy/evaluator.go`)
    - Implement evaluateStatement
    - Implement evaluatePolicy
    - Write unit tests
 
-7. **Policy engine** (`internal/policy/engine.go`)
+8. **Policy engine** (`internal/policy/engine.go`)
    - Implement Engine struct with cache
    - Implement Evaluate() with admin bypass + bucket policy
    - Implement LoadBucketPolicies, UpdateBucketPolicy
    - Write unit tests for full evaluation flow
 
-8. **Authorization middleware** (`internal/middleware/authorization.go`)
-   - Extract action from context
-   - Extract resource from route params
-   - Build RequestContext
+9. **Authorization middleware** (`internal/middleware/authorization.go`) 🔴 **UPDATED**
+   - Create ActionMapper instance
+   - Extract action from route context
+   - Use ActionMapper to translate to permission(s)
+   - Handle multi-resource operations (CopyObject)
+   - Build RequestContext with MAPPED permission
    - Call policy engine
    - Return 403 on deny
 
-9. **Server integration** (`internal/server/server.go`)
-   - Add PolicyEngine to Server struct
-   - Create policy engine in New()
-   - Load bucket policies at startup
-   - Pass root access key to routes
+10. **Server integration** (`internal/server/server.go`)
+    - Add PolicyEngine to Server struct
+    - Create policy engine in New()
+    - Create ActionMapper instance
+    - Load bucket policies at startup
+    - Pass policy engine, action mapper, and root access key to routes
 
-10. **Routes wiring** (`internal/server/routes.go`)
-    - Add PolicyEngine to RouteDependencies
-    - Update route registration with action tags
+11. **Routes wiring** (`internal/server/routes.go`)
+    - Add PolicyEngine and ActionMapper to RouteDependencies
+    - All routes already tagged with S3 actions (teapot-router)
     - Insert Authorization middleware after Auth
 
-11. **Handler cleanup** (`internal/api/handler.go`)
-    - Remove action setting for simple routes
-    - Keep action override for query param routes (policy, location)
+12. **Handler cleanup** (`internal/api/handler.go`)
+    - Remove action setting for simple routes (read from route context)
+    - Keep action override for query param routes if needed (policy, location)
 
-12. **Service notifications** (`internal/service/s3/bucket_policy.go`)
+13. **Service notifications** (`internal/service/bucket/bucket.go` or similar)
     - Add PolicyEngine to Service struct
     - Notify on PutBucketPolicy
     - Notify on DeleteBucketPolicy
 
-13. **Integration tests**
+14. **Integration tests**
     - Test admin bypass
+    - Test action mapping (HeadObject works with GetObject policy)
+    - Test multi-resource (CopyObject requires both permissions)
     - Test public bucket read policy
     - Test policy updates at runtime
     - Test anonymous access denied by default
@@ -898,6 +1034,8 @@ func (s *Service) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 **Files to Create:**
 - `internal/policy/types.go`
 - `internal/policy/cache.go`
+- 🔴 `internal/policy/action_mapper.go` **NEW - CRITICAL**
+- 🔴 `internal/policy/action_mapper_test.go` **NEW - CRITICAL**
 - `internal/policy/matcher.go`
 - `internal/policy/evaluator.go`
 - `internal/policy/engine.go`
@@ -905,22 +1043,33 @@ func (s *Service) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 - `internal/middleware/authorization.go`
 
 **Files to Modify:**
-- `internal/router/router.go` - Add S3Action metadata
+- ✅ `internal/router/router.go` - **DONE** (teapot-router already supports actions)
 - `internal/context/context.go` - Add S3ActionKey
-- `internal/server/server.go` - Initialize PE, load policies
-- `internal/server/routes.go` - Tag routes, add middleware
-- `internal/api/handler.go` - Cleanup action setting
-- `internal/service/s3/bucket_policy.go` - Notify PE
+- `internal/server/server.go` - Initialize PE, ActionMapper, load policies
+- ✅ `internal/server/routes.go` - **DONE** (routes already tagged with actions)
+- `internal/middleware/authorization.go` - **UPDATE** to use ActionMapper
+- `internal/api/handler.go` - Cleanup action setting (optional)
+- `internal/service/bucket/` - Notify PE on policy changes
 
 ## Testing Strategy
 
 **Unit Tests (No FS Dependencies):**
+- 🔴 **Action mapping** - Comprehensive tests for all mapping types:
+  - 1:1 same name (GetObject → s3:GetObject)
+  - 1:1 different name (HeadObject → s3:GetObject, HeadBucket → s3:ListBucket)
+  - 1:many (CopyObject → [s3:GetObject, s3:PutObject])
+  - Multipart operations (CreateMultipartUpload → s3:PutObject)
+  - Multi-resource detection (IsMultiResourceAction)
 - Policy matching logic (wildcards, ARNs)
 - Policy evaluation (allow/deny precedence)
 - Thread-safety of cache
 
 **Integration Tests:**
 - Admin bypass works
+- 🔴 **Action mapping works end-to-end**:
+  - HeadObject request allowed with GetObject policy
+  - CopyObject requires both source GetObject and dest PutObject policies
+  - ListObjectsV2 works with ListBucket policy
 - Public bucket policy allows anonymous reads
 - Policy updates reflected immediately
 - Anonymous access denied by default
@@ -929,6 +1078,7 @@ func (s *Service) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 
 **How to test end-to-end:**
 
+### Basic Authorization Flow
 1. **Start server** with test data directory
 2. **Create bucket** as admin
 3. **Upload object** as admin
@@ -938,9 +1088,38 @@ func (s *Service) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 7. **Delete bucket policy**
 8. **Verify anonymous access denied again** (GET returns 403)
 
+### Action Mapping Verification 🔴
+9. **Test HeadObject with GetObject policy**:
+   ```json
+   Policy: { "Action": "s3:GetObject", "Resource": "arn:aws:s3:::bucket/*" }
+   Request: HEAD /bucket/file.txt (route action: s3:HeadObject)
+   Expected: ActionMapper translates to s3:GetObject → ALLOW
+   ```
+
+10. **Test CopyObject with dual permissions**:
+    ```json
+    Policy 1: { "Action": "s3:GetObject", "Resource": "arn:aws:s3:::bucket-a/*" }
+    Policy 2: { "Action": "s3:PutObject", "Resource": "arn:aws:s3:::bucket-b/*" }
+    Request: PUT /bucket-b/newfile.txt with X-Amz-Copy-Source: /bucket-a/oldfile.txt
+    Expected: ALLOW (both permissions granted)
+
+    Request: PUT /bucket-b/newfile.txt with X-Amz-Copy-Source: /bucket-c/oldfile.txt
+    Expected: DENY (no GetObject on bucket-c)
+    ```
+
+11. **Test ListObjectsV2 with ListBucket policy**:
+    ```json
+    Policy: { "Action": "s3:ListBucket", "Resource": "arn:aws:s3:::bucket" }
+    Request: GET /bucket?list-type=2 (route action: s3:ListObjectsV2)
+    Expected: ActionMapper translates to s3:ListBucket → ALLOW
+    ```
+
 ## Success Criteria
 
 - ✅ Policy Engine evaluates bucket policies correctly
+- 🔴 **Action Mapper correctly translates all S3 actions to IAM permissions**
+- 🔴 **HeadObject requests work with GetObject policies**
+- 🔴 **CopyObject enforces dual-permission checks (source + destination)**
 - ✅ Admin can access everything (bypass)
 - ✅ Anonymous users can read from public buckets
 - ✅ Anonymous users denied from private buckets
@@ -950,8 +1129,10 @@ func (s *Service) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 
 ## Future Enhancements (Phase 3.2+)
 
-- Condition evaluation support
+- Condition evaluation support (IpAddress, StringEquals, etc.)
+- Conditional permissions based on request headers (x-amz-acl, x-amz-tagging, etc.)
 - Pre-signed URL policy validation
-- CopyObject dual-permission checks
+- Version-aware permission evaluation (GetObjectVersion vs GetObject)
 - Range request authorization
+- KMS encryption permission checks (kms:Decrypt, kms:GenerateDataKey)
 - IAM user policy evaluation (Phase 5)
