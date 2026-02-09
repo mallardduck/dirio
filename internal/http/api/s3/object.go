@@ -2,6 +2,7 @@ package s3
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -61,7 +62,7 @@ func (h *HTTPHandler) GetObject(w http.ResponseWriter, r *http.Request, bucket, 
 	// Set response headers
 	w.Header().Set("Content-Type", obj.ContentType)
 	w.Header().Set("Content-Length", strconv.FormatInt(obj.Size, 10))
-	w.Header().Set("ETag", obj.ETag)
+	w.Header().Set("ETag", fmt.Sprintf(`"%s"`, obj.ETag))
 	w.Header().Set("Last-Modified", obj.LastModified.Format(http.TimeFormat))
 	w.Header().Set("Accept-Ranges", "bytes")
 
@@ -151,7 +152,7 @@ func (h *HTTPHandler) PutObject(w http.ResponseWriter, r *http.Request, bucket, 
 	}
 
 	// Set response headers
-	w.Header().Set("ETag", etag)
+	w.Header().Set("ETag", fmt.Sprintf(`"%s"`, etag))
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -202,7 +203,7 @@ func (h *HTTPHandler) HeadObject(w http.ResponseWriter, r *http.Request, bucket,
 	// Set response headers
 	w.Header().Set("Content-Type", meta.ContentType)
 	w.Header().Set("Content-Length", strconv.FormatInt(meta.Size, 10))
-	w.Header().Set("ETag", meta.ETag)
+	w.Header().Set("ETag", fmt.Sprintf(`"%s"`, meta.ETag))
 	w.Header().Set("Last-Modified", meta.LastModified.Format(http.TimeFormat))
 	w.Header().Set("Accept-Ranges", "bytes")
 

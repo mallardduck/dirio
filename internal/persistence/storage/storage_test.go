@@ -56,7 +56,7 @@ func createTestObject(t *testing.T, s *Storage, bucket, key string, size int64) 
 		Version:      metadata.ObjectMetadataVersion,
 		ContentType:  "application/octet-stream",
 		Size:         size,
-		ETag:         `"test-etag"`,
+		ETag:         "test-etag",
 		LastModified: time.Now().Truncate(time.Second),
 	}
 	err = s.metadata.PutObjectMetadata(context.Background(), bucket, key, meta)

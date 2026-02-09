@@ -2,6 +2,19 @@
 
 Current status: **Phase 3.2 - Features with Policy Integration** (Policy Engine Foundation complete!)
 
+## Recent Updates
+
+**February 8, 2026:**
+- ✅ **AWS CLI test suite expanded** - From 11 to 21 tests with comprehensive content verification
+  - AWS CLI: 16/21 tests passed (76.2%) - 10 new tests added
+  - boto3: 15/21 tests passed (71.4%)
+  - MinIO mc: 22/30 tests passed (73.3%)
+- ✅ **Uniform test coverage achieved** - All three clients now test same core S3 operations
+- ✅ **Content verification added** - AWS CLI tests now verify object content integrity (not just exit codes)
+- ✅ **New tests added:** GetBucketLocation, ListObjectsV2 (prefix/delimiter), Custom metadata (set/get), Range requests, CopyObject, Pre-signed URLs, Multipart upload, Object tagging
+- 📊 Confirmed known bugs affect all clients consistently - Range requests, CopyObject, Pre-signed URLs, Multipart (partial), Object tagging
+- 🎯 Next priority: Pre-signed URLs (Phase 3.2 feature #3)
+
 **📁 Known Issues:** See [bugs/](bugs/) directory for detailed bug reports and tracking
 
 ## Phase 1: MVP Core ✅ (Scaffolded)
@@ -110,12 +123,14 @@ Current status: **Phase 3.2 - Features with Policy Integration** (Policy Engine 
   - Useful for creating consistent test state regardless of client
 
 ### Client Compatibility Testing
-- [x] Test with AWS CLI - basic CRUD operations
-  - **Result:** 11/11 passed - 100% success rate (via testcontainers-go, Jan 31, 2026)
-  - Core CRUD operations all work
-  - High-level s3 commands (cp upload/download) work
-  - HeadBucket returns x-amz-bucket-region header
-  - DeleteObject and DeleteBucket both working
+- [x] Test with AWS CLI - comprehensive S3 operations
+  - **Result:** 16/21 passed - 76.2% success rate (via testcontainers-go, Feb 8, 2026) - **EXPANDED from 11 to 21 tests**
+  - ✅ **NEW:** GetBucketLocation, ListObjectsV2 (prefix/delimiter), Custom metadata (set/get), Range requests, CopyObject, Pre-signed URLs, Multipart upload, Object tagging
+  - ✅ Core CRUD operations all work with content verification
+  - ✅ High-level s3 commands (cp upload/download) work
+  - ✅ HeadBucket returns x-amz-bucket-region header
+  - ✅ DeleteObject and DeleteBucket both working
+  - ❌ Failed: Range requests (returns full content), CopyObject (Unknown error), Pre-signed URLs (403/content mismatch), Multipart upload (405), Object tagging (content corruption)
 - [x] Test with boto3 (Python) - programmatic access patterns
   - **Result:** 15/21 passed - 71.4% success rate (via testcontainers-go, Feb 1, 2026) - **IMPROVED from 62%**
   - ✅ **NEW:** ListObjectsV2 delimiter and max-keys now working!

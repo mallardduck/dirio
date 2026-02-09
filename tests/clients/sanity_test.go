@@ -2,9 +2,10 @@ package clients_test
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -24,9 +25,23 @@ const (
 	mockServerDumbSuccess
 )
 
-// createMockServer creates a test HTTP server with the specified behavior
-func createMockServer(serverType mockServerType) *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// mockServerWrapper wraps an HTTP server for cleanup
+type mockServerWrapper struct {
+	server *http.Server
+	port   string
+}
+
+func (m *mockServerWrapper) Close() {
+	if m.server != nil {
+		m.server.Close()
+	}
+}
+
+// createMockServer creates a test HTTP server with the specified behavior.
+// It binds to 0.0.0.0 on a random port so Docker containers can reach it via host.docker.internal.
+func createMockServer(serverType mockServerType) (*mockServerWrapper, string) {
+	// Create handler
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch serverType {
 		case mockServerFailing:
 			w.WriteHeader(http.StatusInternalServerError)
@@ -42,7 +57,37 @@ func createMockServer(serverType mockServerType) *httptest.Server {
 			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <Response></Response>`))
 		}
-	}))
+	})
+
+	// Create listener on 0.0.0.0 with random port (tcp4 forces IPv4)
+	listener, err := net.Listen("tcp4", "0.0.0.0:0")
+	if err != nil {
+		panic(fmt.Sprintf("failed to create listener: %v", err))
+	}
+
+	// Get the port that was assigned
+	_, port, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		panic(fmt.Sprintf("failed to get port: %v", err))
+	}
+
+	// Create HTTP server
+	server := &http.Server{
+		Handler: handler,
+	}
+
+	// Start serving in background
+	go server.Serve(listener)
+
+	// Build URL using host.docker.internal for container access
+	containerURL := fmt.Sprintf("http://host.docker.internal:%s", port)
+
+	wrapper := &mockServerWrapper{
+		server: server,
+		port:   port,
+	}
+
+	return wrapper, containerURL
 }
 
 // runClientTest is a helper that runs a client test against a mock server
@@ -86,10 +131,10 @@ func runClientTest(t *testing.T, testName string, req testcontainers.ContainerRe
 func TestSanityCheck_FailingServer(t *testing.T) {
 	t.Parallel()
 
-	mockServer := createMockServer(mockServerFailing)
+	mockServer, containerURL := createMockServer(mockServerFailing)
 	defer mockServer.Close()
 
-	t.Logf("Mock failing server started at %s", mockServer.URL)
+	t.Logf("Mock failing server started on port %s (container URL: %s)", mockServer.port, containerURL)
 
 	// Test AWS CLI against failing server - should fail
 	t.Run("AWS_CLI_Should_Fail", func(t *testing.T) {
@@ -101,7 +146,7 @@ func TestSanityCheck_FailingServer(t *testing.T) {
 				"AWS_ACCESS_KEY_ID":     testAccessKey,
 				"AWS_SECRET_ACCESS_KEY": testSecretKey,
 				"AWS_DEFAULT_REGION":    testRegion,
-				"DIRIO_ENDPOINT":        mockServer.URL,
+				"DIRIO_ENDPOINT":        containerURL,
 			},
 			Entrypoint: []string{"/bin/bash", "-c"},
 			Cmd: []string{
@@ -120,7 +165,7 @@ func TestSanityCheck_FailingServer(t *testing.T) {
 		req := testcontainers.ContainerRequest{
 			Image: "python:3.12-slim",
 			Env: map[string]string{
-				"DIRIO_ENDPOINT":   mockServer.URL,
+				"DIRIO_ENDPOINT":   containerURL,
 				"DIRIO_ACCESS_KEY": testAccessKey,
 				"DIRIO_SECRET_KEY": testSecretKey,
 				"DIRIO_REGION":     testRegion,
@@ -140,7 +185,7 @@ func TestSanityCheck_FailingServer(t *testing.T) {
 		t.Parallel()
 
 		envMap := map[string]string{
-			"DIRIO_ENDPOINT":   mockServer.URL,
+			"DIRIO_ENDPOINT":   containerURL,
 			"DIRIO_ACCESS_KEY": testAccessKey,
 			"DIRIO_SECRET_KEY": testSecretKey,
 		}
@@ -156,10 +201,10 @@ func TestSanityCheck_FailingServer(t *testing.T) {
 func TestSanityCheck_DumbSuccessServer(t *testing.T) {
 	t.Parallel()
 
-	mockServer := createMockServer(mockServerDumbSuccess)
+	mockServer, containerURL := createMockServer(mockServerDumbSuccess)
 	defer mockServer.Close()
 
-	t.Logf("Mock dumb-success server started at %s", mockServer.URL)
+	t.Logf("Mock dumb-success server started on port %s (container URL: %s)", mockServer.port, containerURL)
 
 	// Test AWS CLI against dumb success server - should fail
 	t.Run("AWS_CLI_Should_Fail", func(t *testing.T) {
@@ -171,7 +216,7 @@ func TestSanityCheck_DumbSuccessServer(t *testing.T) {
 				"AWS_ACCESS_KEY_ID":     testAccessKey,
 				"AWS_SECRET_ACCESS_KEY": testSecretKey,
 				"AWS_DEFAULT_REGION":    testRegion,
-				"DIRIO_ENDPOINT":        mockServer.URL,
+				"DIRIO_ENDPOINT":        containerURL,
 			},
 			Entrypoint: []string{"/bin/bash", "-c"},
 			Cmd: []string{
@@ -190,7 +235,7 @@ func TestSanityCheck_DumbSuccessServer(t *testing.T) {
 		req := testcontainers.ContainerRequest{
 			Image: "python:3.12-slim",
 			Env: map[string]string{
-				"DIRIO_ENDPOINT":   mockServer.URL,
+				"DIRIO_ENDPOINT":   containerURL,
 				"DIRIO_ACCESS_KEY": testAccessKey,
 				"DIRIO_SECRET_KEY": testSecretKey,
 				"DIRIO_REGION":     testRegion,
@@ -210,7 +255,7 @@ func TestSanityCheck_DumbSuccessServer(t *testing.T) {
 		t.Parallel()
 
 		envMap := map[string]string{
-			"DIRIO_ENDPOINT":   mockServer.URL,
+			"DIRIO_ENDPOINT":   containerURL,
 			"DIRIO_ACCESS_KEY": testAccessKey,
 			"DIRIO_SECRET_KEY": testSecretKey,
 		}

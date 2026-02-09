@@ -189,7 +189,7 @@ func (s *Storage) PutObject(ctx context.Context, bucket, key string, content io.
 	}
 
 	// Calculate ETag (MD5 hash)
-	etag := `"` + hex.EncodeToString(hash.Sum(nil)) + `"`
+	etag := hex.EncodeToString(hash.Sum(nil))
 
 	// Check context before finalizing
 	if err := ctx.Err(); err != nil {

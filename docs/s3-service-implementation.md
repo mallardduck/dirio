@@ -189,7 +189,7 @@ func (h *HTTPHandler) PutObject(w http.ResponseWriter, r *http.Request, bucket, 
         return
     }
 
-    w.Header().Set("ETag", etag)
+    w.Header().Set("ETag", fmt.Sprintf(`"%s"`, etag))
     w.WriteHeader(http.StatusOK)
 }
 ```

@@ -2,9 +2,10 @@
 
 This document tracks DirIO's compatibility with various S3 clients, test results, and known issues.
 
-**Latest Update: February 1, 2026 08:59 UTC**
+**Latest Update: February 8, 2026**
 **Test Framework:** testcontainers-go with Docker containers for each client
 **Test Location:** `tests/clients/` using canonical scripts from `tests/clients/scripts/`
+**Latest Test Run:** February 8, 2026 - All test results confirmed, compatibility matrix remains accurate
 
 ---
 
@@ -34,20 +35,20 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 | HeadObject                | ✅       | ✅     | ✅        | mc: mc stat works                                     | High     |
 | DeleteObject              | ✅       | ✅     | ❌        | mc: 405 Method Not Allowed (mc rm)                    | High     |
 | ListObjectsV2 (basic)     | ✅       | ✅     | ✅        | mc: mc ls works                                       | High     |
-| ListObjectsV2 (prefix)    | ❓       | ✅     | ✅        | mc: mc ls prefix/ works                               | High     |
-| ListObjectsV2 (delimiter) | ❓       | ✅     | ✅        | boto3+mc: now working correctly                       | High     |
+| ListObjectsV2 (prefix)    | ✅       | ✅     | ✅        | All clients: now tested and working                   | High     |
+| ListObjectsV2 (delimiter) | ✅       | ✅     | ✅        | All clients: now working correctly                    | High     |
 | ListObjectsV2 (recursive) | ❓       | ❓     | ✅        | mc: mc ls -r works                                    | Medium   |
 | ListObjectsV2 (max-keys)  | ❓       | ✅     | ❓        | boto3: now working correctly                          | Medium   |
 | ListObjectsV1             | ❓       | ✅     | ❓        | boto3: works                                          | Medium   |
-| Range Requests            | ❓       | ❌     | ❌        | Returns full content instead of range                 | High     |
-| Custom Metadata (set)     | ❓       | ✅     | ✅        | mc: mc cp --attr works                                | Medium   |
-| Custom Metadata (get)     | ❓       | ⚠️    | ❌        | boto3: wrong key case; mc: not returned in stat       | Medium   |
-| Pre-signed URLs (down)    | ❓       | ❌     | ❌        | mc: mc share download fails                           | Medium   |
+| Range Requests            | ❌       | ❌     | ❌        | All clients: Returns full content instead of range    | High     |
+| Custom Metadata (set)     | ✅       | ✅     | ✅        | All clients: works correctly                          | Medium   |
+| Custom Metadata (get)     | ✅       | ⚠️    | ❌        | AWS CLI: works with Title-Case keys; boto3: wrong case; mc: not returned | Medium   |
+| Pre-signed URLs (down)    | ❌       | ❌     | ❌        | All clients: signature/403 issues                     | Medium   |
 | Pre-signed URLs (up)      | ❓       | ❓     | ❌        | mc: mc share upload fails                             | Medium   |
-| CopyObject                | ❓       | ❌     | ❌        | Creates 0-byte file; mc: mc cp s3-to-s3 fails         | Medium   |
-| Multipart Upload          | ❓       | ❌     | ✅        | boto3: 405; mc: works with verified content integrity | High     |
-| Object Tagging (set)      | ❓       | ❌     | ⚠️       | boto3+mc: operation succeeds but corrupts content      | High     |
-| Object Tagging (get)      | ❓       | ❌     | ⚠️       | boto3+mc: returns tags but object content is XML       | High     |
+| CopyObject                | ❌       | ❌     | ❌        | All clients: fails (AWS CLI: Unknown error; boto3: empty file; mc: EOF) | Medium   |
+| Multipart Upload          | ❌       | ❌     | ✅        | AWS CLI+boto3: 405; mc: works with verified content integrity | High     |
+| Object Tagging (set)      | ❌       | ❌     | ⚠️       | All clients: operation succeeds but corrupts content   | High     |
+| Object Tagging (get)      | ❌       | ❌     | ⚠️       | All clients: returns tags but object content is XML    | High     |
 
 **Legend:** ✅ Works | ❌ Fails | ⚠️ Partial | ❓Untested
 
@@ -58,39 +59,56 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 **S3 API Implementation Status** (24 unique features tested across 3 clients):
 - ✅ **Fully Working:** 15/24 (63%) - Works correctly across all tested clients
 - ⚠️ **Partially Working:** 3/24 (13%) - Custom metadata (set works, get has issues), Pre-signed URLs (partial failures), Object Tagging (mc works, boto3 corrupts)
-- ❌ **Not Working:** 6/24 (25%) - DeleteObject/DeleteBucket for mc, Range requests, CopyObject, Multipart for boto3, Pre-signed URLs
-- ❓ **Not Tested:** Many features only tested with subset of clients
+- ❌ **Not Working:** 6/24 (25%) - DeleteObject/DeleteBucket for mc, Range requests, CopyObject, Multipart for AWS CLI+boto3, Pre-signed URLs
+- ❓ **Not Tested:** Some features only tested with subset of clients
 
-**Recent Improvements (Feb 1, 2026):**
-- ✅ ListObjectsV2 delimiter support now working in boto3
-- ✅ ListObjectsV2 max-keys pagination now working in boto3
-- ✅ Multipart upload content integrity verified and working in MinIO mc
+**Recent Improvements (Feb 8, 2026):**
+- ✅ **AWS CLI test suite expanded** - From 11 to 21 tests with comprehensive content verification
+- ✅ ListObjectsV2 (prefix/delimiter) now tested and working in AWS CLI
+- ✅ Custom metadata fully tested in AWS CLI (set/get both work)
+- ✅ All three test suites now have uniform coverage for core operations
+- ✅ Confirmed known bugs affect all clients consistently (Range, CopyObject, Pre-signed URLs, Multipart, Tagging)
 
 ---
 
 ## Detailed Client Test Results
 
-### AWS CLI (11/11 tests passed - 100%)
+### AWS CLI (16/21 tests passed - 76.2%)
 
-**Status:** ✅ **Fully Compatible**
+**Status:** ⚠️ **Partially Compatible** - IMPROVED with comprehensive test coverage
 
-**Test Coverage:**
+**Test Coverage Expanded:** Now testing 21 features with full content verification
+
+**Working Features (16):**
 - ✅ ListBuckets
 - ✅ CreateBucket
 - ✅ HeadBucket (returns `x-amz-bucket-region` header)
+- ✅ GetBucketLocation
 - ✅ PutObject
+- ✅ Custom metadata (set)
+- ✅ Custom metadata (get) - Returns Title-Case keys but accessible
 - ✅ HeadObject
-- ✅ GetObject
-- ✅ ListObjectsV2
+- ✅ GetObject - **with content verification**
+- ✅ ListObjectsV2 (basic)
+- ✅ ListObjectsV2 (prefix)
+- ✅ ListObjectsV2 (delimiter)
 - ✅ High-level `s3 cp` upload
 - ✅ High-level `s3 cp` download
 - ✅ DeleteObject
 - ✅ DeleteBucket
 
+**Failed Tests (5/21):**
+- ❌ Range request: Returns full 100 bytes instead of first 10 bytes (DirIO bug)
+- ❌ CopyObject: Operation failed with "Unknown" error (DirIO bug)
+- ❌ Pre-signed URL: Download failed or content mismatch (DirIO bug)
+- ❌ Multipart upload: Create operation failed (405 Method Not Allowed - DirIO bug)
+- ❌ Object tagging: Content corrupted after tagging (known bug #001)
+
 **Notes:**
 - All core CRUD operations work perfectly
 - High-level `s3` commands work
-- ⚠️ Content verification not yet implemented for AWS CLI tests (may be affected by bug #001)
+- ✅ Content verification now implemented for all read/write operations
+- All failures match boto3 failures - confirmed DirIO bugs, not client issues
 
 ---
 
