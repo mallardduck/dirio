@@ -3,9 +3,9 @@ package s3
 import (
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
+	"github.com/mallardduck/go-http-helpers/pkg/query"
 
 	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/http/middleware"
@@ -164,11 +164,10 @@ func (h *HTTPHandler) GetBucketLocation(w http.ResponseWriter, r *http.Request, 
 
 // ListObjects handles GET /{bucket} (ListObjectsV1)
 func (h *HTTPHandler) ListObjects(w http.ResponseWriter, r *http.Request, bucket string) {
-	query := r.URL.Query()
-	prefix := query.Get("prefix")
-	delimiter := query.Get("delimiter")
-	marker := query.Get("marker")
-	maxKeys := parseMaxKeys(query.Get("max-keys"))
+	prefix := query.String(r, "prefix", "")
+	delimiter := query.String(r, "delimiter", "")
+	marker := query.String(r, "marker", "")
+	maxKeys := parseMaxKeys(query.Int(r, "max-keys", defaultMaxKeys))
 
 	listRequest := &s3.ListObjectsRequest{
 		Bucket:    bucket,
@@ -213,14 +212,13 @@ func (h *HTTPHandler) ListObjects(w http.ResponseWriter, r *http.Request, bucket
 
 // ListObjectsV2 handles GET /{bucket}?list-type=2
 func (h *HTTPHandler) ListObjectsV2(w http.ResponseWriter, r *http.Request, bucket string) {
-	query := r.URL.Query()
-	continuationToken := query.Get("continuation-token")
-	delimiter := query.Get("delimiter")
+	continuationToken := query.String(r, "continuation-token", "")
+	delimiter := query.String(r, "delimiter", "")
 	// encoding-type
-	fetchOwner := query.Get("fetch-owner") == "true"
-	maxKeys := parseMaxKeys(query.Get("max-keys"))
-	prefix := query.Get("prefix")
-	startAfter := query.Get("start-after")
+	fetchOwner := query.Bool(r, "fetch-owner", false)
+	maxKeys := parseMaxKeys(query.Int(r, "max-keys", defaultMaxKeys))
+	prefix := query.String(r, "prefix", "")
+	startAfter := query.String(r, "start-after", "")
 
 	listRequest := &s3.ListObjectsV2Request{
 		Bucket:            bucket,
@@ -271,25 +269,13 @@ func (h *HTTPHandler) ListObjectsV2(w http.ResponseWriter, r *http.Request, buck
 	}
 }
 
+const (
+	defaultMaxKeys = 1000
+	maxMaxKeys     = 1000
+)
+
 // parseMaxKeys parses the max-keys query parameter with S3-compatible defaults and limits
-func parseMaxKeys(maxKeysStr string) int {
-	const (
-		defaultMaxKeys = 1000
-		maxMaxKeys     = 1000
-	)
-
-	// Default to 1000 if not provided
-	if maxKeysStr == "" {
-		return defaultMaxKeys
-	}
-
-	// Parse the value
-	maxKeys, err := strconv.Atoi(maxKeysStr)
-	if err != nil {
-		// Invalid value, use default
-		return defaultMaxKeys
-	}
-
+func parseMaxKeys(maxKeys int) int {
 	// Enforce S3 limits: minimum 1, maximum 1000
 	if maxKeys < 1 {
 		return 1

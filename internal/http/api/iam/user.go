@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
+	"github.com/mallardduck/go-http-helpers/pkg/query"
 	"github.com/minio/madmin-go/v3"
 
 	"github.com/mallardduck/dirio/internal/http/auth"
@@ -48,7 +49,7 @@ func (s *userHTTPService) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// The accessKey comes from query parameter
-	accessKey := r.URL.Query().Get("accessKey")
+	accessKey := query.String(r, "accessKey", "")
 	if accessKey == "" {
 		s.log.Error("Missing accessKey parameter")
 		w.WriteHeader(http.StatusBadRequest)
@@ -129,7 +130,7 @@ func (s *userHTTPService) CreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *userHTTPService) RemoveUser(w http.ResponseWriter, r *http.Request) {
-	username := r.URL.Query().Get("accessKey")
+	username := query.String(r, "accessKey", "")
 
 	err := s.users.Delete(r.Context(), username)
 	if err != nil {
@@ -153,7 +154,7 @@ func (s *userHTTPService) RemoveUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *userHTTPService) InfoUser(w http.ResponseWriter, r *http.Request) {
-	accessKey := r.URL.Query().Get("accessKey")
+	accessKey := query.String(r, "accessKey", "")
 	if accessKey == "" {
 		s.log.Error("Missing accessKey parameter")
 		w.WriteHeader(http.StatusBadRequest)
@@ -193,8 +194,8 @@ func (s *userHTTPService) InfoUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *userHTTPService) SetUserStatus(w http.ResponseWriter, r *http.Request) {
-	accessKey := r.URL.Query().Get("accessKey")
-	status := r.URL.Query().Get("status")
+	accessKey := query.String(r, "accessKey", "")
+	status := query.String(r, "status", "")
 
 	if accessKey == "" {
 		s.log.Error("Missing accessKey parameter")

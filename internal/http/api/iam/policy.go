@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
+	"github.com/mallardduck/go-http-helpers/pkg/query"
 
 	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/jsonutil"
@@ -23,7 +24,7 @@ type policyHTTPService struct {
 
 func (s policyHTTPService) AddCannedPolicy(w http.ResponseWriter, r *http.Request) {
 	// Get policy name from query parameter (MinIO API format)
-	policyName := r.URL.Query().Get("name")
+	policyName := query.String(r, "name", "")
 	if policyName == "" {
 		s.log.Error("Missing policy name in query parameter")
 		w.WriteHeader(http.StatusBadRequest)
@@ -97,7 +98,7 @@ func (s policyHTTPService) ListCannedPolicies(w http.ResponseWriter, r *http.Req
 }
 
 func (s policyHTTPService) RemoveCannedPolicy(w http.ResponseWriter, r *http.Request) {
-	policyName := r.URL.Query().Get("name")
+	policyName := query.String(r, "name", "")
 	if policyName == "" {
 		s.log.Error("Missing policy name in query parameter")
 		w.WriteHeader(http.StatusBadRequest)
@@ -125,7 +126,7 @@ func (s policyHTTPService) RemoveCannedPolicy(w http.ResponseWriter, r *http.Req
 }
 
 func (s policyHTTPService) InfoCannedPolicy(w http.ResponseWriter, r *http.Request) {
-	policyName := r.URL.Query().Get("name")
+	policyName := query.String(r, "name", "")
 	if policyName == "" {
 		s.log.Error("Missing policy name in query parameter")
 		w.WriteHeader(http.StatusBadRequest)
@@ -211,9 +212,9 @@ func (s policyHTTPService) SetPolicy(w http.ResponseWriter, r *http.Request) {
 		s.log.Debug("Parsed encrypted request", "policy", policyName, "userOrGroup", userOrGroup, "isGroup", isGroup)
 	} else {
 		// Fall back to old format (query parameters)
-		policyName = r.URL.Query().Get("policyName")
-		userOrGroup = r.URL.Query().Get("userOrGroup")
-		isGroup = r.URL.Query().Get("isGroup") == "true"
+		policyName = query.String(r, "policyName", "")
+		userOrGroup = query.String(r, "userOrGroup", "")
+		isGroup = query.Bool(r, "isGroup", false)
 
 		s.log.Debug("Parsed query parameters", "policy", policyName, "userOrGroup", userOrGroup, "isGroup", isGroup)
 	}
@@ -285,7 +286,7 @@ func (s policyHTTPService) SetPolicy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s policyHTTPService) PolicyEntitiesList(w http.ResponseWriter, r *http.Request) {
-	policyName := r.URL.Query().Get("policy")
+	policyName := query.String(r, "policy", "")
 	if policyName == "" {
 		s.log.Error("Missing policy name in query parameter")
 		w.WriteHeader(http.StatusBadRequest)
