@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mallardduck/dirio/internal/persistence/metadata"
 )
 
 func TestAuthenticator_ValidateCredentials(t *testing.T) {

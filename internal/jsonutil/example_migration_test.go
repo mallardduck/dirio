@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/go-git/go-billy/v5/memfs"
+
 	"github.com/mallardduck/dirio/internal/jsonutil"
 )
 

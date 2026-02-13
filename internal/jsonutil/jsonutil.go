@@ -6,8 +6,9 @@ import (
 	"os"
 
 	"github.com/go-git/go-billy/v5"
-	"github.com/mallardduck/dirio/internal/config"
 	"github.com/minio/madmin-go/v3"
+
+	"github.com/mallardduck/dirio/internal/config"
 )
 
 // isDebugMode determines whether to use pretty-printed JSON output.

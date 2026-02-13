@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/brutella/dnssd"
+
 	"github.com/mallardduck/dirio/internal/hostname"
 	"github.com/mallardduck/dirio/internal/logging"
 )
