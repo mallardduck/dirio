@@ -69,7 +69,13 @@ func writeXMLResponse(w http.ResponseWriter, statusCode int, data interface{}) e
 
 	encoder := xml.NewEncoder(&buf)
 	encoder.Indent("", "  ")
+	defer func() { _ = encoder.Flush() }() // Best effort cleanup on error paths
+
 	if err := encoder.Encode(data); err != nil {
+		return err
+	}
+
+	if err := encoder.Flush(); err != nil {
 		return err
 	}
 
@@ -96,17 +102,26 @@ func writeErrorResponse(w http.ResponseWriter, requestID string, errCode s3types
 		RequestID: requestID,
 	}
 
-	var buf bytes.Buffer
-	buf.Write([]byte(xml.Header))
+	w.Header().Set("Content-Type", "application/xml")
+	w.WriteHeader(errCode.HTTPStatus())
 
-	encoder := xml.NewEncoder(&buf)
+	if _, err := w.Write([]byte(xml.Header)); err != nil {
+		return err
+	}
+
+	encoder := xml.NewEncoder(w)
 	encoder.Indent("", "  ")
+	defer func() { _ = encoder.Flush() }() // Best effort cleanup on error paths
+
 	if err := encoder.Encode(response); err != nil {
+		// Note: At this point, headers are sent, so we can't change the status code.
+		// We just log or return the error.
 		return fmt.Errorf("failed to encode error response: %w", err)
 	}
 
-	w.Header().Set("Content-Type", "application/xml")
-	w.WriteHeader(errCode.HTTPStatus())
-	_, err = w.Write(buf.Bytes())
-	return err
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+
+	return encoder.Flush() // Return flush error on success path
 }
