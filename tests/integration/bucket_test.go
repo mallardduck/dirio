@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/mallardduck/dirio/pkg/s3types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
 func TestListBucketsEmpty(t *testing.T) {
@@ -22,11 +23,11 @@ func TestListBucketsEmpty(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusOK, resp.StatusCode)
+	asserts := assert.New(t)
+	asserts.Equal(http.StatusOK, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	assert.Contains(string(body), "<Buckets></Buckets>")
+	asserts.Contains(string(body), "<Buckets></Buckets>")
 }
 
 func TestCreateBucket(t *testing.T) {
@@ -58,11 +59,11 @@ func TestCreateBucketDuplicate(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusConflict, resp.StatusCode)
+	asserts := assert.New(t)
+	asserts.Equal(http.StatusConflict, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	assert.Contains(string(body), "BucketAlreadyExists")
+	asserts.Contains(string(body), "BucketAlreadyExists")
 }
 
 func TestListBucketsAfterCreate(t *testing.T) {
@@ -83,9 +84,9 @@ func TestListBucketsAfterCreate(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	bodyStr := string(body)
 
-	assert := assert.New(t)
-	assert.Contains(bodyStr, "<Name>bucket-alpha</Name>")
-	assert.Contains(bodyStr, "<Name>bucket-beta</Name>")
+	asserts := assert.New(t)
+	asserts.Contains(bodyStr, "<Name>bucket-alpha</Name>")
+	asserts.Contains(bodyStr, "<Name>bucket-beta</Name>")
 }
 
 func TestHeadBucketExists(t *testing.T) {
@@ -101,10 +102,10 @@ func TestHeadBucketExists(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusOK, resp.StatusCode)
+	asserts := assert.New(t)
+	asserts.Equal(http.StatusOK, resp.StatusCode)
 	// Verify bucket region header is present (AWS best practice)
-	assert.Equal("us-east-1", resp.Header.Get("x-amz-bucket-region"))
+	asserts.Equal("us-east-1", resp.Header.Get("x-amz-bucket-region"))
 }
 
 func TestHeadBucketNotExists(t *testing.T) {
@@ -134,11 +135,11 @@ func TestGetBucketLocation(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusOK, resp.StatusCode)
+	asserts := assert.New(t)
+	asserts.Equal(http.StatusOK, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	assert.Contains(string(body), "us-east-1")
+	asserts.Contains(string(body), "us-east-1")
 }
 
 // TestGetBucketLocationWithEmptyValue tests ?location= (empty value, like mc client sends)
@@ -156,11 +157,11 @@ func TestGetBucketLocationWithEmptyValue(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusOK, resp.StatusCode, "Should handle ?location= (empty value)")
+	asserts := assert.New(t)
+	asserts.Equal(http.StatusOK, resp.StatusCode, "Should handle ?location= (empty value)")
 
 	body, _ := io.ReadAll(resp.Body)
-	assert.Contains(string(body), "us-east-1")
+	asserts.Contains(string(body), "us-east-1")
 }
 
 // TestGetBucketLocationWithTrailingSlash tests GET /bucket/?location
@@ -178,11 +179,11 @@ func TestGetBucketLocationWithTrailingSlash(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusOK, resp.StatusCode, "Should handle /bucket/?location (trailing slash)")
+	asserts := assert.New(t)
+	asserts.Equal(http.StatusOK, resp.StatusCode, "Should handle /bucket/?location (trailing slash)")
 
 	body, _ := io.ReadAll(resp.Body)
-	assert.Contains(string(body), "us-east-1")
+	asserts.Contains(string(body), "us-east-1")
 }
 
 // TestListObjectsWithTrailingSlash tests GET /bucket/ (trailing slash, empty key)
@@ -201,13 +202,13 @@ func TestListObjectsWithTrailingSlash(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusOK, resp.StatusCode, "Should handle /bucket/ (trailing slash) for ListObjects")
+	asserts := assert.New(t)
+	asserts.Equal(http.StatusOK, resp.StatusCode, "Should handle /bucket/ (trailing slash) for ListObjects")
 
 	body, _ := io.ReadAll(resp.Body)
 	bodyStr := string(body)
-	assert.Contains(bodyStr, "ListBucketResult", "Should return ListBucketResult XML")
-	assert.Contains(bodyStr, "test.txt", "Should list the object")
+	asserts.Contains(bodyStr, "ListBucketResult", "Should return ListBucketResult XML")
+	asserts.Contains(bodyStr, "test.txt", "Should list the object")
 }
 
 // TestGetObjectWithEmptyKey tests GET /bucket/ interpreted as object request
@@ -227,14 +228,14 @@ func TestGetObjectWithEmptyKey(t *testing.T) {
 
 	// This should either list objects (200) or return an appropriate error
 	// It should NOT return "key cannot be empty" as a raw error
-	assert := assert.New(t)
+	asserts := assert.New(t)
 	body, _ := io.ReadAll(resp.Body)
 	bodyStr := string(body)
 
 	if resp.StatusCode != http.StatusOK {
 		// If it's an error, it should be a proper S3 error XML, not a text error
-		assert.Contains(bodyStr, "<?xml", "Error response should be XML")
-		assert.NotContains(bodyStr, "key cannot be empty", "Should not expose internal validation errors")
+		asserts.Contains(bodyStr, "<?xml", "Error response should be XML")
+		asserts.NotContains(bodyStr, "key cannot be empty", "Should not expose internal validation errors")
 	}
 }
 
@@ -248,7 +249,10 @@ func TestDeleteBucketEmpty(t *testing.T) {
 	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		require.NoError(t, err)
+	}(resp.Body)
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 
@@ -256,7 +260,10 @@ func TestDeleteBucketEmpty(t *testing.T) {
 	headReq, _ := http.NewRequest("HEAD", ts.BucketURL("test-bucket"), nil)
 	ts.SignRequest(headReq, nil)
 	headResp, _ := http.DefaultClient.Do(headReq)
-	defer headResp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		require.NoError(t, err)
+	}(headResp.Body)
 
 	assert.Equal(t, http.StatusNotFound, headResp.StatusCode)
 }
@@ -275,11 +282,11 @@ func TestDeleteBucketNotEmpty(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusConflict, resp.StatusCode)
+	asserts := assert.New(t)
+	asserts.Equal(http.StatusConflict, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	assert.Contains(string(body), "BucketNotEmpty")
+	asserts.Contains(string(body), "BucketNotEmpty")
 }
 
 func TestDeleteBucketNotExists(t *testing.T) {
@@ -313,13 +320,13 @@ func TestCreateBucket_ReturnsLocationHeader(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusOK, resp.StatusCode)
+	asserts := assert.New(t)
+	asserts.Equal(http.StatusOK, resp.StatusCode)
 
 	location := resp.Header.Get("Location")
-	assert.NotEmpty(location, "Location header should be present")
-	assert.Contains(location, "/test-bucket", "Location should contain bucket name")
-	assert.Contains(location, "localhost", "Location should contain host")
+	asserts.NotEmpty(location, "Location header should be present")
+	asserts.Contains(location, "/test-bucket", "Location should contain bucket name")
+	asserts.Contains(location, "localhost", "Location should contain host")
 }
 
 func TestCreateBucket_LocationWithCustomHost(t *testing.T) {
@@ -333,11 +340,11 @@ func TestCreateBucket_LocationWithCustomHost(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusOK, resp.StatusCode)
+	asserts := assert.New(t)
+	asserts.Equal(http.StatusOK, resp.StatusCode)
 
 	location := resp.Header.Get("Location")
-	assert.Contains(location, "dirio-s3.local:9000/test-bucket", "Location should use custom Host header")
+	asserts.Contains(location, "dirio-s3.local:9000/test-bucket", "Location should use custom Host header")
 }
 
 func TestCreateBucket_LocationWithXForwardedProto(t *testing.T) {
@@ -353,13 +360,13 @@ func TestCreateBucket_LocationWithXForwardedProto(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusOK, resp.StatusCode)
+	asserts := assert.New(t)
+	asserts.Equal(http.StatusOK, resp.StatusCode)
 
 	location := resp.Header.Get("Location")
-	assert.NotEmpty(location, "Location header should be present")
-	assert.True(
-		assert.Contains(location, "https://") || assert.Contains(location, "http://"),
+	asserts.NotEmpty(location, "Location header should be present")
+	asserts.True(
+		asserts.Contains(location, "https://") || asserts.Contains(location, "http://"),
 		"Location should have a scheme",
 	)
 }

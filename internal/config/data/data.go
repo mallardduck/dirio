@@ -9,15 +9,15 @@ import (
 	"github.com/go-git/go-billy/v5/util"
 )
 
-// DataConfig version
+// ConfigDataVersion represents the version of the configuration data format
 const (
-	DataConfigVersion = "1.0.0"
+	ConfigDataVersion = "1.0.0"
 )
 
-// DataConfig represents configuration stored in the data directory (.dirio/config.json)
+// ConfigData represents configuration stored in the data directory (.dirio/config.json)
 // These settings control how DirIO must behave when working with this specific data directory.
 // Unlike application config (CLI flags), these settings travel with the data and take precedence.
-type DataConfig struct {
+type ConfigData struct {
 	// Version of this config format for future migrations
 	Version string `json:"version"`
 
@@ -75,10 +75,10 @@ type StorageClassConfig struct {
 	RRS string `json:"rrs,omitempty"`
 }
 
-// DefaultDataConfig returns a DataConfig with sensible defaults
-func DefaultDataConfig() *DataConfig {
-	return &DataConfig{
-		Version: DataConfigVersion,
+// DefaultDataConfig returns a ConfigData with sensible defaults
+func DefaultDataConfig() *ConfigData {
+	return &ConfigData{
+		Version: ConfigDataVersion,
 		Credentials: CredentialsConfig{
 			AccessKey: "dirio-admin",
 			SecretKey: "dirio-admin-secret",
@@ -100,8 +100,8 @@ func DefaultDataConfig() *DataConfig {
 	}
 }
 
-// Validate checks if the DataConfig is valid
-func (dc *DataConfig) Validate() error {
+// Validate checks if the ConfigData is valid
+func (dc *ConfigData) Validate() error {
 	// TODO: Decide validation strategy for invalid/missing configs
 	// Options: (A) Fail fast, (B) Merge with defaults, (C) Warn and use defaults
 	// Current: Fail fast for required fields
@@ -119,7 +119,7 @@ func (dc *DataConfig) Validate() error {
 }
 
 // LoadDataConfig loads the data config from .dirio/config.json
-func LoadDataConfig(rootFS billy.Filesystem) (*DataConfig, error) {
+func LoadDataConfig(rootFS billy.Filesystem) (*ConfigData, error) {
 	configPath := ".dirio/config.json"
 
 	data, err := util.ReadFile(rootFS, configPath)
@@ -127,7 +127,7 @@ func LoadDataConfig(rootFS billy.Filesystem) (*DataConfig, error) {
 		return nil, fmt.Errorf("failed to read data config: %w", err)
 	}
 
-	var config DataConfig
+	var config ConfigData
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse data config: %w", err)
 	}
@@ -140,7 +140,7 @@ func LoadDataConfig(rootFS billy.Filesystem) (*DataConfig, error) {
 }
 
 // SaveDataConfig saves the data config to .dirio/config.json
-func SaveDataConfig(rootFS billy.Filesystem, config *DataConfig) error {
+func SaveDataConfig(rootFS billy.Filesystem, config *ConfigData) error {
 	if err := config.Validate(); err != nil {
 		return fmt.Errorf("invalid data config: %w", err)
 	}
@@ -168,8 +168,8 @@ func SaveDataConfig(rootFS billy.Filesystem, config *DataConfig) error {
 	return nil
 }
 
-// DataConfigExists checks if a data config file exists
-func DataConfigExists(rootFS billy.Filesystem) bool {
+// ConfigDataExists checks if a data config file exists
+func ConfigDataExists(rootFS billy.Filesystem) bool {
 	configPath := ".dirio/config.json"
 	_, err := rootFS.Stat(configPath)
 	return err == nil

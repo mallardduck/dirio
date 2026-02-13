@@ -9,10 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mallardduck/dirio/tests/clients"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+
+	"github.com/mallardduck/dirio/tests/clients"
 )
 
 // mockServerType defines the behavior of the mock server

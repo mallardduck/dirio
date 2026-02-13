@@ -155,7 +155,12 @@ func (s *Storage) PutObject(ctx context.Context, bucket, key string, content io.
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
-	defer bucketFS.Remove(tmpPath) // Cleanup on failure
+	defer func(bucketFS billy.Filesystem, filename string) {
+		err := bucketFS.Remove(filename)
+		if err != nil {
+			s.log.Warn("failed to remove temp file", "filename", filename, "error", err)
+		}
+	}(bucketFS, tmpPath) // Cleanup on failure
 
 	// Calculate MD5 hash while writing
 	hash := md5.New()
@@ -344,21 +349,26 @@ func (s *Storage) DeleteObject(ctx context.Context, bucket, key string) error {
 	}
 
 	// Clean up empty parent directories
-	s.cleanupEmptyDirs(bucketFS, filepath.Dir(objectPath))
-
-	return nil
+	return s.cleanupEmptyDirs(bucketFS, filepath.Dir(objectPath))
 }
 
 // cleanupEmptyDirs removes empty directories up to the bucket root
-func (s *Storage) cleanupEmptyDirs(bucketFS billy.Filesystem, dir string) {
+func (s *Storage) cleanupEmptyDirs(bucketFS billy.Filesystem, dir string) error {
 	for dir != "." && dir != "" && dir != "/" {
 		entries, err := bucketFS.ReadDir(dir)
-		if err != nil || len(entries) > 0 {
+		if err != nil {
+			return err
+		}
+		if len(entries) > 0 {
 			break
 		}
-		bucketFS.Remove(dir)
+		if err := bucketFS.Remove(dir); err != nil {
+			return err
+		}
 		dir = filepath.Dir(dir)
 	}
+
+	return nil
 }
 
 // calculateETag computes the ETag for a file

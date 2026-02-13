@@ -11,11 +11,9 @@ import (
 
 	"github.com/mallardduck/dirio/internal/http/auth"
 
+	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
 	"github.com/mallardduck/dirio/internal/service/policy"
 	"github.com/mallardduck/dirio/internal/service/user"
-
-	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
-	svcuser "github.com/mallardduck/dirio/internal/service/user"
 )
 
 type userHTTPService struct {
@@ -33,7 +31,11 @@ func (s *userHTTPService) ListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(usernames)
+	err = json.NewEncoder(w).Encode(usernames)
+	if err != nil {
+		s.log.Error("Failed to marshal response", "error", err)
+		return
+	}
 }
 
 func (s *userHTTPService) CreateUser(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +101,7 @@ func (s *userHTTPService) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Use the user service to create the user
-	_, err = s.users.Create(r.Context(), &svcuser.CreateUserRequest{
+	_, err = s.users.Create(r.Context(), &user.CreateUserRequest{
 		AccessKey: accessKey,
 		SecretKey: secretKey,
 		Status:    status,
@@ -157,9 +159,9 @@ func (s *userHTTPService) InfoUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.users.Get(r.Context(), accessKey)
+	userEntity, err := s.users.Get(r.Context(), accessKey)
 	if err != nil {
-		s.log.Error("Failed to get user", "error", err, "accessKey", accessKey)
+		s.log.Error("Failed to get userEntity", "error", err, "accessKey", accessKey)
 
 		if svcerrors.IsNotFound(err) {
 			w.WriteHeader(http.StatusNotFound)
@@ -175,12 +177,12 @@ func (s *userHTTPService) InfoUser(w http.ResponseWriter, r *http.Request) {
 
 	// Convert to MinIO format
 	response := map[string]interface{}{
-		"accessKey":        user.AccessKey,
-		"status":           user.Status,
+		"accessKey":        userEntity.AccessKey,
+		"status":           userEntity.Status,
 		"policyName":       "",
 		"memberOf":         []string{},
-		"updatedAt":        user.UpdatedAt,
-		"attachedPolicies": user.AttachedPolicies,
+		"updatedAt":        userEntity.UpdatedAt,
+		"attachedPolicies": userEntity.AttachedPolicies,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -219,7 +221,7 @@ func (s *userHTTPService) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Update the user status
-	_, err := s.users.Update(r.Context(), accessKey, &svcuser.UpdateUserRequest{
+	_, err := s.users.Update(r.Context(), accessKey, &user.UpdateUserRequest{
 		Status: &userStatus,
 	})
 

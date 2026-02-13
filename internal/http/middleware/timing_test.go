@@ -101,7 +101,7 @@ func TestTiming(t *testing.T) {
 
 func TestGetRequestStartTime(t *testing.T) {
 	t.Run("returns false for nil context", func(t *testing.T) {
-		_, ok := GetRequestStartTime(nil)
+		_, ok := GetRequestStartTime(context.Background())
 		if ok {
 			t.Error("expected ok to be false for nil context")
 		}

@@ -9,7 +9,6 @@ import (
 	"github.com/mallardduck/dirio/internal/jsonutil"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
 	"github.com/mallardduck/dirio/internal/service/policy"
-	svcpolicy "github.com/mallardduck/dirio/internal/service/policy"
 	"github.com/mallardduck/dirio/internal/service/user"
 	"github.com/mallardduck/dirio/pkg/iam"
 )
@@ -48,7 +47,7 @@ func (s policyHTTPService) AddCannedPolicy(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Use the policy service to create the policy
-	_, err = s.policies.Create(r.Context(), &svcpolicy.CreatePolicyRequest{
+	_, err = s.policies.Create(r.Context(), &policy.CreatePolicyRequest{
 		Name:           policyName,
 		PolicyDocument: &policyDoc,
 	})
@@ -88,7 +87,11 @@ func (s policyHTTPService) ListCannedPolicies(w http.ResponseWriter, r *http.Req
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Write(data)
+	_, err = w.Write(data)
+	if err != nil {
+		s.log.Error("Failed to write response", "error", err)
+		return
+	}
 }
 
 func (s policyHTTPService) RemoveCannedPolicy(w http.ResponseWriter, r *http.Request) {
@@ -127,7 +130,7 @@ func (s policyHTTPService) InfoCannedPolicy(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	policy, err := s.policies.Get(r.Context(), policyName)
+	cannedPolicy, err := s.policies.Get(r.Context(), policyName)
 	if err != nil {
 		s.log.Error("Failed to get policy", "error", err, "name", policyName)
 
@@ -144,13 +147,17 @@ func (s policyHTTPService) InfoCannedPolicy(w http.ResponseWriter, r *http.Reque
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	data, err := jsonutil.Marshal(policy)
+	data, err := jsonutil.Marshal(cannedPolicy)
 	if err != nil {
 		s.log.Error("Failed to marshal response", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Write(data)
+	_, err = w.Write(data)
+	if err != nil {
+		s.log.Error("Failed to write response", "error", err)
+		return
+	}
 }
 
 func (s policyHTTPService) SetPolicy(w http.ResponseWriter, r *http.Request) {
@@ -264,7 +271,11 @@ func (s policyHTTPService) SetPolicy(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.WriteHeader(http.StatusOK)
-		w.Write(encrypted)
+		_, err = w.Write(encrypted)
+		if err != nil {
+			s.log.Error("Failed to write response", "error", err)
+			return
+		}
 	} else {
 		// Old format - just return OK
 		w.WriteHeader(http.StatusOK)
@@ -290,12 +301,12 @@ func (s policyHTTPService) PolicyEntitiesList(w http.ResponseWriter, r *http.Req
 	// Filter users that have this policy
 	var usersWithPolicy []string
 	for _, accessKey := range users {
-		user, err := s.users.Get(r.Context(), accessKey)
+		userEntity, err := s.users.Get(r.Context(), accessKey)
 		if err != nil {
 			continue
 		}
-		for _, policy := range user.AttachedPolicies {
-			if policy == policyName {
+		for _, policyEntity := range userEntity.AttachedPolicies {
+			if policyEntity == policyName {
 				usersWithPolicy = append(usersWithPolicy, accessKey)
 				break
 			}
@@ -314,5 +325,9 @@ func (s policyHTTPService) PolicyEntitiesList(w http.ResponseWriter, r *http.Req
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Write(data)
+	_, err = w.Write(data)
+	if err != nil {
+		s.log.Error("Failed to write response", "error", err)
+		return
+	}
 }

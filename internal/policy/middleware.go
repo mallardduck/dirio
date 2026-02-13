@@ -328,5 +328,9 @@ func writeAccessDenied(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/xml")
 	w.WriteHeader(http.StatusForbidden)
-	w.Write(buf.Bytes())
+	_, err := w.Write(buf.Bytes())
+	if err != nil {
+		authzLogger.With("error", err).Error("failed to write access denied response")
+		return
+	}
 }

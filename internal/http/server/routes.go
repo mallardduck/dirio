@@ -6,6 +6,8 @@ import (
 
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 
+	"github.com/mallardduck/dirio/internal/logging"
+
 	"github.com/mallardduck/dirio/internal/http/api"
 	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/http/middleware"
@@ -368,5 +370,9 @@ func setupS3Routes(r *teapot.Router, deps *s3RouteDeps) {
 func RouteNotImplemented(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusNotImplemented)
-	w.Write([]byte(`{"status":"error","error":"This operation is not yet implemented"}`))
+	_, err := w.Write([]byte(`{"status":"error","error":"This operation is not yet implemented"}`))
+	if err != nil {
+		logging.Component("RouteNotImplemented handler").With("err", err).Warn("failed to write error response")
+		return
+	}
 }

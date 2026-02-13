@@ -11,48 +11,48 @@ import (
 	configdata "github.com/mallardduck/dirio/internal/config/data"
 )
 
-// MinIO 2019 config.json structure (format version 33)
-type MinIOConfig2019 struct {
-	Version    string                     `json:"version"`
-	Credential MinIOConfig2019Credential  `json:"credential"`
-	Region     string                     `json:"region"`
-	WORM       string                     `json:"worm"` // "on" or "off"
-	Compress   MinIOConfig2019Compression `json:"compress"`
+// Config2019 represents MinIO 2019 config.json structure (format version 33)
+type Config2019 struct {
+	Version    string                `json:"version"`
+	Credential Config2019Credential  `json:"credential"`
+	Region     string                `json:"region"`
+	WORM       string                `json:"worm"` // "on" or "off"
+	Compress   Config2019Compression `json:"compress"`
 }
 
-type MinIOConfig2019Credential struct {
+type Config2019Credential struct {
 	AccessKey string `json:"accessKey"`
 	SecretKey string `json:"secretKey"`
 	Status    string `json:"status"`
 }
 
-type MinIOConfig2019Compression struct {
+type Config2019Compression struct {
 	Enabled    bool     `json:"enabled"`
 	Extensions []string `json:"extensions"`
 	MIMETypes  []string `json:"mime-types"`
 }
 
-// MinIO 2022 config.json structure (newer format)
+// Config2022 represents MinIO 2022 config.json structure (newer format)
 // This is a flat key-value structure where each top-level key is a config section
-type MinIOConfig2022 struct {
-	Credentials  MinIOConfig2022Section `json:"credentials"`
-	Region       MinIOConfig2022Section `json:"region"`
-	Compression  MinIOConfig2022Section `json:"compression"`
-	StorageClass MinIOConfig2022Section `json:"storage_class"`
+type Config2022 struct {
+	Credentials  Config2022Section `json:"credentials"`
+	Region       Config2022Section `json:"region"`
+	Compression  Config2022Section `json:"compression"`
+	StorageClass Config2022Section `json:"storage_class"`
 	// Add other sections as needed
 }
 
-type MinIOConfig2022Section struct {
-	Underscore []MinIOConfig2022KV `json:"_"`
+type Config2022Section struct {
+	Underscore []Config2022KV `json:"_"`
 }
 
-type MinIOConfig2022KV struct {
+type Config2022KV struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
 
-// ImportConfig reads MinIO's config.json and converts it to DirIO DataConfig
-func ImportConfig(minioFS billy.Filesystem) (*configdata.DataConfig, error) {
+// ImportConfig reads MinIO's config.json and converts it to DirIO ConfigData
+func ImportConfig(minioFS billy.Filesystem) (*configdata.ConfigData, error) {
 	configPath := "config/config.json"
 
 	data, err := util.ReadFile(minioFS, configPath)
@@ -65,14 +65,14 @@ func ImportConfig(minioFS billy.Filesystem) (*configdata.DataConfig, error) {
 	}
 
 	// Try parsing as MinIO 2022 format first (flat key-value structure)
-	var config2022 MinIOConfig2022
+	var config2022 Config2022
 	if err := json.Unmarshal(data, &config2022); err == nil && config2022.Credentials.Underscore != nil {
 		fmt.Println("Detected MinIO 2022 config format")
 		return convertConfig2022(config2022), nil
 	}
 
 	// Try parsing as MinIO 2019 format (nested structure)
-	var config2019 MinIOConfig2019
+	var config2019 Config2019
 	if err := json.Unmarshal(data, &config2019); err == nil && config2019.Version != "" {
 		fmt.Println("Detected MinIO 2019 config format")
 		return convertConfig2019(config2019), nil
@@ -82,8 +82,8 @@ func ImportConfig(minioFS billy.Filesystem) (*configdata.DataConfig, error) {
 	return nil, fmt.Errorf("unrecognized MinIO config.json format")
 }
 
-// convertConfig2019 converts MinIO 2019 config to DirIO DataConfig
-func convertConfig2019(minioConfig MinIOConfig2019) *configdata.DataConfig {
+// convertConfig2019 converts MinIO 2019 config to DirIO ConfigData
+func convertConfig2019(minioConfig Config2019) *configdata.ConfigData {
 	config := configdata.DefaultDataConfig()
 
 	// Credentials
@@ -115,8 +115,8 @@ func convertConfig2019(minioConfig MinIOConfig2019) *configdata.DataConfig {
 	return config
 }
 
-// convertConfig2022 converts MinIO 2022 config to DirIO DataConfig
-func convertConfig2022(minioConfig MinIOConfig2022) *configdata.DataConfig {
+// convertConfig2022 converts MinIO 2022 config to DirIO ConfigData
+func convertConfig2022(minioConfig Config2022) *configdata.ConfigData {
 	config := configdata.DefaultDataConfig()
 
 	// Credentials

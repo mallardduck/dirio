@@ -283,7 +283,7 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 
 	// Process delimiter to create common prefixes
 	// Step 1: Group all entries into either objects or common prefixes
-	var objects []s3types.Object
+	objects := make([]s3types.Object, 0, len(allEntries))
 	commonPrefixMap := make(map[string]bool)
 
 	s.log.Debug("listInternal processing",
@@ -350,7 +350,7 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 
 	// Step 3: Convert common prefix map to sorted slice and filter by startAt
 	// Per S3 spec: CommonPrefixes is filtered out if not lexicographically greater than StartAfter
-	var commonPrefixes []s3types.CommonPrefix
+	commonPrefixes := make([]s3types.CommonPrefix, 0, len(commonPrefixMap))
 	for prefixKey := range commonPrefixMap {
 		if startAt != "" && prefixKey <= startAt {
 			continue
@@ -528,16 +528,6 @@ func isNotExist(err error) bool {
 
 func hasPrefix(s, prefix string) bool {
 	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
-}
-
-// indexOf returns the index of the first occurrence of substr in s, or -1 if not found
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
 }
 
 // sortObjectEntries sorts object entries by key in lexicographic order

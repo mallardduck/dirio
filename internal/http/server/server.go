@@ -50,7 +50,7 @@ type Config struct {
 
 	// Data directory configuration (optional)
 	// If present, provides alternative admin credentials from data config
-	DataConfig *data.DataConfig
+	DataConfig *data.ConfigData
 
 	// CLICredentialsExplicitlySet tracks whether AccessKey/SecretKey were
 	// explicitly provided (via env, flag, or config) vs using defaults

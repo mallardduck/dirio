@@ -1,6 +1,11 @@
 package context
 
-import "context"
+import (
+	"context"
+	"fmt"
+
+	"github.com/mallardduck/dirio/pkg/iam"
+)
 
 type KeyID string
 
@@ -43,4 +48,11 @@ func IsAnonymousRequest(ctx context.Context) bool {
 		return v
 	}
 	return false
+}
+
+func GetUser(ctx context.Context) (*iam.User, error) {
+	if userdata, ok := ctx.Value(RequestUserKey).(*iam.User); ok {
+		return userdata, nil
+	}
+	return nil, fmt.Errorf("cannot get user from request context")
 }

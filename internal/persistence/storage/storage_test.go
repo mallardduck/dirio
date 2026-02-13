@@ -6,9 +6,10 @@ import (
 	"time"
 
 	"github.com/go-git/go-billy/v5/memfs"
-	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mallardduck/dirio/internal/persistence/metadata"
 )
 
 func setupTestStorage(t *testing.T) *Storage {
@@ -306,6 +307,7 @@ func TestListInternal_Pagination(t *testing.T) {
 
 func TestListInternal_FetchOwner(t *testing.T) {
 	s := setupTestStorage(t)
+	asserts := assert.New(t)
 	createTestBucket(t, s, "test-bucket")
 	createTestObject(t, s, "test-bucket", "file.txt", 100)
 
@@ -319,16 +321,16 @@ func TestListInternal_FetchOwner(t *testing.T) {
 	// Test with fetchOwner=false
 	result, err := s.listInternal(context.Background(), "test-bucket", "", "", "", 1000, false)
 	require.NoError(t, err)
-	assert.Len(t, result.Objects, 1)
-	assert.Nil(t, result.Objects[0].Owner)
+	asserts.Len(result.Objects, 1)
+	asserts.Nil(result.Objects[0].Owner)
 
 	// Test with fetchOwner=true
 	// Note: This might fail if bucket metadata doesn't include owner, which is expected
 	result2, err := s.listInternal(context.Background(), "test-bucket", "", "", "", 1000, true)
 	require.NoError(t, err)
-	assert.Len(t, result2.Objects, 1)
+	asserts.Len(result2.Objects, 1)
 	// Owner might be nil if bucket metadata doesn't have owner set
-	_ = bucketMeta // Keep for potential future use
+	asserts.Equal(bucketMeta.Owner, result2.Objects[0].Owner)
 }
 
 func TestListInternal_ContextCancellation(t *testing.T) {

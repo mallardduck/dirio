@@ -250,7 +250,7 @@ func TestBucketPolicy_PublicReadListAllowsAnonymousList(t *testing.T) {
 	ts.PutObject(t, bucket, "file2.txt", "content2")
 
 	// Set public read + list policy
-	policy := strings.Replace(publicReadListPolicy, "%s", bucket, -1) // Replace all occurrences
+	policy := strings.ReplaceAll(publicReadListPolicy, "%s", bucket) // Replace all occurrences
 	ts.SetBucketPolicy(t, bucket, policy)
 
 	// Anonymous ListObjects should succeed

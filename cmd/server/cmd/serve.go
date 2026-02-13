@@ -165,7 +165,7 @@ func initOrMigrateDataConfig(settings *config.Settings) error {
 	fs := osfs.New(settings.DataDir)
 
 	// Check if .dirio/config.json already exists
-	if data.DataConfigExists(fs) {
+	if data.ConfigDataExists(fs) {
 		// Should have been loaded, but wasn't - this might indicate a problem
 		log.Warn("Data config file exists but wasn't loaded - skipping initialization")
 		return nil

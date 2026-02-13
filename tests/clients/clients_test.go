@@ -16,10 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mallardduck/dirio/tests/clients"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+
+	"github.com/mallardduck/dirio/tests/clients"
 )
 
 //go:embed scripts/awscli.sh
@@ -275,42 +276,11 @@ func getSharedClientServer(t *testing.T) *TestServer {
 	return sharedClientServer
 }
 
-// registerContainer adds a container to the cleanup list
-func registerContainer(container testcontainers.Container) {
-	cleanupMutex.Lock()
-	defer cleanupMutex.Unlock()
-	activeContainers = append(activeContainers, container)
-}
-
 // registerServer adds a server to the cleanup list
 func registerServer(server *TestServer) {
 	cleanupMutex.Lock()
 	defer cleanupMutex.Unlock()
 	activeServers = append(activeServers, server)
-}
-
-// unregisterContainer removes a container from the cleanup list
-func unregisterContainer(container testcontainers.Container) {
-	cleanupMutex.Lock()
-	defer cleanupMutex.Unlock()
-	for i, c := range activeContainers {
-		if c == container {
-			activeContainers = append(activeContainers[:i], activeContainers[i+1:]...)
-			break
-		}
-	}
-}
-
-// unregisterServer removes a server from the cleanup list
-func unregisterServer(server *TestServer) {
-	cleanupMutex.Lock()
-	defer cleanupMutex.Unlock()
-	for i, s := range activeServers {
-		if s == server {
-			activeServers = append(activeServers[:i], activeServers[i+1:]...)
-			break
-		}
-	}
 }
 
 // TestAWSCLI runs AWS CLI compatibility tests

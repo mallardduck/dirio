@@ -1,3 +1,5 @@
+package auth
+
 // AWS Signature Version 4 chunked transfer encoding decoder.
 //
 // AWS uses a special chunked encoding format when streaming large uploads:
@@ -22,7 +24,6 @@
 //
 // The first chunk uses the request signature as the previous signature.
 // Subsequent chunks use the previous chunk's signature.
-package auth
 
 import (
 	"bufio"
@@ -287,7 +288,10 @@ func (cr *ChunkedReader) consumeTrailingCRLF() error {
 		// Some implementations might use just \n
 		if buf[0] == '\n' {
 			// Push back the second byte
-			cr.reader.UnreadByte()
+			err := cr.reader.UnreadByte()
+			if err != nil {
+				return err
+			}
 			return nil
 		}
 		return fmt.Errorf("%w: expected CRLF, got %q", ErrInvalidChunkFormat, buf)

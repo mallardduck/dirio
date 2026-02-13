@@ -7,9 +7,10 @@ import (
 	"testing"
 
 	"github.com/go-git/go-billy/v5/osfs"
-	"github.com/mallardduck/dirio/internal/minio"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mallardduck/dirio/internal/minio"
 )
 
 // TestMinIOImport_CreatesMetadataFiles tests that importing MinIO data actually creates metadata files

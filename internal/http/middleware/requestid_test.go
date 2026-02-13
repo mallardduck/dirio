@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -61,7 +62,7 @@ func TestRequestID(t *testing.T) {
 	})
 
 	t.Run("GetRequestID returns empty string for nil context", func(t *testing.T) {
-		id := GetRequestID(nil)
+		id := GetRequestID(context.Background())
 		if id != "" {
 			t.Errorf("expected empty string for nil context, got %q", id)
 		}

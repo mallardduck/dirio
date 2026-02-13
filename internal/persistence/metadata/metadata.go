@@ -11,6 +11,8 @@ import (
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/util"
 
+	contextInt "github.com/mallardduck/dirio/internal/context"
+
 	"github.com/mallardduck/dirio/internal/persistence/path"
 
 	"github.com/mallardduck/dirio/internal/jsonutil"
@@ -117,10 +119,15 @@ func (m *Manager) CreateBucket(ctx context.Context, bucket string) error {
 		return fmt.Errorf("context cancelled: %w", err)
 	}
 
+	user, err := contextInt.GetUser(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+
 	meta := BucketMetadata{
 		Version: BucketMetadataVersion,
 		Name:    bucket,
-		Owner:   "root", // TODO: Get from auth context
+		Owner:   user.Username,
 		Created: time.Now(),
 	}
 

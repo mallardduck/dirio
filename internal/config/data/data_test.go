@@ -12,7 +12,7 @@ import (
 func TestDefaultDataConfig(t *testing.T) {
 	config := DefaultDataConfig()
 
-	assert.Equal(t, DataConfigVersion, config.Version)
+	assert.Equal(t, ConfigDataVersion, config.Version)
 	assert.Equal(t, "dirio-admin", config.Credentials.AccessKey)
 	assert.Equal(t, "dirio-admin-secret", config.Credentials.SecretKey)
 	assert.Equal(t, "us-east-1", config.Region) // Default region is now us-east-1
@@ -29,7 +29,7 @@ func TestDefaultDataConfig(t *testing.T) {
 func TestDataConfig_Validate(t *testing.T) {
 	tests := []struct {
 		name      string
-		config    *DataConfig
+		config    *ConfigData
 		expectErr bool
 		errMsg    string
 	}{
@@ -40,7 +40,7 @@ func TestDataConfig_Validate(t *testing.T) {
 		},
 		{
 			name: "missing version",
-			config: &DataConfig{
+			config: &ConfigData{
 				Version: "",
 				Credentials: CredentialsConfig{
 					AccessKey: "key",
@@ -52,8 +52,8 @@ func TestDataConfig_Validate(t *testing.T) {
 		},
 		{
 			name: "missing access key",
-			config: &DataConfig{
-				Version: DataConfigVersion,
+			config: &ConfigData{
+				Version: ConfigDataVersion,
 				Credentials: CredentialsConfig{
 					AccessKey: "",
 					SecretKey: "secret",
@@ -64,8 +64,8 @@ func TestDataConfig_Validate(t *testing.T) {
 		},
 		{
 			name: "missing secret key",
-			config: &DataConfig{
-				Version: DataConfigVersion,
+			config: &ConfigData{
+				Version: ConfigDataVersion,
 				Credentials: CredentialsConfig{
 					AccessKey: "key",
 					SecretKey: "",
@@ -103,7 +103,7 @@ func TestSaveAndLoadDataConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify file exists
-	assert.True(t, DataConfigExists(fs))
+	assert.True(t, ConfigDataExists(fs))
 
 	// Load it back
 	loaded, err := LoadDataConfig(fs)
@@ -122,7 +122,7 @@ func TestDataConfigExists(t *testing.T) {
 	fs := memfs.New()
 
 	// Initially should not exist
-	assert.False(t, DataConfigExists(fs))
+	assert.False(t, ConfigDataExists(fs))
 
 	// Save a config
 	config := DefaultDataConfig()
@@ -130,7 +130,7 @@ func TestDataConfigExists(t *testing.T) {
 	require.NoError(t, err)
 
 	// Now should exist
-	assert.True(t, DataConfigExists(fs))
+	assert.True(t, ConfigDataExists(fs))
 }
 
 func TestLoadDataConfig_NotFound(t *testing.T) {
@@ -164,8 +164,8 @@ func TestLoadDataConfig_InvalidData(t *testing.T) {
 	fs := memfs.New()
 
 	// Create a config with missing required fields
-	invalidConfig := &DataConfig{
-		Version: DataConfigVersion,
+	invalidConfig := &ConfigData{
+		Version: ConfigDataVersion,
 		Credentials: CredentialsConfig{
 			AccessKey: "", // Missing
 			SecretKey: "secret",

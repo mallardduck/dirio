@@ -20,7 +20,7 @@ type ImportResult struct {
 	Buckets        map[string]*BucketMetadata
 	Policies       map[string]*Policy
 	ObjectMetadata map[string]map[string]*ObjectMetadata // bucket -> object key -> metadata
-	DataConfig     *data.DataConfig                      // Data directory configuration
+	DataConfig     *data.ConfigData                      // Data directory configuration
 }
 
 // Import reads MinIO data from the specified filesystem and returns parsed data.

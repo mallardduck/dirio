@@ -39,7 +39,7 @@ type Settings struct {
 	CanonicalDomain string
 
 	// Data directory configuration (loaded from .dirio/config.json if exists)
-	DataConfig *data.DataConfig
+	DataConfig *data.ConfigData
 
 	// CLICredentialsExplicitlySet tracks whether access_key/secret_key were
 	// explicitly provided (via env, flag, or config) vs using defaults
@@ -142,7 +142,7 @@ func LoadConfig(flags *pflag.FlagSet, v *viper.Viper) (*Settings, error) {
 	}
 
 	// Try to load data config from data directory
-	if err := loadDataConfig(settings, flags); err != nil {
+	if err := loadDataConfig(settings); err != nil {
 		return nil, fmt.Errorf("failed to load data config: %w", err)
 	}
 
@@ -155,13 +155,14 @@ func LoadConfig(flags *pflag.FlagSet, v *viper.Viper) (*Settings, error) {
 }
 
 // loadDataConfig attempts to load data config from .dirio/config.json
-// If it exists, it populates settings.DataConfig
-func loadDataConfig(settings *Settings, flags *pflag.FlagSet) error {
+// If it exists, it populates settings.ConfigData
+func loadDataConfig(settings *Settings) error {
+	// TODO identify if we need flags here at all
 	// Create filesystem for data directory
 	fs := osfs.New(settings.DataDir)
 
 	// Check if data config exists
-	if !data.DataConfigExists(fs) {
+	if !data.ConfigDataExists(fs) {
 		slog.Debug("No data config found, will use CLI/app config values")
 		return nil
 	}

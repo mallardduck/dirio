@@ -34,7 +34,7 @@ func TestWithTraceID(t *testing.T) {
 
 func TestFromContext(t *testing.T) {
 	t.Run("returns unknown for nil context", func(t *testing.T) {
-		id := FromContext(nil)
+		id := FromContext(context.Background())
 		if id != "unknown" {
 			t.Errorf("expected 'unknown' for nil context, got %q", id)
 		}
