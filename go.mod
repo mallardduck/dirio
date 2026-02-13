@@ -4,7 +4,7 @@ go 1.25
 
 require (
 	github.com/brutella/dnssd v1.2.14
-	github.com/go-chi/chi/v5 v5.2.4
+	github.com/go-chi/chi/v5 v5.2.5
 	github.com/go-git/go-billy/v5 v5.7.0
 	github.com/mallardduck/teapot-router v0.7.2
 	github.com/minio/madmin-go/v3 v3.0.110
