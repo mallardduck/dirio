@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/mallardduck/go-http-helpers/pkg/headers"
+
 	"github.com/mallardduck/dirio/internal/http/middleware"
 	"github.com/mallardduck/dirio/internal/jsonutil"
 	"github.com/mallardduck/dirio/internal/service/s3"
@@ -76,7 +78,7 @@ func (h *HTTPHandler) GetBucketPolicy(w http.ResponseWriter, r *http.Request, bu
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headers.ContentType, "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(policyJSON)
 }

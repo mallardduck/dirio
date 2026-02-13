@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/mallardduck/go-http-helpers/pkg/headers"
+
 	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/jsonutil"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
@@ -80,7 +82,7 @@ func (s policyHTTPService) ListCannedPolicies(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headers.ContentType, "application/json")
 	data, err := jsonutil.Marshal(policies)
 	if err != nil {
 		s.log.Error("Failed to marshal response", "error", err)
@@ -146,7 +148,7 @@ func (s policyHTTPService) InfoCannedPolicy(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headers.ContentType, "application/json")
 	data, err := jsonutil.Marshal(cannedPolicy)
 	if err != nil {
 		s.log.Error("Failed to marshal response", "error", err)
@@ -170,7 +172,7 @@ func (s policyHTTPService) SetPolicy(w http.ResponseWriter, r *http.Request) {
 	var isGroup bool
 
 	// Try encrypted body first (new MinIO admin API format)
-	if r.Header.Get("Content-Type") == "application/octet-stream" && r.ContentLength > 0 {
+	if r.Header.Get(headers.ContentType) == "application/octet-stream" && r.ContentLength > 0 {
 		// Get the authenticated admin user's secret key for decryption
 		adminUser := auth.GetRequestUser(r.Context())
 		if adminUser == nil {
@@ -248,7 +250,7 @@ func (s policyHTTPService) SetPolicy(w http.ResponseWriter, r *http.Request) {
 	s.log.Info("Policy attached successfully", "user", userOrGroup, "policy", policyName)
 
 	// For encrypted requests, return encrypted response (MinIO format)
-	if r.Header.Get("Content-Type") == "application/octet-stream" {
+	if r.Header.Get(headers.ContentType) == "application/octet-stream" {
 		adminUser := auth.GetRequestUser(r.Context())
 		if adminUser == nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -269,7 +271,7 @@ func (s policyHTTPService) SetPolicy(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set(headers.ContentType, "application/octet-stream")
 		w.WriteHeader(http.StatusOK)
 		_, err = w.Write(encrypted)
 		if err != nil {
@@ -318,7 +320,7 @@ func (s policyHTTPService) PolicyEntitiesList(w http.ResponseWriter, r *http.Req
 		"groupMappings": []string{}, // Groups not yet supported
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headers.ContentType, "application/json")
 	data, err := jsonutil.Marshal(response)
 	if err != nil {
 		s.log.Error("Failed to marshal response", "error", err)

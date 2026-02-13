@@ -288,7 +288,7 @@ To diagnose why the middleware isn't activating for real AWS clients:
 func ChunkedEncoding(decoderFactory ChunkedDecoderFactory) func(http.Handler) http.Handler {
     return func(next http.Handler) http.Handler {
         return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            contentSHA256 := r.Header.Get(consts.HeaderContentSHA256)
+            contentSHA256 := r.Header.Get(headers.ContentSHA256)
 
             // DEBUG: Log header value
             log.Printf("DEBUG: X-Amz-Content-Sha256 = %q", contentSHA256)

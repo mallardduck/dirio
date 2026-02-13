@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/mallardduck/go-http-helpers/pkg/headers"
+
 	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/http/middleware"
 	"github.com/mallardduck/dirio/internal/service/s3"
@@ -52,7 +54,7 @@ func (h *HTTPHandler) CreateBucket(w http.ResponseWriter, r *http.Request, bucke
 
 	// Generate Location header per S3 spec
 	location := h.urlBuilder.BucketURL(r, bucket)
-	w.Header().Set("Location", location)
+	w.Header().Set(headers.Location, location)
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -86,7 +88,7 @@ func (h *HTTPHandler) HeadBucket(w http.ResponseWriter, r *http.Request, bucket 
 	// Auth ACL things should already be blocking this, but if an admin level account tries to modify buckets with the same name owned by different users it is helpful.
 
 	// Set bucket region header (best practice per AWS documentation)
-	w.Header().Set("x-amz-bucket-region", consts.DefaultBucketLocation)
+	w.Header().Set(consts.HeaderBucketRegion, consts.DefaultBucketLocation)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -302,7 +304,7 @@ func parseMaxKeys(maxKeysStr string) int {
 func (h *HTTPHandler) DeleteObjects(w http.ResponseWriter, r *http.Request, bucket string) {
 	// TODO implement basic multiple object delete, will need to add service funcs
 	// something like: h.s3Service.DeleteObjects
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headers.ContentType, "application/json")
 	w.WriteHeader(http.StatusNotImplemented)
 	_, err := w.Write([]byte(`{"status":"error","error":"This operation is not yet implemented"}`))
 	if err != nil {

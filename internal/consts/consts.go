@@ -9,6 +9,15 @@ const (
 	// HeaderContentSHA256 is the AWS SigV4 header for payload hash
 	HeaderContentSHA256 = "X-Amz-Content-Sha256"
 
+	// HeaderDate is the AWS SigV4 header for request timestamp
+	HeaderDate = "X-Amz-Date"
+
+	// HeaderCopySource is the S3 header for copy operations
+	HeaderCopySource = "X-Amz-Copy-Source"
+
+	// HeaderBucketRegion is the S3 header for bucket region
+	HeaderBucketRegion = "x-amz-bucket-region"
+
 	// ContentSHA256Streaming is the value for chunked transfer encoding
 	ContentSHA256Streaming = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD"
 

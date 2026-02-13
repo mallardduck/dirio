@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/mallardduck/go-http-helpers/pkg/headers"
+
 	contextInt "github.com/mallardduck/dirio/internal/context"
 	"github.com/mallardduck/dirio/internal/http/middleware"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
@@ -17,7 +19,7 @@ import (
 func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check if request has authentication credentials
-		authHeader := r.Header.Get("Authorization")
+		authHeader := r.Header.Get(headers.Authorization)
 		if authHeader == "" {
 			// No auth header - mark as anonymous and allow through
 			// Authorization middleware will decide based on bucket policies
@@ -77,7 +79,7 @@ func writeAuthError(w http.ResponseWriter, requestID string, errCode s3types.Err
 		return fmt.Errorf("failed to encode error response: %w", err)
 	}
 
-	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set(headers.ContentType, "application/xml")
 	w.WriteHeader(errCode.HTTPStatus())
 	_, err := w.Write(buf.Bytes())
 	return err

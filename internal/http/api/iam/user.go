@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/mallardduck/go-http-helpers/pkg/headers"
 	"github.com/minio/madmin-go/v3"
 
 	"github.com/mallardduck/dirio/internal/http/auth"
@@ -30,7 +31,7 @@ func (s *userHTTPService) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headers.ContentType, "application/json")
 	err = json.NewEncoder(w).Encode(usernames)
 	if err != nil {
 		s.log.Error("Failed to marshal response", "error", err)
@@ -185,7 +186,7 @@ func (s *userHTTPService) InfoUser(w http.ResponseWriter, r *http.Request) {
 		"attachedPolicies": userEntity.AttachedPolicies,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headers.ContentType, "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		s.log.Error("Failed to encode response", "error", err)
 	}

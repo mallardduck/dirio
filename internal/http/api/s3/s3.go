@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/mallardduck/go-http-helpers/pkg/headers"
+
 	"github.com/mallardduck/dirio/internal/http/middleware"
 	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/service"
@@ -84,7 +86,7 @@ func writeXMLResponse(w http.ResponseWriter, statusCode int, data interface{}) e
 		s3Logger.With("length", buf.Len()).Warn("Large XML response")
 	}
 
-	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set(headers.ContentType, "application/xml")
 	w.WriteHeader(statusCode)
 	_, err := w.Write(buf.Bytes())
 	return err
@@ -102,7 +104,7 @@ func writeErrorResponse(w http.ResponseWriter, requestID string, errCode s3types
 		RequestID: requestID,
 	}
 
-	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set(headers.ContentType, "application/xml")
 	w.WriteHeader(errCode.HTTPStatus())
 
 	if _, err := w.Write([]byte(xml.Header)); err != nil {

@@ -4,8 +4,10 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/mallardduck/go-http-helpers/pkg/headers"
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 
+	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/logging"
 
 	"github.com/mallardduck/dirio/internal/http/api"
@@ -344,10 +346,10 @@ func setupS3Routes(r *teapot.Router, deps *s3RouteDeps) {
 	// below (acl, tagging, …) are added to this same dispatcher automatically.
 	r.Dispatch("PUT", "/{bucket}/{key:.*}", func(d *teapot.DispatchBuilder, m teapot.Matchers) {
 		d.Default(deps.putObject).Name("object.put").Action("s3:PutObject")
-		d.When(m.HeaderExists("X-Amz-Copy-Source")).Do(deps.copyObject).Name("object.copy").Action("s3:CopyObject")
+		d.When(m.HeaderExists(consts.HeaderCopySource)).Do(deps.copyObject).Name("object.copy").Action("s3:CopyObject")
 
 		d.When(m.QueryExists("partNumber"), m.QueryExists("uploadId")).Do(deps.multipartUploadPart).Name("multipart.upload-part").Action("s3:UploadPart")
-		d.When(m.QueryExists("partNumber"), m.QueryExists("uploadId"), m.HeaderExists("X-Amz-Copy-Source")).Do(deps.multipartUploadPartCopy).Name("multipart.upload-part-copy").Action("s3:UploadPartCopy")
+		d.When(m.QueryExists("partNumber"), m.QueryExists("uploadId"), m.HeaderExists(consts.HeaderCopySource)).Do(deps.multipartUploadPartCopy).Name("multipart.upload-part-copy").Action("s3:UploadPartCopy")
 	})
 
 	// Query-based object operations
@@ -368,7 +370,7 @@ func setupS3Routes(r *teapot.Router, deps *s3RouteDeps) {
 // RouteNotImplemented is a placeholder handler for routes that are registered
 // but not yet implemented (Admin API, S3 API, etc.).
 func RouteNotImplemented(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headers.ContentType, "application/json")
 	w.WriteHeader(http.StatusNotImplemented)
 	_, err := w.Write([]byte(`{"status":"error","error":"This operation is not yet implemented"}`))
 	if err != nil {

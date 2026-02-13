@@ -2,11 +2,12 @@ package s3
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/mallardduck/go-http-helpers/pkg/headers"
 
 	"github.com/mallardduck/dirio/internal/http/middleware"
 	"github.com/mallardduck/dirio/internal/logging"
@@ -60,11 +61,11 @@ func (h *HTTPHandler) GetObject(w http.ResponseWriter, r *http.Request, bucket, 
 	defer obj.Content.Close()
 
 	// Set response headers
-	w.Header().Set("Content-Type", obj.ContentType)
-	w.Header().Set("Content-Length", strconv.FormatInt(obj.Size, 10))
-	w.Header().Set("ETag", fmt.Sprintf(`"%s"`, obj.ETag))
-	w.Header().Set("Last-Modified", obj.LastModified.Format(http.TimeFormat))
-	w.Header().Set("Accept-Ranges", "bytes")
+	w.Header().Set(headers.ContentType, obj.ContentType)
+	w.Header().Set(headers.ContentLength, strconv.FormatInt(obj.Size, 10))
+	w.Header().Set(headers.ETag, obj.ETag)
+	w.Header().Set(headers.LastModified, obj.LastModified.Format(http.TimeFormat))
+	w.Header().Set(headers.AcceptRanges, "bytes")
 
 	// Set custom metadata headers
 	for key, value := range obj.CustomMetadata {
@@ -93,7 +94,7 @@ func (h *HTTPHandler) PutObject(w http.ResponseWriter, r *http.Request, bucket, 
 		return
 	}
 
-	contentType := r.Header.Get("Content-Type")
+	contentType := r.Header.Get(headers.ContentType)
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
@@ -103,11 +104,11 @@ func (h *HTTPHandler) PutObject(w http.ResponseWriter, r *http.Request, bucket, 
 
 	// Extract S3-standard metadata headers
 	metadataHeaders := []string{
-		"Cache-Control",
-		"Content-Disposition",
-		"Content-Encoding",
-		"Content-Language",
-		"Expires",
+		headers.CacheControl,
+		headers.ContentDisposition,
+		headers.ContentEncoding,
+		headers.ContentLanguage,
+		headers.Expires,
 	}
 	for _, header := range metadataHeaders {
 		if value := r.Header.Get(header); value != "" {
@@ -152,7 +153,7 @@ func (h *HTTPHandler) PutObject(w http.ResponseWriter, r *http.Request, bucket, 
 	}
 
 	// Set response headers
-	w.Header().Set("ETag", fmt.Sprintf(`"%s"`, etag))
+	w.Header().Set(headers.ETag, etag)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -201,11 +202,11 @@ func (h *HTTPHandler) HeadObject(w http.ResponseWriter, r *http.Request, bucket,
 	}
 
 	// Set response headers
-	w.Header().Set("Content-Type", meta.ContentType)
-	w.Header().Set("Content-Length", strconv.FormatInt(meta.Size, 10))
-	w.Header().Set("ETag", fmt.Sprintf(`"%s"`, meta.ETag))
-	w.Header().Set("Last-Modified", meta.LastModified.Format(http.TimeFormat))
-	w.Header().Set("Accept-Ranges", "bytes")
+	w.Header().Set(headers.ContentType, meta.ContentType)
+	w.Header().Set(headers.ContentLength, strconv.FormatInt(meta.Size, 10))
+	w.Header().Set(headers.ETag, meta.ETag)
+	w.Header().Set(headers.LastModified, meta.LastModified.Format(http.TimeFormat))
+	w.Header().Set(headers.AcceptRanges, "bytes")
 
 	// Set custom metadata headers
 	for key, value := range meta.CustomMetadata {

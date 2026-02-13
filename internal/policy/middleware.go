@@ -8,8 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mallardduck/go-http-helpers/pkg/headers"
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 
+	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/context"
 	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
@@ -226,7 +228,7 @@ func evaluateMultiResourceAction(
 // parseCopySource extracts bucket and key from X-Amz-Copy-Source header.
 // Format: /bucket/key or bucket/key (URL-encoded)
 func parseCopySource(r *http.Request) (bucket, key string) {
-	copySource := r.Header.Get("X-Amz-Copy-Source")
+	copySource := r.Header.Get(consts.HeaderCopySource)
 	if copySource == "" {
 		return "", ""
 	}
@@ -260,7 +262,7 @@ func isAdmin(user *metadata.User, rootAccessKey, altRootAccessKey string) bool {
 // extractClientIP gets the client IP from X-Forwarded-For or RemoteAddr
 func extractClientIP(r *http.Request) string {
 	// Check X-Forwarded-For header (may be set by reverse proxy)
-	forwarded := r.Header.Get("X-Forwarded-For")
+	forwarded := r.Header.Get(headers.XForwardedFor)
 	if forwarded != "" {
 		// X-Forwarded-For can contain multiple IPs; first is the client
 		parts := strings.Split(forwarded, ",")
@@ -326,7 +328,7 @@ func writeAccessDenied(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set(headers.ContentType, "application/xml")
 	w.WriteHeader(http.StatusForbidden)
 	_, err := w.Write(buf.Bytes())
 	if err != nil {

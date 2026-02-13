@@ -21,12 +21,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mallardduck/go-http-helpers/pkg/headers"
+
 	"github.com/mallardduck/dirio/internal/consts"
 )
 
 const (
-	authorizationHeader = "Authorization"
-	dateHeader          = "X-Amz-Date"
+	authorizationHeader = headers.Authorization
+	dateHeader          = consts.HeaderDate
 	algorithmID         = "AWS4-HMAC-SHA256"
 	iso8601TimeFormat   = "20060102T150405Z"
 	shortDateFormat     = "20060102"
