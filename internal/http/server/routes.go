@@ -344,6 +344,14 @@ func setupS3Routes(r *teapot.Router, deps *s3RouteDeps) {
 	// UploadPart / UploadPartCopy also live here: same method+path, and header
 	// presence distinguishes the copy variant.  The remaining QueryPUT routes
 	// below (acl, tagging, …) are added to this same dispatcher automatically.
+	// PUT /{bucket}/{key} dispatcher
+	// TODO(Phase 3.2 #4): Implement CopyObject handler (currently RouteNotImplemented)
+	//   - Parse X-Amz-Copy-Source header (bucket/key format)
+	//   - Policy engine already supports dual permission checks (source read + dest write)
+	//   - Copy object metadata, content-type, and custom metadata
+	//   - Handle copy-if-* conditional headers (If-Match, If-None-Match, If-Modified-Since, If-Unmodified-Since)
+	//   - Test: aws s3 cp s3://bucket/src.txt s3://bucket/dest.txt
+	//   - See policy/middleware.go:169 for multi-resource action handling
 	r.Dispatch("PUT", "/{bucket}/{key:.*}", func(d *teapot.DispatchBuilder, m teapot.Matchers) {
 		d.Default(deps.putObject).Name("object.put").Action("s3:PutObject")
 		d.When(m.HeaderExists(consts.HeaderCopySource)).Do(deps.copyObject).Name("object.copy").Action("s3:CopyObject")

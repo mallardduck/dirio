@@ -6,6 +6,23 @@
 //
 // AWS Signature Version 4 specification:
 // https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
+//
+// TODO(Phase 3.2 #3 - CRITICAL): Implement Pre-signed URL support
+//
+//	Pre-signed URLs are NEXT PRIORITY - required for temporary access sharing
+//	Implementation areas:
+//	1. Query string authentication (X-Amz-Algorithm, X-Amz-Credential, X-Amz-Date, X-Amz-Expires, X-Amz-SignedHeaders, X-Amz-Signature)
+//	2. Signature verification for presigned requests (similar to VerifySignature but from query params)
+//	3. Expiration validation (X-Amz-Expires, max 604800 seconds / 7 days)
+//	4. Embedded policy validation if X-Amz-Security-Token present
+//	5. URL generation helper for creating presigned URLs (for future CLI/SDK)
+//	Testing:
+//	- aws s3 presign s3://bucket/object.txt --expires-in 300
+//	- boto3: generate_presigned_url()
+//	- mc share download alias/bucket/object.txt
+//	References:
+//	- https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
+//	- MinIO: cmd/signature-v4.go (doesPresignedSignatureMatch)
 package auth
 
 import (

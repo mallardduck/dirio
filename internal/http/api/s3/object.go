@@ -16,6 +16,12 @@ import (
 )
 
 // GetObject handles GET /{bucket}/{key}
+// TODO(Phase 3.2 #5): Add Range request support for resumable downloads and video streaming
+//   - Parse Range header (bytes=0-1023, bytes=1024-, etc.)
+//   - Return 206 Partial Content with Content-Range header
+//   - Handle multiple ranges (multipart/byteranges response)
+//   - Storage layer needs range support in GetObject
+//   - Test with video streaming and aws s3api get-object --range
 func (h *HTTPHandler) GetObject(w http.ResponseWriter, r *http.Request, bucket, key string) {
 	// Validate key according to S3 naming rules
 	if err := ValidateS3Key(key); err != nil {
@@ -103,6 +109,12 @@ func (h *HTTPHandler) PutObject(w http.ResponseWriter, r *http.Request, bucket, 
 	customMetadata := make(map[string]string)
 
 	// Extract S3-standard metadata headers
+	// TODO(Phase 3.2 #9): Fix custom metadata key case preservation bug
+	//   - Currently returns wrong case in GetObject/HeadObject responses
+	//   - S3 standard: preserves exact case of x-amz-meta-* headers
+	//   - Issue: somewhere in the chain we're lowercasing or changing case
+	//   - Test: PUT with x-amz-meta-Author, GET should return x-amz-meta-Author (not x-amz-meta-author)
+	//   - Check: storage layer, metadata serialization, response header setting
 	metadataHeaders := []string{
 		headers.CacheControl,
 		headers.ContentDisposition,
@@ -217,6 +229,11 @@ func (h *HTTPHandler) HeadObject(w http.ResponseWriter, r *http.Request, bucket,
 }
 
 // DeleteObject handles DELETE /{bucket}/{key}
+// TODO(Phase 3.2 #1): Fix 405 Method Not Allowed for MinIO mc client
+//   - Currently returns 405 for MinIO mc, but policy engine is ready (s3:DeleteObject)
+//   - Likely a routing issue, not authorization - check teapot-router DELETE route registration
+//   - Test: mc rm alias/bucket/object.txt
+//   - Verify route matches in routes.go line ~340: r.DELETE("/{bucket}/{key:.*}", ...)
 func (h *HTTPHandler) DeleteObject(w http.ResponseWriter, r *http.Request, bucket, key string) {
 	// Validate key according to S3 naming rules
 	if err := ValidateS3Key(key); err != nil {

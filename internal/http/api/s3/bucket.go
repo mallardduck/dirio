@@ -93,6 +93,11 @@ func (h *HTTPHandler) HeadBucket(w http.ResponseWriter, r *http.Request, bucket 
 }
 
 // DeleteBucket handles DELETE /{bucket}
+// TODO(Phase 3.2 #2): Fix 405 Method Not Allowed for MinIO mc client
+//   - Currently returns 405 for MinIO mc, but policy engine is ready (s3:DeleteBucket)
+//   - Likely a routing issue, not authorization - check teapot-router DELETE route registration
+//   - Test: mc rb alias/bucket
+//   - Verify route matches in routes.go line ~293: r.DELETE("/{bucket}", ...)
 func (h *HTTPHandler) DeleteBucket(w http.ResponseWriter, r *http.Request, bucket string) {
 	if err := h.s3Service.DeleteBucket(r.Context(), bucket); err != nil {
 		requestID := middleware.GetRequestID(r.Context())
