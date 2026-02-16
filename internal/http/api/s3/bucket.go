@@ -249,15 +249,17 @@ func (h *HTTPHandler) ListObjectsV2(w http.ResponseWriter, r *http.Request, buck
 	keyCount := len(objects.Objects) + len(objects.CommonPrefixes)
 
 	response := s3types.ListBucketV2Result{
-		Name:              bucket,
-		Prefix:            prefix,
-		Delimiter:         delimiter,
-		MaxKeys:           maxKeys,
-		KeyCount:          keyCount,
-		IsTruncated:       objects.IsTruncated,
-		ContinuationToken: continuationToken,
-		Contents:          objects.Objects,
-		CommonPrefixes:    objects.CommonPrefixes,
+		Name:                  bucket,
+		Prefix:                prefix,
+		Delimiter:             delimiter,
+		MaxKeys:               maxKeys,
+		KeyCount:              keyCount,
+		IsTruncated:           objects.IsTruncated,
+		ContinuationToken:     continuationToken,
+		NextContinuationToken: objects.NextMarker,
+		StartAfter:            startAfter,
+		Contents:              objects.Objects,
+		CommonPrefixes:        objects.CommonPrefixes,
 	}
 
 	if writeErr := WriteXMLResponse(w, http.StatusOK, response); writeErr != nil {

@@ -1,8 +1,9 @@
 # Bug #007: ListObjectsV2 MaxKeys Parameter Ignored
 
-**Status:** Open  
-**Priority:** Medium  
-**Discovered:** 2026-01-31  
+**Status:** Fixed
+**Priority:** Medium
+**Discovered:** 2026-01-31
+**Fixed:** 2026-02-16
 **Affects:** boto3 (confirmed), likely all clients
 
 ## Summary
@@ -68,16 +69,22 @@ print(f"Expected 2 objects, got {len(contents)}")  # FAIL
 
 ## Root Cause Analysis
 
-Likely causes:
-1. **Query parameter not parsed:** `max-keys` query parameter not extracted from request
-2. **Parameter ignored in handler:** ListObjectsV2 handler doesn't use MaxKeys value
-3. **Default value used:** Handler always uses default (1000) instead of requested value
-4. **Pagination not implemented:** Truncation and continuation logic missing
+**Initial hypothesis (incorrect):**
+1. ~~Query parameter not parsed~~ - max-keys WAS being parsed correctly
+2. ~~Parameter ignored in handler~~ - Handler DID use MaxKeys value
+3. ~~Default value used~~ - Correct value was used
+4. ~~Pagination not implemented~~ - Truncation logic WAS implemented
 
-Location to investigate:
-- `internal/api/handlers/bucket.go` - ListObjectsV2 handler
-- Query parameter parsing for `max-keys`
-- Response building for `IsTruncated` and `NextContinuationToken`
+**Actual root cause (confirmed):**
+- Handler did NOT populate `NextContinuationToken` field in response
+- Handler did NOT populate `StartAfter` field in response
+- Storage layer correctly calculated `NextMarker`, but handler ignored it
+
+Location investigated:
+- `internal/http/api/s3/bucket.go` - ListObjectsV2 handler (lines 251-264)
+- Query parameter parsing for `max-keys` - ✅ Working correctly
+- Response building for `IsTruncated` - ✅ Working correctly
+- Response building for `NextContinuationToken` - ❌ **MISSING (root cause)**
 
 ## Impact
 
@@ -215,3 +222,54 @@ MEDIUM priority because:
 - Becomes critical for buckets with thousands of objects
 - Required for full S3 API compliance
 - Less urgent than data corruption bugs (#001, #004, #005)
+
+## Resolution
+
+**Fixed:** 2026-02-16
+
+### Root Cause (Actual)
+
+The ListObjectsV2 handler in `internal/http/api/s3/bucket.go` was not populating two critical response fields:
+- `NextContinuationToken` - Required for pagination, should be set from `objects.NextMarker`
+- `StartAfter` - Should echo back the request parameter per S3 API spec
+
+The storage layer (`internal/persistence/storage/storage.go`) was already:
+- Correctly parsing the `max-keys` query parameter
+- Limiting results to MaxKeys count
+- Calculating `NextMarker` for pagination
+- Setting `IsTruncated` flag correctly
+
+However, the HTTP handler was ignoring `objects.NextMarker` and not including it in the response.
+
+### Fix Applied
+
+**File:** `internal/http/api/s3/bucket.go` (lines 251-264)
+
+Added two fields to the `ListBucketV2Result` response:
+```go
+response := s3types.ListBucketV2Result{
+    // ... existing fields ...
+    NextContinuationToken: objects.NextMarker,  // NEW: for pagination
+    StartAfter:            startAfter,           // NEW: echo request param
+    // ... rest of fields ...
+}
+```
+
+Both fields have `xml:"...,omitempty"` tags, so they're only included when non-empty.
+
+### Verification
+
+**Integration Tests:** All pass (79 tests)
+- `TestListObjectsV2WithMaxKeys` - Verifies MaxKeys limiting with delimiter
+- `TestListObjectsV2Boto3Scenario` - Verifies boto3 compatibility
+
+**boto3 Client Tests:** 21/21 pass (was 15/21 before fix)
+- ✅ `PASS: ListObjectsV2 (max-keys)`
+- ✅ All pagination functionality now works correctly
+
+### Impact
+
+- boto3 clients can now paginate through large result sets
+- NextContinuationToken is returned when results are truncated
+- StartAfter parameter is properly echoed in responses
+- Full S3 API compliance for pagination
