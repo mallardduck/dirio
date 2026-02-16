@@ -328,3 +328,84 @@ func (s *Service) GetObjectWithRange(ctx context.Context, bucket, key string, st
 
 	return obj.Content, nil
 }
+
+// DeleteObjects deletes multiple objects in a single request
+// Returns a top-level error for request-level failures (invalid request, bucket not found, etc.)
+// Per-object deletion failures are collected in the response's Errors slice
+func (s *Service) DeleteObjects(ctx context.Context, request *DeleteObjectsRequest) (*DeleteObjectsResponse, error) {
+	// Validate bucket name
+	if err := validation.ValidateBucketName(request.Bucket); err != nil {
+		return nil, err
+	}
+
+	objectCount := len(request.Objects)
+	// Validate objects list is not empty
+	if objectCount == 0 {
+		return nil, errors.New("delete request must contain at least one object")
+	}
+
+	// AWS S3 supports up to 1000 objects per request
+	if objectCount > 1000 {
+		return nil, errors.New("cannot delete more than 1000 objects in a single request")
+	}
+
+	// Validate each object key
+	for _, obj := range request.Objects {
+		if err := validation.ValidateObjectKey(obj.Key); err != nil {
+			return nil, err
+		}
+	}
+
+	// Check if bucket exists (early return error for bucket-level issues)
+	exists, err := s.HeadBucket(ctx, request.Bucket)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, s3types.ErrBucketNotFound
+	}
+
+	// Initialize response with pre-allocated slices
+	response := &DeleteObjectsResponse{
+		Deleted: make([]s3types.DeletedObject, 0, len(request.Objects)),
+		Errors:  make([]s3types.DeleteError, 0),
+	}
+
+	// Delete each object
+	for _, obj := range request.Objects {
+		err := s.storage.DeleteObject(ctx, request.Bucket, obj.Key)
+
+		if err != nil {
+			// Per S3 spec, DeleteObject is idempotent - treat not-found as success
+			if errors.Is(err, storage.ErrNoSuchKey) {
+				// Add to deleted list unless in quiet mode
+				if !request.Quiet {
+					response.Deleted = append(response.Deleted, s3types.DeletedObject{
+						Key:       obj.Key,
+						VersionId: obj.VersionId,
+					})
+				}
+				continue
+			}
+
+			// For other errors, add to errors list (always, regardless of Quiet mode)
+			response.Errors = append(response.Errors, s3types.DeleteError{
+				Key:       obj.Key,
+				VersionId: obj.VersionId,
+				Code:      "InternalError",
+				Message:   err.Error(),
+			})
+			continue
+		}
+
+		// Successfully deleted - add to deleted list unless in quiet mode
+		if !request.Quiet {
+			response.Deleted = append(response.Deleted, s3types.DeletedObject{
+				Key:       obj.Key,
+				VersionId: obj.VersionId,
+			})
+		}
+	}
+
+	return response, nil
+}

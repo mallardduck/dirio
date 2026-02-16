@@ -44,3 +44,17 @@ type LocationResponse struct {
 	XMLName  xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ LocationConstraint"`
 	Location string   `xml:",chardata"`
 }
+
+// DeleteObjectsRequest is the request body for DeleteObjects operation
+type DeleteObjectsRequest struct {
+	XMLName xml.Name           `xml:"Delete"`
+	Quiet   bool               `xml:"Quiet,omitempty"`
+	Objects []ObjectIdentifier `xml:"Object"`
+}
+
+// DeleteObjectsResult is the response for DeleteObjects operation
+type DeleteObjectsResult struct {
+	XMLName xml.Name        `xml:"http://s3.amazonaws.com/doc/2006-03-01/ DeleteResult"`
+	Deleted []DeletedObject `xml:"Deleted,omitempty"`
+	Errors  []DeleteError   `xml:"Error,omitempty"`
+}

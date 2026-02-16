@@ -1,7 +1,9 @@
 package s3
 
 import (
+	"encoding/xml"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
@@ -282,13 +284,73 @@ func parseMaxKeys(maxKeys int) int {
 }
 
 func (h *HTTPHandler) DeleteObjects(w http.ResponseWriter, r *http.Request, bucket string) {
-	// TODO implement basic multiple object delete, will need to add service funcs
-	// something like: h.s3Service.DeleteObjects
-	w.Header().Set(headers.ContentType, "application/json")
-	w.WriteHeader(http.StatusNotImplemented)
-	_, err := w.Write([]byte(`{"status":"error","error":"This operation is not yet implemented"}`))
+	// Read and parse the XML request body
+	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		s3Logger.With("err", err).Warn("failed to write error response")
+		requestID := middleware.GetRequestID(r.Context())
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
+			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error reading delete objects request body and additional error writing XML error response")
+			return
+		}
+		s3Logger.With("err", err).Warn("encountered error reading delete objects request body")
 		return
+	}
+
+	var xmlRequest s3types.DeleteObjectsRequest
+	if err := xml.Unmarshal(bodyBytes, &xmlRequest); err != nil {
+		requestID := middleware.GetRequestID(r.Context())
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInvalidRequest, err); writeErr != nil {
+			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error parsing delete objects request and additional error writing XML error response")
+			return
+		}
+		s3Logger.With("err", err).Warn("encountered error parsing delete objects request")
+		return
+	}
+
+	// Validate that objects list is not empty
+	if len(xmlRequest.Objects) == 0 {
+		requestID := middleware.GetRequestID(r.Context())
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInvalidRequest, errors.New("delete request must contain at least one object")); writeErr != nil {
+			s3Logger.With("write_err", writeErr).Warn("encountered error writing empty objects list error response")
+			return
+		}
+		return
+	}
+
+	// Create service request
+	deleteRequest := &s3.DeleteObjectsRequest{
+		Bucket:  bucket,
+		Objects: xmlRequest.Objects,
+		Quiet:   xmlRequest.Quiet,
+	}
+
+	// Call service
+	result, err := h.s3Service.DeleteObjects(r.Context(), deleteRequest)
+	if err != nil {
+		requestID := middleware.GetRequestID(r.Context())
+		if errors.Is(err, s3types.ErrBucketNotFound) {
+			if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchBucket, err); writeErr != nil {
+				s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error deleting objects (no such bucket) and additional error writing XML error response")
+				return
+			}
+			s3Logger.With("err", err).Warn("encountered error deleting objects (no such bucket)")
+			return
+		}
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
+			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error deleting objects and additional error writing XML error response")
+			return
+		}
+		s3Logger.With("err", err).Warn("encountered error deleting objects")
+		return
+	}
+
+	// Build XML response
+	response := s3types.DeleteObjectsResult{
+		Deleted: result.Deleted,
+		Errors:  result.Errors,
+	}
+
+	if writeErr := WriteXMLResponse(w, http.StatusOK, response); writeErr != nil {
+		s3Logger.With("err", writeErr).Warn("encountered error writing XML OK response")
 	}
 }

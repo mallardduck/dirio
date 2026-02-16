@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
+	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
 // ============================================================================
@@ -71,6 +72,19 @@ type HeadObjectResponse struct {
 type DeleteObjectRequest struct {
 	Bucket string
 	Key    string
+}
+
+// DeleteObjectsRequest represents a request to delete multiple objects
+type DeleteObjectsRequest struct {
+	Bucket  string
+	Objects []s3types.ObjectIdentifier
+	Quiet   bool // If true, only return errors in response
+}
+
+// DeleteObjectsResponse represents the response from deleting multiple objects
+type DeleteObjectsResponse struct {
+	Deleted []s3types.DeletedObject
+	Errors  []s3types.DeleteError
 }
 
 // ListObjectsRequest represents a request to list objects in a bucket
