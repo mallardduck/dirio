@@ -132,14 +132,77 @@ Current status: **Phase 3.2 COMPLETE** - All critical S3 features implemented!
 - [x] Object tagging (with content preservation)
 - [x] Custom metadata (case-insensitive, HTTP spec compliant)
 
-### Remaining Work
+## Phase 3.3: Advanced Policy Features
 
-**Phase 3.5+ (Deferred):**
-- [ ] **ListBuckets/ListObjects result filtering** - Filter results per-item based on permissions
+**Goal:** Enhance policy engine with advanced features for fine-grained access control.
+
+**Status:** Test scenarios complete, ready for implementation.
+
+**Infrastructure Complete (Feb 16, 2026):**
+- ✅ UUID-based ownership system (buckets and objects)
+- ✅ Admin UUID constant (`badfc0de-fadd-fc0f-fee0-000dadbeef00`)
+- ✅ UserStatus enum type with validation
+- ✅ Ownership semantics (nil = admin-only, UUID = user ownership)
+- ✅ Setup scripts with comprehensive test scenarios
+
+### Policy Evaluation Enhancements (Test scenarios ready in setup script)
 - [ ] **Policy condition evaluation** - IpAddress, StringEquals, DateLessThan, etc.
-- [ ] **NotAction/NotResource/NotPrincipal** - Inverse matching support
-- [ ] **Policy variables** - ${aws:username}, ${aws:userid}, etc.
-- [ ] **POST Policy Uploads** - Browser-based form uploads (optional MinIO feature for `mc share upload`)
+  - [ ] IpAddress / NotIpAddress conditions (test: policy-ip-test bucket)
+  - [ ] StringEquals / StringLike / StringNotEquals / StringNotLike (test: policy-string-test bucket)
+  - [ ] DateLessThan / DateGreaterThan / DateEquals (test: policy-time-test bucket)
+  - [ ] NumericLessThan / NumericGreaterThan / NumericEquals (test: policy-numeric-test bucket)
+  - [ ] Bool condition operator
+  - [ ] Null condition operator
+- [ ] **NotAction/NotResource/NotPrincipal** - Inverse matching support (test scenarios ready)
+  - [ ] NotAction support (deny everything except specified actions) (test: policy-notaction-test bucket)
+  - [ ] NotResource support (apply to all resources except specified) (test: policy-notresource-test bucket)
+  - [ ] NotPrincipal support (apply to all principals except specified)
+- [ ] **Policy variables** - Dynamic variable substitution (test scenarios ready)
+  - [ ] ${aws:username} - Current authenticated username (test: policy-variables-test bucket, ready to implement!)
+  - [ ] ${aws:userid} - Current authenticated user ID (UUID support added!)
+  - [ ] ${aws:SourceIp} - Request source IP (test: policy-ip-condition.json)
+  - [ ] ${s3:prefix} - Object key prefix (test: policy-prefix-filter.json)
+  - [ ] ${s3:delimiter} - Delimiter for ListObjects
+  - [ ] ${aws:CurrentTime} - Request timestamp (test: policy-time-condition.json)
+
+### Result Filtering (Test buckets ready: filter-alice-only, filter-bob-only, filter-shared, filter-mixed-perms)
+- [ ] **ListBuckets result filtering** - Only return buckets user has permission to access
+  - [ ] Evaluate GetBucketLocation permission per bucket
+  - [ ] Filter out buckets without permission
+  - [ ] Maintain pagination with filtered results
+  - [ ] Use ownership tracking (UUID-based) for filtering
+- [ ] **ListObjects result filtering** - Only return objects user has permission to read
+  - [ ] Evaluate GetObject permission per object
+  - [ ] Filter out objects without permission
+  - [ ] Handle prefix-based permissions efficiently (test: filter-mixed-perms with public/private/restricted prefixes)
+  - [ ] Maintain pagination with filtered results
+  - [ ] Use object ownership (UUID-based) for filtering
+
+### Browser Upload Support
+- [ ] **POST Policy Uploads** - Browser-based form uploads
+  - [ ] Parse POST policy documents
+  - [ ] Validate policy signature and expiration
+  - [ ] Support multipart/form-data uploads
+  - [ ] HTML form upload examples
+  - [ ] MinIO `mc share upload` compatibility
+
+### Testing
+- [x] Policy condition test scenarios (IP, date, string matching) - Setup script creates test buckets and example policies
+- [x] NotAction/NotResource/NotPrincipal test cases - Setup script creates test scenarios
+- [x] Policy variable substitution tests - Setup script creates user-specific folders with ${aws:username} policies
+- [x] ListBuckets/ListObjects filtering with partial permissions - Setup script creates filter-* buckets with 20 objects each
+- [ ] POST upload with signed policies - TODO: Add to setup script
+- [ ] Automated tests for condition evaluation (once implemented)
+- [ ] Automated tests for policy variables (once implemented)
+- [ ] Automated tests for result filtering (once implemented)
+
+### Setup Script Enhancements ✅ COMPLETE
+- [x] Add SETUP_POLICY_TESTS flag to s3-minio-setup.sh (905 lines of test scenarios!)
+- [x] Create test buckets with conditional policies (IP, date, string, numeric)
+- [x] Create users with prefix-based permissions (policy-variables-test bucket)
+- [x] Create test scenarios for NotAction/NotResource (policy-notaction-test, policy-notresource-test)
+- [x] Create test buckets for result filtering (filter-alice-only, filter-bob-only, filter-shared, filter-mixed-perms)
+- [ ] Generate POST upload policy examples (TODO: add to script)
 
 ## Phase 3.5: Stability & Performance
 

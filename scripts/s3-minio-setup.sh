@@ -11,14 +11,15 @@ set -euo pipefail
 #   S3_ENDPOINT=http://localhost:9000 \
 #   S3_ACCESS_KEY=dirio-admin \
 #   S3_SECRET_KEY=dirio-admin-secret \
-#   ./s3-generic-setup.sh
+#   ./s3-minio-setup.sh
 #
 # Optional environment variables:
-#   S3_ALIAS       - mc alias name (default: "target")
-#   S3_REGION      - AWS region if needed (default: "us-east-1")
-#   OBJECT_SIZE    - Size of test objects in bytes (default: 65536)
-#   SKIP_USERS     - Set to "true" to skip user/policy creation (default: false)
-#   SKIP_POLICIES  - Set to "true" to skip bucket policies (default: false)
+#   S3_ALIAS         - mc alias name (default: "target")
+#   S3_REGION        - AWS region if needed (default: "us-east-1")
+#   OBJECT_SIZE      - Size of test objects in bytes (default: 65536)
+#   SKIP_USERS       - Set to "true" to skip user/policy creation (default: false)
+#   SKIP_POLICIES    - Set to "true" to skip bucket policies (default: false)
+#   SETUP_POLICY_TESTS - Set to "true" to create advanced policy test scenarios (default: false)
 
 # -----------------------
 # Config
@@ -31,6 +32,7 @@ S3_REGION="${S3_REGION:-us-east-1}"
 OBJECT_SIZE="${OBJECT_SIZE:-65536}"
 SKIP_USERS="${SKIP_USERS:-false}"
 SKIP_POLICIES="${SKIP_POLICIES:-false}"
+SETUP_POLICY_TESTS="${SETUP_POLICY_TESTS:-false}"
 
 # Users (for IAM creation, if supported)
 ALICE_USER="alice"
@@ -51,11 +53,12 @@ if [ -z "${S3_ENDPOINT}" ]; then
   echo "  $0"
   echo ""
   echo "Optional variables:"
-  echo "  S3_ALIAS=target        # mc alias name"
-  echo "  S3_REGION=us-east-1    # AWS region"
-  echo "  OBJECT_SIZE=65536      # Test object size in bytes"
-  echo "  SKIP_USERS=true        # Skip IAM user creation"
-  echo "  SKIP_POLICIES=true     # Skip bucket policy creation"
+  echo "  S3_ALIAS=target           # mc alias name"
+  echo "  S3_REGION=us-east-1       # AWS region"
+  echo "  OBJECT_SIZE=65536         # Test object size in bytes"
+  echo "  SKIP_USERS=true           # Skip IAM user creation"
+  echo "  SKIP_POLICIES=true        # Skip bucket policy creation"
+  echo "  SETUP_POLICY_TESTS=true   # Create advanced policy test scenarios (Phase 3.3)"
   exit 1
 fi
 
@@ -399,6 +402,473 @@ echo "Gamma bucket:"
 mc ls --recursive "${S3_ALIAS}/gamma" | head -20
 
 # -----------------------
+# Advanced Policy Test Scenarios (Phase 3.3)
+# -----------------------
+if [ "${SETUP_POLICY_TESTS}" = "true" ]; then
+  echo ""
+  echo "🔒 Setting up advanced policy test scenarios..."
+  echo ""
+
+  # -----------------------
+  # 1. Conditional Policy Testing
+  # -----------------------
+  echo "📋 Creating buckets for conditional policy tests..."
+
+  # Create policy-test buckets
+  for bucket in policy-ip-test policy-time-test policy-string-test policy-numeric-test; do
+    if mc ls "${S3_ALIAS}/${bucket}" >/dev/null 2>&1; then
+      echo "  ⚠️  Bucket '${bucket}' already exists, skipping"
+    else
+      mc mb "${S3_ALIAS}/${bucket}" --region="${S3_REGION}"
+      echo "  ✓ Created bucket '${bucket}'"
+    fi
+  done
+
+  # Upload test objects to policy buckets
+  echo "📤 Uploading objects for conditional policy tests..."
+  upload_object policy-ip-test ip-restricted.txt
+  upload_object policy-time-test time-restricted.txt
+  upload_object policy-string-test useragent-restricted.txt
+  upload_object policy-numeric-test size-restricted.txt
+
+  # Create example conditional policies
+  echo "📝 Creating example conditional policy documents..."
+
+  # IP-based condition policy
+  cat > /tmp/policy-ip-condition.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::policy-ip-test/*"],
+      "Condition": {
+        "IpAddress": {
+          "aws:SourceIp": ["192.168.1.0/24", "10.0.0.0/8"]
+        }
+      }
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-ip-condition.json (allows GetObject only from specific IPs)"
+
+  # Date-based condition policy
+  cat > /tmp/policy-time-condition.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::policy-time-test/*"],
+      "Condition": {
+        "DateGreaterThan": {
+          "aws:CurrentTime": "2026-01-01T00:00:00Z"
+        },
+        "DateLessThan": {
+          "aws:CurrentTime": "2026-12-31T23:59:59Z"
+        }
+      }
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-time-condition.json (allows GetObject only during 2026)"
+
+  # String condition policy (UserAgent)
+  cat > /tmp/policy-string-condition.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::policy-string-test/*"],
+      "Condition": {
+        "StringLike": {
+          "aws:UserAgent": ["aws-cli/*", "boto3/*"]
+        }
+      }
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-string-condition.json (allows GetObject only for aws-cli/boto3)"
+
+  # Numeric condition policy (object size)
+  cat > /tmp/policy-numeric-condition.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject"],
+      "Resource": ["arn:aws:s3:::policy-numeric-test/*"],
+      "Condition": {
+        "NumericLessThan": {
+          "s3:content-length": 10485760
+        }
+      }
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-numeric-condition.json (allows PutObject only for files < 10MB)"
+
+  # -----------------------
+  # 2. NotAction/NotResource/NotPrincipal Testing
+  # -----------------------
+  echo ""
+  echo "📋 Creating buckets for NotAction/NotResource tests..."
+
+  for bucket in policy-notaction-test policy-notresource-test; do
+    if mc ls "${S3_ALIAS}/${bucket}" >/dev/null 2>&1; then
+      echo "  ⚠️  Bucket '${bucket}' already exists, skipping"
+    else
+      mc mb "${S3_ALIAS}/${bucket}" --region="${S3_REGION}"
+      echo "  ✓ Created bucket '${bucket}'"
+    fi
+  done
+
+  # Upload test objects
+  echo "📤 Uploading objects for NotAction/NotResource tests..."
+  upload_object policy-notaction-test readonly.txt
+  upload_object policy-notresource-test protected-file.txt
+  upload_object policy-notresource-test unprotected-file.txt
+
+  # Create NotAction policy (deny everything except GetObject)
+  cat > /tmp/policy-notaction.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "NotAction": ["s3:DeleteObject", "s3:DeleteBucket"],
+      "Resource": [
+        "arn:aws:s3:::policy-notaction-test",
+        "arn:aws:s3:::policy-notaction-test/*"
+      ]
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-notaction.json (allows everything except delete operations)"
+
+  # Create NotResource policy (protect specific files)
+  cat > /tmp/policy-notresource.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Deny",
+      "Action": ["s3:DeleteObject"],
+      "NotResource": ["arn:aws:s3:::policy-notresource-test/unprotected-*"]
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-notresource.json (deny delete except for unprotected-* files)"
+
+  # -----------------------
+  # 3. Policy Variables Testing
+  # -----------------------
+  echo ""
+  echo "📋 Creating buckets for policy variable tests..."
+
+  if mc ls "${S3_ALIAS}/policy-variables-test" >/dev/null 2>&1; then
+    echo "  ⚠️  Bucket 'policy-variables-test' already exists, skipping"
+  else
+    mc mb "${S3_ALIAS}/policy-variables-test" --region="${S3_REGION}"
+    echo "  ✓ Created bucket 'policy-variables-test'"
+  fi
+
+  # Create user-specific folders
+  echo "📤 Creating user-specific folder structure..."
+  upload_object policy-variables-test alice/private-file.txt
+  upload_object policy-variables-test alice/data.json
+  upload_object policy-variables-test bob/private-file.txt
+  upload_object policy-variables-test bob/data.json
+  upload_object policy-variables-test shared/public-file.txt
+
+  # Create policy with ${aws:username} variable
+  cat > /tmp/policy-username-variable.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Resource": ["arn:aws:s3:::policy-variables-test/${aws:username}/*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::policy-variables-test/shared/*"]
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-username-variable.json (allows access to own prefix + shared)"
+
+  # Create policy with multiple variables
+  cat > /tmp/policy-multiple-variables.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::policy-variables-test/*"],
+      "Condition": {
+        "IpAddress": {
+          "aws:SourceIp": "${aws:SourceIp}"
+        },
+        "StringEquals": {
+          "s3:prefix": "${aws:username}/"
+        }
+      }
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-multiple-variables.json (combines variables in conditions)"
+
+  # -----------------------
+  # 4. ListBuckets/ListObjects Filtering Testing
+  # -----------------------
+  echo ""
+  echo "📋 Creating buckets for result filtering tests..."
+
+  for bucket in filter-alice-only filter-bob-only filter-shared; do
+    if mc ls "${S3_ALIAS}/${bucket}" >/dev/null 2>&1; then
+      echo "  ⚠️  Bucket '${bucket}' already exists, skipping"
+    else
+      mc mb "${S3_ALIAS}/${bucket}" --region="${S3_REGION}"
+      echo "  ✓ Created bucket '${bucket}'"
+    fi
+  done
+
+  # Upload objects to filtering test buckets
+  echo "📤 Uploading objects for filtering tests..."
+  for i in {1..20}; do
+    upload_object filter-alice-only "alice-file-${i}.txt" >/dev/null 2>&1
+  done
+  echo "  ✓ Uploaded 20 objects to filter-alice-only"
+
+  for i in {1..20}; do
+    upload_object filter-bob-only "bob-file-${i}.txt" >/dev/null 2>&1
+  done
+  echo "  ✓ Uploaded 20 objects to filter-bob-only"
+
+  for i in {1..20}; do
+    upload_object filter-shared "shared-file-${i}.txt" >/dev/null 2>&1
+  done
+  echo "  ✓ Uploaded 20 objects to filter-shared"
+
+  # Create bucket with mixed permissions (some objects readable, some not)
+  if mc ls "${S3_ALIAS}/filter-mixed-perms" >/dev/null 2>&1; then
+    echo "  ⚠️  Bucket 'filter-mixed-perms' already exists, skipping"
+  else
+    mc mb "${S3_ALIAS}/filter-mixed-perms" --region="${S3_REGION}"
+    echo "  ✓ Created bucket 'filter-mixed-perms'"
+  fi
+
+  # Create objects with different prefixes for partial permissions
+  echo "📤 Creating objects with different permission prefixes..."
+  upload_object filter-mixed-perms public/file1.txt
+  upload_object filter-mixed-perms public/file2.txt
+  upload_object filter-mixed-perms private/file1.txt
+  upload_object filter-mixed-perms private/file2.txt
+  upload_object filter-mixed-perms restricted/file1.txt
+  upload_object filter-mixed-perms restricted/file2.txt
+  echo "  ✓ Created mixed-permission object structure"
+
+  # Create policy for partial bucket access (prefix-based)
+  cat > /tmp/policy-prefix-filter.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": ["arn:aws:s3:::filter-mixed-perms"],
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": ["public/*", ""]
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::filter-mixed-perms/public/*"]
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-prefix-filter.json (allows listing/reading only public/* prefix)"
+
+  # Create policy for partial bucket list access
+  cat > /tmp/policy-bucket-filter.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket", "s3:GetObject"],
+      "Resource": [
+        "arn:aws:s3:::filter-alice-only",
+        "arn:aws:s3:::filter-alice-only/*",
+        "arn:aws:s3:::filter-shared",
+        "arn:aws:s3:::filter-shared/*"
+      ]
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-bucket-filter.json (alice can only see 2 of 4 filter buckets)"
+
+  # -----------------------
+  # 5. POST Policy Upload Testing
+  # -----------------------
+  echo ""
+  echo "📋 Creating POST upload policy examples..."
+
+  # Create bucket for POST uploads
+  if mc ls "${S3_ALIAS}/post-upload-test" >/dev/null 2>&1; then
+    echo "  ⚠️  Bucket 'post-upload-test' already exists, skipping"
+  else
+    mc mb "${S3_ALIAS}/post-upload-test" --region="${S3_REGION}"
+    echo "  ✓ Created bucket 'post-upload-test'"
+  fi
+
+  # Create example POST upload policy
+  cat > /tmp/post-upload-policy.json <<'EOF'
+{
+  "expiration": "2026-12-31T23:59:59Z",
+  "conditions": [
+    {"bucket": "post-upload-test"},
+    ["starts-with", "$key", "uploads/"],
+    {"acl": "private"},
+    ["content-length-range", 0, 10485760],
+    ["starts-with", "$Content-Type", "image/"]
+  ]
+}
+EOF
+  echo "  ✓ Created post-upload-policy.json (example browser upload policy)"
+
+  # Create HTML form example
+  cat > /tmp/post-upload-form.html <<'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+  <title>S3 POST Upload Example</title>
+</head>
+<body>
+  <h1>S3 POST Upload Test</h1>
+  <form action="http://localhost:9000/post-upload-test" method="post" enctype="multipart/form-data">
+    <input type="hidden" name="key" value="uploads/${filename}">
+    <input type="hidden" name="acl" value="private">
+    <input type="hidden" name="Content-Type" value="image/jpeg">
+    <input type="hidden" name="policy" value="BASE64_ENCODED_POLICY">
+    <input type="hidden" name="x-amz-algorithm" value="AWS4-HMAC-SHA256">
+    <input type="hidden" name="x-amz-credential" value="CREDENTIALS">
+    <input type="hidden" name="x-amz-date" value="DATE">
+    <input type="hidden" name="x-amz-signature" value="SIGNATURE">
+    <input type="file" name="file" accept="image/*">
+    <input type="submit" value="Upload">
+  </form>
+  <p>Note: This is an example form. Policy, credentials, and signature must be generated server-side.</p>
+</body>
+</html>
+EOF
+  echo "  ✓ Created post-upload-form.html (example HTML form for browser uploads)"
+
+  # Create restrictive POST policy (size limits, content type)
+  cat > /tmp/post-upload-restrictive.json <<'EOF'
+{
+  "expiration": "2026-12-31T23:59:59Z",
+  "conditions": [
+    {"bucket": "post-upload-test"},
+    ["starts-with", "$key", "images/"],
+    {"acl": "public-read"},
+    ["content-length-range", 1024, 5242880],
+    {"Content-Type": "image/jpeg"},
+    {"x-amz-meta-uploaded-by": "browser-form"}
+  ]
+}
+EOF
+  echo "  ✓ Created post-upload-restrictive.json (restrictive POST policy with size/type limits)"
+
+  # -----------------------
+  # Summary of policy test artifacts
+  # -----------------------
+  echo ""
+  echo "✅ Advanced policy test setup complete!"
+  echo ""
+  echo "📁 Policy Test Artifacts Created:"
+  echo ""
+  echo "Conditional Policy Examples:"
+  echo "  - /tmp/policy-ip-condition.json (IP-based access)"
+  echo "  - /tmp/policy-time-condition.json (time-based access)"
+  echo "  - /tmp/policy-string-condition.json (UserAgent matching)"
+  echo "  - /tmp/policy-numeric-condition.json (file size limits)"
+  echo ""
+  echo "NotAction/NotResource Examples:"
+  echo "  - /tmp/policy-notaction.json (allow all except delete)"
+  echo "  - /tmp/policy-notresource.json (protect specific files)"
+  echo ""
+  echo "Policy Variable Examples:"
+  echo "  - /tmp/policy-username-variable.json (user-specific prefixes)"
+  echo "  - /tmp/policy-multiple-variables.json (multiple variables)"
+  echo ""
+  echo "Result Filtering Examples:"
+  echo "  - /tmp/policy-prefix-filter.json (prefix-based ListObjects filtering)"
+  echo "  - /tmp/policy-bucket-filter.json (partial ListBuckets access)"
+  echo ""
+  echo "POST Upload Examples:"
+  echo "  - /tmp/post-upload-policy.json (basic browser upload)"
+  echo "  - /tmp/post-upload-restrictive.json (restrictive upload policy)"
+  echo "  - /tmp/post-upload-form.html (HTML form example)"
+  echo ""
+  echo "📦 Test Buckets Created:"
+  echo "  - policy-ip-test (for IP condition testing)"
+  echo "  - policy-time-test (for date/time condition testing)"
+  echo "  - policy-string-test (for string matching testing)"
+  echo "  - policy-numeric-test (for numeric condition testing)"
+  echo "  - policy-notaction-test (for NotAction testing)"
+  echo "  - policy-notresource-test (for NotResource testing)"
+  echo "  - policy-variables-test (for policy variable substitution)"
+  echo "  - filter-alice-only (for ListBuckets filtering - alice only)"
+  echo "  - filter-bob-only (for ListBuckets filtering - bob only)"
+  echo "  - filter-shared (for ListBuckets filtering - shared)"
+  echo "  - filter-mixed-perms (for ListObjects prefix-based filtering)"
+  echo "  - post-upload-test (for POST upload testing)"
+  echo ""
+  echo "🧪 Testing Scenarios:"
+  echo "  1. Conditional policies: Test IP, date, string, and numeric conditions"
+  echo "  2. NotAction/NotResource: Test inverse matching (deny all except...)"
+  echo "  3. Policy variables: Test \${aws:username}, \${aws:SourceIp} substitution"
+  echo "  4. Result filtering: Test that ListBuckets/ListObjects only show allowed items"
+  echo "  5. POST uploads: Test browser-based form uploads with signed policies"
+  echo ""
+  echo "📝 Next Steps:"
+  echo "  - Apply policies to buckets using: mc anonymous set-json /tmp/policy-*.json ${S3_ALIAS}/bucket-name"
+  echo "  - Test with different users/credentials to verify filtering"
+  echo "  - Implement condition evaluation in DirIO policy engine"
+  echo "  - Implement NotAction/NotResource support"
+  echo "  - Implement policy variable substitution"
+  echo "  - Implement ListBuckets/ListObjects result filtering"
+  echo "  - Implement POST upload policy validation"
+  echo ""
+else
+  echo ""
+  echo "⏭️  Skipping advanced policy tests (set SETUP_POLICY_TESTS=true to enable)"
+fi
+
+# -----------------------
 # Done
 # -----------------------
 echo ""
@@ -424,6 +894,11 @@ echo ""
 echo "To test with different credentials:"
 echo "  mc alias set test-alice ${S3_ENDPOINT} alice alicepass1234"
 echo "  mc ls test-alice/alpha"
+echo ""
+echo "To setup advanced policy test scenarios (Phase 3.3):"
+echo "  SETUP_POLICY_TESTS=true S3_ENDPOINT=${S3_ENDPOINT} \\"
+echo "    S3_ACCESS_KEY=${S3_ACCESS_KEY} S3_SECRET_KEY=*** \\"
+echo "    $0"
 echo ""
 echo "To remove the alias:"
 echo "  mc alias rm ${S3_ALIAS}"

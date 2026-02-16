@@ -9,6 +9,13 @@ set -euo pipefail
 #
 # Goal: Create comprehensive test data to understand what metadata features
 # were actually implemented in FS mode during its "golden era".
+#
+# Usage:
+#   ./minio-2019-setup.sh
+#
+# Optional environment variables:
+#   OBJECT_SIZE          - Size of test objects in bytes (default: 65536)
+#   SETUP_POLICY_TESTS   - Set to "true" to create advanced policy test scenarios (default: false)
 
 # -----------------------
 # Config
@@ -23,7 +30,8 @@ MINIO_SECRET_KEY="minioadmin"
 MINIO_PORT="9001"  # Different port to avoid conflicts
 DATA_DIR="$(pwd)/minio-data-2019"
 
-OBJECT_SIZE=65536
+OBJECT_SIZE="${OBJECT_SIZE:-65536}"
+SETUP_POLICY_TESTS="${SETUP_POLICY_TESTS:-false}"
 
 # Users
 ALICE_USER="alice"
@@ -31,6 +39,20 @@ ALICE_PASS="alicepass1234"
 
 BOB_USER="bob"
 BOB_PASS="bobpass1234"
+
+# -----------------------
+# Validation
+# -----------------------
+# Check if docker is installed
+if ! command -v docker &> /dev/null; then
+  echo "❌ Error: Docker is not installed"
+  echo ""
+  echo "Install Docker:"
+  echo "  Visit https://docs.docker.com/get-docker/"
+  exit 1
+fi
+
+echo "✓ Docker found: $(which docker)"
 
 # -----------------------
 # Password validation
@@ -101,9 +123,14 @@ done
 # -----------------------
 # Create buckets
 # -----------------------
-echo "📦 Creating buckets..."
+echo "📦 Creating test buckets..."
 for bucket in alpha beta gamma; do
-  docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" mb "minio2019/${bucket}"
+  if docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" ls "minio2019/${bucket}" >/dev/null 2>&1; then
+    echo "  ⚠️  Bucket '${bucket}' already exists, skipping"
+  else
+    docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" mb "minio2019/${bucket}"
+    echo "  ✓ Created bucket '${bucket}'"
+  fi
 done
 
 # -----------------------
@@ -142,24 +169,53 @@ cat > /tmp/beta-rw.json <<'EOF'
 }
 EOF
 
-docker run --rm --network host -e MC_HOST_minio2019 \
+# Check if alpha-rw policy exists, create if not
+if docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" admin policy info minio2019 alpha-rw >/dev/null 2>&1; then
+  echo "  ⚠️  Policy 'alpha-rw' already exists, skipping"
+elif docker run --rm --network host -e MC_HOST_minio2019 \
   -v /tmp/alpha-rw.json:/policy.json \
-  "${MC_IMAGE}" admin policy add minio2019 alpha-rw /policy.json
+  "${MC_IMAGE}" admin policy add minio2019 alpha-rw /policy.json 2>/dev/null; then
+  echo "  ✓ Created policy 'alpha-rw'"
+else
+  echo "  ⚠️  Failed to create policy 'alpha-rw'"
+fi
 
-docker run --rm --network host -e MC_HOST_minio2019 \
+# Check if beta-rw policy exists, create if not
+if docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" admin policy info minio2019 beta-rw >/dev/null 2>&1; then
+  echo "  ⚠️  Policy 'beta-rw' already exists, skipping"
+elif docker run --rm --network host -e MC_HOST_minio2019 \
   -v /tmp/beta-rw.json:/policy.json \
-  "${MC_IMAGE}" admin policy add minio2019 beta-rw /policy.json
+  "${MC_IMAGE}" admin policy add minio2019 beta-rw /policy.json 2>/dev/null; then
+  echo "  ✓ Created policy 'beta-rw'"
+else
+  echo "  ⚠️  Failed to create policy 'beta-rw'"
+fi
 
 # -----------------------
 # Create users with policies (2019 syntax: requires POLICYNAME as 4th arg)
 # -----------------------
 echo "👥 Creating users with policies..."
 # 2019 syntax: mc admin user add TARGET ACCESSKEY SECRETKEY POLICYNAME
-docker run --rm --network host -e MC_HOST_minio2019 \
-  "${MC_IMAGE}" admin user add minio2019 "${ALICE_USER}" "${ALICE_PASS}" alpha-rw
 
-docker run --rm --network host -e MC_HOST_minio2019 \
-  "${MC_IMAGE}" admin user add minio2019 "${BOB_USER}" "${BOB_PASS}" beta-rw
+# Check if alice user exists, create if not
+if docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" admin user info minio2019 "${ALICE_USER}" >/dev/null 2>&1; then
+  echo "  ⚠️  User '${ALICE_USER}' already exists, skipping"
+elif docker run --rm --network host -e MC_HOST_minio2019 \
+  "${MC_IMAGE}" admin user add minio2019 "${ALICE_USER}" "${ALICE_PASS}" alpha-rw 2>/dev/null; then
+  echo "  ✓ Created user '${ALICE_USER}' with policy 'alpha-rw'"
+else
+  echo "  ⚠️  Failed to create user '${ALICE_USER}'"
+fi
+
+# Check if bob user exists, create if not
+if docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" admin user info minio2019 "${BOB_USER}" >/dev/null 2>&1; then
+  echo "  ⚠️  User '${BOB_USER}' already exists, skipping"
+elif docker run --rm --network host -e MC_HOST_minio2019 \
+  "${MC_IMAGE}" admin user add minio2019 "${BOB_USER}" "${BOB_PASS}" beta-rw 2>/dev/null; then
+  echo "  ✓ Created user '${BOB_USER}' with policy 'beta-rw'"
+else
+  echo "  ⚠️  Failed to create user '${BOB_USER}'"
+fi
 
 # -----------------------
 # Public-read buckets (2019 syntax: no "set" subcommand)
@@ -175,10 +231,11 @@ docker run --rm --network host -e MC_HOST_minio2019 \
 # -----------------------
 # Upload basic objects
 # -----------------------
-echo "📤 Uploading test objects..."
+echo "📤 Uploading basic test objects..."
 upload_object () {
   local bucket=$1
   local name=$2
+  local quiet=${3:-false}
 
   tmpfile="$(mktemp)"
   head -c "${OBJECT_SIZE}" /dev/urandom > "${tmpfile}"
@@ -187,7 +244,11 @@ upload_object () {
     -e MC_HOST_minio2019 \
     -v "${tmpfile}:/file.bin:ro" \
     "${MC_IMAGE}" \
-    cp /file.bin "minio2019/${bucket}/${name}"
+    cp /file.bin "minio2019/${bucket}/${name}" >/dev/null 2>&1
+
+  if [ "${quiet}" != "true" ]; then
+    echo "  ✓ Uploaded ${bucket}/${name}"
+  fi
 
   rm -f "${tmpfile}"
 }
@@ -199,7 +260,7 @@ upload_object gamma public-object.bin
 # -----------------------
 # Folder Structure Objects (for delimiter/prefix testing)
 # -----------------------
-echo "📁 Creating folder structure for ListObjects delimiter testing..."
+echo "📁 Creating folder structure for ListObjects testing..."
 upload_object alpha folder1/file1.txt
 upload_object alpha folder1/file2.txt
 upload_object alpha folder1/subfolder/deep.txt
@@ -217,9 +278,12 @@ echo "🔬 Testing advanced FS mode features..."
 
 # Test versioning (if supported in 2019 FS mode)
 echo "  Testing versioning..."
-docker run --rm --network host -e MC_HOST_minio2019 \
-  "${MC_IMAGE}" version enable "minio2019/alpha" || \
+if docker run --rm --network host -e MC_HOST_minio2019 \
+  "${MC_IMAGE}" version enable "minio2019/alpha" >/dev/null 2>&1; then
+  echo "  ✓ Versioning enabled on bucket 'alpha'"
+else
   echo "  ⚠️  Versioning not available in 2019 FS mode"
+fi
 
 # Upload object with custom metadata (2019 syntax: comma separator, simple values)
 echo "  Testing custom metadata..."
@@ -228,12 +292,16 @@ head -c "${OBJECT_SIZE}" /dev/urandom > "${tmpfile}"
 
 # Note: 2019 MC has trouble with values containing '=' or complex syntax
 # Use simple key=value pairs only
-docker run --rm --network host \
+if docker run --rm --network host \
   -e MC_HOST_minio2019 \
   -v "${tmpfile}:/file.bin:ro" \
   "${MC_IMAGE}" \
   cp --attr "x-amz-meta-author=TestUser,x-amz-meta-project=DirIO,x-amz-meta-version=1" \
-  /file.bin "minio2019/alpha/metadata-test.bin"
+  /file.bin "minio2019/alpha/metadata-test.bin" >/dev/null 2>&1; then
+  echo "  ✓ Uploaded alpha/metadata-test.bin (with custom metadata)"
+else
+  echo "  ⚠️  Failed to upload object with custom metadata"
+fi
 
 rm -f "${tmpfile}"
 
@@ -264,7 +332,8 @@ docker run --rm --network host \
   -e MC_HOST_minio2019 \
   -v "${tmpfile}:/tagging-test.txt:ro" \
   "${MC_IMAGE}" \
-  cp /tagging-test.txt "minio2019/alpha/tagging-test.txt"
+  cp /tagging-test.txt "minio2019/alpha/tagging-test.txt" >/dev/null 2>&1
+echo "  ✓ Uploaded alpha/tagging-test.txt"
 rm -f "${tmpfile}"
 
 # Note: Object tagging (mc tag) was not available in 2019
@@ -272,42 +341,52 @@ rm -f "${tmpfile}"
 echo "  ⚠️  Object tagging (mc tag) not available in 2019 - using custom metadata instead"
 tmpfile="$(mktemp)"
 echo "simulated tagged content" > "${tmpfile}"
-docker run --rm --network host \
+if docker run --rm --network host \
   -e MC_HOST_minio2019 \
   -v "${tmpfile}:/tagged.txt:ro" \
   "${MC_IMAGE}" \
   cp --attr "x-amz-meta-environment=test,x-amz-meta-project=dirio,x-amz-meta-version=1.0" \
-  /tagged.txt "minio2019/alpha/simulated-tagged.txt"
+  /tagged.txt "minio2019/alpha/simulated-tagged.txt" >/dev/null 2>&1; then
+  echo "  ✓ Uploaded alpha/simulated-tagged.txt (using metadata as tag simulation)"
+else
+  echo "  ⚠️  Failed to upload simulated tagged object"
+fi
 rm -f "${tmpfile}"
 
 # -----------------------
 # Multipart Upload (large file) Testing
 # -----------------------
-echo "📦 Testing Multipart Upload (large file >5MB)..."
+echo "📦 Uploading large file for multipart testing..."
 # Create a 10MB file for multipart upload testing
 largefile="$(mktemp)"
 dd if=/dev/zero of="${largefile}" bs=1M count=10 2>/dev/null
 
-docker run --rm --network host \
+if docker run --rm --network host \
   -e MC_HOST_minio2019 \
   -v "${largefile}:/large-file.dat:ro" \
   "${MC_IMAGE}" \
-  cp /large-file.dat "minio2019/alpha/large-file.dat" || \
-  echo "  ⚠️  Multipart upload might not work in 2019 FS mode"
+  cp /large-file.dat "minio2019/alpha/large-file.dat" >/dev/null 2>&1; then
+  echo "  ✓ Uploaded alpha/large-file.dat (10MB, likely multipart)"
+else
+  echo "  ⚠️  Multipart upload failed (not supported in 2019 FS mode?)"
+fi
 
-docker run --rm --network host \
+if docker run --rm --network host \
   -e MC_HOST_minio2019 \
   -v "${largefile}:/large-file.dat:ro" \
   "${MC_IMAGE}" \
-  cp /large-file.dat "minio2019/gamma/large-public.dat" || \
-  echo "  ⚠️  Multipart upload might not work in 2019 FS mode"
+  cp /large-file.dat "minio2019/gamma/large-public.dat" >/dev/null 2>&1; then
+  echo "  ✓ Uploaded gamma/large-public.dat (10MB, likely multipart)"
+else
+  echo "  ⚠️  Multipart upload failed (not supported in 2019 FS mode?)"
+fi
 
 rm -f "${largefile}"
 
 # -----------------------
 # Additional Metadata Variations (2019 syntax: comma separator, simple values)
 # -----------------------
-echo "🔖 Creating objects with various metadata combinations..."
+echo "🔖 Uploading objects with various metadata..."
 
 # Object with Content-Type only
 tmpfile="$(mktemp)"
@@ -317,7 +396,8 @@ docker run --rm --network host \
   -v "${tmpfile}:/data.json:ro" \
   "${MC_IMAGE}" \
   cp --attr "Content-Type=application/json" \
-  /data.json "minio2019/alpha/data.json"
+  /data.json "minio2019/alpha/data.json" >/dev/null 2>&1
+echo "  ✓ Uploaded alpha/data.json (Content-Type: application/json)"
 rm -f "${tmpfile}"
 
 # Object with Content-Type and custom metadata
@@ -328,7 +408,8 @@ docker run --rm --network host \
   -v "${tmpfile}:/index.html:ro" \
   "${MC_IMAGE}" \
   cp --attr "Content-Type=text/html,x-amz-meta-page=index" \
-  /index.html "minio2019/gamma/index.html"
+  /index.html "minio2019/gamma/index.html" >/dev/null 2>&1
+echo "  ✓ Uploaded gamma/index.html (Content-Type + custom metadata)"
 rm -f "${tmpfile}"
 
 # Object with Content-Encoding
@@ -339,7 +420,8 @@ docker run --rm --network host \
   -v "${tmpfile}:/data.gz:ro" \
   "${MC_IMAGE}" \
   cp --attr "Content-Type=application/gzip,Content-Encoding=gzip" \
-  /data.gz "minio2019/beta/data.gz"
+  /data.gz "minio2019/beta/data.gz" >/dev/null 2>&1
+echo "  ✓ Uploaded beta/data.gz (Content-Encoding: gzip)"
 rm -f "${tmpfile}"
 
 # Object with multiple custom metadata fields (x-amz-meta-*)
@@ -350,7 +432,8 @@ docker run --rm --network host \
   -v "${tmpfile}:/userdata.txt:ro" \
   "${MC_IMAGE}" \
   cp --attr "x-amz-meta-user-id=12345,x-amz-meta-department=engineering,x-amz-meta-uploaded-by=alice" \
-  /userdata.txt "minio2019/alpha/userdata.txt"
+  /userdata.txt "minio2019/alpha/userdata.txt" >/dev/null 2>&1
+echo "  ✓ Uploaded alpha/userdata.txt (multiple custom metadata fields)"
 rm -f "${tmpfile}"
 
 # Object with Content-Language
@@ -361,8 +444,463 @@ docker run --rm --network host \
   -v "${tmpfile}:/french.txt:ro" \
   "${MC_IMAGE}" \
   cp --attr "Content-Type=text/plain,Content-Language=fr" \
-  /french.txt "minio2019/alpha/french.txt"
+  /french.txt "minio2019/alpha/french.txt" >/dev/null 2>&1
+echo "  ✓ Uploaded alpha/french.txt (Content-Language: fr)"
 rm -f "${tmpfile}"
+
+# -----------------------
+# Advanced Policy Test Scenarios (Phase 3.3)
+# -----------------------
+if [ "${SETUP_POLICY_TESTS}" = "true" ]; then
+  echo ""
+  echo "🔒 Setting up advanced policy test scenarios..."
+  echo ""
+
+  # -----------------------
+  # 1. Conditional Policy Testing
+  # -----------------------
+  echo "📋 Creating buckets for conditional policy tests..."
+
+  # Create policy-test buckets
+  for bucket in policy-ip-test policy-time-test policy-string-test policy-numeric-test; do
+    if docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" ls "minio2019/${bucket}" >/dev/null 2>&1; then
+      echo "  ⚠️  Bucket '${bucket}' already exists, skipping"
+    else
+      docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" mb "minio2019/${bucket}" >/dev/null 2>&1
+      echo "  ✓ Created bucket '${bucket}'"
+    fi
+  done
+
+  # Upload test objects to policy buckets
+  echo "📤 Uploading objects for conditional policy tests..."
+  upload_object policy-ip-test ip-restricted.txt true
+  upload_object policy-time-test time-restricted.txt true
+  upload_object policy-string-test useragent-restricted.txt true
+  upload_object policy-numeric-test size-restricted.txt true
+  echo "  ✓ Uploaded test objects to policy buckets"
+
+  # Create example conditional policies
+  echo "📝 Creating example conditional policy documents..."
+
+  # IP-based condition policy
+  cat > /tmp/policy-ip-condition.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::policy-ip-test/*"],
+      "Condition": {
+        "IpAddress": {
+          "aws:SourceIp": ["192.168.1.0/24", "10.0.0.0/8"]
+        }
+      }
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-ip-condition.json (allows GetObject only from specific IPs)"
+
+  # Date-based condition policy
+  cat > /tmp/policy-time-condition.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::policy-time-test/*"],
+      "Condition": {
+        "DateGreaterThan": {
+          "aws:CurrentTime": "2026-01-01T00:00:00Z"
+        },
+        "DateLessThan": {
+          "aws:CurrentTime": "2026-12-31T23:59:59Z"
+        }
+      }
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-time-condition.json (allows GetObject only during 2026)"
+
+  # String condition policy (UserAgent)
+  cat > /tmp/policy-string-condition.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::policy-string-test/*"],
+      "Condition": {
+        "StringLike": {
+          "aws:UserAgent": ["aws-cli/*", "boto3/*"]
+        }
+      }
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-string-condition.json (allows GetObject only for aws-cli/boto3)"
+
+  # Numeric condition policy (object size)
+  cat > /tmp/policy-numeric-condition.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject"],
+      "Resource": ["arn:aws:s3:::policy-numeric-test/*"],
+      "Condition": {
+        "NumericLessThan": {
+          "s3:content-length": 10485760
+        }
+      }
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-numeric-condition.json (allows PutObject only for files < 10MB)"
+
+  # -----------------------
+  # 2. NotAction/NotResource/NotPrincipal Testing
+  # -----------------------
+  echo ""
+  echo "📋 Creating buckets for NotAction/NotResource tests..."
+
+  for bucket in policy-notaction-test policy-notresource-test; do
+    if docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" ls "minio2019/${bucket}" >/dev/null 2>&1; then
+      echo "  ⚠️  Bucket '${bucket}' already exists, skipping"
+    else
+      docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" mb "minio2019/${bucket}" >/dev/null 2>&1
+      echo "  ✓ Created bucket '${bucket}'"
+    fi
+  done
+
+  # Upload test objects
+  echo "📤 Uploading objects for NotAction/NotResource tests..."
+  upload_object policy-notaction-test readonly.txt true
+  upload_object policy-notresource-test protected-file.txt true
+  upload_object policy-notresource-test unprotected-file.txt true
+  echo "  ✓ Uploaded test objects"
+
+  # Create NotAction policy (deny everything except GetObject)
+  cat > /tmp/policy-notaction.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "NotAction": ["s3:DeleteObject", "s3:DeleteBucket"],
+      "Resource": [
+        "arn:aws:s3:::policy-notaction-test",
+        "arn:aws:s3:::policy-notaction-test/*"
+      ]
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-notaction.json (allows everything except delete operations)"
+
+  # Create NotResource policy (protect specific files)
+  cat > /tmp/policy-notresource.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Deny",
+      "Action": ["s3:DeleteObject"],
+      "NotResource": ["arn:aws:s3:::policy-notresource-test/unprotected-*"]
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-notresource.json (deny delete except for unprotected-* files)"
+
+  # -----------------------
+  # 3. Policy Variables Testing
+  # -----------------------
+  echo ""
+  echo "📋 Creating buckets for policy variable tests..."
+
+  if docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" ls "minio2019/policy-variables-test" >/dev/null 2>&1; then
+    echo "  ⚠️  Bucket 'policy-variables-test' already exists, skipping"
+  else
+    docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" mb "minio2019/policy-variables-test" >/dev/null 2>&1
+    echo "  ✓ Created bucket 'policy-variables-test'"
+  fi
+
+  # Create user-specific folders
+  echo "📤 Creating user-specific folder structure..."
+  upload_object policy-variables-test alice/private-file.txt true
+  upload_object policy-variables-test alice/data.json true
+  upload_object policy-variables-test bob/private-file.txt true
+  upload_object policy-variables-test bob/data.json true
+  upload_object policy-variables-test shared/public-file.txt true
+  echo "  ✓ Created user-specific folders"
+
+  # Create policy with ${aws:username} variable
+  cat > /tmp/policy-username-variable.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Resource": ["arn:aws:s3:::policy-variables-test/${aws:username}/*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::policy-variables-test/shared/*"]
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-username-variable.json (allows access to own prefix + shared)"
+
+  # Create policy with multiple variables
+  cat > /tmp/policy-multiple-variables.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::policy-variables-test/*"],
+      "Condition": {
+        "IpAddress": {
+          "aws:SourceIp": "${aws:SourceIp}"
+        },
+        "StringEquals": {
+          "s3:prefix": "${aws:username}/"
+        }
+      }
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-multiple-variables.json (combines variables in conditions)"
+
+  # -----------------------
+  # 4. ListBuckets/ListObjects Filtering Testing
+  # -----------------------
+  echo ""
+  echo "📋 Creating buckets for result filtering tests..."
+
+  for bucket in filter-alice-only filter-bob-only filter-shared; do
+    if docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" ls "minio2019/${bucket}" >/dev/null 2>&1; then
+      echo "  ⚠️  Bucket '${bucket}' already exists, skipping"
+    else
+      docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" mb "minio2019/${bucket}" >/dev/null 2>&1
+      echo "  ✓ Created bucket '${bucket}'"
+    fi
+  done
+
+  # Upload objects to filtering test buckets
+  echo "📤 Uploading objects for filtering tests..."
+  for i in {1..20}; do
+    upload_object filter-alice-only "alice-file-${i}.txt" true
+  done
+  echo "  ✓ Uploaded 20 objects to filter-alice-only"
+
+  for i in {1..20}; do
+    upload_object filter-bob-only "bob-file-${i}.txt" true
+  done
+  echo "  ✓ Uploaded 20 objects to filter-bob-only"
+
+  for i in {1..20}; do
+    upload_object filter-shared "shared-file-${i}.txt" true
+  done
+  echo "  ✓ Uploaded 20 objects to filter-shared"
+
+  # Create bucket with mixed permissions (some objects readable, some not)
+  if docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" ls "minio2019/filter-mixed-perms" >/dev/null 2>&1; then
+    echo "  ⚠️  Bucket 'filter-mixed-perms' already exists, skipping"
+  else
+    docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" mb "minio2019/filter-mixed-perms" >/dev/null 2>&1
+    echo "  ✓ Created bucket 'filter-mixed-perms'"
+  fi
+
+  # Create objects with different prefixes for partial permissions
+  echo "📤 Creating objects with different permission prefixes..."
+  upload_object filter-mixed-perms public/file1.txt true
+  upload_object filter-mixed-perms public/file2.txt true
+  upload_object filter-mixed-perms private/file1.txt true
+  upload_object filter-mixed-perms private/file2.txt true
+  upload_object filter-mixed-perms restricted/file1.txt true
+  upload_object filter-mixed-perms restricted/file2.txt true
+  echo "  ✓ Created mixed-permission object structure"
+
+  # Create policy for partial bucket access (prefix-based)
+  cat > /tmp/policy-prefix-filter.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": ["arn:aws:s3:::filter-mixed-perms"],
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": ["public/*", ""]
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::filter-mixed-perms/public/*"]
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-prefix-filter.json (allows listing/reading only public/* prefix)"
+
+  # Create policy for partial bucket list access
+  cat > /tmp/policy-bucket-filter.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket", "s3:GetObject"],
+      "Resource": [
+        "arn:aws:s3:::filter-alice-only",
+        "arn:aws:s3:::filter-alice-only/*",
+        "arn:aws:s3:::filter-shared",
+        "arn:aws:s3:::filter-shared/*"
+      ]
+    }
+  ]
+}
+EOF
+  echo "  ✓ Created policy-bucket-filter.json (alice can only see 2 of 4 filter buckets)"
+
+  # -----------------------
+  # 5. POST Policy Upload Testing
+  # -----------------------
+  echo ""
+  echo "📋 Creating POST upload policy examples..."
+
+  # Create bucket for POST uploads
+  if docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" ls "minio2019/post-upload-test" >/dev/null 2>&1; then
+    echo "  ⚠️  Bucket 'post-upload-test' already exists, skipping"
+  else
+    docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" mb "minio2019/post-upload-test" >/dev/null 2>&1
+    echo "  ✓ Created bucket 'post-upload-test'"
+  fi
+
+  # Create example POST upload policy
+  cat > /tmp/post-upload-policy.json <<'EOF'
+{
+  "expiration": "2026-12-31T23:59:59Z",
+  "conditions": [
+    {"bucket": "post-upload-test"},
+    ["starts-with", "$key", "uploads/"],
+    {"acl": "private"},
+    ["content-length-range", 0, 10485760],
+    ["starts-with", "$Content-Type", "image/"]
+  ]
+}
+EOF
+  echo "  ✓ Created post-upload-policy.json (example browser upload policy)"
+
+  # Create HTML form example
+  cat > /tmp/post-upload-form.html <<'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+  <title>S3 POST Upload Example</title>
+</head>
+<body>
+  <h1>S3 POST Upload Test</h1>
+  <form action="http://localhost:9001/post-upload-test" method="post" enctype="multipart/form-data">
+    <input type="hidden" name="key" value="uploads/${filename}">
+    <input type="hidden" name="acl" value="private">
+    <input type="hidden" name="Content-Type" value="image/jpeg">
+    <input type="hidden" name="policy" value="BASE64_ENCODED_POLICY">
+    <input type="hidden" name="x-amz-algorithm" value="AWS4-HMAC-SHA256">
+    <input type="hidden" name="x-amz-credential" value="CREDENTIALS">
+    <input type="hidden" name="x-amz-date" value="DATE">
+    <input type="hidden" name="x-amz-signature" value="SIGNATURE">
+    <input type="file" name="file" accept="image/*">
+    <input type="submit" value="Upload">
+  </form>
+  <p>Note: This is an example form. Policy, credentials, and signature must be generated server-side.</p>
+</body>
+</html>
+EOF
+  echo "  ✓ Created post-upload-form.html (example HTML form for browser uploads)"
+
+  # Create restrictive POST policy (size limits, content type)
+  cat > /tmp/post-upload-restrictive.json <<'EOF'
+{
+  "expiration": "2026-12-31T23:59:59Z",
+  "conditions": [
+    {"bucket": "post-upload-test"},
+    ["starts-with", "$key", "images/"],
+    {"acl": "public-read"},
+    ["content-length-range", 1024, 5242880],
+    {"Content-Type": "image/jpeg"},
+    {"x-amz-meta-uploaded-by": "browser-form"}
+  ]
+}
+EOF
+  echo "  ✓ Created post-upload-restrictive.json (restrictive POST policy with size/type limits)"
+
+  # -----------------------
+  # Summary of policy test artifacts
+  # -----------------------
+  echo ""
+  echo "✅ Advanced policy test setup complete!"
+  echo ""
+  echo "📁 Policy Test Artifacts Created:"
+  echo ""
+  echo "Conditional Policy Examples:"
+  echo "  - /tmp/policy-ip-condition.json (IP-based access)"
+  echo "  - /tmp/policy-time-condition.json (time-based access)"
+  echo "  - /tmp/policy-string-condition.json (UserAgent matching)"
+  echo "  - /tmp/policy-numeric-condition.json (file size limits)"
+  echo ""
+  echo "NotAction/NotResource Examples:"
+  echo "  - /tmp/policy-notaction.json (allow all except delete)"
+  echo "  - /tmp/policy-notresource.json (protect specific files)"
+  echo ""
+  echo "Policy Variable Examples:"
+  echo "  - /tmp/policy-username-variable.json (user-specific prefixes)"
+  echo "  - /tmp/policy-multiple-variables.json (multiple variables)"
+  echo ""
+  echo "Result Filtering Examples:"
+  echo "  - /tmp/policy-prefix-filter.json (prefix-based ListObjects filtering)"
+  echo "  - /tmp/policy-bucket-filter.json (partial ListBuckets access)"
+  echo ""
+  echo "POST Upload Examples:"
+  echo "  - /tmp/post-upload-policy.json (basic browser upload)"
+  echo "  - /tmp/post-upload-restrictive.json (restrictive upload policy)"
+  echo "  - /tmp/post-upload-form.html (HTML form example)"
+  echo ""
+  echo "📦 Test Buckets Created:"
+  echo "  - policy-ip-test (for IP condition testing)"
+  echo "  - policy-time-test (for date/time condition testing)"
+  echo "  - policy-string-test (for string matching testing)"
+  echo "  - policy-numeric-test (for numeric condition testing)"
+  echo "  - policy-notaction-test (for NotAction testing)"
+  echo "  - policy-notresource-test (for NotResource testing)"
+  echo "  - policy-variables-test (for policy variable substitution)"
+  echo "  - filter-alice-only (for ListBuckets filtering - alice only)"
+  echo "  - filter-bob-only (for ListBuckets filtering - bob only)"
+  echo "  - filter-shared (for ListBuckets filtering - shared)"
+  echo "  - filter-mixed-perms (for ListObjects prefix-based filtering)"
+  echo "  - post-upload-test (for POST upload testing)"
+  echo ""
+else
+  echo ""
+  echo "⏭️  Skipping advanced policy tests (set SETUP_POLICY_TESTS=true to enable)"
+fi
 
 # -----------------------
 # Examine what was created
@@ -415,10 +953,17 @@ echo "  - Metadata separator: comma (,) not semicolon (;)"
 echo "  - Metadata values with '=' fail (e.g., Cache-Control=max-age=3600)"
 echo "  - Content-Disposition with filename parameters fails"
 echo
+echo "Environment variables:"
+echo "  OBJECT_SIZE=${OBJECT_SIZE}       # Test object size in bytes"
+echo "  SETUP_POLICY_TESTS=${SETUP_POLICY_TESTS}  # Advanced policy test scenarios"
+echo
 echo "Next steps:"
 echo "  1. Examine ${DATA_DIR}/.minio.sys/ to see what metadata was created"
 echo "  2. Compare with modern MinIO data to identify differences"
 echo "  3. Import this data into DirIO to test compatibility"
 echo "  4. Run DirIO S3 API tests against imported data to verify correctness"
+echo
+echo "To setup advanced policy test scenarios (Phase 3.3):"
+echo "  SETUP_POLICY_TESTS=true ./$(basename "$0")"
 echo
 echo "To stop: docker rm -f ${MINIO_CONTAINER}"
