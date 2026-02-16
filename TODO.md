@@ -144,6 +144,13 @@ Current status: **Phase 3.2 COMPLETE** - All critical S3 features implemented!
 - ✅ UserStatus enum type with validation
 - ✅ Ownership semantics (nil = admin-only, UUID = user ownership)
 - ✅ Setup scripts with comprehensive test scenarios
+- ✅ **Ownership-based authorization** - Resource owners have implicit access (AWS-like model)
+  - ✅ Evaluation at position 3.5 (after explicit deny, before default deny)
+  - ✅ Bucket owners can access their buckets
+  - ✅ Object owners can access their objects
+  - ✅ Bucket owners have access to all objects in their bucket (AWS model)
+  - ✅ Explicit deny beats ownership (AWS security principle)
+  - ✅ Comprehensive test coverage (14 test scenarios)
 
 ### Policy Evaluation Enhancements (Test scenarios ready in setup script)
 - [ ] **Policy condition evaluation** - IpAddress, StringEquals, DateLessThan, etc.
@@ -157,13 +164,18 @@ Current status: **Phase 3.2 COMPLETE** - All critical S3 features implemented!
   - [ ] NotAction support (deny everything except specified actions) (test: policy-notaction-test bucket)
   - [ ] NotResource support (apply to all resources except specified) (test: policy-notresource-test bucket)
   - [ ] NotPrincipal support (apply to all principals except specified)
-- [ ] **Policy variables** - Dynamic variable substitution (test scenarios ready)
-  - [ ] ${aws:username} - Current authenticated username (test: policy-variables-test bucket, ready to implement!)
-  - [ ] ${aws:userid} - Current authenticated user ID (UUID support added!)
-  - [ ] ${aws:SourceIp} - Request source IP (test: policy-ip-condition.json)
-  - [ ] ${s3:prefix} - Object key prefix (test: policy-prefix-filter.json)
-  - [ ] ${s3:delimiter} - Delimiter for ListObjects
-  - [ ] ${aws:CurrentTime} - Request timestamp (test: policy-time-condition.json)
+- [x] **Policy variables** ✅ COMPLETE - Dynamic variable substitution (test scenarios ready)
+  - [x] ${aws:username} - Current authenticated username (test: policy-variables-test bucket)
+  - [x] ${aws:userid} - Current authenticated user ID (UUID-based)
+  - [x] ${aws:SourceIp} - Request source IP
+  - [x] ${s3:prefix} - Object key prefix (for ListObjects filtering)
+  - [x] ${s3:delimiter} - Delimiter for ListObjects
+  - [x] ${aws:CurrentTime} - Request timestamp (ISO 8601 format)
+  - [x] ${aws:UserAgent} - HTTP User-Agent header
+  - [x] Variable substitution engine with regex-based pattern matching
+  - [x] Context building from HTTP requests
+  - [x] Integration with policy evaluation engine
+  - [x] Comprehensive test coverage (all variables tested)
 
 ### Result Filtering (Test buckets ready: filter-alice-only, filter-bob-only, filter-shared, filter-mixed-perms)
 - [ ] **ListBuckets result filtering** - Only return buckets user has permission to access
@@ -193,7 +205,7 @@ Current status: **Phase 3.2 COMPLETE** - All critical S3 features implemented!
 - [x] ListBuckets/ListObjects filtering with partial permissions - Setup script creates filter-* buckets with 20 objects each
 - [ ] POST upload with signed policies - TODO: Add to setup script
 - [ ] Automated tests for condition evaluation (once implemented)
-- [ ] Automated tests for policy variables (once implemented)
+- [x] Automated tests for policy variables ✅ COMPLETE - Comprehensive test coverage in internal/policy/variables and internal/policy/matcher_test.go
 - [ ] Automated tests for result filtering (once implemented)
 
 ### Setup Script Enhancements ✅ COMPLETE

@@ -30,12 +30,13 @@ func New() *Engine {
 // Evaluate evaluates a request against all applicable policies.
 // This is the main entry point for authorization decisions.
 //
-// Evaluation order:
+// Evaluation order (AWS-like model):
 // 1. Admin bypass - authenticated admin can do everything
-// 2. Explicit deny in bucket policy - immediately denies
+// 2. Explicit deny in bucket policy - immediately denies (irrevocable)
 // 3. Allow in bucket policy - allows if found
 // 4. IAM user policies (Phase 5) - not implemented yet
-// 5. Default deny - if no explicit allow found
+// 5. Ownership check - resource owner has implicit access
+// 6. Default deny - if no explicit allow found
 //
 // The action in req.Action should be the MAPPED permission (from ActionMapper),
 // not the route action. The authorization middleware handles this translation.
@@ -51,7 +52,7 @@ func (e *Engine) Evaluate(ctx context.Context, req *RequestContext) Decision {
 		if bucketPolicy != nil {
 			decision := e.evaluatePolicy(bucketPolicy, req)
 			if decision == DecisionExplicitDeny {
-				return DecisionExplicitDeny // Explicit deny always wins
+				return DecisionExplicitDeny // Explicit deny always wins (AWS model)
 			}
 			if decision == DecisionAllow {
 				return DecisionAllow
@@ -62,14 +63,16 @@ func (e *Engine) Evaluate(ctx context.Context, req *RequestContext) Decision {
 	// 3. IAM user policy evaluation (Phase 5 - defer)
 	// TODO: Evaluate user's attached IAM policies
 
-	// 4. Default behavior based on authentication status
+	// 4. Ownership check (Phase 3.3 - AWS-like position 3.5)
+	// If the authenticated user owns the resource, grant implicit access
+	// This check happens AFTER explicit deny (AWS model: deny beats ownership)
 	if req.Principal != nil && !req.Principal.IsAnonymous {
-		// Phase 3.1: Authenticated non-admin users denied by default
-		// Phase 5: Will evaluate user's attached IAM policies instead
-		return DecisionDeny
+		if checkOwnership(req) {
+			return DecisionAllow
+		}
 	}
 
-	// 5. Default deny for anonymous
+	// 5. Default deny
 	return DecisionDeny
 }
 
@@ -140,4 +143,45 @@ func (e *Engine) GetCache() *Cache {
 // HasBucketPolicy checks if a bucket has a policy set
 func (e *Engine) HasBucketPolicy(bucket string) bool {
 	return e.cache.HasBucketPolicy(bucket)
+}
+
+// ============================================================
+// Ownership-based Authorization (Phase 3.3)
+// ============================================================
+
+// checkOwnership checks if the principal owns the resource being accessed.
+// Returns true if the user owns the bucket (for bucket operations) or
+// the object (for object operations).
+//
+// Ownership logic (AWS-like):
+// - For object operations: Check if user owns the object
+// - For bucket operations: Check if user owns the bucket
+// - nil owner means admin-only (not owned by this user)
+// - Ownership grants implicit access (unless denied by explicit deny)
+func checkOwnership(req *RequestContext) bool {
+	if req.Principal == nil || req.Principal.User == nil {
+		return false // Anonymous or nil principal
+	}
+
+	if req.Resource == nil {
+		return false // No resource specified
+	}
+
+	userUUID := req.Principal.User.UUID
+
+	// For object operations, check object ownership first
+	if req.Resource.Key != "" && req.ObjectOwnerUUID != nil {
+		if *req.ObjectOwnerUUID == userUUID {
+			return true
+		}
+		// Object not owned by user, but might still own the bucket
+		// (bucket owner has control over all objects in AWS model)
+	}
+
+	// For bucket operations or if object not owned, check bucket ownership
+	if req.BucketOwnerUUID != nil && *req.BucketOwnerUUID == userUUID {
+		return true
+	}
+
+	return false
 }

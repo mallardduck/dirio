@@ -3,6 +3,7 @@ package policy
 import (
 	"strings"
 
+	"github.com/mallardduck/dirio/internal/policy/variables"
 	"github.com/mallardduck/dirio/pkg/iam"
 )
 
@@ -166,6 +167,31 @@ func matchSingleAction(pattern, reqAction string) bool {
 	return false
 }
 
+// matchResourceWithVariables checks if the request resource matches the statement resource,
+// applying variable substitution if a variable context is provided.
+//
+// Variable substitution examples:
+//   - "arn:aws:s3:::bucket/${aws:username}/*" → "arn:aws:s3:::bucket/alice/*"
+//   - "arn:aws:s3:::bucket/${aws:userid}/*" → "arn:aws:s3:::bucket/550e8400-e29b-41d4-a716-446655440000/*"
+func matchResourceWithVariables(stmtResource interface{}, reqResource *Resource, varCtx *variables.Context) bool {
+	if varCtx == nil {
+		// No variable context, fall back to regular matching
+		return matchResource(stmtResource, reqResource)
+	}
+
+	// Apply variable substitution to statement resources
+	substitutedResource, err := varCtx.SubstituteInterface(stmtResource)
+	if err != nil {
+		// Variable substitution failed (e.g., unknown variable, missing context value)
+		// Fall back to matching with original pattern
+		// This allows policies to work even if some variables aren't available
+		return matchResource(stmtResource, reqResource)
+	}
+
+	// Use existing matchResource with substituted patterns
+	return matchResource(substitutedResource, reqResource)
+}
+
 // matchResource checks if the request resource matches the statement resource.
 //
 // Resource formats:
@@ -246,13 +272,13 @@ func evaluateStatement(stmt *iam.Statement, req *RequestContext) Decision {
 		return DecisionDeny // Statement doesn't apply
 	}
 
-	// 3. Check if resource matches
-	if !matchResource(stmt.Resource, req.Resource) {
+	// 3. Check if resource matches (with variable substitution)
+	if !matchResourceWithVariables(stmt.Resource, req.Resource, req.VarContext) {
 		return DecisionDeny // Statement doesn't apply
 	}
 
-	// 4. Check conditions (Phase 3.2 - skip for MVP)
-	// TODO: Implement condition evaluation
+	// 4. Check conditions (Phase 3.3 - deferred)
+	// TODO: Implement condition evaluation with variable substitution
 
 	// 5. Return effect
 	if stmt.Effect == "Deny" {

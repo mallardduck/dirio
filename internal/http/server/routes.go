@@ -11,6 +11,7 @@ import (
 
 	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/logging"
+	"github.com/mallardduck/dirio/internal/persistence/metadata"
 
 	"github.com/mallardduck/dirio/internal/http/api"
 	"github.com/mallardduck/dirio/internal/http/auth"
@@ -23,8 +24,9 @@ import (
 type RouteDependencies struct {
 	Auth             *auth.Authenticator
 	PolicyEngine     *policy.Engine
-	RootAccessKey    string // Primary admin access key
-	AltRootAccessKey string // Alternative admin access key (from data config)
+	Metadata         *metadata.Manager // For ownership-based authorization
+	RootAccessKey    string            // Primary admin access key
+	AltRootAccessKey string            // Alternative admin access key (from data config)
 	APIHandler       *api.Handler
 	Debug            bool
 }
@@ -123,6 +125,7 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 		// Build authorization middleware config
 		authzConfig := &policy.AuthorizationConfig{
 			Engine:           deps.PolicyEngine,
+			Metadata:         deps.Metadata,
 			RootAccessKey:    deps.RootAccessKey,
 			AltRootAccessKey: deps.AltRootAccessKey,
 		}

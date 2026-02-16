@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
+	"github.com/mallardduck/dirio/internal/policy/variables"
 )
 
 // RequestContext contains all information needed for policy evaluation
@@ -16,7 +18,12 @@ type RequestContext struct {
 	Action          string    // The IAM permission to check (e.g., "s3:GetObject")
 	Resource        *Resource // The resource being accessed
 	Conditions      *ConditionContext
-	OriginalRequest *http.Request // Access to raw request if needed
+	VarContext      *variables.Context // Variable substitution context (Phase 3.3)
+	OriginalRequest *http.Request      // Access to raw request if needed
+
+	// Ownership information (Phase 3.3) - populated by middleware for ownership-based authorization
+	BucketOwnerUUID *uuid.UUID // Owner UUID of the bucket (nil if admin-only or unknown)
+	ObjectOwnerUUID *uuid.UUID // Owner UUID of the object (nil if admin-only, unknown, or bucket operation)
 }
 
 // Principal represents the requester making the API call

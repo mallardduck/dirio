@@ -3,7 +3,9 @@ package policy
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
+	"github.com/mallardduck/dirio/internal/policy/variables"
 	"github.com/mallardduck/dirio/pkg/iam"
 )
 
@@ -295,6 +297,195 @@ func TestResource_ARN(t *testing.T) {
 			got := tt.resource.ARN()
 			if got != tt.expected {
 				t.Errorf("ARN() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMatchResourceWithVariables(t *testing.T) {
+	testUUID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+
+	// Create variable context for a user named "alice"
+	varCtx := &variables.Context{
+		Username: "alice",
+		UserID:   testUUID,
+	}
+
+	// Test resources
+	aliceResource := &Resource{Bucket: "my-bucket", Key: "alice/file.txt"}
+	bobResource := &Resource{Bucket: "my-bucket", Key: "bob/file.txt"}
+	uuidResource := &Resource{Bucket: "my-bucket", Key: "550e8400-e29b-41d4-a716-446655440000/file.txt"}
+
+	tests := []struct {
+		name         string
+		stmtResource interface{}
+		reqResource  *Resource
+		varCtx       *variables.Context
+		expected     bool
+	}{
+		// Variable substitution - username
+		{
+			name:         "username variable matches user path",
+			stmtResource: "arn:aws:s3:::my-bucket/${aws:username}/*",
+			reqResource:  aliceResource,
+			varCtx:       varCtx,
+			expected:     true,
+		},
+		{
+			name:         "username variable does not match other user",
+			stmtResource: "arn:aws:s3:::my-bucket/${aws:username}/*",
+			reqResource:  bobResource,
+			varCtx:       varCtx,
+			expected:     false,
+		},
+
+		// Variable substitution - userid
+		{
+			name:         "userid variable matches UUID path",
+			stmtResource: "arn:aws:s3:::my-bucket/${aws:userid}/*",
+			reqResource:  uuidResource,
+			varCtx:       varCtx,
+			expected:     true,
+		},
+		{
+			name:         "userid variable does not match username path",
+			stmtResource: "arn:aws:s3:::my-bucket/${aws:userid}/*",
+			reqResource:  aliceResource,
+			varCtx:       varCtx,
+			expected:     false,
+		},
+
+		// Array with variables
+		{
+			name: "array with variable includes match",
+			stmtResource: []string{
+				"arn:aws:s3:::my-bucket/${aws:username}/*",
+				"arn:aws:s3:::my-bucket/public/*",
+			},
+			reqResource: aliceResource,
+			varCtx:      varCtx,
+			expected:    true,
+		},
+
+		// Nil variable context - fall back to regular matching
+		{
+			name:         "nil context falls back to regular matching",
+			stmtResource: "arn:aws:s3:::my-bucket/*",
+			reqResource:  aliceResource,
+			varCtx:       nil,
+			expected:     true,
+		},
+		{
+			name:         "nil context with variable pattern does not match",
+			stmtResource: "arn:aws:s3:::my-bucket/${aws:username}/*",
+			reqResource:  aliceResource,
+			varCtx:       nil,
+			expected:     false, // No substitution, so literal pattern doesn't match
+		},
+
+		// Unknown variable - fall back to original pattern
+		{
+			name:         "unknown variable falls back to original pattern",
+			stmtResource: "arn:aws:s3:::my-bucket/${aws:unknown}/*",
+			reqResource:  aliceResource,
+			varCtx:       varCtx,
+			expected:     false, // Pattern with variable doesn't match after fallback
+		},
+
+		// Static patterns still work
+		{
+			name:         "static pattern with context",
+			stmtResource: "arn:aws:s3:::my-bucket/*",
+			reqResource:  aliceResource,
+			varCtx:       varCtx,
+			expected:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchResourceWithVariables(tt.stmtResource, tt.reqResource, tt.varCtx)
+			if got != tt.expected {
+				t.Errorf("matchResourceWithVariables() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEvaluateStatementWithVariables(t *testing.T) {
+	testUUID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+
+	userPrincipal := &Principal{
+		User:        &metadata.User{AccessKey: "alice", UUID: testUUID, Username: "alice"},
+		IsAnonymous: false,
+	}
+
+	varCtx := &variables.Context{
+		Username: "alice",
+		UserID:   testUUID,
+	}
+
+	tests := []struct {
+		name     string
+		stmt     *iam.Statement
+		req      *RequestContext
+		expected Decision
+	}{
+		{
+			name: "allow user access to their own path with username variable",
+			stmt: &iam.Statement{
+				Effect:    "Allow",
+				Principal: "*",
+				Action:    "s3:*",
+				Resource:  "arn:aws:s3:::shared-bucket/${aws:username}/*",
+			},
+			req: &RequestContext{
+				Principal:  userPrincipal,
+				Action:     "s3:GetObject",
+				Resource:   &Resource{Bucket: "shared-bucket", Key: "alice/file.txt"},
+				VarContext: varCtx,
+			},
+			expected: DecisionAllow,
+		},
+		{
+			name: "deny user access to other user path with username variable",
+			stmt: &iam.Statement{
+				Effect:    "Allow",
+				Principal: "*",
+				Action:    "s3:*",
+				Resource:  "arn:aws:s3:::shared-bucket/${aws:username}/*",
+			},
+			req: &RequestContext{
+				Principal:  userPrincipal,
+				Action:     "s3:GetObject",
+				Resource:   &Resource{Bucket: "shared-bucket", Key: "bob/file.txt"},
+				VarContext: varCtx,
+			},
+			expected: DecisionDeny,
+		},
+		{
+			name: "allow user access to UUID-based path with userid variable",
+			stmt: &iam.Statement{
+				Effect:    "Allow",
+				Principal: "*",
+				Action:    "s3:*",
+				Resource:  "arn:aws:s3:::uuid-bucket/${aws:userid}/*",
+			},
+			req: &RequestContext{
+				Principal:  userPrincipal,
+				Action:     "s3:PutObject",
+				Resource:   &Resource{Bucket: "uuid-bucket", Key: "550e8400-e29b-41d4-a716-446655440000/data.txt"},
+				VarContext: varCtx,
+			},
+			expected: DecisionAllow,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := evaluateStatement(tt.stmt, tt.req)
+			if got != tt.expected {
+				t.Errorf("evaluateStatement() = %v, want %v", got, tt.expected)
 			}
 		})
 	}

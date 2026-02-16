@@ -189,6 +189,7 @@ func (s *Server) setupRoutes() {
 	deps := &RouteDependencies{
 		Auth:             s.auth,
 		PolicyEngine:     s.policyEngine,
+		Metadata:         s.metadata,
 		RootAccessKey:    rootAccessKey,
 		AltRootAccessKey: altRootAccessKey,
 		APIHandler:       apiHandler,

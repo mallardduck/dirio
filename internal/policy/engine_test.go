@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/pkg/iam"
 )
@@ -285,5 +286,215 @@ func TestEngine_GetActionMapper(t *testing.T) {
 	perms := mapper.GetRequiredPermissions("s3:HeadObject")
 	if len(perms) != 1 || perms[0] != "s3:GetObject" {
 		t.Errorf("ActionMapper should translate HeadObject, got %v", perms)
+	}
+}
+
+func TestEngine_OwnershipBasedAuthorization(t *testing.T) {
+	engine := New()
+
+	// Create test users with UUIDs
+	aliceUUID := uuid.New()
+	bobUUID := uuid.New()
+
+	aliceUser := &metadata.User{
+		UUID:      aliceUUID,
+		Username:  "alice",
+		AccessKey: "alice-key",
+		Status:    iam.UserStatusActive,
+	}
+
+	bobUser := &metadata.User{
+		UUID:      bobUUID,
+		Username:  "bob",
+		AccessKey: "bob-key",
+		Status:    iam.UserStatusActive,
+	}
+
+	tests := []struct {
+		name     string
+		req      *RequestContext
+		expected Decision
+	}{
+		{
+			name: "bucket owner can access their bucket",
+			req: &RequestContext{
+				Principal: &Principal{
+					User:        aliceUser,
+					IsAnonymous: false,
+					IsAdmin:     false,
+				},
+				Action:          "s3:ListBucket",
+				Resource:        &Resource{Bucket: "alice-bucket"},
+				BucketOwnerUUID: &aliceUUID,
+			},
+			expected: DecisionAllow,
+		},
+		{
+			name: "object owner can access their object",
+			req: &RequestContext{
+				Principal: &Principal{
+					User:        aliceUser,
+					IsAnonymous: false,
+					IsAdmin:     false,
+				},
+				Action:          "s3:GetObject",
+				Resource:        &Resource{Bucket: "shared-bucket", Key: "alice/file.txt"},
+				BucketOwnerUUID: &bobUUID,   // Bob owns bucket
+				ObjectOwnerUUID: &aliceUUID, // Alice owns object
+			},
+			expected: DecisionAllow,
+		},
+		{
+			name: "bucket owner can access objects in their bucket",
+			req: &RequestContext{
+				Principal: &Principal{
+					User:        bobUser,
+					IsAnonymous: false,
+					IsAdmin:     false,
+				},
+				Action:          "s3:GetObject",
+				Resource:        &Resource{Bucket: "shared-bucket", Key: "alice/file.txt"},
+				BucketOwnerUUID: &bobUUID,   // Bob owns bucket
+				ObjectOwnerUUID: &aliceUUID, // Alice owns object
+			},
+			expected: DecisionAllow, // Bucket owner has implicit access (AWS model)
+		},
+		{
+			name: "non-owner cannot access bucket",
+			req: &RequestContext{
+				Principal: &Principal{
+					User:        bobUser,
+					IsAnonymous: false,
+					IsAdmin:     false,
+				},
+				Action:          "s3:ListBucket",
+				Resource:        &Resource{Bucket: "alice-bucket"},
+				BucketOwnerUUID: &aliceUUID,
+			},
+			expected: DecisionDeny,
+		},
+		{
+			name: "non-owner cannot access object",
+			req: &RequestContext{
+				Principal: &Principal{
+					User:        bobUser,
+					IsAnonymous: false,
+					IsAdmin:     false,
+				},
+				Action:          "s3:GetObject",
+				Resource:        &Resource{Bucket: "alice-bucket", Key: "file.txt"},
+				BucketOwnerUUID: &aliceUUID,
+				ObjectOwnerUUID: &aliceUUID,
+			},
+			expected: DecisionDeny,
+		},
+		{
+			name: "anonymous has no ownership",
+			req: &RequestContext{
+				Principal: &Principal{
+					IsAnonymous: true,
+				},
+				Action:          "s3:GetObject",
+				Resource:        &Resource{Bucket: "alice-bucket", Key: "file.txt"},
+				BucketOwnerUUID: &aliceUUID,
+			},
+			expected: DecisionDeny,
+		},
+		{
+			name: "admin-only bucket (nil owner) denies regular user",
+			req: &RequestContext{
+				Principal: &Principal{
+					User:        aliceUser,
+					IsAnonymous: false,
+					IsAdmin:     false,
+				},
+				Action:          "s3:ListBucket",
+				Resource:        &Resource{Bucket: "admin-bucket"},
+				BucketOwnerUUID: nil, // Admin-only
+			},
+			expected: DecisionDeny,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			decision := engine.Evaluate(context.Background(), tt.req)
+			if decision != tt.expected {
+				t.Errorf("got %v, want %v", decision, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEngine_ExplicitDenyBeatsOwnership(t *testing.T) {
+	engine := New()
+
+	aliceUUID := uuid.New()
+	aliceUser := &metadata.User{
+		UUID:      aliceUUID,
+		Username:  "alice",
+		AccessKey: "alice-key",
+		Status:    iam.UserStatusActive,
+	}
+
+	// Policy that explicitly denies the owner
+	denyOwnerPolicy := &iam.PolicyDocument{
+		Version: "2012-10-17",
+		Statement: []iam.Statement{
+			{
+				Effect:    "Deny",
+				Principal: "*", // Denies everyone, including owner
+				Action:    "s3:DeleteObject",
+				Resource:  "arn:aws:s3:::alice-bucket/protected/*",
+			},
+		},
+	}
+	engine.UpdateBucketPolicy("alice-bucket", denyOwnerPolicy)
+
+	tests := []struct {
+		name     string
+		key      string
+		action   string
+		expected Decision
+	}{
+		{
+			name:     "owner denied by explicit deny for protected path",
+			key:      "protected/sensitive.txt",
+			action:   "s3:DeleteObject",
+			expected: DecisionExplicitDeny,
+		},
+		{
+			name:     "owner allowed for unprotected path (no policy match)",
+			key:      "public/file.txt",
+			action:   "s3:DeleteObject",
+			expected: DecisionAllow, // Ownership grants access
+		},
+		{
+			name:     "owner allowed for different action on protected path",
+			key:      "protected/sensitive.txt",
+			action:   "s3:GetObject",
+			expected: DecisionAllow, // Ownership grants access (no deny for GetObject)
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &RequestContext{
+				Principal: &Principal{
+					User:        aliceUser,
+					IsAnonymous: false,
+					IsAdmin:     false,
+				},
+				Action:          tt.action,
+				Resource:        &Resource{Bucket: "alice-bucket", Key: tt.key},
+				BucketOwnerUUID: &aliceUUID,
+				ObjectOwnerUUID: &aliceUUID,
+			}
+
+			decision := engine.Evaluate(context.Background(), req)
+			if decision != tt.expected {
+				t.Errorf("got %v, want %v", decision, tt.expected)
+			}
+		})
 	}
 }

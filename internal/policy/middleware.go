@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/mallardduck/dirio/internal/context"
 	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
+	"github.com/mallardduck/dirio/internal/policy/variables"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
@@ -24,6 +26,9 @@ var authzLogger = logging.Component("authz")
 type AuthorizationConfig struct {
 	// Engine is the policy evaluation engine
 	Engine *Engine
+
+	// Metadata is the metadata manager for fetching ownership information
+	Metadata *metadata.Manager
 
 	// RootAccessKey is the admin access key that bypasses all policy checks
 	RootAccessKey string
@@ -93,6 +98,9 @@ func AuthorizationMiddleware(config *AuthorizationConfig) func(http.Handler) htt
 				CurrentTime:     time.Now(),
 			}
 
+			// Build variable context for policy variable substitution
+			varCtx := variables.FromRequest(r)
+
 			// Handle multi-resource operations (CopyObject, UploadPartCopy)
 			if mapper.IsMultiResourceAction(routeAction) {
 				decision := evaluateMultiResourceAction(
@@ -103,6 +111,8 @@ func AuthorizationMiddleware(config *AuthorizationConfig) func(http.Handler) htt
 					key,
 					r,
 					conditions,
+					varCtx,
+					config.Metadata,
 				)
 				if !decision.IsAllowed() {
 					writeAccessDenied(w, r)
@@ -118,11 +128,17 @@ func AuthorizationMiddleware(config *AuthorizationConfig) func(http.Handler) htt
 				// Use the FIRST required permission (most operations have only one)
 				permission := requiredPermissions[0]
 
+				// Fetch ownership information for authorization
+				bucketOwnerUUID, objectOwnerUUID := fetchOwnership(r.Context(), config.Metadata, bucket, key)
+
 				reqCtx := &RequestContext{
 					Principal:       principal,
 					Action:          permission,
 					Resource:        resource,
 					Conditions:      conditions,
+					VarContext:      varCtx,
+					BucketOwnerUUID: bucketOwnerUUID,
+					ObjectOwnerUUID: objectOwnerUUID,
 					OriginalRequest: r,
 				}
 
@@ -174,6 +190,8 @@ func evaluateMultiResourceAction(
 	destBucket, destKey string,
 	r *http.Request,
 	conditions *ConditionContext,
+	varCtx *variables.Context,
+	metadata *metadata.Manager,
 ) Decision {
 	// Parse source from X-Amz-Copy-Source header
 	sourceBucket, sourceKey := parseCopySource(r)
@@ -184,12 +202,18 @@ func evaluateMultiResourceAction(
 		return DecisionDeny
 	}
 
+	// Fetch ownership for source resource
+	sourceBucketOwnerUUID, sourceObjectOwnerUUID := fetchOwnership(r.Context(), metadata, sourceBucket, sourceKey)
+
 	// Check source permission (GetObject)
 	sourceCtx := &RequestContext{
 		Principal:       principal,
 		Action:          permissions[0], // s3:GetObject
 		Resource:        &Resource{Bucket: sourceBucket, Key: sourceKey},
 		Conditions:      conditions,
+		VarContext:      varCtx,
+		BucketOwnerUUID: sourceBucketOwnerUUID,
+		ObjectOwnerUUID: sourceObjectOwnerUUID,
 		OriginalRequest: r,
 	}
 	sourceDecision := engine.Evaluate(r.Context(), sourceCtx)
@@ -203,12 +227,18 @@ func evaluateMultiResourceAction(
 		return sourceDecision
 	}
 
+	// Fetch ownership for destination resource
+	destBucketOwnerUUID, destObjectOwnerUUID := fetchOwnership(r.Context(), metadata, destBucket, destKey)
+
 	// Check destination permission (PutObject)
 	destCtx := &RequestContext{
 		Principal:       principal,
 		Action:          permissions[1], // s3:PutObject
 		Resource:        &Resource{Bucket: destBucket, Key: destKey},
 		Conditions:      conditions,
+		VarContext:      varCtx,
+		BucketOwnerUUID: destBucketOwnerUUID,
+		ObjectOwnerUUID: destObjectOwnerUUID,
 		OriginalRequest: r,
 	}
 	destDecision := engine.Evaluate(r.Context(), destCtx)
@@ -304,6 +334,32 @@ func getRequestID(ctx stdcontext.Context) string {
 		return id
 	}
 	return ""
+}
+
+// fetchOwnership fetches bucket and object ownership UUIDs for authorization.
+// Returns nil for owners if metadata not found (admin-only resources or errors).
+func fetchOwnership(ctx stdcontext.Context, metadataMgr *metadata.Manager, bucket, key string) (bucketOwnerUUID, objectOwnerUUID *uuid.UUID) {
+	if metadataMgr == nil {
+		return nil, nil
+	}
+
+	// Fetch bucket metadata for bucket owner UUID
+	if bucket != "" {
+		bucketMeta, err := metadataMgr.GetBucketMetadata(ctx, bucket)
+		if err == nil && bucketMeta != nil {
+			bucketOwnerUUID = bucketMeta.Owner // Already a *uuid.UUID
+		}
+	}
+
+	// Fetch object metadata for object owner UUID (only for object operations)
+	if bucket != "" && key != "" {
+		objectMeta, err := metadataMgr.GetObjectMetadata(ctx, bucket, key)
+		if err == nil && objectMeta != nil {
+			objectOwnerUUID = objectMeta.Owner // Already a *uuid.UUID
+		}
+	}
+
+	return bucketOwnerUUID, objectOwnerUUID
 }
 
 // writeAccessDenied writes an S3 AccessDenied error response
