@@ -50,6 +50,12 @@ func IsAnonymousRequest(ctx context.Context) bool {
 	return false
 }
 
+// WithUser returns a new context with the user set
+func WithUser(ctx context.Context, user *iam.User) context.Context {
+	return context.WithValue(ctx, RequestUserKey, user)
+}
+
+// GetUser extracts the user from the context
 func GetUser(ctx context.Context) (*iam.User, error) {
 	if userdata, ok := ctx.Value(RequestUserKey).(*iam.User); ok {
 		return userdata, nil

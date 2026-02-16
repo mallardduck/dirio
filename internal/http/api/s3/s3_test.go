@@ -50,25 +50,25 @@ func TestWriteXMLResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			err := writeXMLResponse(w, tt.statusCode, tt.data)
+			err := WriteXMLResponse(w, tt.statusCode, tt.data)
 
 			if (err != nil) != tt.wantErr {
-				t.Errorf("writeXMLResponse() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("WriteXMLResponse() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
 			if w.Code != tt.wantStatusCode {
-				t.Errorf("writeXMLResponse() status code = %v, want %v", w.Code, tt.wantStatusCode)
+				t.Errorf("WriteXMLResponse() status code = %v, want %v", w.Code, tt.wantStatusCode)
 			}
 
 			if got := w.Header().Get("Content-Type"); got != tt.wantHeader {
-				t.Errorf("writeXMLResponse() Content-Type = %v, want %v", got, tt.wantHeader)
+				t.Errorf("WriteXMLResponse() Content-Type = %v, want %v", got, tt.wantHeader)
 			}
 
 			body := w.Body.String()
 			for _, want := range tt.wantContains {
 				if !strings.Contains(body, want) {
-					t.Errorf("writeXMLResponse() body does not contain %q\nGot: %s", want, body)
+					t.Errorf("WriteXMLResponse() body does not contain %q\nGot: %s", want, body)
 				}
 			}
 		})
@@ -88,13 +88,13 @@ func TestWriteXMLResponse_LargeResponse(t *testing.T) {
 	data := s3types.ListBucketsResponse{Buckets: buckets}
 	w := httptest.NewRecorder()
 
-	err := writeXMLResponse(w, http.StatusOK, data)
+	err := WriteXMLResponse(w, http.StatusOK, data)
 	if err != nil {
-		t.Errorf("writeXMLResponse() unexpected error for large response: %v", err)
+		t.Errorf("WriteXMLResponse() unexpected error for large response: %v", err)
 	}
 
 	if w.Code != http.StatusOK {
-		t.Errorf("writeXMLResponse() status code = %v, want %v", w.Code, http.StatusOK)
+		t.Errorf("WriteXMLResponse() status code = %v, want %v", w.Code, http.StatusOK)
 	}
 
 	// Verify the response was actually large
@@ -110,10 +110,10 @@ func TestWriteXMLResponse_InvalidData(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	err := writeXMLResponse(w, http.StatusOK, InvalidStruct{Channel: make(chan int)})
+	err := WriteXMLResponse(w, http.StatusOK, InvalidStruct{Channel: make(chan int)})
 
 	if err == nil {
-		t.Error("writeXMLResponse() expected error for unmarshalable data, got nil")
+		t.Error("WriteXMLResponse() expected error for unmarshalable data, got nil")
 	}
 }
 
@@ -228,25 +228,25 @@ func TestWriteErrorResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			err := writeErrorResponse(w, tt.requestID, tt.errCode, tt.err)
+			err := WriteErrorResponse(w, tt.requestID, tt.errCode, tt.err)
 
 			if err != nil {
-				t.Errorf("writeErrorResponse() unexpected error = %v", err)
+				t.Errorf("WriteErrorResponse() unexpected error = %v", err)
 				return
 			}
 
 			if w.Code != tt.wantStatusCode {
-				t.Errorf("writeErrorResponse() status code = %v, want %v", w.Code, tt.wantStatusCode)
+				t.Errorf("WriteErrorResponse() status code = %v, want %v", w.Code, tt.wantStatusCode)
 			}
 
 			if got := w.Header().Get("Content-Type"); got != "application/xml" {
-				t.Errorf("writeErrorResponse() Content-Type = %v, want application/xml", got)
+				t.Errorf("WriteErrorResponse() Content-Type = %v, want application/xml", got)
 			}
 
 			body := w.Body.String()
 			for _, want := range tt.wantContains {
 				if !strings.Contains(body, want) {
-					t.Errorf("writeErrorResponse() body does not contain %q\nGot: %s", want, body)
+					t.Errorf("WriteErrorResponse() body does not contain %q\nGot: %s", want, body)
 				}
 			}
 		})
@@ -259,9 +259,9 @@ func TestWriteErrorResponse_XMLStructure(t *testing.T) {
 	requestID := "test-request-id"
 	testErr := errors.New("test error message")
 
-	err := writeErrorResponse(w, requestID, s3types.ErrCodeNoSuchBucket, testErr)
+	err := WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchBucket, testErr)
 	if err != nil {
-		t.Fatalf("writeErrorResponse() unexpected error = %v", err)
+		t.Fatalf("WriteErrorResponse() unexpected error = %v", err)
 	}
 
 	// Parse the XML response

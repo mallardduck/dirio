@@ -9,7 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	contextInt "github.com/mallardduck/dirio/internal/context"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
+	"github.com/mallardduck/dirio/pkg/iam"
 )
 
 func setupTestStorage(t *testing.T) *Storage {
@@ -25,9 +27,19 @@ func setupTestStorage(t *testing.T) *Storage {
 	return storage
 }
 
+// testContext creates a context with a test user for storage tests
+func testContext() context.Context {
+	user := &iam.User{
+		Username:  "testuser",
+		AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+	}
+	return contextInt.WithUser(context.Background(), user)
+}
+
 func createTestBucket(t *testing.T, s *Storage, bucket string) {
 	t.Helper()
-	err := s.CreateBucket(context.Background(), bucket)
+	err := s.CreateBucket(testContext(), bucket)
 	require.NoError(t, err)
 }
 
@@ -60,7 +72,7 @@ func createTestObject(t *testing.T, s *Storage, bucket, key string, size int64) 
 		ETag:         "test-etag",
 		LastModified: time.Now().Truncate(time.Second),
 	}
-	err = s.metadata.PutObjectMetadata(context.Background(), bucket, key, meta)
+	err = s.metadata.PutObjectMetadata(testContext(), bucket, key, meta)
 	require.NoError(t, err)
 }
 
@@ -68,7 +80,7 @@ func TestListInternal_EmptyBucket(t *testing.T) {
 	s := setupTestStorage(t)
 	createTestBucket(t, s, "test-bucket")
 
-	result, err := s.listInternal(context.Background(), "test-bucket", "", "", "", 1000, false)
+	result, err := s.listInternal(testContext(), "test-bucket", "", "", "", 1000, false)
 	require.NoError(t, err)
 
 	assert.Empty(t, result.Objects)
@@ -80,7 +92,7 @@ func TestListInternal_EmptyBucket(t *testing.T) {
 func TestListInternal_BucketNotExist(t *testing.T) {
 	s := setupTestStorage(t)
 
-	_, err := s.listInternal(context.Background(), "nonexistent", "", "", "", 1000, false)
+	_, err := s.listInternal(testContext(), "nonexistent", "", "", "", 1000, false)
 	assert.ErrorIs(t, err, ErrNoSuchBucket)
 }
 
@@ -93,7 +105,7 @@ func TestListInternal_BasicListing(t *testing.T) {
 	createTestObject(t, s, "test-bucket", "file2.txt", 200)
 	createTestObject(t, s, "test-bucket", "file3.txt", 300)
 
-	result, err := s.listInternal(context.Background(), "test-bucket", "", "", "", 1000, false)
+	result, err := s.listInternal(testContext(), "test-bucket", "", "", "", 1000, false)
 	require.NoError(t, err)
 
 	assert.Len(t, result.Objects, 3)
@@ -122,7 +134,7 @@ func TestListInternal_WithPrefix(t *testing.T) {
 	createTestObject(t, s, "test-bucket", "file.txt", 400)
 
 	// List with prefix "docs/"
-	result, err := s.listInternal(context.Background(), "test-bucket", "docs/", "", "", 1000, false)
+	result, err := s.listInternal(testContext(), "test-bucket", "docs/", "", "", 1000, false)
 	require.NoError(t, err)
 
 	assert.Len(t, result.Objects, 2)
@@ -141,7 +153,7 @@ func TestListInternal_WithDelimiter(t *testing.T) {
 	createTestObject(t, s, "test-bucket", "file.txt", 400)
 
 	// List with delimiter "/"
-	result, err := s.listInternal(context.Background(), "test-bucket", "", "", "/", 1000, false)
+	result, err := s.listInternal(testContext(), "test-bucket", "", "", "/", 1000, false)
 	require.NoError(t, err)
 
 	// Should have 1 object (file.txt) and 2 common prefixes (docs/, images/)
@@ -164,7 +176,7 @@ func TestListInternal_WithPrefixAndDelimiter(t *testing.T) {
 	createTestObject(t, s, "test-bucket", "images/logo.png", 400)
 
 	// List with prefix "docs/" and delimiter "/"
-	result, err := s.listInternal(context.Background(), "test-bucket", "docs/", "", "/", 1000, false)
+	result, err := s.listInternal(testContext(), "test-bucket", "docs/", "", "/", 1000, false)
 	require.NoError(t, err)
 
 	// Should have 1 object (docs/readme.md) and 1 common prefix (docs/api/)
@@ -185,7 +197,7 @@ func TestListInternal_MaxKeys(t *testing.T) {
 	}
 
 	// List with maxKeys=5
-	result, err := s.listInternal(context.Background(), "test-bucket", "", "", "", 5, false)
+	result, err := s.listInternal(testContext(), "test-bucket", "", "", "", 5, false)
 	require.NoError(t, err)
 
 	assert.Len(t, result.Objects, 5)
@@ -208,7 +220,7 @@ func TestListInternal_MaxKeysWithCommonPrefixes(t *testing.T) {
 	createTestObject(t, s, "test-bucket", "e/file5.txt", 500)
 
 	// List with delimiter and maxKeys=3
-	result, err := s.listInternal(context.Background(), "test-bucket", "", "", "/", 3, false)
+	result, err := s.listInternal(testContext(), "test-bucket", "", "", "/", 3, false)
 	require.NoError(t, err)
 
 	// Should return 3 common prefixes total
@@ -230,7 +242,7 @@ func TestListInternal_StartAt(t *testing.T) {
 	createTestObject(t, s, "test-bucket", "file5.txt", 500)
 
 	// List starting after file2.txt
-	result, err := s.listInternal(context.Background(), "test-bucket", "", "file2.txt", "", 1000, false)
+	result, err := s.listInternal(testContext(), "test-bucket", "", "file2.txt", "", 1000, false)
 	require.NoError(t, err)
 
 	// Should return file3.txt, file4.txt, file5.txt (files > file2.txt)
@@ -251,7 +263,7 @@ func TestListInternal_StartAtWithCommonPrefixes(t *testing.T) {
 	createTestObject(t, s, "test-bucket", "d/file4.txt", 400)
 
 	// List with delimiter and startAt "b/"
-	result, err := s.listInternal(context.Background(), "test-bucket", "", "b/", "/", 1000, false)
+	result, err := s.listInternal(testContext(), "test-bucket", "", "b/", "/", 1000, false)
 	require.NoError(t, err)
 
 	// Should return common prefixes c/ and d/ (prefixes > "b/")
@@ -270,19 +282,19 @@ func TestListInternal_Pagination(t *testing.T) {
 	}
 
 	// First page (maxKeys=4)
-	result1, err := s.listInternal(context.Background(), "test-bucket", "", "", "", 4, false)
+	result1, err := s.listInternal(testContext(), "test-bucket", "", "", "", 4, false)
 	require.NoError(t, err)
 	assert.Len(t, result1.Objects, 4)
 	assert.True(t, result1.IsTruncated)
 
 	// Second page (use NextMarker from first page)
-	result2, err := s.listInternal(context.Background(), "test-bucket", "", result1.NextMarker, "", 4, false)
+	result2, err := s.listInternal(testContext(), "test-bucket", "", result1.NextMarker, "", 4, false)
 	require.NoError(t, err)
 	assert.Len(t, result2.Objects, 4)
 	assert.True(t, result2.IsTruncated)
 
 	// Third page (should have remaining 2 objects)
-	result3, err := s.listInternal(context.Background(), "test-bucket", "", result2.NextMarker, "", 4, false)
+	result3, err := s.listInternal(testContext(), "test-bucket", "", result2.NextMarker, "", 4, false)
 	require.NoError(t, err)
 	assert.Len(t, result3.Objects, 2)
 	assert.False(t, result3.IsTruncated)
@@ -311,26 +323,21 @@ func TestListInternal_FetchOwner(t *testing.T) {
 	createTestBucket(t, s, "test-bucket")
 	createTestObject(t, s, "test-bucket", "file.txt", 100)
 
-	// Set bucket owner
-	bucketMeta := &metadata.BucketMetadata{
-		Owner: "test-owner-id",
-	}
-	err := s.metadata.CreateBucket(context.Background(), "test-bucket")
-	require.NoError(t, err)
-
-	// Test with fetchOwner=false
-	result, err := s.listInternal(context.Background(), "test-bucket", "", "", "", 1000, false)
+	// Test with fetchOwner=false - owner should be nil
+	result, err := s.listInternal(testContext(), "test-bucket", "", "", "", 1000, false)
 	require.NoError(t, err)
 	asserts.Len(result.Objects, 1)
 	asserts.Nil(result.Objects[0].Owner)
 
-	// Test with fetchOwner=true
-	// Note: This might fail if bucket metadata doesn't include owner, which is expected
-	result2, err := s.listInternal(context.Background(), "test-bucket", "", "", "", 1000, true)
+	// Test with fetchOwner=true - owner should match the user from context
+	result2, err := s.listInternal(testContext(), "test-bucket", "", "", "", 1000, true)
 	require.NoError(t, err)
 	asserts.Len(result2.Objects, 1)
-	// Owner might be nil if bucket metadata doesn't have owner set
-	asserts.Equal(bucketMeta.Owner, result2.Objects[0].Owner)
+	// Owner should be populated from bucket metadata (which was set from context user)
+	if asserts.NotNil(result2.Objects[0].Owner) {
+		asserts.Equal("testuser", result2.Objects[0].Owner.ID)
+		asserts.Equal("testuser", result2.Objects[0].Owner.DisplayName)
+	}
 }
 
 func TestListInternal_ContextCancellation(t *testing.T) {
@@ -358,7 +365,7 @@ func TestListInternal_SortOrder(t *testing.T) {
 	createTestObject(t, s, "test-bucket", "banana.txt", 300)
 	createTestObject(t, s, "test-bucket", "cherry.txt", 400)
 
-	result, err := s.listInternal(context.Background(), "test-bucket", "", "", "", 1000, false)
+	result, err := s.listInternal(testContext(), "test-bucket", "", "", "", 1000, false)
 	require.NoError(t, err)
 
 	// Verify lexicographic sort order
@@ -378,7 +385,7 @@ func TestListInternal_CommonPrefixesSortOrder(t *testing.T) {
 	createTestObject(t, s, "test-bucket", "a-dir/file.txt", 200)
 	createTestObject(t, s, "test-bucket", "m-dir/file.txt", 300)
 
-	result, err := s.listInternal(context.Background(), "test-bucket", "", "", "/", 1000, false)
+	result, err := s.listInternal(testContext(), "test-bucket", "", "", "/", 1000, false)
 	require.NoError(t, err)
 
 	// Verify common prefixes are sorted
@@ -395,7 +402,7 @@ func TestListInternal_EdgeCases(t *testing.T) {
 		createTestObject(t, s, "test-bucket", "file.txt", 100)
 
 		// maxKeys=0 should return all results (no limit)
-		result, err := s.listInternal(context.Background(), "test-bucket", "", "", "", 0, false)
+		result, err := s.listInternal(testContext(), "test-bucket", "", "", "", 0, false)
 		require.NoError(t, err)
 		assert.Len(t, result.Objects, 1)
 		assert.False(t, result.IsTruncated)
@@ -407,7 +414,7 @@ func TestListInternal_EdgeCases(t *testing.T) {
 		createTestObject(t, s, "test-bucket", "file.txt", 100)
 
 		// negative maxKeys should be treated as no limit
-		result, err := s.listInternal(context.Background(), "test-bucket", "", "", "", -1, false)
+		result, err := s.listInternal(testContext(), "test-bucket", "", "", "", -1, false)
 		require.NoError(t, err)
 		assert.Len(t, result.Objects, 1)
 		assert.False(t, result.IsTruncated)
@@ -418,7 +425,7 @@ func TestListInternal_EdgeCases(t *testing.T) {
 		createTestBucket(t, s, "test-bucket")
 		createTestObject(t, s, "test-bucket", "file.txt", 100)
 
-		result, err := s.listInternal(context.Background(), "test-bucket", "nonexistent/", "", "", 1000, false)
+		result, err := s.listInternal(testContext(), "test-bucket", "nonexistent/", "", "", 1000, false)
 		require.NoError(t, err)
 		assert.Empty(t, result.Objects)
 		assert.Empty(t, result.CommonPrefixes)

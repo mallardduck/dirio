@@ -56,7 +56,7 @@ func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Add user to context
-		ctx := context.WithValue(r.Context(), contextInt.RequestUserKey, user)
+		ctx := contextInt.WithUser(r.Context(), user)
 		// Authentication successful - proceed to next handler
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

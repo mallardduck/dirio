@@ -63,7 +63,7 @@ func (h *HTTPHandler) ListBuckets(w http.ResponseWriter, r *http.Request) {
 	buckets, err := h.s3Service.ListBuckets(r.Context())
 	if err != nil {
 		requestID := middleware.GetRequestID(r.Context())
-		if writeErr := writeErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error listing buckets and additional error writing XML error response")
 			return
 		}
@@ -79,12 +79,14 @@ func (h *HTTPHandler) ListBuckets(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	if writeErr := writeXMLResponse(w, http.StatusOK, response); writeErr != nil {
+	if writeErr := WriteXMLResponse(w, http.StatusOK, response); writeErr != nil {
 		s3Logger.With("err", writeErr).Warn("encountered error writing XML OK response")
 	}
 }
 
-func writeXMLResponse(w http.ResponseWriter, statusCode int, data interface{}) error {
+// WriteXMLResponse writes an S3 response in XML format.
+// It is exported so that middleware can use it.
+func WriteXMLResponse(w http.ResponseWriter, statusCode int, data interface{}) error {
 	var buf bytes.Buffer
 	buf.Write([]byte(xml.Header))
 
@@ -111,7 +113,9 @@ func writeXMLResponse(w http.ResponseWriter, statusCode int, data interface{}) e
 	return err
 }
 
-func writeErrorResponse(w http.ResponseWriter, requestID string, errCode s3types.ErrorCode, err error) error {
+// WriteErrorResponse writes an S3 error response in XML format.
+// It is exported so that middleware can use it for validation errors.
+func WriteErrorResponse(w http.ResponseWriter, requestID string, errCode s3types.ErrorCode, err error) error {
 	errMsg := errCode.Description()
 	if err != nil {
 		errMsg = err.Error()

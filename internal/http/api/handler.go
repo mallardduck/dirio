@@ -41,3 +41,11 @@ func New(storage *storage.Storage, metadata *metadata.Manager, auth *auth.Authen
 		),
 	}
 }
+
+// WriteXMLResponse writes an S3 response in XML format.
+// It is exported so that middleware can use it.
+var WriteXMLResponse = s3.WriteXMLResponse
+
+// WriteErrorResponse writes an S3 error response in XML format.
+// It is exported so that middleware can use it for validation errors.
+var WriteErrorResponse = s3.WriteErrorResponse
