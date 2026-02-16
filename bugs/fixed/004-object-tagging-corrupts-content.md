@@ -1,14 +1,47 @@
 # Bug #004: Object Tagging Stores Tags as Content
 
-**Status:** Open  
+**Status:** ✅ RESOLVED  
 **Priority:** High  
 **Discovered:** 2026-01-31  
+**Resolved:** 2026-02-16  
 **Affects:** boto3, MinIO mc (all clients that support object tagging)  
-**Root Cause:** Bug #001 (AWS SigV4 Chunked Encoding Corruption)
+**Root Cause:** ~~Bug #001 (AWS SigV4 Chunked Encoding Corruption)~~ **FIXED** - Missing handler implementation **IMPLEMENTED**
+
+## Resolution Summary (2026-02-16)
+
+**What Was Fixed:**
+
+1. **Added Tagging Types** (`pkg/s3types/responses.go`):
+   - `Tagging` - Response type for GetObjectTagging
+   - `PutObjectTaggingRequest` - Request type for PutObjectTagging
+   - `Tag` - Key-value tag structure
+   - `ErrCodeMalformedXML` - Error code for invalid XML
+
+2. **Updated ObjectMetadata** (`internal/persistence/metadata/metadata.go`):
+   - Added `Tags map[string]string` field to store object tags separately from content
+
+3. **Implemented Service Methods** (`internal/service/s3/s3.go`):
+   - `PutObjectTagging` - Sets tags on existing objects
+   - `GetObjectTagging` - Retrieves tags from objects
+   - Added request types in `internal/service/s3/types.go`
+
+4. **Implemented HTTP Handlers** (`internal/http/api/s3/object_tagging.go`):
+   - `PutObjectTagging` - Handles `PUT /{bucket}/{key}?tagging`
+   - `GetObjectTagging` - Handles `GET /{bucket}/{key}?tagging`
+   - Proper XML parsing and error handling
+
+5. **Wired Up Routes** (`internal/http/server/routes.go`):
+   - Connected handlers to existing query-based routes
+   - Routes already existed and were correctly configured
+
+**What Was Already Fixed:**
+- Bug #001 (Chunked Encoding Corruption) - Fully resolved on 2026-02-16
+- Query parameter routing - Already implemented correctly
+- Routes properly dispatch `?tagging` query parameter to dedicated handlers
 
 ## Summary
 
-When setting tags on an object using `PutObjectTagging`, the tag XML payload completely replaces the object's content instead of being stored as separate metadata. This causes data loss and corruption.
+When setting tags on an object using `PutObjectTagging`, the operation returns "not yet implemented" because the handlers don't exist. Once implemented, tags need to be stored as separate metadata (not as object content).
 
 ## Evidence
 

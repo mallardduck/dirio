@@ -110,8 +110,8 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 			deleteObject:            object(deps.APIHandler.S3Handler.DeleteObject),
 			getObjectACL:            RouteNotImplemented,
 			putObjectACL:            RouteNotImplemented,
-			getObjectTagging:        RouteNotImplemented,
-			putObjectTagging:        RouteNotImplemented,
+			getObjectTagging:        object(deps.APIHandler.S3Handler.GetObjectTagging),
+			putObjectTagging:        object(deps.APIHandler.S3Handler.PutObjectTagging),
 			multipartCreate:         object(deps.APIHandler.S3Handler.CreateMultipartUpload),
 			multipartUploadPart:     object(deps.APIHandler.S3Handler.UploadPart),
 			multipartUploadPartCopy: object(deps.APIHandler.S3Handler.UploadPartCopy),
@@ -390,20 +390,24 @@ func setupS3Routes(r *teapot.Router, deps *s3RouteDeps) {
 	//   - Test: aws s3 cp s3://bucket/src.txt s3://bucket/dest.txt
 	//   - See policy/middleware.go:169 for multi-resource action handling
 	r.Dispatch("PUT", "/{bucket}/{key:.*}", func(d *teapot.DispatchBuilder, m teapot.Matchers) {
-		d.Default(deps.putObject).Name("object.put").Action("s3:PutObject")
+		// Query-based operations must come before default
+		d.When(m.QueryExists("partNumber"), m.QueryExists("uploadId"), m.HeaderExists(consts.HeaderCopySource)).Do(deps.multipartUploadPartCopy).Name("multipart.upload-part-copy").Action("s3:UploadPartCopy")
+		d.When(m.QueryExists("partNumber"), m.QueryExists("uploadId")).Do(deps.multipartUploadPart).Name("multipart.upload-part").Action("s3:UploadPart")
+		d.When(m.QueryExists("acl")).Do(deps.putObjectACL).Name("objects.acl.store").Action("s3:PutObjectAcl")
+		d.When(m.QueryExists("tagging")).Do(deps.putObjectTagging).Name("objects.tagging.store").Action("s3:PutObjectTagging")
+
+		// Header-based copy operation
 		d.When(m.HeaderExists(consts.HeaderCopySource)).Do(deps.copyObject).Name("object.copy").Action("s3:CopyObject")
 
-		d.When(m.QueryExists("partNumber"), m.QueryExists("uploadId")).Do(deps.multipartUploadPart).Name("multipart.upload-part").Action("s3:UploadPart")
-		d.When(m.QueryExists("partNumber"), m.QueryExists("uploadId"), m.HeaderExists(consts.HeaderCopySource)).Do(deps.multipartUploadPartCopy).Name("multipart.upload-part-copy").Action("s3:UploadPartCopy")
+		// Default: regular PUT object
+		d.Default(deps.putObject).Name("object.put").Action("s3:PutObject")
 	})
 
 	// Query-based object operations
 	r.QueryGET("/{bucket}/{key:.*}", deps.getObjectACL).Query("acl").Name("objects.acl.show").Action("s3:GetObjectAcl")
-	r.QueryPUT("/{bucket}/{key:.*}", deps.putObjectACL).Query("acl").Name("objects.acl.store").Action("s3:PutObjectAcl")
 
 	// Object tagging
 	r.QueryGET("/{bucket}/{key:.*}", deps.getObjectTagging).Query("tagging").Name("objects.tagging.show").Action("s3:GetObjectTagging")
-	r.QueryPUT("/{bucket}/{key:.*}", deps.putObjectTagging).Query("tagging").Name("objects.tagging.store").Action("s3:PutObjectTagging")
 
 	// Multipart upload operations
 	r.QueryPOST("/{bucket}/{key:.*}", deps.multipartCreate).Query("uploads").Name("multipart.create").Action("s3:CreateMultipartUpload")

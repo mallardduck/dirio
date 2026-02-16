@@ -79,6 +79,7 @@ type ObjectMetadata struct {
 	ETag           string            `json:"etag"`
 	LastModified   time.Time         `json:"lastModified"`
 	CustomMetadata map[string]string `json:"customMetadata,omitempty"` // Custom headers like Cache-Control, Content-Disposition, x-amz-meta-*, etc.
+	Tags           map[string]string `json:"tags,omitempty"`           // Object tags (key-value pairs)
 }
 
 // New creates a new metadata manager

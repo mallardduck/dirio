@@ -111,3 +111,21 @@ type Part struct {
 	Size         int64  `xml:"Size"`
 	LastModified string `xml:"LastModified"`
 }
+
+// Tagging is the response for GetObjectTagging operation
+type Tagging struct {
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ Tagging"`
+	TagSet  []Tag    `xml:"TagSet>Tag"`
+}
+
+// PutObjectTaggingRequest is the request body for PutObjectTagging operation
+type PutObjectTaggingRequest struct {
+	XMLName xml.Name `xml:"Tagging"`
+	TagSet  []Tag    `xml:"TagSet>Tag"`
+}
+
+// Tag represents a single key-value tag
+type Tag struct {
+	Key   string `xml:"Key"`
+	Value string `xml:"Value"`
+}

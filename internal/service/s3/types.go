@@ -192,3 +192,20 @@ type ListPartsResponse struct {
 	UploadID string
 	Parts    []Part
 }
+
+// ============================================================================
+// Object Tagging Request/Response Types
+// ============================================================================
+
+// PutObjectTaggingRequest represents a request to set tags on an object
+type PutObjectTaggingRequest struct {
+	Bucket string
+	Key    string
+	Tags   map[string]string
+}
+
+// GetObjectTaggingRequest represents a request to get tags from an object
+type GetObjectTaggingRequest struct {
+	Bucket string
+	Key    string
+}

@@ -409,3 +409,72 @@ func (s *Service) DeleteObjects(ctx context.Context, request *DeleteObjectsReque
 
 	return response, nil
 }
+
+// ============================================================================
+// Object Tagging Operations
+// ============================================================================
+
+// PutObjectTagging sets tags on an object
+func (s *Service) PutObjectTagging(ctx context.Context, req *PutObjectTaggingRequest) error {
+	// Validate inputs
+	if err := validation.ValidateBucketName(req.Bucket); err != nil {
+		return err
+	}
+	if err := validation.ValidateObjectKey(req.Key); err != nil {
+		return err
+	}
+
+	// Check if object exists
+	exists, err := s.ObjectExists(ctx, req.Bucket, req.Key)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return s3types.ErrObjectNotFound
+	}
+
+	// Get existing metadata
+	meta, err := s.metadata.GetObjectMetadata(ctx, req.Bucket, req.Key)
+	if err != nil {
+		return err
+	}
+
+	// Update tags
+	meta.Tags = req.Tags
+
+	// Save metadata
+	return s.metadata.PutObjectMetadata(ctx, req.Bucket, req.Key, meta)
+}
+
+// GetObjectTagging retrieves tags from an object
+func (s *Service) GetObjectTagging(ctx context.Context, req *GetObjectTaggingRequest) (map[string]string, error) {
+	// Validate inputs
+	if err := validation.ValidateBucketName(req.Bucket); err != nil {
+		return nil, err
+	}
+	if err := validation.ValidateObjectKey(req.Key); err != nil {
+		return nil, err
+	}
+
+	// Check if object exists
+	exists, err := s.ObjectExists(ctx, req.Bucket, req.Key)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, s3types.ErrObjectNotFound
+	}
+
+	// Get metadata
+	meta, err := s.metadata.GetObjectMetadata(ctx, req.Bucket, req.Key)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return tags (empty map if no tags)
+	if meta.Tags == nil {
+		return make(map[string]string), nil
+	}
+
+	return meta.Tags, nil
+}

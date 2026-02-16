@@ -34,6 +34,7 @@ const (
 	ErrCodeNoSuchBucketPolicy
 	ErrCodeMalformedPolicy
 	ErrCodeInvalidRequest
+	ErrCodeMalformedXML
 )
 
 // String returns the string representation of error code
@@ -69,6 +70,8 @@ func (e ErrorCode) String() string {
 		return "MalformedPolicy"
 	case ErrCodeInvalidRequest:
 		return "InvalidRequest"
+	case ErrCodeMalformedXML:
+		return "MalformedXML"
 	default:
 		return "InternalError"
 	}
@@ -105,6 +108,8 @@ func (e ErrorCode) Description() string {
 		return "Policy has invalid resource"
 	case ErrCodeInvalidRequest:
 		return "Invalid request"
+	case ErrCodeMalformedXML:
+		return "The XML provided was not well-formed or did not validate against our published schema"
 	default:
 		return "Internal error"
 	}
@@ -123,7 +128,7 @@ func (e ErrorCode) HTTPStatus() int {
 		return http.StatusMethodNotAllowed
 	case ErrCodeInvalidAccessKeyID, ErrCodeSignatureDoesNotMatch, ErrCodeAccessDenied:
 		return http.StatusForbidden
-	case ErrCodeInvalidBucketName, ErrCodeInvalidObjectKey, ErrCodeMalformedPolicy, ErrCodeInvalidRequest:
+	case ErrCodeInvalidBucketName, ErrCodeInvalidObjectKey, ErrCodeMalformedPolicy, ErrCodeInvalidRequest, ErrCodeMalformedXML:
 		return http.StatusBadRequest
 	case ErrCodeNoSuchBucketPolicy:
 		return http.StatusNotFound
