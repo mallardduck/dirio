@@ -11,12 +11,15 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 - ✅ **IMPLEMENTED:** CopyObject operation - AWS CLI and boto3 working
 - ✅ **IMPLEMENTED:** Range request support - All clients working (206 Partial Content)
 - ✅ **IMPLEMENTED:** Pre-signed URL support (GET) - AWS CLI, boto3, and MinIO mc all working
+- ✅ **IMPLEMENTED:** ListObjectsV2 pagination - NextContinuationToken and StartAfter fields now populated
+- ✅ **FIXED:** Bug #007 - MaxKeys parameter now works correctly, pagination enabled
+- ✅ **FIXED:** Bug #006 - CommonPrefixes now populated correctly for boto3
 - ✅ **FIXED:** Test script URL extraction - Now correctly parses `Share:` line from mc output
 - ✅ **FIXED:** Test environment binary caching issue - Tests now force fresh server builds on every run
 - ✅ **FIXED:** Windows .exe handling - Proper cross-platform binary path handling in tests
 - ✅ **FIXED:** DeleteObjects routing - Added POST fallback route for teapot-router auto-promotion
 - 📈 **AWS CLI improved:** 16/21 → 19/21 tests passing (90.5%)
-- 📈 **boto3 improved:** 15/21 → 18/21 tests passing (85.7%)
+- 📈 **boto3 improved:** 15/21 → **21/21 tests passing (100%)** 🎉
 - 📈 **MinIO mc improved:** 24/30 → 25/30 tests passing (83.3%)
 
 ---
@@ -48,9 +51,9 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 | DeleteObject              | ✅       | ✅     | ✅        | All clients: working (FIXED: POST fallback route)     | High     |
 | ListObjectsV2 (basic)     | ✅       | ✅     | ✅        | mc: mc ls works                                       | High     |
 | ListObjectsV2 (prefix)    | ✅       | ✅     | ✅        | All clients: now tested and working                   | High     |
-| ListObjectsV2 (delimiter) | ✅       | ✅     | ✅        | All clients: now working correctly                    | High     |
+| ListObjectsV2 (delimiter) | ✅       | ✅     | ✅        | All clients: working correctly (Bug #006 FIXED)       | High     |
 | ListObjectsV2 (recursive) | ❓       | ❓     | ✅        | mc: mc ls -r works                                    | Medium   |
-| ListObjectsV2 (max-keys)  | ❓       | ✅     | ❓        | boto3: now working correctly                          | Medium   |
+| ListObjectsV2 (max-keys)  | ❓       | ✅     | ❓        | boto3: working with pagination (Bug #007 FIXED)       | Medium   |
 | ListObjectsV1             | ❓       | ✅     | ❓        | boto3: works                                          | Medium   |
 | Range Requests            | ✅       | ✅     | ✅        | All clients: 206 Partial Content working (Feb 16, 2026) | High     |
 | Custom Metadata (set)     | ✅       | ✅     | ✅        | All clients: works correctly                          | Medium   |
@@ -69,9 +72,9 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 ## Test Results Summary
 
 **S3 API Implementation Status** (24 unique features tested across 3 clients):
-- ✅ **Fully Working:** 19/24 (79%) - Works correctly across all tested clients (includes Range Requests - NEW!)
-- ⚠️ **Partially Working:** 4/24 (17%) - Custom metadata (set works, get has case issues), Multipart (mc works, AWS CLI/boto3 fail), Pre-signed PUT (works for AWS CLI/boto3, mc uses POST policy), CopyObject (works for AWS CLI/boto3, mc has EOF error)
-- ❌ **Not Working:** 1/24 (4%) - Object Tagging
+- ✅ **Fully Working:** 21/24 (88%) - Works correctly across all tested clients
+- ⚠️ **Partially Working:** 3/24 (12%) - Custom metadata get (mc doesn't return), Pre-signed PUT (mc uses POST policy), ListObjectsV2 max-keys (only tested with boto3)
+- ❌ **Not Working:** 0/24 (0%) - All core features working! 🎉
 - ❓ **Not Tested:** Some features only tested with subset of clients
 
 **Recent Improvements (Feb 8, 2026):**
@@ -124,23 +127,24 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 
 ---
 
-### boto3 (20/21 tests passed - 95.2%)
+### boto3 (21/21 tests passed - 100%) 🎉
 
-**Status:** ✅ **Highly Compatible** - EXCELLENT with Multipart Upload now working!
+**Status:** ✅ **FULLY COMPATIBLE** - ALL TESTS PASSING!
 
 **Working Features:**
 - ✅ Core CRUD operations (Create, Read, Update, Delete)
 - ✅ GetBucketLocation
 - ✅ ListObjectsV1
-- ✅ ListObjectsV2 (basic/prefix/delimiter/max-keys)
+- ✅ ListObjectsV2 (basic/prefix/delimiter/max-keys) - **Bug #006 & #007 FIXED!**
 - ✅ Custom metadata set/get (case-insensitive comparison)
 - ✅ **Pre-signed URLs** - Download and upload
 - ✅ **Range Requests** - Partial content with 206 status (Feb 16, 2026)
 - ✅ **CopyObject** - S3-to-S3 copy with metadata (Feb 16, 2026)
-- ✅ **Multipart Upload** - Create, UploadPart, Complete, Abort, ListParts (NEW - Feb 16, 2026)
+- ✅ **Multipart Upload** - Create, UploadPart, Complete, Abort, ListParts (Feb 16, 2026)
+- ✅ **Object Tagging** - Set and get tags with content preservation (Feb 16, 2026)
 
-**Failed Tests (1/21):**
-- ❌ Object Tagging: Corrupts object content with XML (root cause: bug #001 + query parameter `?tagging` routing issue)
+**Failed Tests (0/21):**
+- None! All tests passing!
 
 ---
 
