@@ -173,24 +173,17 @@ else
   if [ -z "$UPLOAD_ID" ]; then
     fail "Multipart upload" "could not parse UploadId"
   else
-    # Upload part 1
-    PART1_RESP=$($AWS s3api upload-part --bucket ${BUCKET} --key multipart.txt --upload-id "$UPLOAD_ID" --part-number 1 --body /tmp/part1.txt --output json)
-    if command -v jq >/dev/null 2>&1; then
-      ETAG1=$(echo "$PART1_RESP" | jq -r '.ETag')
-    else
-      ETAG1=$(echo "$PART1_RESP" | grep -o '"ETag"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)".*/\1/')
-    fi
+    # Upload part 1 - extract ETag (AWS CLI returns it with escaped quotes: "\"hash\"")
+    PART1_RESP=$($AWS s3api upload-part --bucket ${BUCKET} --key multipart.txt --upload-id "$UPLOAD_ID" --part-number 1 --body /tmp/part1.txt 2>&1)
+    # Extract the hash between the escaped quotes
+    ETAG1=$(echo "$PART1_RESP" | grep -i '"ETag":' | sed -E 's/.*"ETag"[[:space:]]*:[[:space:]]*"\\+"([^\\]+)\\+".*/\1/' | tr -d '\n\r')
 
-    # Upload part 2
-    PART2_RESP=$($AWS s3api upload-part --bucket ${BUCKET} --key multipart.txt --upload-id "$UPLOAD_ID" --part-number 2 --body /tmp/part2.txt --output json)
-    if command -v jq >/dev/null 2>&1; then
-      ETAG2=$(echo "$PART2_RESP" | jq -r '.ETag')
-    else
-      ETAG2=$(echo "$PART2_RESP" | grep -o '"ETag"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)".*/\1/')
-    fi
+    # Upload part 2 - extract ETag
+    PART2_RESP=$($AWS s3api upload-part --bucket ${BUCKET} --key multipart.txt --upload-id "$UPLOAD_ID" --part-number 2 --body /tmp/part2.txt 2>&1)
+    ETAG2=$(echo "$PART2_RESP" | grep -i '"ETag":' | sed -E 's/.*"ETag"[[:space:]]*:[[:space:]]*"\\+"([^\\]+)\\+".*/\1/' | tr -d '\n\r')
 
-    # Complete multipart
-    COMPLETE_JSON="{\"Parts\":[{\"PartNumber\":1,\"ETag\":$ETAG1},{\"PartNumber\":2,\"ETag\":$ETAG2}]}"
+    # Complete multipart - ETags must be wrapped in escaped quotes in JSON
+    COMPLETE_JSON="{\"Parts\":[{\"PartNumber\":1,\"ETag\":\"\\\"$ETAG1\\\"\"},{\"PartNumber\":2,\"ETag\":\"\\\"$ETAG2\\\"\"}]}"
     $AWS s3api complete-multipart-upload --bucket ${BUCKET} --key multipart.txt --upload-id "$UPLOAD_ID" --multipart-upload "$COMPLETE_JSON" 2>&1
 
     if [ $? -eq 0 ]; then

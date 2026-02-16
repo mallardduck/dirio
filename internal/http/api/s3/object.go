@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 
@@ -408,7 +409,7 @@ func (h *HTTPHandler) CopyObject(w http.ResponseWriter, r *http.Request, bucket,
 
 	// Return CopyObjectResult XML response
 	result := s3types.CopyObjectResult{
-		LastModified: obj.LastModified.Format(http.TimeFormat),
+		LastModified: obj.LastModified.Format(time.RFC3339), // ISO 8601 format for XML responses
 		ETag:         obj.ETag,
 	}
 

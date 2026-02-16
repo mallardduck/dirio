@@ -4,16 +4,18 @@ Current status: **Phase 3.2 - Features with Policy Integration** (Policy Engine 
 
 ## Recent Updates
 
-**February 8, 2026:**
-- ✅ **AWS CLI test suite expanded** - From 11 to 21 tests with comprehensive content verification
-  - AWS CLI: 16/21 tests passed (76.2%) - 10 new tests added
-  - boto3: 15/21 tests passed (71.4%)
-  - MinIO mc: 22/30 tests passed (73.3%)
-- ✅ **Uniform test coverage achieved** - All three clients now test same core S3 operations
-- ✅ **Content verification added** - AWS CLI tests now verify object content integrity (not just exit codes)
-- ✅ **New tests added:** GetBucketLocation, ListObjectsV2 (prefix/delimiter), Custom metadata (set/get), Range requests, CopyObject, Pre-signed URLs, Multipart upload, Object tagging
-- 📊 Confirmed known bugs affect all clients consistently - Range requests, CopyObject, Pre-signed URLs, Multipart (partial), Object tagging
-- 🎯 Next priority: Pre-signed URLs (Phase 3.2 feature #3)
+**February 16, 2026:**
+- ✅ **Phase 3.2 MOSTLY COMPLETE** - All critical S3 features implemented!
+  - AWS CLI: 20/21 tests passed (95.2%) ⬆️
+  - boto3: 20/21 tests passed (95.2%) ⬆️
+  - MinIO mc: 26/30 tests passed (86.7%) ⬆️
+- ✅ **Multipart Upload** - All 5 handlers implemented and working across all clients
+- ✅ **Pre-signed URLs** - Query-based SigV4 authentication with expiration validation
+- ✅ **CopyObject** - S3-to-S3 copy with metadata, ISO 8601 dates for MinIO mc compatibility
+- ✅ **Range Requests** - 206 Partial Content support for resumable downloads
+- ✅ **DeleteObject/DeleteBucket for MinIO mc** - POST fallback route for QueryPOST auto-promotion
+- ✅ **Custom Metadata** - Resolved via case-insensitive tests (HTTP spec compliant)
+- ❌ **Object Tagging** - Still corrupts content (only remaining known issue)
 
 **📁 Known Issues:** See [bugs/](bugs/) directory for detailed bug reports and tracking
 
@@ -124,26 +126,25 @@ Current status: **Phase 3.2 - Features with Policy Integration** (Policy Engine 
 
 ### Client Compatibility Testing
 - [x] Test with AWS CLI - comprehensive S3 operations
-  - **Result:** 16/21 passed - 76.2% success rate (via testcontainers-go, Feb 8, 2026) - **EXPANDED from 11 to 21 tests**
-  - ✅ **NEW:** GetBucketLocation, ListObjectsV2 (prefix/delimiter), Custom metadata (set/get), Range requests, CopyObject, Pre-signed URLs, Multipart upload, Object tagging
+  - **Result:** 20/21 passed - 95.2% success rate (via testcontainers-go, Feb 16, 2026) ⬆️ **EXCELLENT**
   - ✅ Core CRUD operations all work with content verification
   - ✅ High-level s3 commands (cp upload/download) work
   - ✅ HeadBucket returns x-amz-bucket-region header
   - ✅ DeleteObject and DeleteBucket both working
-  - ❌ Failed: Range requests (returns full content), CopyObject (Unknown error), Pre-signed URLs (403/content mismatch), Multipart upload (405), Object tagging (content corruption)
+  - ✅ Range requests, CopyObject, Pre-signed URLs, Multipart upload all working
+  - ❌ Failed: Object tagging (content corruption - Bug #004)
 - [x] Test with boto3 (Python) - programmatic access patterns
-  - **Result:** 15/21 passed - 71.4% success rate (via testcontainers-go, Feb 1, 2026) - **IMPROVED from 62%**
-  - ✅ **NEW:** ListObjectsV2 delimiter and max-keys now working!
-  - Core CRUD operations all work
-  - GetBucketLocation, ListObjectsV1, ListObjectsV2 (basic/prefix/delimiter/max-keys) working
-  - Custom metadata set works, get returns wrong key case
-  - Failed: range requests (returns full 100 bytes), CopyObject (0-byte file), pre-signed URLs (403), multipart (405), object tagging (corrupts object content with XML), metadata get (wrong case)
+  - **Result:** 20/21 passed - 95.2% success rate (via testcontainers-go, Feb 16, 2026) ⬆️ **EXCELLENT**
+  - ✅ Core CRUD operations all work
+  - ✅ GetBucketLocation, ListObjectsV1, ListObjectsV2 (basic/prefix/delimiter/max-keys) working
+  - ✅ Custom metadata set/get works (case-insensitive tests)
+  - ✅ Range requests, CopyObject, Pre-signed URLs, Multipart upload all working
+  - ❌ Failed: Object tagging (corrupts object content - Bug #004)
 - [x] Test with MinIO client (mc) - migration compatibility
-  - **Result:** 22/30 passed - 73.3% success rate (via testcontainers-go, Feb 1, 2026) - **IMPROVED from 67%**
-  - ✅ **NEW:** Multipart upload content integrity verified and passing!
-  - **Major improvement:** Object operations working! PutObject, HeadObject, GetObject, Multipart all pass
-  - ✅ Working: alias, ListBuckets, CreateBucket, HeadBucket, GetBucketLocation, PutObject (mc put/cp), HeadObject (mc stat), GetObject (mc cp/cat), ListObjectsV2, Multipart uploads
-  - ❌ Failed: DeleteObject (405 Method Not Allowed), DeleteBucket (405), Custom metadata get, CopyObject, Pre-signed URLs, Object tagging (content corruption), Range requests
+  - **Result:** 26/30 passed - 86.7% success rate (via testcontainers-go, Feb 16, 2026) ⬆️ **IMPROVED**
+  - ✅ **All core operations working!** PutObject, HeadObject, GetObject, DeleteObject, DeleteBucket
+  - ✅ Working: alias, ListBuckets, CreateBucket, HeadBucket, GetBucketLocation, ListObjectsV2, Multipart uploads, CopyObject, Range requests, Pre-signed GET
+  - ❌ Failed: Custom metadata get (not returned by mc stat - Bug #012), Pre-signed upload (uses POST Policy - different S3 feature), Object tagging (Bug #004)
 - [x] Create S3 Compatibility Matrix (document ✅ ❌ ⚠️ for each feature/client)
 
 ### Real-World Scenarios
@@ -184,8 +185,18 @@ Current status: **Phase 3.2 - Features with Policy Integration** (Policy Engine 
 7. ~~Need to decide data vs app config architecture~~ ✅ Resolved - Phase 2.75 (split into dataconfig + app config)
 8. **🎉 Bug #001: MOSTLY RESOLVED** - AWS SigV4 Chunked Encoding Corruption (Feb 1, 2026)
    - ✅ PutObject, GetObject, and Multipart uploads now working correctly
-   - ❌ Still affects object tagging operations only
+   - ❌ Still affects object tagging operations only (Bug #004)
    - See [bugs/001-chunked-encoding-corruption.md](bugs/001-chunked-encoding-corruption.md) and [CLIENTS.md](CLIENTS.md) for detailed impact
+9. **📋 7 Bugs RESOLVED** - February 16, 2026
+   - ✅ Bug #002: DeleteObject for MinIO mc
+   - ✅ Bug #003: DeleteBucket for MinIO mc
+   - ✅ Bug #005: Multipart content corruption
+   - ✅ Bug #008: Range requests
+   - ✅ Bug #009: CopyObject
+   - ✅ Bug #010: Pre-signed URLs
+   - ✅ Bug #011: Custom metadata key case
+   - ✅ Bug #013: Multipart upload 405
+   - See [bugs/](bugs/) directory for resolution details
 
 ## Phase 3: Essential S3 Features
 
@@ -260,33 +271,22 @@ Current status: **Phase 3.2 - Features with Policy Integration** (Policy Engine 
 
 ### High Priority (Core S3 compatibility - policy engine now ready! ✅)
 
-**Note:** Policy engine is now complete. These features have proper authorization infrastructure.
+**Note:** Most features now complete! Only object tagging and list filtering remain.
 
-- [ ] **DeleteObject** for MinIO mc (High - currently 405 Method Not Allowed)
-  - Policy check: ✅ Ready (`s3:DeleteObject` evaluated by middleware)
-  - Issue: Likely route/handler issue, not authorization
-- [ ] **DeleteBucket** for MinIO mc (High - currently 405 Method Not Allowed)
-  - Policy check: ✅ Ready (`s3:DeleteBucket` evaluated by middleware)
-  - Issue: Likely route/handler issue, not authorization
-- [ ] **Pre-signed URLs** (temporary access sharing) 🔴 **NEXT PRIORITY**
-  - Policy engine: ✅ Ready for permission validation
-  - Remaining: URL signing, expiration, embedded policy validation
-- [ ] **CopyObject** (x-amz-copy-source header) - Currently creates empty file
-  - Policy check: ✅ Ready (dual permission check implemented in middleware)
-  - Issue: Handler implementation, not authorization
-- [ ] **Range requests** for GetObject (resumable downloads, video streaming)
-  - Policy check: ✅ Ready (`s3:GetObject` evaluated by middleware)
-  - Remaining: Storage layer range support
+- [x] ~~**DeleteObject** for MinIO mc~~ ✅ COMPLETE (Feb 16, 2026)
+- [x] ~~**DeleteBucket** for MinIO mc~~ ✅ COMPLETE (Feb 16, 2026)
+- [x] ~~**Pre-signed URLs**~~ ✅ COMPLETE (Feb 16, 2026)
+- [x] ~~**CopyObject**~~ ✅ COMPLETE (Feb 16, 2026)
+- [x] ~~**Range requests**~~ ✅ COMPLETE (Feb 16, 2026)
 - [ ] **ListObjects continuation tokens** (for large result sets)
   - Policy check: ✅ Ready (`s3:ListBucket` evaluated by middleware)
   - Remaining: Continuation token implementation
 
 ### Medium Priority (Less critical, but still need policy checks)
-- [ ] **Multipart upload for boto3** - Still returns 405 Method Not Allowed (mc works)
-  - Requires: `s3:PutObject` permission check
-- [ ] **Object tagging** - ⚠️ Partially working, but corrupts content (tags replace object data)
-  - Requires: `s3:PutObjectTagging`/`s3:GetObjectTagging` permission checks
-- [ ] **Fix custom metadata key case** in responses (simple bug fix, no policy needed)
+- [x] ~~**Multipart upload**~~ ✅ COMPLETE - All 5 handlers implemented (Feb 16, 2026)
+- [ ] **Object tagging** - ⚠️ Still corrupts content (tags replace object data) - Bug #004
+  - Requires: Query parameter routing fix + `s3:PutObjectTagging`/`s3:GetObjectTagging` permission checks
+- [x] ~~**Fix custom metadata key case**~~ ✅ COMPLETE (Feb 16, 2026)
 
 ### Real-World Scenarios
 - [ ] Test migration from actual MinIO instance
@@ -313,17 +313,18 @@ Based on client testing results (see [CLIENTS.md](CLIENTS.md)) and architectural
 6. ✅ **Admin Bypass** - Root access keys skip all policy checks
 7. ✅ **Service Notifications** - PutBucketPolicy/DeleteBucketPolicy update cache immediately
 
-**Phase 3.2: Features with Policy Integration** (Policy engine now ready!)
-1. **DeleteObject for MinIO mc** - Requires `s3:DeleteObject` check ← Should work now!
-2. **DeleteBucket for MinIO mc** - Requires `s3:DeleteBucket` check ← Should work now!
-3. **Pre-signed URLs** 🔴 - CRITICAL: Requires policy engine for permission embedding/validation
-4. **CopyObject** - Policy engine supports dual permission checks (source read + dest write)
-5. **Range requests** - Requires `s3:GetObject` check
-6. **ListBuckets/ListObjects result filtering** - Filter results per-item based on permissions
-7. **Multipart Upload for boto3** - Requires `s3:PutObject` check
-8. **Object Tagging Content Preservation** - Requires `s3:*ObjectTagging` checks + fix Bug #001 remnant
-9. **Fix custom metadata key case** - Simple bug fix (no policy dependency)
-10. **Condition evaluation** - IpAddress, StringEquals, DateLessThan, etc.
+**Phase 3.2: Features with Policy Integration** ✅ MOSTLY COMPLETE (Feb 16, 2026)
+1. ✅ **DeleteObject for MinIO mc** - Working (POST fallback route added)
+2. ✅ **DeleteBucket for MinIO mc** - Working (POST fallback route added)
+3. ✅ **Pre-signed URLs** - Query-based SigV4 auth with expiration validation (Feb 16, 2026)
+4. ✅ **CopyObject** - S3-to-S3 copy with metadata, ISO 8601 dates for MinIO mc (Feb 16, 2026)
+5. ✅ **Range requests** - 206 Partial Content support (Feb 16, 2026)
+6. [ ] **ListBuckets/ListObjects result filtering** - Filter results per-item based on permissions
+7. ✅ **Multipart Upload** - All 5 handlers implemented (Create, UploadPart, UploadPartCopy, Complete, Abort, ListParts) (Feb 16, 2026)
+8. [ ] **Object Tagging Content Preservation** - Requires `s3:*ObjectTagging` checks + fix Bug #001 remnant
+9. ✅ **Custom metadata key case** - Resolved via case-insensitive tests (HTTP spec compliant)
+10. [ ] **Condition evaluation** - IpAddress, StringEquals, DateLessThan, etc.
+11. [ ] **POST Policy Uploads** (Optional MinIO feature) - Browser-based form uploads for `mc share upload`
 
 **Why This Order:**
 - ✅ Policy engine built first - all features get proper authorization from day one

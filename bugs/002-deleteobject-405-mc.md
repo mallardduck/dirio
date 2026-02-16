@@ -1,9 +1,11 @@
 # Bug #002: DeleteObject Returns 405 Method Not Allowed (MinIO mc)
 
-**Status:** Open
+**Status:** ✅ RESOLVED
 **Priority:** High
 **Discovered:** 2026-01-31
+**Resolved:** 2026-02-16
 **Affects:** MinIO mc client only (AWS CLI and boto3 work correctly)
+**Resolution:** Added POST fallback route for QueryPOST auto-promotion in teapot-router
 
 ## Summary
 

@@ -57,7 +57,7 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 | Custom Metadata (get)     | ✅       | ⚠️    | ❌        | AWS CLI: works with Title-Case keys; boto3: wrong case; mc: not returned | Medium   |
 | Pre-signed URLs (down)    | ✅       | ✅     | ✅        | All clients: GET pre-signed URLs working (Feb 16, 2026) | Medium   |
 | Pre-signed URLs (up)      | ✅       | ✅     | ❌        | AWS CLI/boto3: PUT pre-signed URLs work; mc uses POST policy (different feature) | Medium   |
-| CopyObject                | ✅       | ✅     | ❌        | AWS CLI/boto3: working (Feb 16, 2026); mc: EOF error (investigating) | Medium   |
+| CopyObject                | ✅       | ✅     | ✅        | All clients working (Feb 16, 2026) - Fixed date format for MinIO mc | Medium   |
 | Multipart Upload          | ⚠️       | ✅     | ✅        | boto3+mc: works; AWS CLI: test script bug (invalid JSON) | High     |
 | Object Tagging (set)      | ❌       | ❌     | ❌        | All clients: 501 Not Implemented or fails              | High     |
 | Object Tagging (get)      | ❌       | ❌     | ❌        | All clients: 501 Not Implemented or fails              | High     |
@@ -144,9 +144,9 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 
 ---
 
-### MinIO mc (25/30 tests passed - 83.3%)
+### MinIO mc (26/30 tests passed - 86.7%)
 
-**Status:** ⚠️ **Partially Compatible** - IMPROVED with Range request support
+**Status:** ⚠️ **Partially Compatible** - IMPROVED with CopyObject fix
 
 **Expanded Test Coverage:** Now testing 30 features with comprehensive content verification
 
@@ -174,12 +174,11 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 - ✅ Size metadata correct
 - ✅ **Multipart content integrity verified** - No corruption detected!
 
-**Failed Tests (5/30):**
+**Failed Tests (4/30):**
 - ❌ Custom Metadata get: Not returned in `mc stat`
-- ❌ CopyObject (`mc cp s3-to-s3`): EOF error (investigating - works for AWS CLI/boto3)
 - ❌ **Pre-signed URL upload** (`mc share upload`): Uses POST Policy (browser-based form upload), not pre-signed PUT URLs - **different S3 feature, needs separate implementation**
-- ❌ **Object Tagging - content corruption**: Tags stored as object content (XML replaces original) - Root cause: bug #001 + query routing
-- ❌ **Object Tagging set**: Failed to set tags
+- ❌ **Object Tagging set**: Failed to set tags (bug #001)
+- ❌ **Object Tagging get**: Tags not returned (bug #001)
 
 **Notes:**
 - MinIO mc `share upload` uses S3 POST Policy (form-based uploads), not pre-signed PUT URLs

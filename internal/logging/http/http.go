@@ -103,6 +103,11 @@ func PrepareAccessLogMiddleware(serverLogger *slog.Logger) func(next http.Handle
 				attrs = append(attrs, "fragment", r.URL.Fragment)
 			}
 
+			// Add ETag from response headers if present (useful for debugging)
+			if etag := wrapped.Header().Get("ETag"); etag != "" {
+				attrs = append(attrs, "etag", etag)
+			}
+
 			// Add operation name if present
 			if data.Action != "" {
 				attrs = append(attrs, "operation", data.Action)
