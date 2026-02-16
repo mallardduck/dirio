@@ -15,4 +15,4 @@ RUN curl -fsSL https://dl.min.io/client/mc/release/linux-amd64/mc \
 WORKDIR /work
 
 # Default shell
-ENTRYPOINT ["/bin/sh"]
+ENTRYPOINT ["/bin/bash"]

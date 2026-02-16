@@ -1,29 +1,50 @@
 #!/usr/bin/env python3
+"""boto3 S3 Integration Tests
+Tests DirIO server compatibility with boto3 (AWS SDK for Python)
+"""
+
 import os
+import sys
 import time
 import boto3
 import requests
+import hashlib
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
-passed = 0
-failed = 0
+# Add lib directory to path - try both local and container locations
+lib_paths = [
+    os.path.join(os.path.dirname(__file__), '..', 'lib'),  # Local
+    '/tmp/lib',  # Container
+    '/tmp'  # Container fallback
+]
 
-def log_pass(name):
-    global passed
-    print(f"PASS: {name}")
-    passed += 1
+for lib_path in lib_paths:
+    if os.path.exists(lib_path):
+        sys.path.insert(0, lib_path)
 
-def log_fail(name, error=""):
-    global failed
-    print(f"FAIL: {name} - {error}")
-    failed += 1
+try:
+    from test_framework import TestRunner, skip_test, compute_hash
+    from validators import (
+        validate_content_integrity,
+        validate_partial_content,
+        validate_metadata,
+        validate_not_empty
+    )
+except ImportError as e:
+    # Fallback for container environment
+    print(f"ERROR: Cannot import test framework modules: {e}", file=sys.stderr)
+    print(f"sys.path: {sys.path}", file=sys.stderr)
+    print(f"cwd: {os.getcwd()}", file=sys.stderr)
+    sys.exit(1)
 
+# Test configuration
 endpoint = os.environ.get("DIRIO_ENDPOINT")
 access_key = os.environ.get("DIRIO_ACCESS_KEY")
 secret_key = os.environ.get("DIRIO_SECRET_KEY")
 region = os.environ.get("DIRIO_REGION", "us-east-1")
 
+# Initialize boto3 client
 config = Config(signature_version="s3v4", s3={"addressing_style": "path"}, retries={'max_attempts': 1})
 s3 = boto3.client(
     "s3",
@@ -34,257 +55,270 @@ s3 = boto3.client(
     config=config,
 )
 
+# Initialize test runner
+boto3_version = boto3.__version__
+runner = TestRunner("boto3", boto3_version)
+
+# Test bucket name
 bucket = f"boto3-test-bucket-{int(time.time())}"
 
-print("=== boto3 Tests ===")
-print(f"Endpoint: {endpoint}")
+print(f"=== boto3 Tests ===", file=sys.stderr)
+print(f"Endpoint: {endpoint}", file=sys.stderr)
+print(f"boto3 version: {boto3_version}", file=sys.stderr)
 
-# Network probe — plain HTTP, no boto3.  Proves the container can reach the
-# server and that we are talking to a real DirIO instance.
-print("--- Network Probe ---")
+# Network probe
+print("--- Network Probe ---", file=sys.stderr)
 try:
-    _p = requests.get(f"{endpoint}/healthz", timeout=5)
-    print(f"  GET /healthz            -> HTTP {_p.status_code}  {_p.text}")
-    _p = requests.get(f"{endpoint}/healthz?probe=1", timeout=5)
-    print(f"  GET /healthz?probe=1    -> HTTP {_p.status_code}  {_p.text}")
+    probe_resp = requests.get(f"{endpoint}/healthz", timeout=5)
+    print(f"GET /healthz -> HTTP {probe_resp.status_code}", file=sys.stderr)
 except Exception as e:
-    print(f"  FATAL: Cannot reach {endpoint}: {e}")
-    exit(1)
+    print(f"FATAL: Cannot reach {endpoint}: {e}", file=sys.stderr)
+    sys.exit(1)
 
-# ListBuckets
-try:
+#------------------------------------------------------------------------------
+# Test Functions
+#------------------------------------------------------------------------------
+
+def test_list_buckets():
     s3.list_buckets()
-    log_pass("ListBuckets")
-except Exception as e:
-    log_fail("ListBuckets", str(e))
 
-# CreateBucket
-try:
+def test_create_bucket():
     s3.create_bucket(Bucket=bucket)
-    log_pass("CreateBucket")
-except Exception as e:
-    log_fail("CreateBucket", str(e))
 
-# GetBucketLocation
-try:
-    response = s3.get_bucket_location(Bucket=bucket)
-    # Verify response has LocationConstraint field (not bucket contents)
-    if "LocationConstraint" in response:
-        log_pass("GetBucketLocation")
-    else:
-        log_fail("GetBucketLocation", f"response missing LocationConstraint: {response}")
-except Exception as e:
-    log_fail("GetBucketLocation", str(e))
-
-# HeadBucket
-try:
+def test_head_bucket():
     s3.head_bucket(Bucket=bucket)
-    log_pass("HeadBucket")
-except Exception as e:
-    log_fail("HeadBucket", str(e))
 
-# PutObject
-try:
+def test_get_bucket_location():
+    response = s3.get_bucket_location(Bucket=bucket)
+    if "LocationConstraint" not in response:
+        raise Exception(f"response missing LocationConstraint: {response}")
+
+def test_put_object():
+    with open("/tmp/test.txt", "wb") as f:
+        f.write(b"test content")
     s3.put_object(Bucket=bucket, Key="test.txt", Body=b"test content")
-    log_pass("PutObject")
-except Exception as e:
-    log_fail("PutObject", str(e))
 
-# HeadObject
-try:
+def test_head_object():
     s3.head_object(Bucket=bucket, Key="test.txt")
-    log_pass("HeadObject")
-except Exception as e:
-    log_fail("HeadObject", str(e))
 
-# GetObject
-try:
+def test_get_object():
     response = s3.get_object(Bucket=bucket, Key="test.txt")
-    body = response["Body"].read()
-    if body == b"test content":
-        log_pass("GetObject")
-    else:
-        log_fail("GetObject", "content mismatch")
-except Exception as e:
-    log_fail("GetObject", str(e))
+    content = response["Body"].read()
 
-# ListObjectsV2 (basic)
-try:
+    # Save to file for validation
+    with open("/tmp/download.txt", "wb") as f:
+        f.write(content)
+
+    # Validate content integrity
+    success, error = validate_content_integrity("/tmp/test.txt", "/tmp/download.txt")
+    if not success:
+        raise Exception(error)
+
+def test_delete_object():
+    s3.delete_object(Bucket=bucket, Key="test.txt")
+    # Re-create for subsequent tests
+    s3.put_object(Bucket=bucket, Key="test.txt", Body=b"test content")
+
+def test_copy_object():
+    s3.copy_object(
+        Bucket=bucket,
+        Key="copied.txt",
+        CopySource={"Bucket": bucket, "Key": "test.txt"},
+    )
+
+    # Verify copied content
+    response = s3.get_object(Bucket=bucket, Key="copied.txt")
+    copied_body = response["Body"].read()
+
+    with open("/tmp/copied.txt", "wb") as f:
+        f.write(copied_body)
+
+    success, error = validate_content_integrity("/tmp/test.txt", "/tmp/copied.txt")
+    if not success:
+        raise Exception(error)
+
+def test_list_objects_v2_basic():
     response = s3.list_objects_v2(Bucket=bucket)
     contents = response.get("Contents", [])
-    # Verify it returns the test.txt object we created earlier
     keys = [obj["Key"] for obj in contents]
-    if "test.txt" in keys:
-        log_pass("ListObjectsV2 (basic)")
-    else:
-        log_fail("ListObjectsV2 (basic)", f"test.txt not found in list: {keys}")
-except Exception as e:
-    log_fail("ListObjectsV2 (basic)", str(e))
 
-# Create some objects for advanced list tests
-try:
+    if "test.txt" not in keys:
+        raise Exception(f"test.txt not found in list: {keys}")
+
+def test_list_objects_v2_prefix():
+    # Create folder structure
     s3.put_object(Bucket=bucket, Key="folder1/file1.txt", Body=b"f1")
     s3.put_object(Bucket=bucket, Key="folder1/file2.txt", Body=b"f2")
     s3.put_object(Bucket=bucket, Key="folder2/file3.txt", Body=b"f3")
-    s3.put_object(Bucket=bucket, Key="root.txt", Body=b"root")
-except Exception as e:
-    print(f"Warning: failed to create test objects: {e}")
 
-# ListObjectsV2 with prefix
-try:
+    # Test prefix filtering
     response = s3.list_objects_v2(Bucket=bucket, Prefix="folder1/")
     contents = response.get("Contents", [])
     keys = [obj["Key"] for obj in contents]
-    # Verify we get exactly the folder1 objects
-    if len(contents) == 2 and "folder1/file1.txt" in keys and "folder1/file2.txt" in keys:
-        log_pass("ListObjectsV2 (prefix)")
-    else:
-        log_fail("ListObjectsV2 (prefix)", f"expected folder1 objects, got {keys}")
-except Exception as e:
-    log_fail("ListObjectsV2 (prefix)", str(e))
 
-# ListObjectsV2 with delimiter (CommonPrefixes)
-try:
+    if len(contents) != 2 or "folder1/file1.txt" not in keys or "folder1/file2.txt" not in keys:
+        raise Exception(f"expected folder1 objects, got {keys}")
+
+def test_list_objects_v2_delimiter():
     response = s3.list_objects_v2(Bucket=bucket, Delimiter="/")
     prefixes = response.get("CommonPrefixes", [])
-    contents = response.get("Contents", [])
-    # Should have folder1/ and folder2/ as common prefixes, and root.txt + test.txt as contents
-    if len(prefixes) >= 2:
-        log_pass("ListObjectsV2 (delimiter)")
-    else:
-        log_fail("ListObjectsV2 (delimiter)", f"expected 2+ CommonPrefixes, got {len(prefixes)}: {prefixes}")
-except Exception as e:
-    log_fail("ListObjectsV2 (delimiter)", str(e))
 
-# ListObjectsV2 with max-keys
-try:
+    if len(prefixes) < 2:
+        raise Exception(f"expected 2+ CommonPrefixes, got {len(prefixes)}: {prefixes}")
+
+def test_list_objects_v2_maxkeys():
     response = s3.list_objects_v2(Bucket=bucket, MaxKeys=2)
     contents = response.get("Contents", [])
     is_truncated = response.get("IsTruncated", False)
-    if len(contents) == 2 and is_truncated:
-        log_pass("ListObjectsV2 (max-keys)")
-    elif len(contents) == 2:
-        log_fail("ListObjectsV2 (max-keys)", "IsTruncated should be True")
-    else:
-        log_fail("ListObjectsV2 (max-keys)", f"expected 2 objects, got {len(contents)}")
-except Exception as e:
-    log_fail("ListObjectsV2 (max-keys)", str(e))
 
-# ListObjectsV1
-try:
+    if len(contents) != 2:
+        raise Exception(f"expected 2 objects, got {len(contents)}")
+    if not is_truncated:
+        raise Exception("IsTruncated should be True")
+
+def test_list_objects_v1():
     response = s3.list_objects(Bucket=bucket)
     contents = response.get("Contents", [])
     keys = [obj["Key"] for obj in contents]
-    # Verify it returns objects we created (at least test.txt should be there)
-    if len(contents) > 0 and "test.txt" in keys:
-        log_pass("ListObjectsV1")
-    else:
-        log_fail("ListObjectsV1", f"expected objects not found: {keys}")
-except Exception as e:
-    log_fail("ListObjectsV1", str(e))
 
-# PutObject with metadata
-try:
+    if len(contents) == 0 or "test.txt" not in keys:
+        raise Exception(f"expected objects not found: {keys}")
+
+def test_custom_metadata_set():
+    with open("/tmp/meta-test.txt", "wb") as f:
+        f.write(b"test with metadata")
+
     s3.put_object(
         Bucket=bucket,
         Key="metadata.txt",
         Body=b"test with metadata",
         Metadata={"custom-key": "custom-value"},
     )
-    log_pass("PutObject with metadata")
-except Exception as e:
-    log_fail("PutObject with metadata", str(e))
 
-# GetObject metadata (verify custom metadata is returned)
-try:
+    # Verify content integrity after metadata set
+    response = s3.get_object(Bucket=bucket, Key="metadata.txt")
+    content = response["Body"].read()
+
+    with open("/tmp/meta-download.txt", "wb") as f:
+        f.write(content)
+
+    success, error = validate_content_integrity("/tmp/meta-test.txt", "/tmp/meta-download.txt")
+    if not success:
+        raise Exception(error)
+
+def test_custom_metadata_get():
     response = s3.head_object(Bucket=bucket, Key="metadata.txt")
     metadata = response.get("Metadata", {})
 
-    # Also verify object content wasn't corrupted
-    obj_response = s3.get_object(Bucket=bucket, Key="metadata.txt")
-    content = obj_response["Body"].read()
+    # Validate metadata using validator
+    success, error = validate_metadata(metadata, "custom-key", "custom-value")
+    if not success:
+        raise Exception(error)
 
-    # Normalize metadata keys to lowercase for case-insensitive comparison (HTTP spec)
-    metadata_lower = {k.lower(): v for k, v in metadata.items()}
+def test_object_tagging_set():
+    # Get hash before tagging
+    response_before = s3.get_object(Bucket=bucket, Key="test.txt")
+    content_before = response_before["Body"].read()
 
-    if content != b"test with metadata":
-        log_fail("GetObject metadata", f"metadata corrupted object content: {content[:100]}")
-    elif metadata_lower.get("custom-key") == "custom-value":
-        log_pass("GetObject metadata")
-    else:
-        log_fail("GetObject metadata", f"metadata not returned correctly: {metadata}")
-except Exception as e:
-    log_fail("GetObject metadata", str(e))
+    with open("/tmp/test-before-tag.txt", "wb") as f:
+        f.write(content_before)
 
-# Range request
-try:
-    # Put a larger object
-    large_content = b"0123456789" * 10  # 100 bytes
+    # Put tags
+    s3.put_object_tagging(
+        Bucket=bucket,
+        Key="test.txt",
+        Tagging={"TagSet": [{"Key": "env", "Value": "test"}]},
+    )
+
+    # Verify content not corrupted
+    response_after = s3.get_object(Bucket=bucket, Key="test.txt")
+    content_after = response_after["Body"].read()
+
+    with open("/tmp/test-after-tag.txt", "wb") as f:
+        f.write(content_after)
+
+    success, error = validate_content_integrity("/tmp/test-before-tag.txt", "/tmp/test-after-tag.txt")
+    if not success:
+        raise Exception(f"CRITICAL: object content corrupted after tagging - {error}")
+
+def test_object_tagging_get():
+    response = s3.get_object_tagging(Bucket=bucket, Key="test.txt")
+    tags = response.get("TagSet", [])
+
+    if not any(t["Key"] == "env" and t["Value"] == "test" for t in tags):
+        raise Exception(f"tags not returned correctly: {tags}")
+
+def test_range_request():
+    # Create 100-byte file
+    large_content = b"0123456789" * 10
+    with open("/tmp/range-source.txt", "wb") as f:
+        f.write(large_content)
+
     s3.put_object(Bucket=bucket, Key="range-test.txt", Body=large_content)
+
+    # Request first 10 bytes
     response = s3.get_object(Bucket=bucket, Key="range-test.txt", Range="bytes=0-9")
     body = response["Body"].read()
-    if body == b"0123456789":
-        log_pass("Range request")
-    else:
-        log_fail("Range request", f"expected first 10 bytes, got {len(body)} bytes: {body[:20]}")
-except Exception as e:
-    log_fail("Range request", str(e))
 
-# CopyObject
-try:
-    s3.copy_object(
-        Bucket=bucket,
-        Key="copied.txt",
-        CopySource={"Bucket": bucket, "Key": "test.txt"},
-    )
-    # Verify copy exists AND has correct content
-    response = s3.get_object(Bucket=bucket, Key="copied.txt")
-    copied_body = response["Body"].read()
-    if copied_body == b"test content":
-        log_pass("CopyObject")
-    else:
-        log_fail("CopyObject", f"copied content mismatch: expected 'test content', got '{copied_body[:50]}'")
-except Exception as e:
-    log_fail("CopyObject", str(e))
+    with open("/tmp/range-partial.txt", "wb") as f:
+        f.write(body)
 
-# Pre-signed URL (generate and fetch)
-try:
+    success, error = validate_partial_content("/tmp/range-partial.txt", 10)
+    if not success:
+        raise Exception(error)
+
+def test_presigned_url_download():
     url = s3.generate_presigned_url(
         "get_object",
         Params={"Bucket": bucket, "Key": "test.txt"},
         ExpiresIn=300,
     )
-    response = requests.get(url)
-    if response.status_code == 200 and response.content == b"test content":
-        log_pass("Pre-signed URL")
-    else:
-        log_fail("Pre-signed URL", f"status={response.status_code}, body={response.content[:50]}")
-except Exception as e:
-    log_fail("Pre-signed URL", str(e))
 
-# Multipart upload
-try:
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise Exception(f"status={response.status_code}")
+
+    with open("/tmp/presigned-download.txt", "wb") as f:
+        f.write(response.content)
+
+    success, error = validate_content_integrity("/tmp/test.txt", "/tmp/presigned-download.txt")
+    if not success:
+        raise Exception(error)
+
+def test_presigned_url_upload():
+    # boto3 can generate upload URLs but testing requires additional setup
+    skip_test("boto3 presigned upload requires complex PUT request setup")
+
+def test_multipart_upload():
+    part1_content = b"part1 content"
+    part2_content = b"part2 content"
+
+    with open("/tmp/part1.txt", "wb") as f:
+        f.write(part1_content)
+    with open("/tmp/part2.txt", "wb") as f:
+        f.write(part2_content)
+
     # Create multipart upload
     mpu = s3.create_multipart_upload(Bucket=bucket, Key="multipart.txt")
     upload_id = mpu["UploadId"]
 
-    # Upload parts (minimum 5MB for real S3, but we'll test with smaller)
+    # Upload parts
     part1 = s3.upload_part(
         Bucket=bucket,
         Key="multipart.txt",
         UploadId=upload_id,
         PartNumber=1,
-        Body=b"part1 content",
+        Body=part1_content,
     )
     part2 = s3.upload_part(
         Bucket=bucket,
         Key="multipart.txt",
         UploadId=upload_id,
         PartNumber=2,
-        Body=b"part2 content",
+        Body=part2_content,
     )
 
-    # Complete multipart upload
+    # Complete
     s3.complete_multipart_upload(
         Bucket=bucket,
         Key="multipart.txt",
@@ -297,68 +331,63 @@ try:
         },
     )
 
-    # Verify object exists and has correct content (parts concatenated)
+    # Verify
     response = s3.get_object(Bucket=bucket, Key="multipart.txt")
     content = response["Body"].read()
-    expected = b"part1 contentpart2 content"
-    if content == expected:
-        log_pass("Multipart upload")
-    else:
-        log_fail("Multipart upload", f"content mismatch: expected {expected}, got {content[:50]}")
-except Exception as e:
-    log_fail("Multipart upload", str(e))
 
-# Object tagging
-try:
-    # First verify object exists and get its content
-    response_before = s3.get_object(Bucket=bucket, Key="test.txt")
-    content_before = response_before["Body"].read()
+    with open("/tmp/mp-downloaded.txt", "wb") as f:
+        f.write(content)
 
-    # Put tags on the object
-    s3.put_object_tagging(
-        Bucket=bucket,
-        Key="test.txt",
-        Tagging={"TagSet": [{"Key": "env", "Value": "test"}]},
-    )
+    # Create expected file
+    with open("/tmp/mp-expected.txt", "wb") as f:
+        f.write(part1_content + part2_content)
 
-    # Get tags back
-    response = s3.get_object_tagging(Bucket=bucket, Key="test.txt")
-    tags = response.get("TagSet", [])
+    success, error = validate_content_integrity("/tmp/mp-expected.txt", "/tmp/mp-downloaded.txt")
+    if not success:
+        raise Exception(error)
 
-    # Verify object content wasn't corrupted by tagging
-    response_after = s3.get_object(Bucket=bucket, Key="test.txt")
-    content_after = response_after["Body"].read()
-
-    if content_before != content_after:
-        log_fail("Object tagging", f"tagging corrupted object content: was {content_before}, now {content_after[:100]}")
-    elif not any(t["Key"] == "env" and t["Value"] == "test" for t in tags):
-        log_fail("Object tagging", f"tags not returned correctly: {tags}")
-    else:
-        log_pass("Object tagging")
-except Exception as e:
-    log_fail("Object tagging", str(e))
-
-# DeleteObject
-try:
-    s3.delete_object(Bucket=bucket, Key="test.txt")
-    log_pass("DeleteObject")
-except Exception as e:
-    log_fail("DeleteObject", str(e))
-
-# Cleanup and DeleteBucket
-try:
+def test_delete_bucket():
+    # Cleanup all objects first
     response = s3.list_objects_v2(Bucket=bucket)
     for obj in response.get("Contents", []):
         s3.delete_object(Bucket=bucket, Key=obj["Key"])
-    s3.delete_bucket(Bucket=bucket)
-    log_pass("DeleteBucket")
-except Exception as e:
-    log_fail("DeleteBucket", str(e))
 
-print()
-print("=== Summary ===")
-print(f"Passed: {passed}")
-print(f"Failed: {failed}")
-if failed == 0:
-    print("All tests passed")
-exit(1 if failed > 0 else 0)
+    s3.delete_bucket(Bucket=bucket)
+
+#------------------------------------------------------------------------------
+# Register and Run All Tests
+#------------------------------------------------------------------------------
+
+runner.register_test("ListBuckets", "bucket_operations", "exit_code", test_list_buckets)
+runner.register_test("CreateBucket", "bucket_operations", "exit_code", test_create_bucket)
+runner.register_test("HeadBucket", "bucket_operations", "exit_code", test_head_bucket)
+runner.register_test("GetBucketLocation", "bucket_operations", "exit_code", test_get_bucket_location)
+runner.register_test("PutObject", "object_operations", "content_integrity", test_put_object)
+runner.register_test("HeadObject", "object_operations", "exit_code", test_head_object)
+runner.register_test("GetObject", "object_operations", "content_integrity", test_get_object)
+runner.register_test("DeleteObject", "object_operations", "exit_code", test_delete_object)
+runner.register_test("CopyObject", "object_operations", "content_integrity", test_copy_object)
+runner.register_test("ListObjectsV2_Basic", "listing_operations", "exit_code", test_list_objects_v2_basic)
+runner.register_test("ListObjectsV2_Prefix", "listing_operations", "exit_code", test_list_objects_v2_prefix)
+runner.register_test("ListObjectsV2_Delimiter", "listing_operations", "exit_code", test_list_objects_v2_delimiter)
+runner.register_test("ListObjectsV2_MaxKeys", "listing_operations", "exit_code", test_list_objects_v2_maxkeys)
+runner.register_test("ListObjectsV1", "listing_operations", "exit_code", test_list_objects_v1)
+runner.register_test("CustomMetadata_Set", "metadata_operations", "content_integrity", test_custom_metadata_set)
+runner.register_test("CustomMetadata_Get", "metadata_operations", "metadata", test_custom_metadata_get)
+runner.register_test("ObjectTagging_Set", "metadata_operations", "content_integrity", test_object_tagging_set)
+runner.register_test("ObjectTagging_Get", "metadata_operations", "exit_code", test_object_tagging_get)
+runner.register_test("RangeRequest", "advanced_features", "partial_content", test_range_request)
+runner.register_test("PreSignedURL_Download", "advanced_features", "content_integrity", test_presigned_url_download)
+runner.register_test("PreSignedURL_Upload", "advanced_features", "content_integrity", test_presigned_url_upload)
+runner.register_test("MultipartUpload", "advanced_features", "content_integrity", test_multipart_upload)
+runner.register_test("DeleteBucket", "bucket_operations", "exit_code", test_delete_bucket)
+
+# Run all tests
+runner.run_all_tests()
+
+# Output JSON results
+runner.output_json()
+
+# Exit with appropriate code
+summary = runner.get_summary()
+sys.exit(1 if summary.failed > 0 else 0)

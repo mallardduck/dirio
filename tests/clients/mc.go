@@ -19,7 +19,7 @@ func MinioClientContainer(envMap map[string]string, script string) testcontainer
 			KeepImage:  true, // Keep the image for reuse across tests
 		},
 		Env:        envMap,
-		Entrypoint: []string{"/bin/sh", "-c"},
+		Entrypoint: []string{"/bin/bash", "-c"},
 		Cmd:        []string{script},
 		WaitingFor: wait.ForExit().WithExitTimeout(3 * time.Minute),
 	}

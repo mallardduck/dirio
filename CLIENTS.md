@@ -1,272 +1,200 @@
-# S3 Client Compatibility Documentation
+# S3 Client Compatibility
 
-This document tracks DirIO's compatibility with various S3 clients, test results, and known issues.
+DirIO's compatibility status with major S3 clients.
 
-**Latest Update: February 16, 2026**
-**Test Framework:** testcontainers-go with Docker containers for each client
-**Test Location:** `tests/clients/` using canonical scripts from `tests/clients/scripts/`
-**Latest Test Run:** February 16, 2026 - All test results verified and accurate
-
-**Recent Fixes (February 16, 2026):**
-- ✅ **IMPLEMENTED:** CopyObject operation - AWS CLI and boto3 working
-- ✅ **IMPLEMENTED:** Range request support - All clients working (206 Partial Content)
-- ✅ **IMPLEMENTED:** Pre-signed URL support (GET) - AWS CLI, boto3, and MinIO mc all working
-- ✅ **IMPLEMENTED:** ListObjectsV2 pagination - NextContinuationToken and StartAfter fields now populated
-- ✅ **FIXED:** Bug #007 - MaxKeys parameter now works correctly, pagination enabled
-- ✅ **FIXED:** Bug #006 - CommonPrefixes now populated correctly for boto3
-- ✅ **FIXED:** Test script URL extraction - Now correctly parses `Share:` line from mc output
-- ✅ **FIXED:** Test environment binary caching issue - Tests now force fresh server builds on every run
-- ✅ **FIXED:** Windows .exe handling - Proper cross-platform binary path handling in tests
-- ✅ **FIXED:** DeleteObjects routing - Added POST fallback route for teapot-router auto-promotion
-- 📈 **AWS CLI improved:** 16/21 → 19/21 tests passing (90.5%)
-- 📈 **boto3 improved:** 15/21 → **21/21 tests passing (100%)** 🎉
-- 📈 **MinIO mc improved:** 24/30 → 25/30 tests passing (83.3%)
+**Last Updated:** February 16, 2026
+**Test Framework:** Structured JSON output with automated feature matrix
+**Test Location:** `tests/clients/`
 
 ---
 
-## 🚨 Critical Issues
+## Quick Summary
 
-**Bug #001: AWS SigV4 Chunked Encoding Corruption** - See [bugs/001-chunked-encoding-corruption.md](bugs/001-chunked-encoding-corruption.md)
-- **Status:** MOSTLY RESOLVED (Feb 1, 2026) - Only affects object tagging now!
-- ✅ **FIXED:** PutObject, GetObject, and Multipart uploads now work correctly
-- ❌ **Still broken:** Object tagging operations corrupt content (tags replace object data)
-- **Impact:** Limited to object tagging operations only
-- **Evidence:** PutObject and multipart uploads verified with content integrity checks
-- **Priority:** MEDIUM - Core write operations working, only tagging affected
+**Overall S3 Compatibility:** 21/23 core operations working (91%)
 
----
-
-## S3 Client Compatibility Matrix
-
-| Feature                   | AWS CLI | boto3 | MinIO mc | Notes                                                 | Priority |
-|---------------------------|---------|-------|----------|-------------------------------------------------------|----------|
-| CreateBucket              | ✅       | ✅     | ✅        | mc: via `mc mb`                                       | High     |
-| DeleteBucket              | ✅       | ✅     | ✅        | All clients: working                                  | High     |
-| ListBuckets               | ✅       | ✅     | ✅        | mc: works                                             | High     |
-| HeadBucket                | ✅       | ✅     | ✅        | mc: via `stat --no-list`; returns x-amz-bucket-region | High     |
-| GetBucketLocation         | ✅       | ✅     | ✅        | mc: via `stat`                                        | High     |
-| PutObject                 | ✅       | ✅     | ✅        | mc: mc put/cp both work                               | High     |
-| GetObject                 | ✅       | ✅     | ✅        | mc: mc cp/cat both work                               | High     |
-| HeadObject                | ✅       | ✅     | ✅        | mc: mc stat works                                     | High     |
-| DeleteObject              | ✅       | ✅     | ✅        | All clients: working (FIXED: POST fallback route)     | High     |
-| ListObjectsV2 (basic)     | ✅       | ✅     | ✅        | mc: mc ls works                                       | High     |
-| ListObjectsV2 (prefix)    | ✅       | ✅     | ✅        | All clients: now tested and working                   | High     |
-| ListObjectsV2 (delimiter) | ✅       | ✅     | ✅        | All clients: working correctly (Bug #006 FIXED)       | High     |
-| ListObjectsV2 (recursive) | ❓       | ❓     | ✅        | mc: mc ls -r works                                    | Medium   |
-| ListObjectsV2 (max-keys)  | ❓       | ✅     | ❓        | boto3: working with pagination (Bug #007 FIXED)       | Medium   |
-| ListObjectsV1             | ❓       | ✅     | ❓        | boto3: works                                          | Medium   |
-| Range Requests            | ✅       | ✅     | ✅        | All clients: 206 Partial Content working (Feb 16, 2026) | High     |
-| Custom Metadata (set)     | ✅       | ✅     | ✅        | All clients: works correctly                          | Medium   |
-| Custom Metadata (get)     | ✅       | ⚠️    | ❌        | AWS CLI: works with Title-Case keys; boto3: wrong case; mc: not returned | Medium   |
-| Pre-signed URLs (down)    | ✅       | ✅     | ✅        | All clients: GET pre-signed URLs working (Feb 16, 2026) | Medium   |
-| Pre-signed URLs (up)      | ✅       | ✅     | ❌        | AWS CLI/boto3: PUT pre-signed URLs work; mc uses POST policy (different feature) | Medium   |
-| CopyObject                | ✅       | ✅     | ✅        | All clients working (Feb 16, 2026) - Fixed date format for MinIO mc | Medium   |
-| Multipart Upload          | ⚠️       | ✅     | ✅        | boto3+mc: works; AWS CLI: test script bug (invalid JSON) | High     |
-| Object Tagging (set)      | ❌       | ❌     | ❌        | All clients: 501 Not Implemented or fails              | High     |
-| Object Tagging (get)      | ❌       | ❌     | ❌        | All clients: 501 Not Implemented or fails              | High     |
-
-**Legend:** ✅ Works | ❌ Fails | ⚠️ Partial | ❓Untested
+| Client | Tested | Passed | Failed | Skipped | Pass Rate |
+|--------|--------|--------|--------|---------|-----------|
+| AWS CLI | 23 | 21 | 0 | 2 | 91% |
+| boto3 | 23 | 22 | 0 | 1 | 96% |
+| MinIO mc | 23 | 20 | 1 | 2 | 87% |
 
 ---
 
-## Test Results Summary
+## Feature Compatibility Matrix
 
-**S3 API Implementation Status** (24 unique features tested across 3 clients):
-- ✅ **Fully Working:** 21/24 (88%) - Works correctly across all tested clients
-- ⚠️ **Partially Working:** 3/24 (12%) - Custom metadata get (mc doesn't return), Pre-signed PUT (mc uses POST policy), ListObjectsV2 max-keys (only tested with boto3)
-- ❌ **Not Working:** 0/24 (0%) - All core features working! 🎉
-- ❓ **Not Tested:** Some features only tested with subset of clients
+All clients test the same 23 canonical S3 operations defined in `tests/clients/features.yaml`.
 
-**Recent Improvements (Feb 8, 2026):**
-- ✅ **AWS CLI test suite expanded** - From 11 to 21 tests with comprehensive content verification
-- ✅ ListObjectsV2 (prefix/delimiter) now tested and working in AWS CLI
-- ✅ Custom metadata fully tested in AWS CLI (set/get both work)
-- ✅ All three test suites now have uniform coverage for core operations
-- ✅ Confirmed known bugs affect all clients consistently (Range, CopyObject, Pre-signed URLs, Multipart, Tagging)
+### Bucket Operations
 
----
+| Feature | AWS CLI | boto3 | MinIO mc | Notes |
+|---------|---------|-------|----------|-------|
+| ListBuckets | ✅ | ✅ | ✅ | List all buckets |
+| CreateBucket | ✅ | ✅ | ✅ | Create new bucket |
+| HeadBucket | ✅ | ✅ | ✅ | Check bucket existence |
+| GetBucketLocation | ✅ | ✅ | ✅ | Get bucket region |
+| DeleteBucket | ✅ | ✅ | ✅ | Delete empty bucket |
 
-## Detailed Client Test Results
+### Object Operations
 
-### AWS CLI (19/21 tests passed - 90.5%)
+| Feature | AWS CLI | boto3 | MinIO mc | Notes |
+|---------|---------|-------|----------|-------|
+| PutObject | ✅ | ✅ | ✅ | Upload object |
+| GetObject | ✅ | ✅ | ✅ | Download object with content verification |
+| HeadObject | ✅ | ✅ | ✅ | Get object metadata |
+| DeleteObject | ✅ | ✅ | ✅ | Delete object |
+| CopyObject | ✅ | ✅ | ✅ | Server-side copy with content verification |
 
-**Status:** ✅ **Highly Compatible** - Core functionality working
+### Listing Operations
 
-**Test Coverage Expanded:** Now testing 21 features with full content verification
+| Feature | AWS CLI | boto3 | MinIO mc | Notes |
+|---------|---------|-------|----------|-------|
+| ListObjectsV2_Basic | ✅ | ✅ | ✅ | List all objects |
+| ListObjectsV2_Prefix | ✅ | ✅ | ✅ | Filter by prefix |
+| ListObjectsV2_Delimiter | ✅ | ✅ | ✅ | Hierarchical listing with CommonPrefixes |
+| ListObjectsV2_MaxKeys | ✅ | ✅ | ⏭️ | Pagination support (mc doesn't expose) |
+| ListObjectsV1 | ⏭️ | ✅ | ⏭️ | Legacy API (clients use V2 by default) |
 
-**Working Features (19):**
-- ✅ ListBuckets
-- ✅ CreateBucket
-- ✅ HeadBucket (returns `x-amz-bucket-region` header)
-- ✅ GetBucketLocation
-- ✅ PutObject
-- ✅ Custom metadata (set)
-- ✅ Custom metadata (get) - Returns Title-Case keys but accessible
-- ✅ HeadObject
-- ✅ GetObject - **with content verification**
-- ✅ ListObjectsV2 (basic)
-- ✅ ListObjectsV2 (prefix)
-- ✅ ListObjectsV2 (delimiter)
-- ✅ High-level `s3 cp` upload
-- ✅ High-level `s3 cp` download
-- ✅ **Pre-signed URLs** - Download and upload
-- ✅ **Range Requests** - Partial content with 206 status (Feb 16, 2026)
-- ✅ **CopyObject** - S3-to-S3 copy with metadata (Feb 16, 2026)
-- ✅ DeleteObject
-- ✅ DeleteBucket
+### Metadata Operations
 
-**Failed Tests (2/21):**
-- ⚠️ Multipart upload: Test script generates invalid JSON (empty ETags) - **DirIO implementation works (boto3 passes)**
-- ❌ Object tagging: Content corrupted after tagging (known bug #001)
+| Feature | AWS CLI | boto3 | MinIO mc | Notes |
+|---------|---------|-------|----------|-------|
+| CustomMetadata_Set | ✅ | ✅ | ✅ | Set x-amz-meta-* headers with content verification |
+| CustomMetadata_Get | ✅ | ✅ | ✅ | Retrieve custom metadata (case-insensitive) |
+| ObjectTagging_Set | ✅ | ✅ | ✅ | Set object tags with content preservation verified |
+| ObjectTagging_Get | ✅ | ✅ | ✅ | Get object tags |
 
-**Notes:**
-- All core CRUD operations work perfectly
-- High-level `s3` commands work
-- ✅ Content verification now implemented for all read/write operations
-- All failures match boto3 failures - confirmed DirIO bugs, not client issues
+### Advanced Features
+
+| Feature | AWS CLI | boto3 | MinIO mc | Notes |
+|---------|---------|-------|----------|-------|
+| RangeRequest | ✅ | ✅ | ✅ | Partial content (206) with byte-exact verification |
+| PreSignedURL_Download | ✅ | ✅ | ✅ | Generate GET URL with content verification |
+| PreSignedURL_Upload | ⏭️ | ⏭️ | ❌ | AWS CLI/boto3 skip (complex setup), mc fails with content mismatch |
+| MultipartUpload | ✅ | ✅ | ✅ | Large file uploads with full content integrity verification |
+
+**Legend:** ✅ Pass | ❌ Fail | ⏭️ Skip | ➖ N/A
 
 ---
 
-### boto3 (21/21 tests passed - 100%) 🎉
+## Known Issues
 
-**Status:** ✅ **FULLY COMPATIBLE** - ALL TESTS PASSING!
+### Active Bugs
 
-**Working Features:**
-- ✅ Core CRUD operations (Create, Read, Update, Delete)
-- ✅ GetBucketLocation
-- ✅ ListObjectsV1
-- ✅ ListObjectsV2 (basic/prefix/delimiter/max-keys) - **Bug #006 & #007 FIXED!**
-- ✅ Custom metadata set/get (case-insensitive comparison)
-- ✅ **Pre-signed URLs** - Download and upload
-- ✅ **Range Requests** - Partial content with 206 status (Feb 16, 2026)
-- ✅ **CopyObject** - S3-to-S3 copy with metadata (Feb 16, 2026)
-- ✅ **Multipart Upload** - Create, UploadPart, Complete, Abort, ListParts (Feb 16, 2026)
-- ✅ **Object Tagging** - Set and get tags with content preservation (Feb 16, 2026)
+**MinIO mc PreSignedURL_Upload - Content Mismatch**
+- **Status:** ❌ FAILING
+- **Clients Affected:** MinIO mc only
+- **Error:** Content integrity check failed (hash mismatch: expected `ec9eadb8b71af4c664405284ac9323de`, got `f840e1434e8ff5782497a5c5b1b8a922`)
+- **Impact:** Pre-signed PUT URLs return different content than what was uploaded
+- **Note:** This is a real bug found by the new content integrity validation
 
-**Failed Tests (0/21):**
-- None! All tests passing!
+### Optional Features (Intentionally Skipped)
+
+- **ListObjectsV1:** Legacy API, modern clients use ListObjectsV2 by default (AWS CLI, mc)
+- **PreSignedURL_Upload:** AWS CLI and boto3 skip due to complex test setup requirements
+- **ListObjectsV2_MaxKeys:** MinIO mc doesn't expose pagination parameter at CLI level
 
 ---
 
-### MinIO mc (26/30 tests passed - 86.7%)
+## Test Details
 
-**Status:** ⚠️ **Partially Compatible** - IMPROVED with CopyObject fix
+### Content Integrity Validation
 
-**Expanded Test Coverage:** Now testing 30 features with comprehensive content verification
+All data operations verify content integrity using MD5 hashes:
+- ✅ PutObject/GetObject - Round-trip verification
+- ✅ CopyObject - Copied content matches original
+- ✅ MultipartUpload - Assembled content matches parts
+- ✅ PreSignedURL - Downloads via URL match object data
+- ✅ Metadata/Tagging - Content not corrupted by metadata operations
 
-**Working Features:**
+### Test Architecture
 
-**Bucket Operations (6/6):**
-- ✅ Configure alias
-- ✅ ListBuckets
-- ✅ CreateBucket (`mc mb`)
-- ✅ HeadBucket (`mc stat --no-list` / `mc stat`)
-- ✅ GetBucketLocation (`mc stat`)
-- ✅ DeleteBucket (`mc rb`) - **FIXED!**
+```
+tests/clients/
+├── features.yaml              # 23 canonical S3 operations
+├── lib/
+│   ├── test_framework.sh      # Bash test runner
+│   ├── test_framework.py      # Python test runner
+│   ├── validators.sh          # Content integrity validators
+│   └── validators.py          # Python validators
+├── scripts/
+│   ├── awscli.sh              # AWS CLI tests (23 operations)
+│   ├── boto3.py               # boto3 tests (23 operations)
+│   ├── mc.sh                  # MinIO mc tests (23 operations)
+│   └── aggregate_results.py   # JSON → Markdown reporter
+└── clients_test.go            # Go test orchestration (testcontainers)
+```
 
-**Object CRUD (11/11):**
-- ✅ PutObject (`mc put` / `mc cp`)
-- ✅ HeadObject (`mc stat`)
-- ✅ GetObject (`mc cp` / `mc cat`)
-- ✅ DeleteObject (`mc rm`) - **FIXED!**
-- ✅ ListObjectsV2 (`mc ls` / `mc ls prefix/` / `mc ls -r`)
-- ✅ ListObjectsV2 with delimiter
+### Running Tests
 
-**Tagging/Multipart Operations (4/7):**
-- ✅ Object tagging - content preserved after tagging
-- ✅ Multipart upload completes
-- ✅ Size metadata correct
-- ✅ **Multipart content integrity verified** - No corruption detected!
+```bash
+# Run with testcontainers (cross-platform)
+go test -v ./tests/clients
 
-**Failed Tests (4/30):**
-- ❌ Custom Metadata get: Not returned in `mc stat`
-- ❌ **Pre-signed URL upload** (`mc share upload`): Uses POST Policy (browser-based form upload), not pre-signed PUT URLs - **different S3 feature, needs separate implementation**
-- ❌ **Object Tagging set**: Failed to set tags (bug #001)
-- ❌ **Object Tagging get**: Tags not returned (bug #001)
+# View detailed results
+cat tests/clients/results/REPORT.md
 
-**Notes:**
-- MinIO mc `share upload` uses S3 POST Policy (form-based uploads), not pre-signed PUT URLs
-- Pre-signed GET URLs work correctly (tested with `mc share download` + curl)
-- POST Policy is a separate S3 feature for browser-based uploads with form data
-
----
-
-## Testing Methodology
-
-### Test Framework Setup
-
-**Framework:** testcontainers-go running Docker containers for each client
-**Scripts:** Canonical test scripts from `tests/clients/scripts/` embedded via go:embed
-**Command:** `go test -v ./tests/clients/...`
-
-### Defensive Testing (Jan 31, 2026)
-
-Comprehensive content verification added to prevent false positives:
-
-- ✅ **Object Tagging tests:** Verify content before and after tagging - EXPOSED BUG: tags replace object content
-- ✅ **Multipart Upload tests:** Download and verify byte-for-byte content integrity - EXPOSED BUG: downloaded file 14KB larger than original
-- ✅ **GetObject tests:** Verify exact content matches expected data - EXPOSED BUG: chunked encoding markers in content
-- These defensive checks revealed that AWS SigV4 chunked transfer encoding headers are being written directly to object files, corrupting data
-
-### Sanity Testing & Defensive Checks
-
-Added comprehensive validation to prevent false positives:
-
-- ✅ **FailingServer test:** Returns 500 errors - all clients correctly fail
-- ✅ **DumbSuccessServer test:** Returns 200 OK with empty responses - all clients correctly fail
-- ✅ **Defensive boto3 checks:** Added content validation to detect query parameter routing issues:
-  - GetBucketLocation: Verify response contains `LocationConstraint` field
-  - ListObjectsV2: Verify actual object keys in results
-  - Custom Metadata: Verify object content not corrupted by metadata operations
-  - Object Tagging: Verify object content not overwritten by tagging XML
-  - Multipart Upload: Verify assembled content matches expected parts
-- These tests confirm passing tests are validating actual server functionality, not just status codes or accidental matches
+# View raw JSON
+cat tests/clients/results/awscli.json
+cat tests/clients/results/boto3.json
+cat tests/clients/results/mc.json
+```
 
 ---
 
-## Architecture Improvements (January 27, 2026)
+## Client-Specific Notes
 
-### Auth Package Refactor
+### AWS CLI
 
-- ✅ **Merged sigv4 into auth package** - `internal/sigv4/` → `internal/auth/signature.go`
-- ✅ **Unified authentication API** - Single `AuthenticateRequest(r)` method replaces 4-step orchestration
-- ✅ **Auth middleware encapsulation** - Moved from `server.go` to `auth.AuthMiddleware()` method
-- ✅ **Improved architecture:**
-  - Single package owns all authentication concerns (signature verification, user lookup, validation)
-  - Cleaner API: `user, err := auth.AuthenticateRequest(r)` instead of juggling sigv4 + auth packages
-  - Better testability and reusability
-  - User added to request context for downstream handlers
-- ✅ **No regressions** - All test results identical before/after refactor
+- Uses AWS CLI v2 with S3 API v4 signatures
+- Tests core `s3api` commands
+- Skips ListObjectsV1 (uses V2 by default)
+- May skip PreSignedURL_Upload (presign command doesn't easily support PUT)
 
-### MinIO mc Success & Remaining Issues
+### boto3 (AWS SDK for Python)
 
-- ✅ **Resolved:** Object PUTs now work perfectly (mc put/cp both working)
-- ✅ **Resolved:** DeleteObject and DeleteBucket now working (POST fallback route added for QueryPOST routing)
-- ✅ **Working:** Multipart uploads, object tagging set, custom metadata set, ListObjectsV2 with delimiter/prefix/recursive
-- ✅ **Working:** DeleteObjects batch operation (POST with ?delete query parameter)
-- ❌ **Remaining failures:** Range requests, CopyObject, Pre-signed URLs, Custom metadata retrieval, Object tagging set
+- Python 3.12+ with boto3
+- Most comprehensive test coverage
+- Supports both ListObjectsV1 and V2
+- Full multipart upload support
 
----
+### MinIO mc
 
-## Known Working Features (Jan 31, 2026)
-
-- ✅ GetBucketLocation (AWS CLI, boto3, MinIO mc) - FIXED Jan 24, 2026
-- ✅ HeadBucket (AWS CLI, boto3, MinIO mc)
-- ✅ DeleteObject/DeleteBucket work in AWS CLI and boto3
-- ✅ ListObjectsV2 with delimiter works in MinIO mc (Jan 31, 2026)
-- ✅ Object metadata operations (size, ETag, timestamps) work correctly
+- MinIO client with high-level commands
+- Tests `mc` commands: mb, rb, ls, cp, stat, tag, share
+- Skips ListObjectsV1 (uses V2 by default)
+- Skips MaxKeys (doesn't expose pagination parameter)
+- PreSignedURL_Upload uses POST Policy (different S3 feature)
 
 ---
 
-## Known Broken Features
+## Recent Changes
 
-**⚠️ Partial Bug #001 Impact - SIGNIFICANTLY IMPROVED (Feb 1, 2026 08:59 UTC)**
+### February 16, 2026 - Test Framework Refactoring
 
-The AWS SigV4 chunked encoding bug (#001) appears to be **RESOLVED** for most operations:
-- ✅ **PutObject** - Now working correctly, no chunked encoding artifacts
-- ✅ **GetObject** - Now working correctly, no encoding markers
-- ✅ **Multipart uploads** - Now working correctly with verified content integrity (MinIO mc)
+**Major Changes:**
+- ✅ Unified test framework with JSON output
+- ✅ All clients test same 23 canonical operations
+- ✅ Automated feature matrix generation
+- ✅ Standardized content integrity validation
+- ✅ Consistent test coverage across all clients
 
-**Remaining Issues:**
-- ❌ **Object tagging** - Operations succeed but tags replace object content (combined bug #001 + query routing issue) - boto3 and mc affected
-- ❌ **Multipart for boto3** - Still returns 405 Method Not Allowed (mc works fine)
+**Benefits:**
+- Feature parity visible at a glance
+- Automated reporting (no manual log inspection)
+- Shared validation logic reduces false positives
+- Easy to add new tests consistently
+
+---
+
+## How to Update This Document
+
+After running tests:
+
+1. **Run tests:** `go test -v ./tests/clients`
+2. **Check results:** `cat tests/clients/results/REPORT.md`
+3. **Update Quick Summary table** with pass/fail counts
+4. **Update Feature Matrix** by copying from REPORT.md (replace TBD with ✅/❌/⏭️)
+5. **Update Known Issues** section with any new failures
+6. **Commit changes** with test evidence
+
+The `aggregate_results.py` script generates the feature matrix automatically, making it easy to keep this document current.

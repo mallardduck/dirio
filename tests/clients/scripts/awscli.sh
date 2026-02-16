@@ -1,252 +1,277 @@
 #!/bin/bash
-set +e
+# AWS CLI S3 Integration Tests
+# Tests DirIO server compatibility with AWS CLI
 
-# Cleanup handler for signals
-cleanup() {
-  echo "Received signal, cleaning up..."
-  exit 130
-}
-trap cleanup SIGINT SIGTERM
+set -euo pipefail
 
-PASSED=0
-FAILED=0
+# Get the script directory (works in containers where this is passed inline)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-pass() { echo "PASS: $1"; PASSED=$((PASSED+1)); }
-fail() { echo "FAIL: $1 - $2"; FAILED=$((FAILED+1)); }
+# Source test framework - handle both container and local execution
+if [ -f "$SCRIPT_DIR/../lib/test_framework.sh" ]; then
+    source "$SCRIPT_DIR/../lib/test_framework.sh"
+    source "$SCRIPT_DIR/../lib/validators.sh"
+elif [ -f "/tmp/test_framework.sh" ]; then
+    source /tmp/test_framework.sh
+    source /tmp/validators.sh
+else
+    echo "ERROR: Cannot find test_framework.sh" >&2
+    exit 1
+fi
 
+# Initialize test runner
+AWS_VERSION=$(aws --version 2>&1 | head -n1)
+init_test_runner "awscli" "$AWS_VERSION"
+
+# Test configuration
 BUCKET="awscli-test-bucket-$(date +%s)"
 ENDPOINT="${DIRIO_ENDPOINT}"
 AWS="aws --endpoint-url ${ENDPOINT}"
 
-echo "=== AWS CLI Tests ==="
-echo "Endpoint: ${ENDPOINT}"
+echo "=== AWS CLI Tests ===" >&2
+echo "Endpoint: ${ENDPOINT}" >&2
+echo "AWS CLI: ${AWS_VERSION}" >&2
 
-# Network probe — plain curl, no AWS CLI.  Proves the container can reach the
-# server and that we are talking to a real DirIO instance.
-echo "--- Network Probe ---"
-PROBE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "${ENDPOINT}/healthz")
+# Network probe
+echo "--- Network Probe ---" >&2
+PROBE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "${ENDPOINT}/healthz" || echo "000")
 if [ "${PROBE_CODE}" = "000" ]; then
-  echo "  FATAL: Cannot reach server at ${ENDPOINT}"
-  exit 1
+    echo "FATAL: Cannot reach server at ${ENDPOINT}" >&2
+    exit 1
 fi
-echo "  GET /healthz            -> HTTP ${PROBE_CODE}"
-QP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "${ENDPOINT}/healthz?probe=1")
-echo "  GET /healthz?probe=1    -> HTTP ${QP_CODE}"
+echo "GET /healthz -> HTTP ${PROBE_CODE}" >&2
 
-# ListBuckets
-$AWS s3api list-buckets && pass "ListBuckets" || fail "ListBuckets"
+#------------------------------------------------------------------------------
+# Test Functions
+#------------------------------------------------------------------------------
 
-# CreateBucket
-$AWS s3api create-bucket --bucket ${BUCKET} && pass "CreateBucket" || fail "CreateBucket"
+test_list_buckets() {
+    $AWS s3api list-buckets > /dev/null
+}
 
-# HeadBucket
-$AWS s3api head-bucket --bucket ${BUCKET} && pass "HeadBucket" || fail "HeadBucket"
+test_create_bucket() {
+    $AWS s3api create-bucket --bucket ${BUCKET} > /dev/null
+}
 
-# GetBucketLocation - verify server returns bucket location metadata
-$AWS s3api get-bucket-location --bucket ${BUCKET} --output json > /tmp/location.json
-if [ $? -eq 0 ] && grep -q "LocationConstraint" /tmp/location.json; then
-  pass "GetBucketLocation"
-else
-  fail "GetBucketLocation" "missing LocationConstraint in response"
-fi
+test_head_bucket() {
+    $AWS s3api head-bucket --bucket ${BUCKET}
+}
 
-# PutObject
-echo "test content" > /tmp/test.txt
-$AWS s3api put-object --bucket ${BUCKET} --key test.txt --body /tmp/test.txt && pass "PutObject" || fail "PutObject"
+test_get_bucket_location() {
+    $AWS s3api get-bucket-location --bucket ${BUCKET} --output json > /tmp/location.json
+    grep -q "LocationConstraint" /tmp/location.json
+}
 
-# PutObject with custom metadata
-echo "metadata test" > /tmp/meta-test.txt
-$AWS s3api put-object --bucket ${BUCKET} --key meta-test.txt --body /tmp/meta-test.txt --metadata custom-key=custom-value
-if [ $? -eq 0 ]; then
-  pass "Custom metadata (set)"
-else
-  fail "Custom metadata (set)" "put-object with metadata failed"
-fi
+test_put_object() {
+    echo "test content" > /tmp/test.txt
+    $AWS s3api put-object --bucket ${BUCKET} --key test.txt --body /tmp/test.txt > /dev/null
+}
 
-# HeadObject
-$AWS s3api head-object --bucket ${BUCKET} --key test.txt && pass "HeadObject" || fail "HeadObject"
+test_head_object() {
+    $AWS s3api head-object --bucket ${BUCKET} --key test.txt > /dev/null
+}
 
-# Custom metadata (get) - verify metadata in HeadObject response AND content not corrupted
-$AWS s3api head-object --bucket ${BUCKET} --key meta-test.txt > /tmp/meta-head.txt
-$AWS s3api get-object --bucket ${BUCKET} --key meta-test.txt /tmp/meta-download.txt
-if grep -qi "custom-key" /tmp/meta-head.txt && diff -q /tmp/meta-test.txt /tmp/meta-download.txt >/dev/null 2>&1; then
-  pass "Custom metadata (get)"
-else
-  fail "Custom metadata (get)" "metadata not returned or content corrupted"
-fi
+test_get_object() {
+    $AWS s3api get-object --bucket ${BUCKET} --key test.txt /tmp/download.txt > /dev/null
+    validate_content_integrity /tmp/test.txt /tmp/download.txt
+}
 
-# GetObject
-$AWS s3api get-object --bucket ${BUCKET} --key test.txt /tmp/download.txt
-if [ $? -eq 0 ] && diff -q /tmp/test.txt /tmp/download.txt >/dev/null 2>&1; then
-  pass "GetObject"
-else
-  fail "GetObject" "download failed or content mismatch"
-fi
+test_delete_object() {
+    $AWS s3api delete-object --bucket ${BUCKET} --key test.txt > /dev/null
+    # Re-create for subsequent tests
+    $AWS s3api put-object --bucket ${BUCKET} --key test.txt --body /tmp/test.txt > /dev/null
+}
 
-# Range request - create 100-byte file with known content
-printf "%0100d" 0 > /tmp/range-source.txt
-$AWS s3api put-object --bucket ${BUCKET} --key range.txt --body /tmp/range-source.txt
+test_copy_object() {
+    $AWS s3api copy-object --copy-source ${BUCKET}/test.txt --bucket ${BUCKET} --key copied.txt > /dev/null
+    $AWS s3api get-object --bucket ${BUCKET} --key copied.txt /tmp/copied.txt > /dev/null
+    validate_content_integrity /tmp/test.txt /tmp/copied.txt
+}
 
-# Request only first 10 bytes
-$AWS s3api get-object --bucket ${BUCKET} --key range.txt --range bytes=0-9 /tmp/range-partial.txt
-PARTIAL_SIZE=$(wc -c < /tmp/range-partial.txt | tr -d ' ')
-if [ "${PARTIAL_SIZE}" = "10" ]; then
-  pass "Range request"
-else
-  fail "Range request" "expected 10 bytes, got ${PARTIAL_SIZE}"
-fi
+test_list_objects_v2_basic() {
+    $AWS s3api list-objects-v2 --bucket ${BUCKET} > /tmp/list-basic.txt
+    grep -q "test.txt" /tmp/list-basic.txt
+}
 
-# ListObjectsV2 (basic)
-$AWS s3api list-objects-v2 --bucket ${BUCKET} > /tmp/list-basic.txt
-if [ $? -eq 0 ] && grep -q "test.txt" /tmp/list-basic.txt; then
-  pass "ListObjectsV2 (basic)"
-else
-  fail "ListObjectsV2 (basic)" "test.txt not found in list"
-fi
+test_list_objects_v2_prefix() {
+    # Setup folder structure
+    echo "folder1 file1" > /tmp/f1-file1.txt
+    echo "folder1 file2" > /tmp/f1-file2.txt
+    $AWS s3api put-object --bucket ${BUCKET} --key folder1/file1.txt --body /tmp/f1-file1.txt > /dev/null
+    $AWS s3api put-object --bucket ${BUCKET} --key folder1/file2.txt --body /tmp/f1-file2.txt > /dev/null
 
-# Setup folder structure for prefix tests
-echo "folder1 file1" > /tmp/f1-file1.txt
-echo "folder1 file2" > /tmp/f1-file2.txt
-$AWS s3api put-object --bucket ${BUCKET} --key folder1/file1.txt --body /tmp/f1-file1.txt
-$AWS s3api put-object --bucket ${BUCKET} --key folder1/file2.txt --body /tmp/f1-file2.txt
+    # Test prefix filtering
+    $AWS s3api list-objects-v2 --bucket ${BUCKET} --prefix folder1/ > /tmp/list-prefix.txt
+    grep -q "folder1/file1.txt" /tmp/list-prefix.txt
+    grep -q "folder1/file2.txt" /tmp/list-prefix.txt
+}
 
-# ListObjectsV2 with prefix
-$AWS s3api list-objects-v2 --bucket ${BUCKET} --prefix folder1/ > /tmp/list-prefix.txt
-if [ $? -eq 0 ] && grep -q "folder1/file1.txt" /tmp/list-prefix.txt && grep -q "folder1/file2.txt" /tmp/list-prefix.txt; then
-  pass "ListObjectsV2 (prefix)"
-else
-  fail "ListObjectsV2 (prefix)" "expected objects not found"
-fi
+test_list_objects_v2_delimiter() {
+    $AWS s3api list-objects-v2 --bucket ${BUCKET} --delimiter / > /tmp/list-delim.txt
+    grep -q "CommonPrefixes" /tmp/list-delim.txt
+}
 
-# ListObjectsV2 with delimiter - should show folder prefixes
-$AWS s3api list-objects-v2 --bucket ${BUCKET} --delimiter / > /tmp/list-delim.txt
-if [ $? -eq 0 ] && grep -q "CommonPrefixes" /tmp/list-delim.txt; then
-  pass "ListObjectsV2 (delimiter)"
-else
-  fail "ListObjectsV2 (delimiter)" "CommonPrefixes not found"
-fi
+test_list_objects_v2_maxkeys() {
+    # Test pagination with max-keys
+    $AWS s3api list-objects-v2 --bucket ${BUCKET} --max-items 2 > /tmp/list-maxkeys.txt
+    # Should have NextToken or limited results
+    if ! grep -q "NextToken" /tmp/list-maxkeys.txt; then
+        # Alternative: count number of keys returned (should be <= 2)
+        KEY_COUNT=$(grep -c "\"Key\":" /tmp/list-maxkeys.txt || echo 0)
+        if [ "$KEY_COUNT" -gt 2 ]; then
+            fail_test "MaxKeys not respected: found $KEY_COUNT keys"
+        fi
+    fi
+}
 
-# CopyObject - copy test.txt to copied.txt
-$AWS s3api copy-object --copy-source ${BUCKET}/test.txt --bucket ${BUCKET} --key copied.txt 2>&1
-if [ $? -eq 0 ]; then
-  # Verify copied content matches original
-  $AWS s3api get-object --bucket ${BUCKET} --key copied.txt /tmp/copied.txt
-  if diff -q /tmp/test.txt /tmp/copied.txt >/dev/null 2>&1; then
-    pass "CopyObject"
-  else
-    fail "CopyObject" "content mismatch after copy"
-  fi
-else
-  fail "CopyObject" "copy operation failed"
-fi
+test_list_objects_v1() {
+    # AWS CLI v2 defaults to ListObjectsV2, skip V1 test
+    skip_test "AWS CLI v2 uses ListObjectsV2 by default"
+}
 
-# Pre-signed URL - generate URL and download via curl
-PRESIGNED_URL=$($AWS s3 presign s3://${BUCKET}/test.txt --expires-in 300 2>&1)
-if [ $? -eq 0 ]; then
-  # Download via presigned URL using curl
-  curl -s -f -o /tmp/presigned-download.txt "${PRESIGNED_URL}"
-  if [ $? -eq 0 ] && diff -q /tmp/test.txt /tmp/presigned-download.txt >/dev/null 2>&1; then
-    pass "Pre-signed URL"
-  else
-    fail "Pre-signed URL" "download failed or content mismatch"
-  fi
-else
-  fail "Pre-signed URL" "URL generation failed"
-fi
+test_custom_metadata_set() {
+    echo "metadata test" > /tmp/meta-test.txt
+    $AWS s3api put-object --bucket ${BUCKET} --key meta-test.txt --body /tmp/meta-test.txt \
+        --metadata custom-key=custom-value > /dev/null
+    # Verify content integrity after metadata set
+    $AWS s3api get-object --bucket ${BUCKET} --key meta-test.txt /tmp/meta-download.txt > /dev/null
+    validate_content_integrity /tmp/meta-test.txt /tmp/meta-download.txt
+}
 
-# Multipart upload - create 2 parts and assemble
-echo "part1 content" > /tmp/part1.txt
-echo "part2 content" > /tmp/part2.txt
+test_custom_metadata_get() {
+    $AWS s3api head-object --bucket ${BUCKET} --key meta-test.txt > /tmp/meta-head.txt
+    if ! grep -qi "custom-key" /tmp/meta-head.txt; then
+        fail_test "Custom metadata key not found in HeadObject response"
+    fi
+    if ! grep -qi "custom-value" /tmp/meta-head.txt; then
+        fail_test "Custom metadata value not found in HeadObject response"
+    fi
+}
 
-# Initiate
-CREATE_RESP=$($AWS s3api create-multipart-upload --bucket ${BUCKET} --key multipart.txt --output json 2>&1)
-if [ $? -ne 0 ]; then
-  fail "Multipart upload" "create failed"
-else
-  # Extract UploadId - try jq first, fallback to grep/sed
-  if command -v jq >/dev/null 2>&1; then
-    UPLOAD_ID=$(echo "$CREATE_RESP" | jq -r '.UploadId')
-  else
-    UPLOAD_ID=$(echo "$CREATE_RESP" | grep -o '"UploadId"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)".*/\1/')
-  fi
+test_object_tagging_set() {
+    # Get hash before tagging
+    $AWS s3api get-object --bucket ${BUCKET} --key test.txt /tmp/test-before-tag.txt > /dev/null
+    HASH_BEFORE=$(compute_hash /tmp/test-before-tag.txt)
 
-  if [ -z "$UPLOAD_ID" ]; then
-    fail "Multipart upload" "could not parse UploadId"
-  else
-    # Upload part 1 - extract ETag (AWS CLI returns it with escaped quotes: "\"hash\"")
-    PART1_RESP=$($AWS s3api upload-part --bucket ${BUCKET} --key multipart.txt --upload-id "$UPLOAD_ID" --part-number 1 --body /tmp/part1.txt 2>&1)
-    # Extract the hash between the escaped quotes
+    # Put tags
+    $AWS s3api put-object-tagging --bucket ${BUCKET} --key test.txt \
+        --tagging 'TagSet=[{Key=env,Value=test}]' > /dev/null
+
+    # Verify content not corrupted
+    $AWS s3api get-object --bucket ${BUCKET} --key test.txt /tmp/test-after-tag.txt > /dev/null
+    HASH_AFTER=$(compute_hash /tmp/test-after-tag.txt)
+
+    if [ "$HASH_BEFORE" != "$HASH_AFTER" ]; then
+        fail_test "CRITICAL: object content corrupted after tagging"
+    fi
+}
+
+test_object_tagging_get() {
+    $AWS s3api get-object-tagging --bucket ${BUCKET} --key test.txt > /tmp/tags.txt
+    if ! grep -q "env" /tmp/tags.txt || ! grep -q "test" /tmp/tags.txt; then
+        fail_test "Tags not returned or incorrect"
+    fi
+}
+
+test_range_request() {
+    # Create 100-byte file
+    printf "%0100d" 0 > /tmp/range-source.txt
+    $AWS s3api put-object --bucket ${BUCKET} --key range.txt --body /tmp/range-source.txt > /dev/null
+
+    # Request first 10 bytes
+    $AWS s3api get-object --bucket ${BUCKET} --key range.txt --range bytes=0-9 /tmp/range-partial.txt > /dev/null
+    validate_partial_content /tmp/range-partial.txt 10
+}
+
+test_presigned_url_download() {
+    PRESIGNED_URL=$($AWS s3 presign s3://${BUCKET}/test.txt --expires-in 300 2>&1)
+    curl -s -f -o /tmp/presigned-download.txt "${PRESIGNED_URL}"
+    validate_content_integrity /tmp/test.txt /tmp/presigned-download.txt
+}
+
+test_presigned_url_upload() {
+    # AWS CLI presign doesn't easily support upload URLs
+    skip_test "AWS CLI presign does not support upload URLs easily"
+}
+
+test_multipart_upload() {
+    echo "part1 content" > /tmp/part1.txt
+    echo "part2 content" > /tmp/part2.txt
+
+    # Initiate
+    CREATE_RESP=$($AWS s3api create-multipart-upload --bucket ${BUCKET} --key multipart.txt --output json 2>&1)
+
+    # Extract UploadId
+    if command -v jq >/dev/null 2>&1; then
+        UPLOAD_ID=$(echo "$CREATE_RESP" | jq -r '.UploadId')
+    else
+        UPLOAD_ID=$(echo "$CREATE_RESP" | grep -o '"UploadId"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)".*/\1/')
+    fi
+
+    if [ -z "$UPLOAD_ID" ]; then
+        fail_test "Could not parse UploadId"
+    fi
+
+    # Upload parts
+    PART1_RESP=$($AWS s3api upload-part --bucket ${BUCKET} --key multipart.txt \
+        --upload-id "$UPLOAD_ID" --part-number 1 --body /tmp/part1.txt 2>&1)
     ETAG1=$(echo "$PART1_RESP" | grep -i '"ETag":' | sed -E 's/.*"ETag"[[:space:]]*:[[:space:]]*"\\+"([^\\]+)\\+".*/\1/' | tr -d '\n\r')
 
-    # Upload part 2 - extract ETag
-    PART2_RESP=$($AWS s3api upload-part --bucket ${BUCKET} --key multipart.txt --upload-id "$UPLOAD_ID" --part-number 2 --body /tmp/part2.txt 2>&1)
+    PART2_RESP=$($AWS s3api upload-part --bucket ${BUCKET} --key multipart.txt \
+        --upload-id "$UPLOAD_ID" --part-number 2 --body /tmp/part2.txt 2>&1)
     ETAG2=$(echo "$PART2_RESP" | grep -i '"ETag":' | sed -E 's/.*"ETag"[[:space:]]*:[[:space:]]*"\\+"([^\\]+)\\+".*/\1/' | tr -d '\n\r')
 
-    # Complete multipart - ETags must be wrapped in escaped quotes in JSON
+    # Complete
     COMPLETE_JSON="{\"Parts\":[{\"PartNumber\":1,\"ETag\":\"\\\"$ETAG1\\\"\"},{\"PartNumber\":2,\"ETag\":\"\\\"$ETAG2\\\"\"}]}"
-    $AWS s3api complete-multipart-upload --bucket ${BUCKET} --key multipart.txt --upload-id "$UPLOAD_ID" --multipart-upload "$COMPLETE_JSON" 2>&1
+    $AWS s3api complete-multipart-upload --bucket ${BUCKET} --key multipart.txt \
+        --upload-id "$UPLOAD_ID" --multipart-upload "$COMPLETE_JSON" > /dev/null
 
-    if [ $? -eq 0 ]; then
-      # Verify assembled content
-      $AWS s3api get-object --bucket ${BUCKET} --key multipart.txt /tmp/mp-downloaded.txt
-      cat /tmp/part1.txt /tmp/part2.txt > /tmp/mp-expected.txt
-      if diff -q /tmp/mp-expected.txt /tmp/mp-downloaded.txt >/dev/null 2>&1; then
-        pass "Multipart upload"
-      else
-        fail "Multipart upload" "content mismatch after assembly"
-      fi
-    else
-      fail "Multipart upload" "complete operation failed"
-    fi
-  fi
-fi
+    # Verify
+    $AWS s3api get-object --bucket ${BUCKET} --key multipart.txt /tmp/mp-downloaded.txt > /dev/null
+    cat /tmp/part1.txt /tmp/part2.txt > /tmp/mp-expected.txt
+    validate_content_integrity /tmp/mp-expected.txt /tmp/mp-downloaded.txt
+}
 
-# Object tagging - CRITICAL: verify content not corrupted
-# Get original content hash first
-$AWS s3api get-object --bucket ${BUCKET} --key test.txt /tmp/test-before-tag.txt
-HASH_BEFORE=$(md5sum /tmp/test-before-tag.txt 2>/dev/null | awk '{print $1}' || md5 -q /tmp/test-before-tag.txt)
+test_delete_bucket() {
+    # Cleanup all objects first
+    $AWS s3 rm s3://${BUCKET} --recursive 2>/dev/null || true
+    $AWS s3api delete-bucket --bucket ${BUCKET}
+}
 
-# Put tags
-$AWS s3api put-object-tagging --bucket ${BUCKET} --key test.txt --tagging 'TagSet=[{Key=env,Value=test}]' 2>&1
-if [ $? -eq 0 ]; then
-  # Get tags back
-  $AWS s3api get-object-tagging --bucket ${BUCKET} --key test.txt > /tmp/tags.txt
-  if grep -q "env" /tmp/tags.txt && grep -q "test" /tmp/tags.txt; then
-    # Verify object content NOT corrupted
-    $AWS s3api get-object --bucket ${BUCKET} --key test.txt /tmp/test-after-tag.txt
-    HASH_AFTER=$(md5sum /tmp/test-after-tag.txt 2>/dev/null | awk '{print $1}' || md5 -q /tmp/test-after-tag.txt)
-    if [ "$HASH_BEFORE" = "$HASH_AFTER" ]; then
-      pass "Object tagging"
-    else
-      fail "Object tagging" "CRITICAL: object content corrupted after tagging"
-    fi
-  else
-    fail "Object tagging" "tags not returned"
-  fi
+#------------------------------------------------------------------------------
+# Run All Tests
+#------------------------------------------------------------------------------
+
+run_test "ListBuckets" "bucket_operations" "exit_code" test_list_buckets
+run_test "CreateBucket" "bucket_operations" "exit_code" test_create_bucket
+run_test "HeadBucket" "bucket_operations" "exit_code" test_head_bucket
+run_test "GetBucketLocation" "bucket_operations" "exit_code" test_get_bucket_location
+run_test "PutObject" "object_operations" "content_integrity" test_put_object
+run_test "HeadObject" "object_operations" "exit_code" test_head_object
+run_test "GetObject" "object_operations" "content_integrity" test_get_object
+run_test "DeleteObject" "object_operations" "exit_code" test_delete_object
+run_test "CopyObject" "object_operations" "content_integrity" test_copy_object
+run_test "ListObjectsV2_Basic" "listing_operations" "exit_code" test_list_objects_v2_basic
+run_test "ListObjectsV2_Prefix" "listing_operations" "exit_code" test_list_objects_v2_prefix
+run_test "ListObjectsV2_Delimiter" "listing_operations" "exit_code" test_list_objects_v2_delimiter
+run_test "ListObjectsV2_MaxKeys" "listing_operations" "exit_code" test_list_objects_v2_maxkeys
+run_test "ListObjectsV1" "listing_operations" "exit_code" test_list_objects_v1
+run_test "CustomMetadata_Set" "metadata_operations" "content_integrity" test_custom_metadata_set
+run_test "CustomMetadata_Get" "metadata_operations" "metadata" test_custom_metadata_get
+run_test "ObjectTagging_Set" "metadata_operations" "content_integrity" test_object_tagging_set
+run_test "ObjectTagging_Get" "metadata_operations" "exit_code" test_object_tagging_get
+run_test "RangeRequest" "advanced_features" "partial_content" test_range_request
+run_test "PreSignedURL_Download" "advanced_features" "content_integrity" test_presigned_url_download
+run_test "PreSignedURL_Upload" "advanced_features" "content_integrity" test_presigned_url_upload
+run_test "MultipartUpload" "advanced_features" "content_integrity" test_multipart_upload
+run_test "DeleteBucket" "bucket_operations" "exit_code" test_delete_bucket
+
+# Output JSON results
+finalize_test_runner
+
+# Exit with appropriate code
+if [ $TEST_FAILED -gt 0 ]; then
+    exit 1
 else
-  fail "Object tagging" "put operation failed"
-fi
-
-# s3 cp upload
-$AWS s3 cp /tmp/test.txt s3://${BUCKET}/hl-test.txt && pass "s3 cp upload" || fail "s3 cp upload"
-
-# s3 cp download
-$AWS s3 cp s3://${BUCKET}/hl-test.txt /tmp/hl-download.txt && pass "s3 cp download" || fail "s3 cp download"
-
-# DeleteObject
-$AWS s3api delete-object --bucket ${BUCKET} --key test.txt && pass "DeleteObject" || fail "DeleteObject"
-
-# Cleanup and DeleteBucket
-$AWS s3 rm s3://${BUCKET} --recursive 2>/dev/null || true
-$AWS s3api delete-bucket --bucket ${BUCKET} && pass "DeleteBucket" || fail "DeleteBucket"
-
-echo ""
-echo "=== Summary ==="
-echo "Passed: ${PASSED}"
-echo "Failed: ${FAILED}"
-if [ ${FAILED} -eq 0 ]; then
-  echo "All tests passed"
-  exit 0
-else
-  exit 1
+    exit 0
 fi

@@ -3,6 +3,7 @@ package clients_test
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -33,11 +34,57 @@ var boto3Script string
 //go:embed scripts/mc.sh
 var mcScript string
 
+//go:embed lib/test_framework.sh
+var testFrameworkSh string
+
+//go:embed lib/validators.sh
+var validatorsSh string
+
+//go:embed lib/test_framework.py
+var testFrameworkPy string
+
+//go:embed lib/validators.py
+var validatorsPy string
+
 const (
 	testAccessKey = "testaccess"
 	testSecretKey = "testsecret"
 	testRegion    = "us-east-1"
 )
+
+// JSON output structures for test results
+type TestMeta struct {
+	Client     string `json:"client"`
+	Version    string `json:"version"`
+	TestRunID  string `json:"test_run_id"`
+	DurationMs int    `json:"duration_ms"`
+}
+
+type TestResultDetails struct {
+	ValidationType string `json:"validation_type"`
+}
+
+type TestResult struct {
+	Feature    string            `json:"feature"`
+	Category   string            `json:"category"`
+	Status     string            `json:"status"`
+	DurationMs int               `json:"duration_ms"`
+	Message    string            `json:"message"`
+	Details    TestResultDetails `json:"details"`
+}
+
+type TestSummary struct {
+	Total   int `json:"total"`
+	Passed  int `json:"passed"`
+	Failed  int `json:"failed"`
+	Skipped int `json:"skipped"`
+}
+
+type TestOutput struct {
+	Meta    TestMeta     `json:"meta"`
+	Results []TestResult `json:"results"`
+	Summary TestSummary  `json:"summary"`
+}
 
 // preserveTestData returns true if test data should be preserved (not cleaned up)
 func preserveTestData() bool {
@@ -297,6 +344,29 @@ func registerServer(server *TestServer) {
 	activeServers = append(activeServers, server)
 }
 
+// parseTestOutput extracts JSON from log output and parses it
+func parseTestOutput(logOutput string) (*TestOutput, error) {
+	// Find JSON output (starts with { and ends with })
+	// The logs will contain human-readable output followed by JSON
+	startIdx := strings.LastIndex(logOutput, "\n{")
+	if startIdx == -1 {
+		startIdx = strings.Index(logOutput, "{")
+	}
+	if startIdx == -1 {
+		return nil, fmt.Errorf("no JSON output found in logs")
+	}
+
+	jsonStr := logOutput[startIdx:]
+	jsonStr = strings.TrimSpace(jsonStr)
+
+	var output TestOutput
+	if err := json.Unmarshal([]byte(jsonStr), &output); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON output: %w", err)
+	}
+
+	return &output, nil
+}
+
 // TestAWSCLI runs AWS CLI compatibility tests
 func TestAWSCLI(t *testing.T) {
 	t.Parallel()
@@ -344,18 +414,31 @@ func TestAWSCLI(t *testing.T) {
 	state, err := container.State(ctx)
 	require.NoError(t, err)
 
-	if state.ExitCode != 0 {
-		t.Errorf("AWS CLI tests failed with exit code %d", state.ExitCode)
-	}
-
-	// Parse and report results
-	if strings.Contains(logOutput, "All tests passed") {
-		t.Log("AWS CLI: All tests passed")
-	} else {
-		// Count passed/failed from output
+	// Parse JSON output
+	testOutput, err := parseTestOutput(logOutput)
+	if err != nil {
+		t.Errorf("Failed to parse test output: %v", err)
+		// Fallback to old method
 		passCount := strings.Count(logOutput, "PASS:")
 		failCount := strings.Count(logOutput, "FAIL:")
-		t.Logf("AWS CLI: %d passed, %d failed", passCount, failCount)
+		t.Logf("AWS CLI: %d passed, %d failed (fallback parsing)", passCount, failCount)
+	} else {
+		t.Logf("AWS CLI Results: %d total, %d passed, %d failed, %d skipped",
+			testOutput.Summary.Total,
+			testOutput.Summary.Passed,
+			testOutput.Summary.Failed,
+			testOutput.Summary.Skipped)
+
+		// Log failed tests
+		for _, result := range testOutput.Results {
+			if result.Status == "fail" {
+				t.Errorf("  FAILED: %s - %s", result.Feature, result.Message)
+			}
+		}
+	}
+
+	if state.ExitCode != 0 {
+		t.Errorf("AWS CLI tests failed with exit code %d", state.ExitCode)
 	}
 }
 
@@ -406,17 +489,31 @@ func TestBoto3(t *testing.T) {
 	state, err := container.State(ctx)
 	require.NoError(t, err)
 
-	if state.ExitCode != 0 {
-		t.Errorf("boto3 tests failed with exit code %d", state.ExitCode)
-	}
-
-	// Parse and report results
-	if strings.Contains(logOutput, "All tests passed") {
-		t.Log("boto3: All tests passed")
-	} else {
+	// Parse JSON output
+	testOutput, err := parseTestOutput(logOutput)
+	if err != nil {
+		t.Errorf("Failed to parse test output: %v", err)
+		// Fallback to old method
 		passCount := strings.Count(logOutput, "PASS:")
 		failCount := strings.Count(logOutput, "FAIL:")
-		t.Logf("boto3: %d passed, %d failed", passCount, failCount)
+		t.Logf("boto3: %d passed, %d failed (fallback parsing)", passCount, failCount)
+	} else {
+		t.Logf("boto3 Results: %d total, %d passed, %d failed, %d skipped",
+			testOutput.Summary.Total,
+			testOutput.Summary.Passed,
+			testOutput.Summary.Failed,
+			testOutput.Summary.Skipped)
+
+		// Log failed tests
+		for _, result := range testOutput.Results {
+			if result.Status == "fail" {
+				t.Errorf("  FAILED: %s - %s", result.Feature, result.Message)
+			}
+		}
+	}
+
+	if state.ExitCode != 0 {
+		t.Errorf("boto3 tests failed with exit code %d", state.ExitCode)
 	}
 }
 
@@ -460,35 +557,87 @@ func TestMinIOMC(t *testing.T) {
 	state, err := container.State(ctx)
 	require.NoError(t, err)
 
-	if state.ExitCode != 0 {
-		t.Errorf("MinIO mc tests failed with exit code %d", state.ExitCode)
-	}
-
-	// Parse and report results
-	if strings.Contains(logOutput, "All tests passed") {
-		t.Log("MinIO mc: All tests passed")
-	} else {
+	// Parse JSON output
+	testOutput, err := parseTestOutput(logOutput)
+	if err != nil {
+		t.Errorf("Failed to parse test output: %v", err)
+		// Fallback to old method
 		passCount := strings.Count(logOutput, "PASS:")
 		failCount := strings.Count(logOutput, "FAIL:")
-		t.Logf("MinIO mc: %d passed, %d failed", passCount, failCount)
+		t.Logf("MinIO mc: %d passed, %d failed (fallback parsing)", passCount, failCount)
+	} else {
+		t.Logf("MinIO mc Results: %d total, %d passed, %d failed, %d skipped",
+			testOutput.Summary.Total,
+			testOutput.Summary.Passed,
+			testOutput.Summary.Failed,
+			testOutput.Summary.Skipped)
+
+		// Log failed tests
+		for _, result := range testOutput.Results {
+			if result.Status == "fail" {
+				t.Errorf("  FAILED: %s - %s", result.Feature, result.Message)
+			}
+		}
+	}
+
+	if state.ExitCode != 0 {
+		t.Errorf("MinIO mc tests failed with exit code %d", state.ExitCode)
 	}
 }
 
 // awsCLITestScript returns the test script for AWS CLI
 func awsCLITestScript() string {
-	return awsCLIScript
+	// Write lib files to /tmp first
+	return fmt.Sprintf(`
+# Write test framework libraries to /tmp
+cat > /tmp/test_framework.sh << 'EOF_FRAMEWORK'
+%s
+EOF_FRAMEWORK
+
+cat > /tmp/validators.sh << 'EOF_VALIDATORS'
+%s
+EOF_VALIDATORS
+
+# Run the test script
+%s
+`, testFrameworkSh, validatorsSh, awsCLIScript)
 }
 
 // boto3TestScript returns the Python test script for boto3
 func boto3TestScript() string {
-	return `pip install --quiet boto3 requests
+	return fmt.Sprintf(`pip install --quiet boto3 requests
+
+# Write Python test framework libraries to /tmp
+mkdir -p /tmp/lib
+cat > /tmp/lib/test_framework.py << 'EOF_FRAMEWORK'
+%s
+EOF_FRAMEWORK
+
+cat > /tmp/lib/validators.py << 'EOF_VALIDATORS'
+%s
+EOF_VALIDATORS
+
+# Add /tmp/lib to Python path and run test
+cd /tmp
 python3 << 'PYTHON_SCRIPT'
-` + boto3Script + `
+%s
 PYTHON_SCRIPT
-`
+`, testFrameworkPy, validatorsPy, boto3Script)
 }
 
 // minioMCTestScript returns the test script for MinIO mc
 func minioMCTestScript() string {
-	return mcScript
+	return fmt.Sprintf(`
+# Write test framework libraries to /tmp
+cat > /tmp/test_framework.sh << 'EOF_FRAMEWORK'
+%s
+EOF_FRAMEWORK
+
+cat > /tmp/validators.sh << 'EOF_VALIDATORS'
+%s
+EOF_VALIDATORS
+
+# Run the test script
+%s
+`, testFrameworkSh, validatorsSh, mcScript)
 }

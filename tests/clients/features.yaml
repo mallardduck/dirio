@@ -1,0 +1,144 @@
+# Canonical S3 Feature Set for Client Integration Tests
+# All clients should implement tests for these features to ensure consistent coverage
+
+# Bucket Operations - Basic bucket lifecycle management
+bucket_operations:
+  - name: ListBuckets
+    priority: required
+    validation: exit_code
+    description: List all buckets in the account
+
+  - name: CreateBucket
+    priority: required
+    validation: exit_code
+    description: Create a new bucket
+
+  - name: HeadBucket
+    priority: required
+    validation: exit_code
+    description: Check if a bucket exists and is accessible
+
+  - name: GetBucketLocation
+    priority: required
+    validation: exit_code
+    description: Get the region/location of a bucket
+
+  - name: DeleteBucket
+    priority: required
+    validation: exit_code
+    description: Delete an empty bucket
+
+# Object Operations - Basic object lifecycle management
+object_operations:
+  - name: PutObject
+    priority: required
+    validation: content_integrity
+    description: Upload an object to a bucket
+
+  - name: GetObject
+    priority: required
+    validation: content_integrity
+    description: Download an object from a bucket
+
+  - name: HeadObject
+    priority: required
+    validation: exit_code
+    description: Retrieve object metadata without downloading content
+
+  - name: DeleteObject
+    priority: required
+    validation: exit_code
+    description: Delete an object from a bucket
+
+  - name: CopyObject
+    priority: required
+    validation: content_integrity
+    description: Copy an object within or across buckets
+
+# Listing Operations - Object enumeration and filtering
+listing_operations:
+  - name: ListObjectsV2_Basic
+    priority: required
+    validation: exit_code
+    description: List all objects in a bucket using ListObjectsV2
+
+  - name: ListObjectsV2_Prefix
+    priority: required
+    validation: exit_code
+    description: List objects with a specific prefix
+
+  - name: ListObjectsV2_Delimiter
+    priority: required
+    validation: exit_code
+    description: List objects using delimiter for hierarchical grouping
+
+  - name: ListObjectsV2_MaxKeys
+    priority: optional
+    validation: exit_code
+    description: List objects with pagination (MaxKeys parameter)
+
+  - name: ListObjectsV1
+    priority: optional
+    validation: exit_code
+    description: List objects using legacy ListObjects (V1) API
+
+# Metadata Operations - Custom metadata and tagging
+metadata_operations:
+  - name: CustomMetadata_Set
+    priority: required
+    validation: content_integrity
+    description: Upload object with custom metadata (x-amz-meta-*)
+
+  - name: CustomMetadata_Get
+    priority: required
+    validation: metadata
+    description: Retrieve and verify custom metadata from object
+
+  - name: ObjectTagging_Set
+    priority: required
+    validation: content_integrity
+    description: Set object tags (separate from metadata)
+
+  - name: ObjectTagging_Get
+    priority: required
+    validation: exit_code
+    description: Retrieve and verify object tags
+
+# Advanced Features - Complex operations
+advanced_features:
+  - name: RangeRequest
+    priority: required
+    validation: partial_content
+    description: Download a byte range from an object
+
+  - name: PreSignedURL_Download
+    priority: required
+    validation: content_integrity
+    description: Generate pre-signed URL and download object
+
+  - name: PreSignedURL_Upload
+    priority: optional
+    validation: content_integrity
+    description: Generate pre-signed URL and upload object
+
+  - name: MultipartUpload
+    priority: required
+    validation: content_integrity
+    description: Upload large object using multipart upload API
+
+# Validation Types:
+# - exit_code: Verify command succeeds (exit code 0)
+# - content_integrity: Verify MD5 hash matches original file
+# - partial_content: Verify byte size matches expected range
+# - metadata: Verify metadata key-value pairs exist and match
+
+# Priority Levels:
+# - required: All clients must implement this test
+# - optional: Skip if client doesn't support the feature (exit code 77)
+
+# Notes:
+# 1. All data operations (Put, Get, Copy) MUST validate content integrity
+# 2. All metadata operations MUST verify content integrity (no corruption)
+# 3. ListObjectsV1 is optional (most modern clients use V2 by default)
+# 4. PreSignedURL_Upload is optional (not all clients support it easily)
+# 5. MaxKeys test is optional (some clients don't expose pagination control)

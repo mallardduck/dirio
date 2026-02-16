@@ -1,344 +1,270 @@
 #!/bin/bash
-set +e
+# MinIO Client (mc) S3 Integration Tests
+# Tests DirIO server compatibility with MinIO mc client
 
-# Cleanup handler for signals
-cleanup() {
-  echo "Received signal, cleaning up..."
-  exit 130
-}
-trap cleanup SIGINT SIGTERM
+set -euo pipefail
 
-PASSED=0
-FAILED=0
+# Get the script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-pass() { echo "PASS: $1"; PASSED=$((PASSED+1)); }
-fail() { echo "FAIL: $1 - $2"; FAILED=$((FAILED+1)); }
+# Source test framework - handle both container and local execution
+if [ -f "$SCRIPT_DIR/../lib/test_framework.sh" ]; then
+    source "$SCRIPT_DIR/../lib/test_framework.sh"
+    source "$SCRIPT_DIR/../lib/validators.sh"
+elif [ -f "/tmp/test_framework.sh" ]; then
+    source /tmp/test_framework.sh
+    source /tmp/validators.sh
+else
+    echo "ERROR: Cannot find test_framework.sh" >&2
+    exit 1
+fi
 
+# Initialize test runner
+MC_VERSION=$(mc --version 2>&1 | head -n1)
+init_test_runner "mc" "$MC_VERSION"
+
+# Test configuration
 BUCKET="mc-test-bucket-$(date +%s)"
 ENDPOINT="${DIRIO_ENDPOINT}"
 MC_ALIAS="dirio"
 
-echo "=== MinIO mc Tests ==="
-echo "Endpoint: ${ENDPOINT}"
+echo "=== MinIO mc Tests ===" >&2
+echo "Endpoint: ${ENDPOINT}" >&2
+echo "mc version: ${MC_VERSION}" >&2
 
-# Network probe — plain curl, no mc.  Proves the container can reach the
-# server and that we are talking to a real DirIO instance.
-echo "--- Network Probe ---"
-PROBE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "${ENDPOINT}/healthz")
+# Network probe
+echo "--- Network Probe ---" >&2
+PROBE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "${ENDPOINT}/healthz" || echo "000")
 if [ "${PROBE_CODE}" = "000" ]; then
-  echo "  FATAL: Cannot reach server at ${ENDPOINT}"
-  exit 1
+    echo "FATAL: Cannot reach server at ${ENDPOINT}" >&2
+    exit 1
 fi
-echo "  GET /healthz            -> HTTP ${PROBE_CODE}"
-QP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "${ENDPOINT}/healthz?probe=1")
-echo "  GET /healthz?probe=1    -> HTTP ${QP_CODE}"
+echo "GET /healthz -> HTTP ${PROBE_CODE}" >&2
 
-# Configure alias
+# Configure alias (not a test, required setup)
 mc alias set ${MC_ALIAS} ${ENDPOINT} ${DIRIO_ACCESS_KEY} ${DIRIO_SECRET_KEY} --api S3v4 2>/dev/null
-if [ $? -eq 0 ]; then
-  pass "Configure alias"
-else
-  fail "Configure alias"
-  exit 1
+if [ $? -ne 0 ]; then
+    echo "FATAL: Failed to configure mc alias" >&2
+    exit 1
 fi
 
-# ListBuckets
-mc ls ${MC_ALIAS} && pass "ListBuckets" || fail "ListBuckets"
+#------------------------------------------------------------------------------
+# Test Functions
+#------------------------------------------------------------------------------
 
-# CreateBucket
-mc mb ${MC_ALIAS}/${BUCKET} 2>&1
-if [ $? -eq 0 ]; then
-  pass "CreateBucket (mc mb)"
-else
-  fail "CreateBucket (mc mb)"
-fi
+test_list_buckets() {
+    mc ls ${MC_ALIAS} > /dev/null
+}
 
-# HeadBucket (requires --no-list flag)
-mc stat --no-list ${MC_ALIAS}/${BUCKET} 2>&1
-if [ $? -eq 0 ]; then
-  pass "HeadBucket (mc stat --no-list)"
-else
-  fail "HeadBucket (mc stat --no-list)"
-fi
+test_create_bucket() {
+    mc mb ${MC_ALIAS}/${BUCKET} > /dev/null 2>&1
+}
 
-# HeadBucket
-mc stat ${MC_ALIAS}/${BUCKET} 2>&1
-if [ $? -eq 0 ]; then
-  pass "HeadBucket (mc stat)"
-else
-  fail "HeadBucket (mc stat)"
-fi
+test_head_bucket() {
+    mc stat ${MC_ALIAS}/${BUCKET} > /dev/null 2>&1
+}
 
-# GetBucketLocation (mc stat calls GetBucketInfo which uses GetBucketLocation)
-mc stat ${MC_ALIAS}/${BUCKET} 2>&1
-if [ $? -eq 0 ]; then
-  pass "GetBucketLocation (mc stat)"
-else
-  fail "GetBucketLocation (mc stat)"
-fi
+test_get_bucket_location() {
+    # mc stat calls GetBucketInfo which uses GetBucketLocation
+    mc stat ${MC_ALIAS}/${BUCKET} > /dev/null 2>&1
+}
 
-# PutObject
-echo "test content" > /tmp/test.txt
-mc put /tmp/test.txt ${MC_ALIAS}/${BUCKET}/test.txt 2>&1
-if [ $? -eq 0 ]; then
-  pass "PutObject (mc put upload)"
-else
-  fail "PutObject (mc put upload)"
-fi
+test_put_object() {
+    echo "test content" > /tmp/test.txt
+    mc cp /tmp/test.txt ${MC_ALIAS}/${BUCKET}/test.txt > /dev/null 2>&1
+}
 
-# PutObject (via mc cp)
-echo "test content" > /tmp/test.txt
-mc cp /tmp/test.txt ${MC_ALIAS}/${BUCKET}/test.txt 2>&1
-if [ $? -eq 0 ]; then
-  pass "PutObject (mc cp upload)"
-else
-  fail "PutObject (mc cp upload)"
-fi
+test_head_object() {
+    mc stat ${MC_ALIAS}/${BUCKET}/test.txt > /dev/null 2>&1
+}
 
-# HeadObject
-mc stat ${MC_ALIAS}/${BUCKET}/test.txt 2>&1
-if [ $? -eq 0 ]; then
-  pass "HeadObject (mc stat)"
-else
-  fail "HeadObject (mc stat)"
-fi
+test_get_object() {
+    mc cp ${MC_ALIAS}/${BUCKET}/test.txt /tmp/download.txt > /dev/null 2>&1
+    validate_content_integrity /tmp/test.txt /tmp/download.txt
+}
 
-# GetObject (download)
-mc cp ${MC_ALIAS}/${BUCKET}/test.txt /tmp/download.txt 2>&1
-if [ $? -eq 0 ]; then
-  pass "GetObject (mc cp download)"
-else
-  fail "GetObject (mc cp download)"
-fi
+test_delete_object() {
+    mc rm ${MC_ALIAS}/${BUCKET}/test.txt > /dev/null 2>&1
+    # Re-create for subsequent tests
+    mc cp /tmp/test.txt ${MC_ALIAS}/${BUCKET}/test.txt > /dev/null 2>&1
+}
 
-# GetObject (cat)
-mc cat ${MC_ALIAS}/${BUCKET}/test.txt 2>&1
-if [ $? -eq 0 ]; then
-  pass "GetObject (mc cat)"
-else
-  fail "GetObject (mc cat)"
-fi
+test_copy_object() {
+    mc cp ${MC_ALIAS}/${BUCKET}/test.txt ${MC_ALIAS}/${BUCKET}/copied.txt > /dev/null 2>&1
+    mc cp ${MC_ALIAS}/${BUCKET}/copied.txt /tmp/copied.txt > /dev/null 2>&1
+    validate_content_integrity /tmp/test.txt /tmp/copied.txt
+}
 
-# ListObjectsV2 (basic)
-mc ls ${MC_ALIAS}/${BUCKET}/ 2>&1
-if [ $? -eq 0 ]; then
-  pass "ListObjectsV2 (mc ls)"
-else
-  fail "ListObjectsV2 (mc ls)"
-fi
+test_list_objects_v2_basic() {
+    mc ls ${MC_ALIAS}/${BUCKET}/ > /tmp/list-basic.txt 2>&1
+    grep -q "test.txt" /tmp/list-basic.txt
+}
 
-# ListObjectsV2 with prefix
-echo "prefix test" > /tmp/prefix-test.txt
-mc cp /tmp/prefix-test.txt ${MC_ALIAS}/${BUCKET}/prefix/test.txt 2>&1 >/dev/null
-mc ls ${MC_ALIAS}/${BUCKET}/prefix/ 2>&1 | grep -q "test.txt"
-if [ $? -eq 0 ]; then
-  pass "ListObjectsV2 with prefix (mc ls prefix/)"
-else
-  fail "ListObjectsV2 with prefix (mc ls prefix/)" "Object not found in prefix listing"
-fi
+test_list_objects_v2_prefix() {
+    # Create folder structure
+    echo "folder1 file1" > /tmp/f1-file1.txt
+    mc cp /tmp/f1-file1.txt ${MC_ALIAS}/${BUCKET}/folder1/file1.txt > /dev/null 2>&1
+    mc cp /tmp/f1-file1.txt ${MC_ALIAS}/${BUCKET}/folder1/file2.txt > /dev/null 2>&1
 
-# ListObjectsV2 with delimiter (non-recursive to show folders)
-# Create folder structure
-mc cp /tmp/test.txt ${MC_ALIAS}/${BUCKET}/folder1/file1.txt 2>&1 >/dev/null
-mc cp /tmp/test.txt ${MC_ALIAS}/${BUCKET}/folder1/file2.txt 2>&1 >/dev/null
-mc cp /tmp/test.txt ${MC_ALIAS}/${BUCKET}/folder2/file1.txt 2>&1 >/dev/null
-mc cp /tmp/test.txt ${MC_ALIAS}/${BUCKET}/root-file.txt 2>&1 >/dev/null
-# Non-recursive listing should show folders as prefixes
-mc ls ${MC_ALIAS}/${BUCKET}/ 2>&1 | grep -q "folder1/"
-if [ $? -eq 0 ]; then
-  pass "ListObjectsV2 with delimiter (mc ls shows folders)"
-else
-  fail "ListObjectsV2 with delimiter (mc ls shows folders)" "folder1/ not shown as prefix"
-fi
+    # Test prefix filtering
+    mc ls ${MC_ALIAS}/${BUCKET}/folder1/ > /tmp/list-prefix.txt 2>&1
+    grep -q "file1.txt" /tmp/list-prefix.txt
+    grep -q "file2.txt" /tmp/list-prefix.txt
+}
 
-# ListObjectsV2 recursive (delimiter empty)
-mc ls --recursive ${MC_ALIAS}/${BUCKET}/ 2>&1 | grep -q "folder1/file1.txt"
-if [ $? -eq 0 ]; then
-  pass "ListObjectsV2 recursive (mc ls -r)"
-else
-  fail "ListObjectsV2 recursive (mc ls -r)" "Recursive listing failed"
-fi
+test_list_objects_v2_delimiter() {
+    # Create more folder structure
+    mc cp /tmp/test.txt ${MC_ALIAS}/${BUCKET}/folder2/file1.txt > /dev/null 2>&1
+    mc cp /tmp/test.txt ${MC_ALIAS}/${BUCKET}/root-file.txt > /dev/null 2>&1
 
-# Custom Metadata (set)
-echo "metadata test" > /tmp/metadata-test.txt
-mc cp --attr "x-amz-meta-custom-key=custom-value;Cache-Control=max-age=3600" /tmp/metadata-test.txt ${MC_ALIAS}/${BUCKET}/metadata-test.txt 2>&1
-if [ $? -eq 0 ]; then
-  pass "Custom Metadata set (mc cp --attr)"
-else
-  fail "Custom Metadata set (mc cp --attr)" "Failed to upload with custom metadata"
-fi
+    # Non-recursive listing should show folders as prefixes
+    mc ls ${MC_ALIAS}/${BUCKET}/ > /tmp/list-delim.txt 2>&1
+    grep -q "folder1/" /tmp/list-delim.txt
+}
 
-# Custom Metadata (get)
-# Note: mc stat displays headers in Title-Case (e.g., "X-Amz-Meta-Custom-Key")
-mc stat ${MC_ALIAS}/${BUCKET}/metadata-test.txt 2>&1 | grep -qi "custom-key"
-if [ $? -eq 0 ]; then
-  pass "Custom Metadata get (mc stat shows metadata)"
-else
-  fail "Custom Metadata get (mc stat shows metadata)" "Custom metadata not returned"
-fi
+test_list_objects_v2_maxkeys() {
+    # mc doesn't expose MaxKeys directly, skip this test
+    skip_test "mc client does not expose MaxKeys parameter"
+}
 
-# CopyObject (server-side copy)
-mc cp ${MC_ALIAS}/${BUCKET}/test.txt ${MC_ALIAS}/${BUCKET}/test-copy.txt 2>&1
-if [ $? -eq 0 ]; then
-  # Verify the copy exists and has same content
-  mc cat ${MC_ALIAS}/${BUCKET}/test-copy.txt 2>&1 | grep -q "test content"
-  if [ $? -eq 0 ]; then
-    pass "CopyObject (mc cp s3-to-s3)"
-  else
-    fail "CopyObject (mc cp s3-to-s3)" "Copied file has wrong content"
-  fi
-else
-  fail "CopyObject (mc cp s3-to-s3)" "Copy operation failed"
-fi
+test_list_objects_v1() {
+    # mc uses ListObjectsV2 by default
+    skip_test "mc uses ListObjectsV2 by default"
+}
 
-# Pre-signed URLs (download)
-# Extract the Share: line which contains the actual pre-signed URL with query params
-PRESIGNED_URL=$(mc share download --expire=1h ${MC_ALIAS}/${BUCKET}/test.txt 2>&1 | awk '/^Share:/ {print $2}')
-if [ -n "$PRESIGNED_URL" ]; then
-  # Try to download using the pre-signed URL
-  curl -f -s "$PRESIGNED_URL" > /tmp/presigned-download.txt 2>&1
-  if [ $? -eq 0 ] && grep -q "test content" /tmp/presigned-download.txt; then
-    pass "Pre-signed URL download (mc share download)"
-  else
-    fail "Pre-signed URL download (mc share download)" "Failed to download via pre-signed URL"
-  fi
-else
-  fail "Pre-signed URL download (mc share download)" "Failed to generate pre-signed URL"
-fi
+test_custom_metadata_set() {
+    echo "metadata test" > /tmp/meta-test.txt
+    mc cp --attr "x-amz-meta-custom-key=custom-value" /tmp/meta-test.txt ${MC_ALIAS}/${BUCKET}/metadata-test.txt > /dev/null 2>&1
 
-# Pre-signed URLs (upload)
-# Extract the Share: line which contains the actual pre-signed URL with query params
-UPLOAD_URL=$(mc share upload --expire=1h ${MC_ALIAS}/${BUCKET}/presigned-upload.txt 2>&1 | awk '/^Share:/ {print $2}')
-if [ -n "$UPLOAD_URL" ]; then
-  echo "presigned upload content" > /tmp/presigned-upload.txt
-  curl -f -s -X PUT -T /tmp/presigned-upload.txt "$UPLOAD_URL" 2>&1 >/dev/null
-  if [ $? -eq 0 ]; then
-    # Verify the uploaded file
-    mc cat ${MC_ALIAS}/${BUCKET}/presigned-upload.txt 2>&1 | grep -q "presigned upload content"
-    if [ $? -eq 0 ]; then
-      pass "Pre-signed URL upload (mc share upload)"
-    else
-      fail "Pre-signed URL upload (mc share upload)" "Uploaded file not found or wrong content"
+    # Verify content integrity after metadata set
+    mc cp ${MC_ALIAS}/${BUCKET}/metadata-test.txt /tmp/meta-download.txt > /dev/null 2>&1
+    validate_content_integrity /tmp/meta-test.txt /tmp/meta-download.txt
+}
+
+test_custom_metadata_get() {
+    mc stat ${MC_ALIAS}/${BUCKET}/metadata-test.txt > /tmp/meta-stat.txt 2>&1
+    if ! grep -qi "custom-key" /tmp/meta-stat.txt; then
+        fail_test "Custom metadata key not found in mc stat output"
     fi
-  else
-    fail "Pre-signed URL upload (mc share upload)" "Failed to upload via pre-signed URL"
-  fi
+}
+
+test_object_tagging_set() {
+    # Get content before tagging
+    mc cat ${MC_ALIAS}/${BUCKET}/test.txt > /tmp/test-before-tag.txt 2>&1
+
+    # Set tags
+    mc tag set ${MC_ALIAS}/${BUCKET}/test.txt "env=test" > /dev/null 2>&1
+
+    # Verify content not corrupted
+    mc cat ${MC_ALIAS}/${BUCKET}/test.txt > /tmp/test-after-tag.txt 2>&1
+    validate_content_integrity /tmp/test-before-tag.txt /tmp/test-after-tag.txt
+}
+
+test_object_tagging_get() {
+    mc tag list ${MC_ALIAS}/${BUCKET}/test.txt > /tmp/tags.txt 2>&1
+    if ! grep -q "env" /tmp/tags.txt; then
+        fail_test "Tags not returned or incorrect"
+    fi
+}
+
+test_range_request() {
+    # Create 100-byte file
+    printf "%0100d" 0 > /tmp/range-source.txt
+    mc cp /tmp/range-source.txt ${MC_ALIAS}/${BUCKET}/range.txt > /dev/null 2>&1
+
+    # mc doesn't support range requests directly, use presigned URL + curl
+    RANGE_URL=$(mc share download --expire=1h ${MC_ALIAS}/${BUCKET}/range.txt 2>&1 | awk '/^Share:/ {print $2}')
+    if [ -z "$RANGE_URL" ]; then
+        fail_test "Could not generate presigned URL for range test"
+    fi
+
+    # Download first 10 bytes using curl
+    curl -f -s -r 0-9 "$RANGE_URL" > /tmp/range-partial.txt 2>&1
+    validate_partial_content /tmp/range-partial.txt 10
+}
+
+test_presigned_url_download() {
+    PRESIGNED_URL=$(mc share download --expire=1h ${MC_ALIAS}/${BUCKET}/test.txt 2>&1 | awk '/^Share:/ {print $2}')
+    if [ -z "$PRESIGNED_URL" ]; then
+        fail_test "Failed to generate presigned URL"
+    fi
+
+    curl -f -s "$PRESIGNED_URL" > /tmp/presigned-download.txt 2>&1
+    validate_content_integrity /tmp/test.txt /tmp/presigned-download.txt
+}
+
+test_presigned_url_upload() {
+    UPLOAD_URL=$(mc share upload --expire=1h ${MC_ALIAS}/${BUCKET}/presigned-upload.txt 2>&1 | awk '/^Share:/ {print $2}')
+    if [ -z "$UPLOAD_URL" ]; then
+        fail_test "Failed to generate upload URL"
+    fi
+
+    echo "presigned upload content" > /tmp/presigned-upload.txt
+    curl -f -s -X PUT -T /tmp/presigned-upload.txt "$UPLOAD_URL" > /dev/null 2>&1
+
+    # Verify uploaded content
+    mc cat ${MC_ALIAS}/${BUCKET}/presigned-upload.txt > /tmp/presigned-upload-verify.txt 2>&1
+    validate_content_integrity /tmp/presigned-upload.txt /tmp/presigned-upload-verify.txt
+}
+
+test_multipart_upload() {
+    # Create 10MB file to trigger multipart upload
+    dd if=/dev/zero of=/tmp/large-file.dat bs=1M count=10 > /dev/null 2>&1
+
+    # Upload (mc automatically uses multipart for large files)
+    mc cp /tmp/large-file.dat ${MC_ALIAS}/${BUCKET}/large-file.dat > /dev/null 2>&1
+
+    # Verify content integrity
+    mc cp ${MC_ALIAS}/${BUCKET}/large-file.dat /tmp/large-file-downloaded.dat > /dev/null 2>&1
+
+    if ! cmp -s /tmp/large-file.dat /tmp/large-file-downloaded.dat; then
+        fail_test "Downloaded file differs from original"
+    fi
+
+    # Cleanup
+    rm -f /tmp/large-file.dat /tmp/large-file-downloaded.dat
+}
+
+test_delete_bucket() {
+    # Cleanup all objects first
+    mc rm --recursive --force ${MC_ALIAS}/${BUCKET}/ > /dev/null 2>&1 || true
+    mc rb ${MC_ALIAS}/${BUCKET} > /dev/null 2>&1
+}
+
+#------------------------------------------------------------------------------
+# Run All Tests
+#------------------------------------------------------------------------------
+
+run_test "ListBuckets" "bucket_operations" "exit_code" test_list_buckets
+run_test "CreateBucket" "bucket_operations" "exit_code" test_create_bucket
+run_test "HeadBucket" "bucket_operations" "exit_code" test_head_bucket
+run_test "GetBucketLocation" "bucket_operations" "exit_code" test_get_bucket_location
+run_test "PutObject" "object_operations" "content_integrity" test_put_object
+run_test "HeadObject" "object_operations" "exit_code" test_head_object
+run_test "GetObject" "object_operations" "content_integrity" test_get_object
+run_test "DeleteObject" "object_operations" "exit_code" test_delete_object
+run_test "CopyObject" "object_operations" "content_integrity" test_copy_object
+run_test "ListObjectsV2_Basic" "listing_operations" "exit_code" test_list_objects_v2_basic
+run_test "ListObjectsV2_Prefix" "listing_operations" "exit_code" test_list_objects_v2_prefix
+run_test "ListObjectsV2_Delimiter" "listing_operations" "exit_code" test_list_objects_v2_delimiter
+run_test "ListObjectsV2_MaxKeys" "listing_operations" "exit_code" test_list_objects_v2_maxkeys
+run_test "ListObjectsV1" "listing_operations" "exit_code" test_list_objects_v1
+run_test "CustomMetadata_Set" "metadata_operations" "content_integrity" test_custom_metadata_set
+run_test "CustomMetadata_Get" "metadata_operations" "metadata" test_custom_metadata_get
+run_test "ObjectTagging_Set" "metadata_operations" "content_integrity" test_object_tagging_set
+run_test "ObjectTagging_Get" "metadata_operations" "exit_code" test_object_tagging_get
+run_test "RangeRequest" "advanced_features" "partial_content" test_range_request
+run_test "PreSignedURL_Download" "advanced_features" "content_integrity" test_presigned_url_download
+run_test "PreSignedURL_Upload" "advanced_features" "content_integrity" test_presigned_url_upload
+run_test "MultipartUpload" "advanced_features" "content_integrity" test_multipart_upload
+run_test "DeleteBucket" "bucket_operations" "exit_code" test_delete_bucket
+
+# Output JSON results
+finalize_test_runner
+
+# Exit with appropriate code
+if [ $TEST_FAILED -gt 0 ]; then
+    exit 1
 else
-  fail "Pre-signed URL upload (mc share upload)" "Failed to generate upload URL"
-fi
-
-# Object Tagging - comprehensive test
-# First, upload a fresh object with known content for tagging test
-echo "tagging test content" > /tmp/tagging-test.txt
-mc cp /tmp/tagging-test.txt ${MC_ALIAS}/${BUCKET}/tagging-test.txt 2>&1 >/dev/null
-
-# Verify initial content before tagging
-CONTENT_BEFORE=$(mc cat ${MC_ALIAS}/${BUCKET}/tagging-test.txt 2>&1)
-if [ "$CONTENT_BEFORE" = "tagging test content" ]; then
-  pass "Object Tagging - verify content before tagging"
-else
-  fail "Object Tagging - verify content before tagging" "Expected 'tagging test content', got: $CONTENT_BEFORE"
-fi
-
-# Object Tagging (set)
-mc tag set ${MC_ALIAS}/${BUCKET}/tagging-test.txt "key1=value1&key2=value2" 2>&1
-if [ $? -eq 0 ]; then
-  pass "Object Tagging set (mc tag set)"
-else
-  fail "Object Tagging set (mc tag set)" "Failed to set tags"
-fi
-
-# Object Tagging (get)
-mc tag list ${MC_ALIAS}/${BUCKET}/tagging-test.txt 2>&1 | grep -q "key1"
-if [ $? -eq 0 ]; then
-  pass "Object Tagging get (mc tag list)"
-else
-  fail "Object Tagging get (mc tag list)" "Tags not returned or incorrect"
-fi
-
-# CRITICAL: Verify object content is still intact after tagging
-CONTENT_AFTER=$(mc cat ${MC_ALIAS}/${BUCKET}/tagging-test.txt 2>&1)
-if [ "$CONTENT_AFTER" = "tagging test content" ]; then
-  pass "Object Tagging - content preserved after tagging"
-else
-  fail "Object Tagging - content preserved after tagging" "Expected 'tagging test content', got: $CONTENT_AFTER"
-fi
-
-# Multipart Upload (large file >5MB) - comprehensive test
-dd if=/dev/zero of=/tmp/large-file.dat bs=1M count=10 2>/dev/null
-
-# Upload the large file
-mc cp /tmp/large-file.dat ${MC_ALIAS}/${BUCKET}/large-file.dat 2>&1
-if [ $? -eq 0 ]; then
-  pass "Multipart Upload - upload completed (mc cp large file)"
-else
-  fail "Multipart Upload - upload completed (mc cp large file)" "Upload failed"
-fi
-
-# Verify file size in metadata
-SIZE=$(mc stat ${MC_ALIAS}/${BUCKET}/large-file.dat 2>&1 | grep "Size" | awk '{print $3}')
-if [ "$SIZE" = "10" ]; then
-  pass "Multipart Upload - size metadata correct"
-else
-  fail "Multipart Upload - size metadata correct" "Expected 10 MiB, got $SIZE"
-fi
-
-# CRITICAL: Download and verify actual content matches original
-mc cp ${MC_ALIAS}/${BUCKET}/large-file.dat /tmp/large-file-downloaded.dat 2>&1 >/dev/null
-if cmp -s /tmp/large-file.dat /tmp/large-file-downloaded.dat; then
-  pass "Multipart Upload - content integrity verified"
-else
-  # Get actual sizes for debugging
-  ORIG_SIZE=$(stat -c%s /tmp/large-file.dat 2>/dev/null || stat -f%z /tmp/large-file.dat 2>/dev/null)
-  DOWN_SIZE=$(stat -c%s /tmp/large-file-downloaded.dat 2>/dev/null || stat -f%z /tmp/large-file-downloaded.dat 2>/dev/null)
-  fail "Multipart Upload - content integrity verified" "Downloaded file differs from original (orig: $ORIG_SIZE bytes, downloaded: $DOWN_SIZE bytes)"
-fi
-
-# Cleanup
-rm -f /tmp/large-file.dat /tmp/large-file-downloaded.dat
-
-# Range Requests (partial download)
-# mc doesn't have direct range request support, but we can test via curl with mc share
-# Extract the Share: line which contains the actual pre-signed URL with query params
-RANGE_URL=$(mc share download --expire=1h ${MC_ALIAS}/${BUCKET}/metadata-test.txt 2>&1 | awk '/^Share:/ {print $2}')
-if [ -n "$RANGE_URL" ]; then
-  # Download only first 10 bytes
-  PARTIAL=$(curl -f -s -r 0-9 "$RANGE_URL" 2>&1)
-  if [ $? -eq 0 ] && [ ${#PARTIAL} -eq 10 ]; then
-    pass "Range Requests (curl with Range header)"
-  else
-    fail "Range Requests (curl with Range header)" "Expected 10 bytes, got ${#PARTIAL}"
-  fi
-else
-  fail "Range Requests (curl with Range header)" "Could not generate URL for range test"
-fi
-
-# DeleteObject
-mc rm ${MC_ALIAS}/${BUCKET}/test.txt 2>&1
-if [ $? -eq 0 ]; then
-  pass "DeleteObject (mc rm)"
-else
-  fail "DeleteObject (mc rm)"
-fi
-
-# DeleteObject (cleanup all test objects)
-mc rm --recursive --force ${MC_ALIAS}/${BUCKET}/ 2>&1 >/dev/null
-
-# DeleteBucket
-mc rb ${MC_ALIAS}/${BUCKET} 2>&1
-if [ $? -eq 0 ]; then
-  pass "DeleteBucket (mc rb)"
-else
-  fail "DeleteBucket (mc rb)"
-fi
-
-echo ""
-echo "=== Summary ==="
-echo "Passed: ${PASSED}"
-echo "Failed: ${FAILED}"
-if [ ${FAILED} -eq 0 ]; then
-  echo "All tests passed"
-  exit 0
-else
-  exit 1
+    exit 0
 fi

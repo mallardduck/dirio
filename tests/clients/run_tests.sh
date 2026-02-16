@@ -162,8 +162,9 @@ run_awscli_tests() {
         export AWS_SECRET_ACCESS_KEY="${DIRIO_SECRET_KEY}"
         export AWS_DEFAULT_REGION="${DIRIO_REGION}"
 
-        bash "${SCRIPT_DIR}/scripts/awscli.sh" 2>&1 | tee "${RESULTS_DIR}/awscli.log"
-        return ${PIPESTATUS[0]}
+        # Run test script - stdout goes to JSON, stderr to log
+        bash "${SCRIPT_DIR}/scripts/awscli.sh" > "${RESULTS_DIR}/awscli.json" 2> >(tee "${RESULTS_DIR}/awscli.log" >&2)
+        return $?
     else
         echo "AWS CLI not installed. Skipping."
         echo "Install with: brew install awscli"
@@ -181,15 +182,15 @@ run_boto3_tests() {
             return 1
         fi
 
-        # boto3 script includes pip install, so just run it directly
+        # Run test script - stdout goes to JSON, stderr to log
         bash -c "
             export DIRIO_ENDPOINT='${DIRIO_ENDPOINT}'
             export DIRIO_ACCESS_KEY='${DIRIO_ACCESS_KEY}'
             export DIRIO_SECRET_KEY='${DIRIO_SECRET_KEY}'
             export DIRIO_REGION='${DIRIO_REGION}'
             python3 '${SCRIPT_DIR}/scripts/boto3.py'
-        " 2>&1 | tee "${RESULTS_DIR}/boto3.log"
-        return ${PIPESTATUS[0]}
+        " > "${RESULTS_DIR}/boto3.json" 2> >(tee "${RESULTS_DIR}/boto3.log" >&2)
+        return $?
     else
         echo "boto3 or requests not installed. Skipping."
         echo "Install with: pip install boto3 requests"
@@ -207,8 +208,9 @@ run_mc_tests() {
             return 1
         fi
 
-        bash "${SCRIPT_DIR}/scripts/mc.sh" 2>&1 | tee "${RESULTS_DIR}/mc.log"
-        return ${PIPESTATUS[0]}
+        # Run test script - stdout goes to JSON, stderr to log
+        bash "${SCRIPT_DIR}/scripts/mc.sh" > "${RESULTS_DIR}/mc.json" 2> >(tee "${RESULTS_DIR}/mc.log" >&2)
+        return $?
     else
         echo "MinIO client (mc) not installed. Skipping."
         echo "Install with: brew install minio/stable/mc"
@@ -241,6 +243,39 @@ case "$TEST_SUITE" in
 esac
 
 # ============================================================================
+# Generate Aggregated Report
+# ============================================================================
+
+print_header "Generating Aggregated Report"
+
+# Check if we have any JSON files
+JSON_FILES=()
+for client in awscli boto3 mc; do
+    if [ -f "${RESULTS_DIR}/${client}.json" ]; then
+        JSON_FILES+=("${RESULTS_DIR}/${client}.json")
+    fi
+done
+
+if [ ${#JSON_FILES[@]} -gt 0 ]; then
+    # Run aggregation script to generate markdown report
+    if check_command python3; then
+        python3 "${SCRIPT_DIR}/scripts/aggregate_results.py" "${JSON_FILES[@]}" > "${RESULTS_DIR}/REPORT.md"
+        if [ $? -eq 0 ]; then
+            echo "Aggregated report generated: ${RESULTS_DIR}/REPORT.md"
+            echo ""
+            # Display the report
+            cat "${RESULTS_DIR}/REPORT.md"
+        else
+            echo "Warning: Failed to generate aggregated report"
+        fi
+    else
+        echo "Warning: python3 not available, skipping report generation"
+    fi
+else
+    echo "No JSON test results found"
+fi
+
+# ============================================================================
 # Summary
 # ============================================================================
 
@@ -248,16 +283,26 @@ print_header "Test Results"
 echo "Results saved in: ${RESULTS_DIR}"
 echo ""
 
-if [ -f "${RESULTS_DIR}/awscli.log" ]; then
-    echo "AWS CLI: $(grep -E 'Passed:|Failed:' "${RESULTS_DIR}/awscli.log" | tail -2 | tr '\n' ' ')"
+# Display summary from JSON files if available
+if [ -f "${RESULTS_DIR}/awscli.json" ] && check_command jq; then
+    TOTAL=$(jq -r '.summary.total' "${RESULTS_DIR}/awscli.json" 2>/dev/null || echo "?")
+    PASSED=$(jq -r '.summary.passed' "${RESULTS_DIR}/awscli.json" 2>/dev/null || echo "?")
+    FAILED=$(jq -r '.summary.failed' "${RESULTS_DIR}/awscli.json" 2>/dev/null || echo "?")
+    echo "AWS CLI: $PASSED/$TOTAL passed, $FAILED failed"
 fi
 
-if [ -f "${RESULTS_DIR}/boto3.log" ]; then
-    echo "boto3:   $(grep -E 'Passed:|Failed:' "${RESULTS_DIR}/boto3.log" | tail -2 | tr '\n' ' ')"
+if [ -f "${RESULTS_DIR}/boto3.json" ] && check_command jq; then
+    TOTAL=$(jq -r '.summary.total' "${RESULTS_DIR}/boto3.json" 2>/dev/null || echo "?")
+    PASSED=$(jq -r '.summary.passed' "${RESULTS_DIR}/boto3.json" 2>/dev/null || echo "?")
+    FAILED=$(jq -r '.summary.failed' "${RESULTS_DIR}/boto3.json" 2>/dev/null || echo "?")
+    echo "boto3:   $PASSED/$TOTAL passed, $FAILED failed"
 fi
 
-if [ -f "${RESULTS_DIR}/mc.log" ]; then
-    echo "mc:      $(grep -E 'Passed:|Failed:' "${RESULTS_DIR}/mc.log" | tail -2 | tr '\n' ' ')"
+if [ -f "${RESULTS_DIR}/mc.json" ] && check_command jq; then
+    TOTAL=$(jq -r '.summary.total' "${RESULTS_DIR}/mc.json" 2>/dev/null || echo "?")
+    PASSED=$(jq -r '.summary.passed' "${RESULTS_DIR}/mc.json" 2>/dev/null || echo "?")
+    FAILED=$(jq -r '.summary.failed' "${RESULTS_DIR}/mc.json" 2>/dev/null || echo "?")
+    echo "mc:      $PASSED/$TOTAL passed, $FAILED failed"
 fi
 
 echo ""

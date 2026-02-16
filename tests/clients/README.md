@@ -9,6 +9,8 @@ This directory contains comprehensive S3 API compatibility tests for DirIO acros
 - **Language:** Go test framework (`go test`)
 - **Test Files:** `clients_test.go`, `sanity_test.go`
 - **Scripts:** Embedded from `scripts/` directory via `go:embed`
+- **Libraries:** Shared test framework and validators in `lib/`
+- **Output Format:** Structured JSON with dual output (human-readable + machine-parseable)
 
 ### Test Clients
 
@@ -17,6 +19,22 @@ Each client runs in an isolated Docker container:
 1. **AWS CLI** (`amazon/aws-cli:2.15.0`)
 2. **boto3** (`python:3.11-slim`)
 3. **MinIO mc** (`minio/mc:latest`)
+
+### Framework Architecture
+
+```
+lib/
+├── test_framework.sh    # Bash test runner with JSON output
+├── test_framework.py    # Python test runner with JSON output
+├── validators.sh        # Bash validation functions
+└── validators.py        # Python validation functions
+```
+
+**Key Features:**
+- **Dual Output:** Human-readable progress (stderr) + JSON results (stdout)
+- **Standardized Validation:** Shared validators for content integrity, metadata, etc.
+- **Consistent Coverage:** All clients test the same 23 canonical S3 operations
+- **Automated Aggregation:** JSON results compiled into markdown tables
 
 ## Running Tests
 
@@ -35,34 +53,42 @@ go test -v -run TestSanityCheck ./tests/clients
 
 ## Test Coverage
 
-All three test suites follow the same structure and test the same S3 operations:
+All three test suites test the same **23 canonical S3 operations** defined in `features.yaml`:
 
-### Core Operations (Tested by all clients)
-1. Network Probe
-2. ListBuckets
-3. CreateBucket
-4. HeadBucket
-5. GetBucketLocation
+### Bucket Operations (5)
+1. ListBuckets
+2. CreateBucket
+3. HeadBucket
+4. GetBucketLocation
+5. DeleteBucket
+
+### Object Operations (5)
 6. PutObject
-7. Custom Metadata (set)
-8. Custom Metadata (get)
-9. HeadObject
-10. GetObject
-11. Range Requests
-12. ListObjectsV2 (basic)
-13. ListObjectsV2 (prefix)
-14. ListObjectsV2 (delimiter)
-15. CopyObject
-16. Pre-signed URLs
-17. Multipart Upload
-18. Object Tagging
-19. DeleteObject
-20. DeleteBucket
+7. GetObject
+8. HeadObject
+9. DeleteObject
+10. CopyObject
 
-### Client-Specific Operations
-- **boto3**: ListObjectsV2 (max-keys), ListObjectsV1
-- **AWS CLI**: High-level `s3 cp` commands
-- **MinIO mc**: Multiple command variants (mc put/cp, mc stat variants, mc ls -r)
+### Listing Operations (5)
+11. ListObjectsV2_Basic
+12. ListObjectsV2_Prefix
+13. ListObjectsV2_Delimiter
+14. ListObjectsV2_MaxKeys (optional)
+15. ListObjectsV1 (optional)
+
+### Metadata Operations (4)
+16. CustomMetadata_Set
+17. CustomMetadata_Get
+18. ObjectTagging_Set
+19. ObjectTagging_Get
+
+### Advanced Features (4)
+20. RangeRequest
+21. PreSignedURL_Download
+22. PreSignedURL_Upload (optional)
+23. MultipartUpload
+
+**Note:** Optional tests are skipped if the client doesn't support the feature (e.g., AWS CLI v2 uses ListObjectsV2 exclusively)
 
 ## Test Validation
 
@@ -88,28 +114,85 @@ All operations check both:
 1. Command exit code (success/failure)
 2. Content integrity (where applicable)
 
+## JSON Output Format
+
+Each test script outputs structured JSON to stdout:
+
+```json
+{
+  "meta": {
+    "client": "awscli",
+    "version": "aws-cli/2.15.0",
+    "test_run_id": "1708089600",
+    "duration_ms": 5300
+  },
+  "results": [
+    {
+      "feature": "PutObject",
+      "category": "object_operations",
+      "status": "pass",
+      "duration_ms": 450,
+      "message": "",
+      "details": {
+        "validation_type": "content_integrity"
+      }
+    }
+  ],
+  "summary": {
+    "total": 23,
+    "passed": 22,
+    "failed": 1,
+    "skipped": 0
+  }
+}
+```
+
+**Status values:** `pass`, `fail`, `skip`
+
+## Aggregated Results
+
+The `aggregate_results.py` script compiles JSON from all clients into a markdown report:
+
+```markdown
+# Client Test Results
+
+## Summary
+| Client | Total | Passed | Failed | Skipped | Duration |
+|--------|-------|--------|--------|---------|----------|
+| awscli | 23    | 22     | 1      | 0       | 5.30s    |
+
+## Feature Support Matrix
+| Feature              | awscli | boto3 | mc  |
+|----------------------|--------|-------|-----|
+| ListBuckets          | ✅     | ✅    | ✅  |
+| PutObject            | ❌     | ✅    | ✅  |
+
+## Failed Tests
+### awscli
+- **PutObject**: Content mismatch after upload
+```
+
+Reports are generated automatically in `results/REPORT.md`
+
 ## Test Scripts
 
 ### `scripts/awscli.sh`
-- **Lines:** 259
-- **Tests:** 21
-- **Pass Rate:** 76.2% (16/21)
+- **Tests:** 23 (canonical set)
 - **Language:** Bash
-- **Validation:** Exit codes + content verification with `diff`
+- **Framework:** test_framework.sh
+- **Validation:** Standardized validators (MD5 hashes, metadata checks)
 
 ### `scripts/boto3.py`
-- **Lines:** 361
-- **Tests:** 21
-- **Pass Rate:** 71.4% (15/21)
+- **Tests:** 23 (canonical set)
 - **Language:** Python
-- **Validation:** Assertions + content checks with byte comparison
+- **Framework:** test_framework.py
+- **Validation:** Standardized validators (MD5 hashes, metadata checks)
 
 ### `scripts/mc.sh`
-- **Lines:** 340
-- **Tests:** 30 (includes command variants)
-- **Pass Rate:** 73.3% (22/30)
+- **Tests:** 23 (canonical set)
 - **Language:** Bash
-- **Validation:** Exit codes + content verification with `grep`/`diff`/`cmp`
+- **Framework:** test_framework.sh
+- **Validation:** Standardized validators (MD5 hashes, metadata checks)
 
 ## Naming Conventions
 
@@ -166,15 +249,39 @@ See `README_SANITY_TESTS.md` for detailed analysis and solutions.
 
 To add a new S3 operation test:
 
-1. **Add to all three scripts** (`awscli.sh`, `boto3.py`, `mc.sh`)
-2. **Use identical test names** across all clients
-3. **Include content verification** where applicable
-4. **Follow existing patterns**:
-   - Exit code check first
-   - Content validation second
-   - Descriptive failure messages
+1. **Add to features.yaml** with name, category, priority, and validation type
+2. **Implement in all three scripts** (`awscli.sh`, `boto3.py`, `mc.sh`):
+   - Create `test_<feature_name>()` function
+   - Use `run_test()` or `runner.register_test()` with exact feature name from YAML
+   - Use standardized validators (`validate_content_integrity`, etc.)
+3. **Use identical test names** across all clients (must match features.yaml)
+4. **Follow framework patterns**:
+   - Bash: `run_test "FeatureName" "category" "validation" test_function_name`
+   - Python: `runner.register_test("FeatureName", "category", "validation", test_function)`
 5. **Update this README** with new operation
-6. **Update CLIENTS.md** compatibility matrix
+6. **Re-run aggregation** to update feature matrix
+
+### Example: Adding DeleteObjectTagging
+
+**1. Add to features.yaml:**
+```yaml
+metadata_operations:
+  - name: DeleteObjectTagging
+    priority: optional
+    validation: exit_code
+    description: Remove all tags from an object
+```
+
+**2. Implement in awscli.sh:**
+```bash
+test_delete_object_tagging() {
+    $AWS s3api delete-object-tagging --bucket ${BUCKET} --key test.txt > /dev/null
+}
+
+run_test "DeleteObjectTagging" "metadata_operations" "exit_code" test_delete_object_tagging
+```
+
+**3. Implement in boto3.py and mc.sh** similarly.
 
 ## Test Environment
 
@@ -183,6 +290,7 @@ To add a new S3 operation test:
 - **Timeouts:** 2-5 minutes per client test
 - **Cleanup:** Automatic via testcontainers (removes containers after test)
 - **Isolation:** Each test gets fresh bucket with timestamp suffix
+- **Libraries:** Framework files written to `/tmp` before test execution
 
 ### Environment Variables
 Tests receive:
@@ -195,13 +303,21 @@ Tests receive:
 
 ```
 tests/clients/
-├── README.md              # This file
-├── clients_test.go        # Main test orchestration
-├── sanity_test.go         # Defensive validation tests
+├── README.md                  # This file
+├── clients_test.go            # Main test orchestration (embeds + runs in containers)
+├── sanity_test.go             # Defensive validation tests
+├── features.yaml              # Canonical S3 feature set (23 operations)
+├── lib/
+│   ├── README.md              # Framework API documentation
+│   ├── test_framework.sh      # Bash test runner
+│   ├── test_framework.py      # Python test runner
+│   ├── validators.sh          # Bash validators
+│   └── validators.py          # Python validators
 └── scripts/
-    ├── awscli.sh         # AWS CLI test script
-    ├── boto3.py          # boto3 test script
-    └── mc.sh             # MinIO mc test script
+    ├── awscli.sh              # AWS CLI test script
+    ├── boto3.py               # boto3 test script
+    ├── mc.sh                  # MinIO mc test script
+    └── aggregate_results.py   # JSON → Markdown aggregator
 ```
 
 ## Validation Philosophy
