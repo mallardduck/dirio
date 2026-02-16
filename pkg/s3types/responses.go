@@ -65,3 +65,49 @@ type CopyObjectResult struct {
 	LastModified string   `xml:"LastModified"`
 	ETag         string   `xml:"ETag"`
 }
+
+// InitiateMultipartUploadResult is the response for CreateMultipartUpload operation
+type InitiateMultipartUploadResult struct {
+	XMLName  xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ InitiateMultipartUploadResult"`
+	Bucket   string   `xml:"Bucket"`
+	Key      string   `xml:"Key"`
+	UploadID string   `xml:"UploadId"`
+}
+
+// CompleteMultipartUploadResult is the response for CompleteMultipartUpload operation
+type CompleteMultipartUploadResult struct {
+	XMLName  xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CompleteMultipartUploadResult"`
+	Location string   `xml:"Location"`
+	Bucket   string   `xml:"Bucket"`
+	Key      string   `xml:"Key"`
+	ETag     string   `xml:"ETag"`
+}
+
+// CompleteMultipartUpload is the request body for CompleteMultipartUpload operation
+type CompleteMultipartUpload struct {
+	XMLName xml.Name       `xml:"CompleteMultipartUpload"`
+	Parts   []CompletePart `xml:"Part"`
+}
+
+// CompletePart represents a part in the CompleteMultipartUpload request
+type CompletePart struct {
+	PartNumber int    `xml:"PartNumber"`
+	ETag       string `xml:"ETag"`
+}
+
+// ListPartsResult is the response for ListParts operation
+type ListPartsResult struct {
+	XMLName  xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListPartsResult"`
+	Bucket   string   `xml:"Bucket"`
+	Key      string   `xml:"Key"`
+	UploadID string   `xml:"UploadId"`
+	Parts    []Part   `xml:"Part"`
+}
+
+// Part represents a single part in ListPartsResult
+type Part struct {
+	PartNumber   int    `xml:"PartNumber"`
+	ETag         string `xml:"ETag"`
+	Size         int64  `xml:"Size"`
+	LastModified string `xml:"LastModified"`
+}

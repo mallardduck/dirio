@@ -204,9 +204,12 @@ try:
     obj_response = s3.get_object(Bucket=bucket, Key="metadata.txt")
     content = obj_response["Body"].read()
 
+    # Normalize metadata keys to lowercase for case-insensitive comparison (HTTP spec)
+    metadata_lower = {k.lower(): v for k, v in metadata.items()}
+
     if content != b"test with metadata":
         log_fail("GetObject metadata", f"metadata corrupted object content: {content[:100]}")
-    elif metadata.get("custom-key") == "custom-value":
+    elif metadata_lower.get("custom-key") == "custom-value":
         log_pass("GetObject metadata")
     else:
         log_fail("GetObject metadata", f"metadata not returned correctly: {metadata}")

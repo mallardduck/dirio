@@ -112,12 +112,12 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 			putObjectACL:            RouteNotImplemented,
 			getObjectTagging:        RouteNotImplemented,
 			putObjectTagging:        RouteNotImplemented,
-			multipartCreate:         RouteNotImplemented,
-			multipartUploadPart:     RouteNotImplemented,
-			multipartUploadPartCopy: RouteNotImplemented,
-			multipartComplete:       RouteNotImplemented,
-			multipartAbort:          RouteNotImplemented,
-			multipartListParts:      RouteNotImplemented,
+			multipartCreate:         object(deps.APIHandler.S3Handler.CreateMultipartUpload),
+			multipartUploadPart:     object(deps.APIHandler.S3Handler.UploadPart),
+			multipartUploadPartCopy: object(deps.APIHandler.S3Handler.UploadPartCopy),
+			multipartComplete:       object(deps.APIHandler.S3Handler.CompleteMultipartUpload),
+			multipartAbort:          object(deps.APIHandler.S3Handler.AbortMultipartUpload),
+			multipartListParts:      object(deps.APIHandler.S3Handler.ListParts),
 		}
 
 		// Build authorization middleware config
@@ -160,18 +160,24 @@ func bucket(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFun
 }
 
 // object wraps an S3 object-level handler, extracting {bucket}, {key},
-// and request ID from the incoming request. It also applies S3 key validation middleware.
+// and request ID from the incoming request. It also applies S3 bucket name and key validation middleware.
 func object(fn func(http.ResponseWriter, *http.Request, string, string)) http.HandlerFunc {
 	// Create the base handler that extracts parameters
 	baseHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fn(w, r, teapot.URLParam(r, "bucket"), teapot.URLParam(r, "key"))
 	})
 
-	// Apply validation middleware
-	validated := middleware.ValidateS3KeyMiddleware(
-		func(r *http.Request) string { return teapot.URLParam(r, "key") },
+	// Apply bucket name validation middleware first
+	validated := middleware.ValidateS3BucketNameMiddleware(
+		func(r *http.Request) string { return teapot.URLParam(r, "bucket") },
 		api.WriteErrorResponse,
 	)(baseHandler)
+
+	// Then apply key validation middleware
+	validated = middleware.ValidateS3KeyMiddleware(
+		func(r *http.Request) string { return teapot.URLParam(r, "key") },
+		api.WriteErrorResponse,
+	)(validated)
 
 	return validated.ServeHTTP
 }

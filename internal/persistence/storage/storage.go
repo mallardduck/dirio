@@ -46,6 +46,11 @@ func New(rootFS billy.Filesystem, metadata *metadata.Manager) (*Storage, error) 
 	}, nil
 }
 
+// GetBucketFS returns a billy.Filesystem for the specified bucket
+func (s *Storage) GetBucketFS(ctx context.Context, bucket string) (billy.Filesystem, error) {
+	return path.NewBucketFS(s.rootFS, bucket)
+}
+
 // ListBuckets returns all buckets
 func (s *Storage) ListBuckets(ctx context.Context) ([]s3types.Bucket, error) {
 	// Check if context is already cancelled

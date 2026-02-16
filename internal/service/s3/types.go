@@ -106,3 +106,89 @@ type ListObjectsV2Request struct {
 	MaxKeys           int
 	FetchOwner        bool
 }
+
+// ============================================================================
+// Multipart Upload Request/Response Types
+// ============================================================================
+
+// CreateMultipartUploadRequest represents a request to initiate a multipart upload
+type CreateMultipartUploadRequest struct {
+	Bucket         string
+	Key            string
+	ContentType    string
+	CustomMetadata map[string]string
+}
+
+// CreateMultipartUploadResponse represents the response from initiating a multipart upload
+type CreateMultipartUploadResponse struct {
+	UploadID string
+	Bucket   string
+	Key      string
+}
+
+// UploadPartRequest represents a request to upload a part
+type UploadPartRequest struct {
+	Bucket     string
+	Key        string
+	UploadID   string
+	PartNumber int
+	Content    io.Reader
+}
+
+// UploadPartResponse represents the response from uploading a part
+type UploadPartResponse struct {
+	ETag string
+}
+
+// CompletePart represents a part in the complete multipart upload request
+type CompletePart struct {
+	PartNumber int
+	ETag       string
+}
+
+// CompleteMultipartUploadRequest represents a request to complete a multipart upload
+type CompleteMultipartUploadRequest struct {
+	Bucket   string
+	Key      string
+	UploadID string
+	Parts    []CompletePart
+}
+
+// CompleteMultipartUploadResponse represents the response from completing a multipart upload
+type CompleteMultipartUploadResponse struct {
+	Location string
+	Bucket   string
+	Key      string
+	ETag     string
+}
+
+// AbortMultipartUploadRequest represents a request to abort a multipart upload
+type AbortMultipartUploadRequest struct {
+	Bucket   string
+	Key      string
+	UploadID string
+}
+
+// ListPartsRequest represents a request to list parts in a multipart upload
+type ListPartsRequest struct {
+	Bucket   string
+	Key      string
+	UploadID string
+	MaxParts int
+}
+
+// Part represents a single part in a multipart upload
+type Part struct {
+	PartNumber   int
+	ETag         string
+	Size         int64
+	LastModified time.Time
+}
+
+// ListPartsResponse represents the response from listing parts
+type ListPartsResponse struct {
+	Bucket   string
+	Key      string
+	UploadID string
+	Parts    []Part
+}

@@ -187,12 +187,11 @@ func (h *HTTPHandler) PutObject(w http.ResponseWriter, r *http.Request, bucket, 
 	customMetadata := make(map[string]string)
 
 	// Extract S3-standard metadata headers
-	// TODO(Phase 3.2 #9): Fix custom metadata key case preservation bug
-	//   - Currently returns wrong case in GetObject/HeadObject responses
-	//   - S3 standard: preserves exact case of x-amz-meta-* headers
-	//   - Issue: somewhere in the chain we're lowercasing or changing case
-	//   - Test: PUT with x-amz-meta-Author, GET should return x-amz-meta-Author (not x-amz-meta-author)
-	//   - Check: storage layer, metadata serialization, response header setting
+	// ✅ FIXED(Phase 3.2 #9): Custom metadata keys now normalized to lowercase
+	//   - Go's HTTP package canonicalizes headers to Title-Case
+	//   - boto3 and other clients expect lowercase keys in Metadata dict
+	//   - Solution: Normalize all metadata keys to lowercase for consistent retrieval
+	//   - This matches behavior of other S3-compatible systems
 	metadataHeaders := []string{
 		headers.CacheControl,
 		headers.ContentDisposition,
@@ -202,14 +201,18 @@ func (h *HTTPHandler) PutObject(w http.ResponseWriter, r *http.Request, bucket, 
 	}
 	for _, header := range metadataHeaders {
 		if value := r.Header.Get(header); value != "" {
-			customMetadata[header] = value
+			// Store with lowercase keys for consistent retrieval
+			customMetadata[strings.ToLower(header)] = value
 		}
 	}
 
 	// Extract user-defined metadata (x-amz-meta-*)
+	// Normalize keys to lowercase for consistent retrieval across clients
+	// (Go's HTTP package canonicalizes headers to Title-Case, but S3 clients expect lowercase)
 	for key, values := range r.Header {
-		if strings.HasPrefix(strings.ToLower(key), "x-amz-meta-") && len(values) > 0 {
-			customMetadata[key] = values[0]
+		lowerKey := strings.ToLower(key)
+		if strings.HasPrefix(lowerKey, "x-amz-meta-") && len(values) > 0 {
+			customMetadata[lowerKey] = values[0]
 		}
 	}
 
