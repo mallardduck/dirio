@@ -48,7 +48,7 @@ builds:
 
 archives:
   - id: server-archive
-    ids:
+    builds:
       - server
     name_template: "{{ .ProjectName }}-server_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats:
@@ -59,7 +59,7 @@ archives:
           - zip
 
   - id: client-archive
-    ids:
+    builds:
       - client
     name_template: "{{ .ProjectName }}-client_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats:
@@ -70,7 +70,7 @@ archives:
           - zip
 
   - id: all-archive
-    ids:
+    builds:
       - server
       - client
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
