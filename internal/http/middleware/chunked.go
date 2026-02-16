@@ -31,12 +31,9 @@ func ChunkedEncoding(decoderFactory ChunkedDecoderFactory) func(http.Handler) ht
 			decodedContentLength := r.Header.Get("X-Amz-Decoded-Content-Length")
 			contentEncoding := r.Header.Get("Content-Encoding")
 
-			needsDecoding := false
+			needsDecoding := contentSHA256 == consts.ContentSHA256Streaming
 
 			// Method 1: Check X-Amz-Content-Sha256 header (standard AWS SDK method)
-			if contentSHA256 == consts.ContentSHA256Streaming {
-				needsDecoding = true
-			}
 
 			// Method 2: Check for X-Amz-Decoded-Content-Length header
 			// This header is present when AWS clients use chunked encoding

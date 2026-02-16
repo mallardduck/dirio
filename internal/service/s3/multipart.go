@@ -239,11 +239,8 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, req *CompleteMult
 		return nil, fmt.Errorf("failed to store complete object: %w", err)
 	}
 
-	// Clean up multipart upload
-	if err := s.cleanupMultipartUpload(ctx, req.Bucket, req.UploadID); err != nil {
-		// Log error but don't fail the request
-		// TODO: add logging
-	}
+	// Clean up multipart upload (best effort - don't fail request on cleanup error)
+	_ = s.cleanupMultipartUpload(ctx, req.Bucket, req.UploadID)
 
 	return &CompleteMultipartUploadResponse{
 		Location: fmt.Sprintf("/%s/%s", req.Bucket, req.Key),
@@ -302,7 +299,7 @@ func (s *Service) ListParts(ctx context.Context, req *ListPartsRequest) (*ListPa
 	}
 
 	// Read part metadata
-	var responseParts []Part
+	responseParts := make([]Part, 0, len(partFiles))
 	for _, fileInfo := range partFiles {
 		if !strings.HasSuffix(fileInfo.Name(), ".json") {
 			continue
@@ -321,12 +318,7 @@ func (s *Service) ListParts(ctx context.Context, req *ListPartsRequest) (*ListPa
 		}
 		partMetaFile.Close()
 
-		responseParts = append(responseParts, Part{
-			PartNumber:   partMeta.PartNumber,
-			ETag:         partMeta.ETag,
-			Size:         partMeta.Size,
-			LastModified: partMeta.LastModified,
-		})
+		responseParts = append(responseParts, Part(partMeta))
 	}
 
 	// Sort by part number

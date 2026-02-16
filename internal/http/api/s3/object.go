@@ -413,5 +413,7 @@ func (h *HTTPHandler) CopyObject(w http.ResponseWriter, r *http.Request, bucket,
 		ETag:         obj.ETag,
 	}
 
-	WriteXMLResponse(w, http.StatusOK, result)
+	if err := WriteXMLResponse(w, http.StatusOK, result); err != nil {
+		s3Logger.With("err", err).Warn("error writing CopyObject XML response")
+	}
 }
