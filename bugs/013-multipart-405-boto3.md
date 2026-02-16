@@ -1,10 +1,10 @@
 # Bug #013: Multipart Upload Returns 405 Method Not Allowed (boto3)
 
-**Status:** ✅ RESOLVED
-**Priority:** High
-**Discovered:** 2026-01-31
-**Resolved:** 2026-02-16
-**Affects:** boto3 (confirmed), likely AWS CLI
+**Status:** ✅ RESOLVED  
+**Priority:** High  
+**Discovered:** 2026-01-31  
+**Resolved:** 2026-02-16  
+**Affects:** boto3 (confirmed), likely AWS CLI  
 **Resolution:** Implemented all 5 multipart upload handlers (CreateMultipartUpload, UploadPart, UploadPartCopy, CompleteMultipartUpload, AbortMultipartUpload, ListParts)
 
 ## Summary

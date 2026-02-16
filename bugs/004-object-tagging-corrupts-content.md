@@ -1,9 +1,9 @@
 # Bug #004: Object Tagging Stores Tags as Content
 
-**Status:** Open
-**Priority:** High
-**Discovered:** 2026-01-31
-**Affects:** boto3, MinIO mc (all clients that support object tagging)
+**Status:** Open  
+**Priority:** High  
+**Discovered:** 2026-01-31  
+**Affects:** boto3, MinIO mc (all clients that support object tagging)  
 **Root Cause:** Bug #001 (AWS SigV4 Chunked Encoding Corruption)
 
 ## Summary

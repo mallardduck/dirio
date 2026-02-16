@@ -1,8 +1,8 @@
 # Bug #007: ListObjectsV2 MaxKeys Parameter Ignored
 
-**Status:** Open
-**Priority:** Medium
-**Discovered:** 2026-01-31
+**Status:** Open  
+**Priority:** Medium  
+**Discovered:** 2026-01-31  
 **Affects:** boto3 (confirmed), likely all clients
 
 ## Summary

@@ -1,10 +1,10 @@
 # Bug #009: CopyObject Creates 0-Byte Files
 
-**Status:** ✅ RESOLVED
-**Priority:** Medium
-**Discovered:** 2026-01-31
-**Resolved:** 2026-02-16
-**Affects:** boto3 (creates 0-byte files), MinIO mc (EOF error)
+**Status:** ✅ RESOLVED  
+**Priority:** Medium  
+**Discovered:** 2026-01-31  
+**Resolved:** 2026-02-16  
+**Affects:** boto3 (creates 0-byte files), MinIO mc (EOF error)  
 **Resolution:** Implemented CopyObject handler with x-amz-copy-source header parsing and ISO 8601 date format for MinIO mc compatibility
 
 ## Summary

@@ -1,8 +1,8 @@
 # Bug #006: ListObjectsV2 Delimiter Returns 0 CommonPrefixes (boto3)
 
-**Status:** Open
-**Priority:** Medium
-**Discovered:** 2026-01-31
+**Status:** Open  
+**Priority:** Medium  
+**Discovered:** 2026-01-31  
 **Affects:** boto3 only (MinIO mc shows folders correctly)
 
 ## Summary

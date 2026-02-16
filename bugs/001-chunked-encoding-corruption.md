@@ -1,8 +1,8 @@
 # CRITICAL: AWS SigV4 Chunked Encoding Bug
 
-**Discovered:** January 31, 2026
-**Status:** 🚨 CRITICAL - Blocks production use
-**Impact:** ALL write operations corrupted
+**Discovered:** January 31, 2026  
+**Status:** 🚨 CRITICAL - Blocks production use  
+**Impact:** ALL write operations corrupted  
 **Fix Status:** ⚠️ PARTIAL - Decoder implemented but not activating for real AWS clients
 
 ## Current Status (January 31, 2026 18:36 UTC)

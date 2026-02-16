@@ -1,10 +1,10 @@
 # Bug #010: Pre-signed URLs Return 403 Forbidden
 
-**Status:** ✅ RESOLVED
-**Priority:** Medium
-**Discovered:** 2026-01-31
-**Resolved:** 2026-02-16
-**Affects:** boto3 (confirmed), MinIO mc (confirmed), likely all clients
+**Status:** ✅ RESOLVED  
+**Priority:** Medium  
+**Discovered:** 2026-01-31  
+**Resolved:** 2026-02-16  
+**Affects:** boto3 (confirmed), MinIO mc (confirmed), likely all clients  
 **Resolution:** Implemented query parameter-based AWS SigV4 authentication with expiration validation
 
 ## Summary

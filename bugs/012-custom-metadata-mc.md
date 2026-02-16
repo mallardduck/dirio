@@ -1,8 +1,8 @@
 # Bug #012: Custom Metadata Not Returned in mc stat
 
-**Status:** Open
-**Priority:** Medium
-**Discovered:** 2026-01-31
+**Status:** Open  
+**Priority:** Medium  
+**Discovered:** 2026-01-31  
 **Affects:** MinIO mc client only (GetObject metadata retrieval)
 
 ## Summary

@@ -1,10 +1,10 @@
 # Bug #011: Custom Metadata Key Case Wrong
 
-**Status:** ✅ RESOLVED
-**Priority:** Medium
-**Discovered:** 2026-01-31
-**Resolved:** 2026-02-16
-**Affects:** boto3 (confirmed - returns Title-Case), MinIO mc (metadata not returned at all - see bug #012)
+**Status:** ✅ RESOLVED  
+**Priority:** Medium  
+**Discovered:** 2026-01-31  
+**Resolved:** 2026-02-16  
+**Affects:** boto3 (confirmed - returns Title-Case), MinIO mc (metadata not returned at all - see bug #012)  
 **Resolution:** Server returns Title-Case (Go HTTP library default), tests updated to use case-insensitive comparison (HTTP spec compliant per RFC 2616)
 
 ## Summary

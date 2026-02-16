@@ -1,10 +1,10 @@
 # Bug #008: Range Requests Not Implemented
 
-**Status:** ✅ RESOLVED
-**Priority:** Medium
-**Discovered:** 2026-01-31
-**Resolved:** 2026-02-16
-**Affects:** boto3 (confirmed), MinIO mc (confirmed), likely all clients
+**Status:** ✅ RESOLVED  
+**Priority:** Medium  
+**Discovered:** 2026-01-31  
+**Resolved:** 2026-02-16  
+**Affects:** boto3 (confirmed), MinIO mc (confirmed), likely all clients  
 **Resolution:** Implemented Range header parsing and 206 Partial Content responses in GetObject handler
 
 ## Summary

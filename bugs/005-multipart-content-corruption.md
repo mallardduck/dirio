@@ -1,11 +1,11 @@
 # Bug #005: Multipart Upload Content Corruption
 
-**Status:** ✅ RESOLVED
-**Priority:** High
-**Discovered:** 2026-01-31
-**Resolved:** 2026-02-16
-**Affects:** MinIO mc (large file uploads), likely boto3 multipart operations
-**Root Cause:** Bug #001 (AWS SigV4 Chunked Encoding Corruption)
+**Status:** ✅ RESOLVED  
+**Priority:** High  
+**Discovered:** 2026-01-31  
+**Resolved:** 2026-02-16  
+**Affects:** MinIO mc (large file uploads), likely boto3 multipart operations  
+**Root Cause:** Bug #001 (AWS SigV4 Chunked Encoding Corruption)  
 **Resolution:** Multipart upload implementation now handles chunked encoding correctly - content integrity verified for all clients
 
 ## Summary
