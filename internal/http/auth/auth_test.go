@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
+	"github.com/mallardduck/dirio/pkg/iam"
 )
 
 func TestAuthenticator_ValidateCredentials(t *testing.T) {
@@ -73,6 +74,8 @@ func TestAuthenticator_GetUserForAccessKey(t *testing.T) {
 			},
 			testAccessKey: "primary-key",
 			wantUser: &metadata.User{
+				UUID:      iam.AdminUserUUID,
+				Username:  "admin",
 				AccessKey: "primary-key",
 				SecretKey: "primary-secret",
 				Status:    "on",
@@ -87,6 +90,8 @@ func TestAuthenticator_GetUserForAccessKey(t *testing.T) {
 			},
 			testAccessKey: "alt-key",
 			wantUser: &metadata.User{
+				UUID:      iam.AdminUserUUID,
+				Username:  "admin",
 				AccessKey: "alt-key",
 				SecretKey: "alt-secret",
 				Status:    "on",
@@ -101,6 +106,8 @@ func TestAuthenticator_GetUserForAccessKey(t *testing.T) {
 			},
 			testAccessKey: "primary-key",
 			wantUser: &metadata.User{
+				UUID:      iam.AdminUserUUID,
+				Username:  "admin",
 				AccessKey: "primary-key",
 				SecretKey: "primary-secret",
 				Status:    "on",

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/go-git/go-billy/v5/memfs"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -29,7 +30,9 @@ func setupTestStorage(t *testing.T) *Storage {
 
 // testContext creates a context with a test user for storage tests
 func testContext() context.Context {
+	testUUID := uuid.MustParse("12345678-1234-1234-1234-123456789012")
 	user := &iam.User{
+		UUID:      testUUID,
 		Username:  "testuser",
 		AccessKey: "AKIAIOSFODNN7EXAMPLE",
 		SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -320,6 +323,19 @@ func TestListInternal_Pagination(t *testing.T) {
 func TestListInternal_FetchOwner(t *testing.T) {
 	s := setupTestStorage(t)
 	asserts := assert.New(t)
+
+	// Save the test user to metadata so GetUserByUUID can find it
+	testUUID := uuid.MustParse("12345678-1234-1234-1234-123456789012")
+	testUser := &iam.User{
+		UUID:      testUUID,
+		Username:  "testuser",
+		AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+		Status:    iam.UserStatusActive,
+	}
+	err := s.metadata.CreateOrUpdateUser(context.Background(), testUser)
+	require.NoError(t, err)
+
 	createTestBucket(t, s, "test-bucket")
 	createTestObject(t, s, "test-bucket", "file.txt", 100)
 
@@ -335,7 +351,8 @@ func TestListInternal_FetchOwner(t *testing.T) {
 	asserts.Len(result2.Objects, 1)
 	// Owner should be populated from bucket metadata (which was set from context user)
 	if asserts.NotNil(result2.Objects[0].Owner) {
-		asserts.Equal("testuser", result2.Objects[0].Owner.ID)
+		// Owner.ID should be the UUID string, DisplayName should be the username
+		asserts.Equal("12345678-1234-1234-1234-123456789012", result2.Objects[0].Owner.ID)
 		asserts.Equal("testuser", result2.Objects[0].Owner.DisplayName)
 	}
 }

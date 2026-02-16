@@ -3,6 +3,7 @@ package policy
 import (
 	"strings"
 
+	"github.com/mallardduck/dirio/internal/policy/conditions"
 	"github.com/mallardduck/dirio/internal/policy/variables"
 	"github.com/mallardduck/dirio/pkg/iam"
 )
@@ -259,26 +260,110 @@ func matchSingleResource(pattern, reqARN string) bool {
 	return false
 }
 
+// matchNotPrincipal checks if the request principal does NOT match the statement NotPrincipal.
+// This is the inverse of matchPrincipal - returns true when principal does NOT match.
+func matchNotPrincipal(stmtNotPrincipal interface{}, reqPrincipal *Principal) bool {
+	if stmtNotPrincipal == nil {
+		// No NotPrincipal specified - treat as match (don't exclude anyone)
+		return true
+	}
+	// Return the inverse of matchPrincipal
+	return !matchPrincipal(stmtNotPrincipal, reqPrincipal)
+}
+
+// matchNotAction checks if the request action does NOT match the statement NotAction.
+// This is the inverse of matchAction - returns true when action does NOT match.
+func matchNotAction(stmtNotAction interface{}, reqAction string) bool {
+	if stmtNotAction == nil {
+		// No NotAction specified - treat as match (don't exclude any action)
+		return true
+	}
+	// Return the inverse of matchAction
+	return !matchAction(stmtNotAction, reqAction)
+}
+
+// matchNotResource checks if the request resource does NOT match the statement NotResource.
+// This is the inverse of matchResource - returns true when resource does NOT match.
+func matchNotResource(stmtNotResource interface{}, reqResource *Resource) bool {
+	if stmtNotResource == nil {
+		// No NotResource specified - treat as match (don't exclude any resource)
+		return true
+	}
+	// Return the inverse of matchResource
+	return !matchResource(stmtNotResource, reqResource)
+}
+
+// matchNotResourceWithVariables checks if the request resource does NOT match the statement NotResource,
+// applying variable substitution if a variable context is provided.
+// This is the inverse of matchResourceWithVariables.
+func matchNotResourceWithVariables(stmtNotResource interface{}, reqResource *Resource, varCtx *variables.Context) bool {
+	if stmtNotResource == nil {
+		// No NotResource specified - treat as match (don't exclude any resource)
+		return true
+	}
+	// Return the inverse of matchResourceWithVariables
+	return !matchResourceWithVariables(stmtNotResource, reqResource, varCtx)
+}
+
 // evaluateStatement evaluates a single policy statement against a request.
 // Returns the decision based on the statement's Effect if all conditions match.
 func evaluateStatement(stmt *iam.Statement, req *RequestContext) Decision {
 	// 1. Check if principal matches
-	if !matchPrincipal(stmt.Principal, req.Principal) {
-		return DecisionDeny // Statement doesn't apply
+	// Use NotPrincipal if Principal is nil, otherwise use Principal
+	if stmt.Principal != nil {
+		if !matchPrincipal(stmt.Principal, req.Principal) {
+			return DecisionDeny // Statement doesn't apply
+		}
+	} else if stmt.NotPrincipal != nil {
+		if !matchNotPrincipal(stmt.NotPrincipal, req.Principal) {
+			return DecisionDeny // Statement doesn't apply (principal was in exclusion list)
+		}
 	}
 
 	// 2. Check if action matches
-	if !matchAction(stmt.Action, req.Action) {
-		return DecisionDeny // Statement doesn't apply
+	// Use NotAction if Action is nil, otherwise use Action
+	if stmt.Action != nil {
+		if !matchAction(stmt.Action, req.Action) {
+			return DecisionDeny // Statement doesn't apply
+		}
+	} else if stmt.NotAction != nil {
+		if !matchNotAction(stmt.NotAction, req.Action) {
+			return DecisionDeny // Statement doesn't apply (action was in exclusion list)
+		}
 	}
 
 	// 3. Check if resource matches (with variable substitution)
-	if !matchResourceWithVariables(stmt.Resource, req.Resource, req.VarContext) {
-		return DecisionDeny // Statement doesn't apply
+	// Use NotResource if Resource is nil, otherwise use Resource
+	if stmt.Resource != nil {
+		if !matchResourceWithVariables(stmt.Resource, req.Resource, req.VarContext) {
+			return DecisionDeny // Statement doesn't apply
+		}
+	} else if stmt.NotResource != nil {
+		if !matchNotResourceWithVariables(stmt.NotResource, req.Resource, req.VarContext) {
+			return DecisionDeny // Statement doesn't apply (resource was in exclusion list)
+		}
 	}
 
-	// 4. Check conditions (Phase 3.3 - deferred)
-	// TODO: Implement condition evaluation with variable substitution
+	// 4. Check conditions (Phase 3.3)
+	if stmt.Condition != nil && len(stmt.Condition) > 0 {
+		secureTransport := false
+		if req.Conditions != nil {
+			secureTransport = req.Conditions.SecureTransport
+		}
+		condCtx := conditions.FromRequest(req.OriginalRequest, req.VarContext, secureTransport)
+		evaluator := conditions.NewEvaluator(condCtx)
+
+		match, err := evaluator.Evaluate(stmt.Condition)
+		if err != nil {
+			// Fail-closed: treat errors as non-match
+			authzLogger.With("error", err, "statement_sid", stmt.Sid).Warn("condition evaluation error")
+			return DecisionDeny
+		}
+		if !match {
+			authzLogger.With("statement_sid", stmt.Sid).Debug("condition did not match")
+			return DecisionDeny
+		}
+	}
 
 	// 5. Return effect
 	if stmt.Effect == "Deny" {

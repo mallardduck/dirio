@@ -433,6 +433,32 @@ func (m *Manager) GetUsers(ctx context.Context) (map[string]*User, error) {
 	return users, nil
 }
 
+// GetUserByUUID retrieves a user by their UUID
+// Note: This is currently O(n) as it iterates through all users.
+// TODO: Implement UUID-to-username index for O(1) lookup
+func (m *Manager) GetUserByUUID(ctx context.Context, userUUID uuid.UUID) (*User, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
+	usernames, err := m.ListUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, username := range usernames {
+		user, err := m.GetUser(ctx, username)
+		if err != nil {
+			continue // Skip users we can't load
+		}
+		if user != nil && user.UUID == userUUID {
+			return user, nil
+		}
+	}
+
+	return nil, ErrUserNotFound
+}
+
 // SavePolicy saves a single policy
 func (m *Manager) SavePolicy(ctx context.Context, policy *Policy) error {
 	if err := ctx.Err(); err != nil {

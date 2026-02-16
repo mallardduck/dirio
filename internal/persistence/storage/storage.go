@@ -237,9 +237,17 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 		bucketMeta, err := s.metadata.GetBucketMetadata(ctx, bucket)
 		if err == nil && bucketMeta.Owner != nil {
 			ownerStr := bucketMeta.Owner.String()
+			displayName := ownerStr // Default to UUID string
+
+			// Look up the user's username for a more friendly display name
+			user, err := s.metadata.GetUserByUUID(ctx, *bucketMeta.Owner)
+			if err == nil && user != nil && user.Username != "" {
+				displayName = user.Username
+			}
+
 			bucketOwner = &s3types.Owner{
 				ID:          ownerStr,
-				DisplayName: ownerStr,
+				DisplayName: displayName,
 			}
 		}
 		// If we can't get bucket metadata or owner is nil, that's ok - owner will be nil

@@ -490,3 +490,427 @@ func TestEvaluateStatementWithVariables(t *testing.T) {
 		})
 	}
 }
+
+func TestMatchNotAction(t *testing.T) {
+	tests := []struct {
+		name          string
+		stmtNotAction interface{}
+		reqAction     string
+		expected      bool
+	}{
+		// NotAction should match when action does NOT match the pattern
+		{"does not match excluded action", "s3:DeleteObject", "s3:GetObject", true},
+		{"matches excluded action", "s3:GetObject", "s3:GetObject", false},
+		{"does not match wildcard exclusion", "s3:*", "s3:GetObject", false},
+		{"matches action outside wildcard exclusion", "s3:Delete*", "s3:GetObject", true},
+		{"does not match when in exclusion array", []string{"s3:DeleteObject", "s3:PutObject"}, "s3:DeleteObject", false},
+		{"matches when not in exclusion array", []string{"s3:DeleteObject", "s3:PutObject"}, "s3:GetObject", true},
+		{"nil NotAction matches all", nil, "s3:GetObject", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchNotAction(tt.stmtNotAction, tt.reqAction)
+			if got != tt.expected {
+				t.Errorf("matchNotAction() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMatchNotResource(t *testing.T) {
+	publicResource := &Resource{Bucket: "public-bucket", Key: "file.txt"}
+
+	tests := []struct {
+		name            string
+		stmtNotResource interface{}
+		reqResource     *Resource
+		expected        bool
+	}{
+		// NotResource should match when resource does NOT match the pattern
+		{"does not match excluded resource", "arn:aws:s3:::admin-bucket/*", publicResource, true},
+		{"matches excluded resource", "arn:aws:s3:::public-bucket/*", publicResource, false},
+		{"does not match wildcard exclusion", "*", publicResource, false},
+		{"matches when not in exclusion array", []string{"arn:aws:s3:::admin-bucket/*", "arn:aws:s3:::private-bucket/*"}, publicResource, true},
+		{"does not match when in exclusion array", []string{"arn:aws:s3:::admin-bucket/*", "arn:aws:s3:::public-bucket/*"}, publicResource, false},
+		{"nil NotResource matches all", nil, publicResource, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchNotResource(tt.stmtNotResource, tt.reqResource)
+			if got != tt.expected {
+				t.Errorf("matchNotResource() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMatchNotResourceWithVariables(t *testing.T) {
+	testUUID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+
+	varCtx := &variables.Context{
+		Username: "alice",
+		UserID:   testUUID,
+	}
+
+	aliceResource := &Resource{Bucket: "my-bucket", Key: "alice/file.txt"}
+	bobResource := &Resource{Bucket: "my-bucket", Key: "bob/file.txt"}
+
+	tests := []struct {
+		name            string
+		stmtNotResource interface{}
+		reqResource     *Resource
+		varCtx          *variables.Context
+		expected        bool
+	}{
+		{
+			name:            "username variable excludes user's own path",
+			stmtNotResource: "arn:aws:s3:::my-bucket/${aws:username}/*",
+			reqResource:     aliceResource,
+			varCtx:          varCtx,
+			expected:        false, // Alice's path is excluded, so NotResource returns false
+		},
+		{
+			name:            "username variable allows other user path",
+			stmtNotResource: "arn:aws:s3:::my-bucket/${aws:username}/*",
+			reqResource:     bobResource,
+			varCtx:          varCtx,
+			expected:        true, // Bob's path is not excluded, so NotResource returns true
+		},
+		{
+			name:            "nil context falls back to regular matching",
+			stmtNotResource: "arn:aws:s3:::my-bucket/alice/*",
+			reqResource:     aliceResource,
+			varCtx:          nil,
+			expected:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchNotResourceWithVariables(tt.stmtNotResource, tt.reqResource, tt.varCtx)
+			if got != tt.expected {
+				t.Errorf("matchNotResourceWithVariables() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMatchNotPrincipal(t *testing.T) {
+	anonymousPrincipal := &Principal{IsAnonymous: true}
+	alicePrincipal := &Principal{
+		User:        &metadata.User{AccessKey: "alice"},
+		IsAnonymous: false,
+	}
+	bobPrincipal := &Principal{
+		User:        &metadata.User{AccessKey: "bob"},
+		IsAnonymous: false,
+	}
+
+	tests := []struct {
+		name             string
+		stmtNotPrincipal interface{}
+		reqPrincipal     *Principal
+		expected         bool
+	}{
+		// NotPrincipal should match when principal does NOT match the pattern
+		{"wildcard excludes everyone", "*", alicePrincipal, false},
+		{"wildcard excludes anonymous", "*", anonymousPrincipal, false},
+		{
+			"specific ARN excludes that user",
+			map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/alice"},
+			alicePrincipal,
+			false,
+		},
+		{
+			"specific ARN allows other user",
+			map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/alice"},
+			bobPrincipal,
+			true,
+		},
+		{
+			"specific ARN allows anonymous",
+			map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/alice"},
+			anonymousPrincipal,
+			true,
+		},
+		{
+			"array excludes included user",
+			map[string]interface{}{"AWS": []string{"arn:aws:iam::123456789012:user/alice", "arn:aws:iam::123456789012:user/bob"}},
+			alicePrincipal,
+			false,
+		},
+		{
+			"array allows user not in list",
+			map[string]interface{}{"AWS": []string{"arn:aws:iam::123456789012:user/bob"}},
+			alicePrincipal,
+			true,
+		},
+		{"nil NotPrincipal matches all", nil, alicePrincipal, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchNotPrincipal(tt.stmtNotPrincipal, tt.reqPrincipal)
+			if got != tt.expected {
+				t.Errorf("matchNotPrincipal() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEvaluateStatementWithNotAction(t *testing.T) {
+	anonymousPrincipal := &Principal{IsAnonymous: true}
+
+	tests := []struct {
+		name     string
+		stmt     *iam.Statement
+		req      *RequestContext
+		expected Decision
+	}{
+		{
+			name: "NotAction allows actions not in exclusion list",
+			stmt: &iam.Statement{
+				Effect:    "Allow",
+				Principal: "*",
+				NotAction: "s3:DeleteObject",
+				Resource:  "arn:aws:s3:::bucket/*",
+			},
+			req: &RequestContext{
+				Principal: anonymousPrincipal,
+				Action:    "s3:GetObject",
+				Resource:  &Resource{Bucket: "bucket", Key: "file.txt"},
+			},
+			expected: DecisionAllow,
+		},
+		{
+			name: "NotAction denies excluded action",
+			stmt: &iam.Statement{
+				Effect:    "Allow",
+				Principal: "*",
+				NotAction: "s3:DeleteObject",
+				Resource:  "arn:aws:s3:::bucket/*",
+			},
+			req: &RequestContext{
+				Principal: anonymousPrincipal,
+				Action:    "s3:DeleteObject",
+				Resource:  &Resource{Bucket: "bucket", Key: "file.txt"},
+			},
+			expected: DecisionDeny,
+		},
+		{
+			name: "NotAction with array excludes multiple actions",
+			stmt: &iam.Statement{
+				Effect:    "Allow",
+				Principal: "*",
+				NotAction: []string{"s3:DeleteObject", "s3:DeleteBucket"},
+				Resource:  "*",
+			},
+			req: &RequestContext{
+				Principal: anonymousPrincipal,
+				Action:    "s3:DeleteBucket",
+				Resource:  &Resource{Bucket: "bucket"},
+			},
+			expected: DecisionDeny,
+		},
+		{
+			name: "NotAction with wildcard excludes all matching",
+			stmt: &iam.Statement{
+				Effect:    "Allow",
+				Principal: "*",
+				NotAction: "s3:Delete*",
+				Resource:  "*",
+			},
+			req: &RequestContext{
+				Principal: anonymousPrincipal,
+				Action:    "s3:DeleteObject",
+				Resource:  &Resource{Bucket: "bucket", Key: "file.txt"},
+			},
+			expected: DecisionDeny,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := evaluateStatement(tt.stmt, tt.req)
+			if got != tt.expected {
+				t.Errorf("evaluateStatement() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEvaluateStatementWithNotResource(t *testing.T) {
+	anonymousPrincipal := &Principal{IsAnonymous: true}
+
+	tests := []struct {
+		name     string
+		stmt     *iam.Statement
+		req      *RequestContext
+		expected Decision
+	}{
+		{
+			name: "NotResource allows resources not in exclusion list",
+			stmt: &iam.Statement{
+				Effect:      "Allow",
+				Principal:   "*",
+				Action:      "s3:*",
+				NotResource: "arn:aws:s3:::admin-bucket/*",
+			},
+			req: &RequestContext{
+				Principal: anonymousPrincipal,
+				Action:    "s3:GetObject",
+				Resource:  &Resource{Bucket: "public-bucket", Key: "file.txt"},
+			},
+			expected: DecisionAllow,
+		},
+		{
+			name: "NotResource denies excluded resource",
+			stmt: &iam.Statement{
+				Effect:      "Allow",
+				Principal:   "*",
+				Action:      "s3:*",
+				NotResource: "arn:aws:s3:::admin-bucket/*",
+			},
+			req: &RequestContext{
+				Principal: anonymousPrincipal,
+				Action:    "s3:GetObject",
+				Resource:  &Resource{Bucket: "admin-bucket", Key: "file.txt"},
+			},
+			expected: DecisionDeny,
+		},
+		{
+			name: "NotResource with array excludes multiple resources",
+			stmt: &iam.Statement{
+				Effect:      "Allow",
+				Principal:   "*",
+				Action:      "s3:*",
+				NotResource: []string{"arn:aws:s3:::admin-bucket/*", "arn:aws:s3:::private-bucket/*"},
+			},
+			req: &RequestContext{
+				Principal: anonymousPrincipal,
+				Action:    "s3:GetObject",
+				Resource:  &Resource{Bucket: "private-bucket", Key: "file.txt"},
+			},
+			expected: DecisionDeny,
+		},
+		{
+			name: "NotResource with variable substitution",
+			stmt: &iam.Statement{
+				Effect:      "Allow",
+				Principal:   "*",
+				Action:      "s3:*",
+				NotResource: "arn:aws:s3:::bucket/${aws:username}/*",
+			},
+			req: &RequestContext{
+				Principal: &Principal{
+					User:        &metadata.User{AccessKey: "alice", Username: "alice"},
+					IsAnonymous: false,
+				},
+				Action:     "s3:GetObject",
+				Resource:   &Resource{Bucket: "bucket", Key: "bob/file.txt"},
+				VarContext: &variables.Context{Username: "alice"},
+			},
+			expected: DecisionAllow, // Bob's path is not excluded for Alice
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := evaluateStatement(tt.stmt, tt.req)
+			if got != tt.expected {
+				t.Errorf("evaluateStatement() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEvaluateStatementWithNotPrincipal(t *testing.T) {
+	anonymousPrincipal := &Principal{IsAnonymous: true}
+	alicePrincipal := &Principal{
+		User:        &metadata.User{AccessKey: "alice"},
+		IsAnonymous: false,
+	}
+	bobPrincipal := &Principal{
+		User:        &metadata.User{AccessKey: "bob"},
+		IsAnonymous: false,
+	}
+
+	tests := []struct {
+		name     string
+		stmt     *iam.Statement
+		req      *RequestContext
+		expected Decision
+	}{
+		{
+			name: "NotPrincipal allows principals not in exclusion list",
+			stmt: &iam.Statement{
+				Effect:       "Allow",
+				NotPrincipal: map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/alice"},
+				Action:       "s3:*",
+				Resource:     "*",
+			},
+			req: &RequestContext{
+				Principal: bobPrincipal,
+				Action:    "s3:GetObject",
+				Resource:  &Resource{Bucket: "bucket", Key: "file.txt"},
+			},
+			expected: DecisionAllow,
+		},
+		{
+			name: "NotPrincipal denies excluded principal",
+			stmt: &iam.Statement{
+				Effect:       "Allow",
+				NotPrincipal: map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/alice"},
+				Action:       "s3:*",
+				Resource:     "*",
+			},
+			req: &RequestContext{
+				Principal: alicePrincipal,
+				Action:    "s3:GetObject",
+				Resource:  &Resource{Bucket: "bucket", Key: "file.txt"},
+			},
+			expected: DecisionDeny,
+		},
+		{
+			name: "NotPrincipal with wildcard excludes everyone",
+			stmt: &iam.Statement{
+				Effect:       "Deny",
+				NotPrincipal: "*",
+				Action:       "s3:*",
+				Resource:     "*",
+			},
+			req: &RequestContext{
+				Principal: alicePrincipal,
+				Action:    "s3:GetObject",
+				Resource:  &Resource{Bucket: "bucket", Key: "file.txt"},
+			},
+			expected: DecisionDeny, // Everyone is excluded, so no one matches
+		},
+		{
+			name: "NotPrincipal allows anonymous when user excluded",
+			stmt: &iam.Statement{
+				Effect:       "Allow",
+				NotPrincipal: map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/alice"},
+				Action:       "s3:*",
+				Resource:     "*",
+			},
+			req: &RequestContext{
+				Principal: anonymousPrincipal,
+				Action:    "s3:GetObject",
+				Resource:  &Resource{Bucket: "bucket", Key: "file.txt"},
+			},
+			expected: DecisionAllow, // Anonymous is not excluded
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := evaluateStatement(tt.stmt, tt.req)
+			if got != tt.expected {
+				t.Errorf("evaluateStatement() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}

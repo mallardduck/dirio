@@ -1,8 +1,21 @@
 # DirIO Development Roadmap
 
-Current status: **Phase 3.2 COMPLETE** - All critical S3 features implemented!
+Current status: **Phase 3.3 IN PROGRESS** - Policy condition evaluation complete, working on NotAction/Result Filtering
 
 ## Recent Updates
+
+**February 16, 2026 - Policy Condition Evaluation Complete:**
+- ✅ **Policy Condition Evaluation:** Full implementation of all 6 operator categories (String, Numeric, Date, IP, Boolean, Null)
+  - ✅ IpAddress/NotIpAddress conditions with CIDR support
+  - ✅ StringEquals/StringLike with glob pattern matching
+  - ✅ DateLessThan/DateGreaterThan/DateEquals with ISO 8601 parsing
+  - ✅ NumericLessThan/NumericGreaterThan/NumericEquals with type coercion
+  - ✅ Bool and Null operators
+  - ✅ AWS IAM evaluation semantics (AND across operators, OR across values)
+  - ✅ Integration with policy matcher (fail-closed security)
+  - ✅ Comprehensive test coverage (26 tests across conditions package)
+- ✅ **User Lookup Optimization:** Added GetUserByUUID method to metadata manager for owner display name resolution
+- ✅ **Bug Fixes:** Owner DisplayName now shows username instead of UUID
 
 **February 16, 2026 - Phase 3.2 Complete:**
 - ✅ **Core S3 Features:** Multipart upload, pre-signed URLs, CopyObject, range requests, object tagging
@@ -132,11 +145,11 @@ Current status: **Phase 3.2 COMPLETE** - All critical S3 features implemented!
 - [x] Object tagging (with content preservation)
 - [x] Custom metadata (case-insensitive, HTTP spec compliant)
 
-## Phase 3.3: Advanced Policy Features
+## Phase 3.3: Advanced Policy Features (IN PROGRESS)
 
 **Goal:** Enhance policy engine with advanced features for fine-grained access control.
 
-**Status:** Test scenarios complete, ready for implementation.
+**Status:** Policy condition evaluation complete (Feb 16, 2026). NotAction/Result Filtering/POST uploads still TODO.
 
 **Infrastructure Complete (Feb 16, 2026):**
 - ✅ UUID-based ownership system (buckets and objects)
@@ -152,18 +165,18 @@ Current status: **Phase 3.2 COMPLETE** - All critical S3 features implemented!
   - ✅ Explicit deny beats ownership (AWS security principle)
   - ✅ Comprehensive test coverage (14 test scenarios)
 
-### Policy Evaluation Enhancements (Test scenarios ready in setup script)
-- [ ] **Policy condition evaluation** - IpAddress, StringEquals, DateLessThan, etc.
-  - [ ] IpAddress / NotIpAddress conditions (test: policy-ip-test bucket)
-  - [ ] StringEquals / StringLike / StringNotEquals / StringNotLike (test: policy-string-test bucket)
-  - [ ] DateLessThan / DateGreaterThan / DateEquals (test: policy-time-test bucket)
-  - [ ] NumericLessThan / NumericGreaterThan / NumericEquals (test: policy-numeric-test bucket)
-  - [ ] Bool condition operator
-  - [ ] Null condition operator
-- [ ] **NotAction/NotResource/NotPrincipal** - Inverse matching support (test scenarios ready)
-  - [ ] NotAction support (deny everything except specified actions) (test: policy-notaction-test bucket)
-  - [ ] NotResource support (apply to all resources except specified) (test: policy-notresource-test bucket)
-  - [ ] NotPrincipal support (apply to all principals except specified)
+### Policy Evaluation Enhancements
+- [x] **Policy condition evaluation** ✅ COMPLETE (Feb 16, 2026) - IpAddress, StringEquals, DateLessThan, etc.
+  - [x] IpAddress / NotIpAddress conditions (test: policy-ip-test bucket)
+  - [x] StringEquals / StringLike / StringNotEquals / StringNotLike (test: policy-string-test bucket)
+  - [x] DateLessThan / DateGreaterThan / DateEquals (test: policy-time-test bucket)
+  - [x] NumericLessThan / NumericGreaterThan / NumericEquals (test: policy-numeric-test bucket)
+  - [x] Bool condition operator
+  - [x] Null condition operator
+- [x] **NotAction/NotResource/NotPrincipal** - Inverse matching support (test scenarios ready)
+  - [x] NotAction support (deny everything except specified actions) (test: policy-notaction-test bucket)
+  - [x] NotResource support (apply to all resources except specified) (test: policy-notresource-test bucket)
+  - [x] NotPrincipal support (apply to all principals except specified)
 - [x] **Policy variables** ✅ COMPLETE - Dynamic variable substitution (test scenarios ready)
   - [x] ${aws:username} - Current authenticated username (test: policy-variables-test bucket)
   - [x] ${aws:userid} - Current authenticated user ID (UUID-based)
@@ -204,7 +217,7 @@ Current status: **Phase 3.2 COMPLETE** - All critical S3 features implemented!
 - [x] Policy variable substitution tests - Setup script creates user-specific folders with ${aws:username} policies
 - [x] ListBuckets/ListObjects filtering with partial permissions - Setup script creates filter-* buckets with 20 objects each
 - [ ] POST upload with signed policies - TODO: Add to setup script
-- [ ] Automated tests for condition evaluation (once implemented)
+- [x] Automated tests for condition evaluation ✅ COMPLETE - 26 comprehensive tests across internal/policy/conditions package + integration tests in matcher_conditions_test.go
 - [x] Automated tests for policy variables ✅ COMPLETE - Comprehensive test coverage in internal/policy/variables and internal/policy/matcher_test.go
 - [ ] Automated tests for result filtering (once implemented)
 

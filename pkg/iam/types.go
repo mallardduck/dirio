@@ -34,12 +34,15 @@ type PolicyDocument struct {
 
 // Statement represents a single statement in a policy document
 type Statement struct {
-	Sid       string                 `json:"Sid,omitempty"`       // Optional statement ID
-	Effect    string                 `json:"Effect"`              // "Allow" or "Deny"
-	Principal interface{}            `json:"Principal,omitempty"` // Who (can be string, map, or array)
-	Action    interface{}            `json:"Action"`              // What actions (string or []string)
-	Resource  interface{}            `json:"Resource,omitempty"`  // What resources (string or []string)
-	Condition map[string]interface{} `json:"Condition,omitempty"` // Optional conditions
+	Sid          string                 `json:"Sid,omitempty"`          // Optional statement ID
+	Effect       string                 `json:"Effect"`                 // "Allow" or "Deny"
+	Principal    interface{}            `json:"Principal,omitempty"`    // Who (can be string, map, or array)
+	NotPrincipal interface{}            `json:"NotPrincipal,omitempty"` // Inverse principal matching
+	Action       interface{}            `json:"Action,omitempty"`       // What actions (string or []string)
+	NotAction    interface{}            `json:"NotAction,omitempty"`    // Inverse action matching
+	Resource     interface{}            `json:"Resource,omitempty"`     // What resources (string or []string)
+	NotResource  interface{}            `json:"NotResource,omitempty"`  // Inverse resource matching
+	Condition    map[string]interface{} `json:"Condition,omitempty"`    // Optional conditions
 }
 
 // Policy represents an IAM policy (attached to users/roles)
