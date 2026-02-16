@@ -169,7 +169,8 @@ else
 fi
 
 # Custom Metadata (get)
-mc stat ${MC_ALIAS}/${BUCKET}/metadata-test.txt 2>&1 | grep -q "custom-key"
+# Note: mc stat displays headers in Title-Case (e.g., "X-Amz-Meta-Custom-Key")
+mc stat ${MC_ALIAS}/${BUCKET}/metadata-test.txt 2>&1 | grep -qi "custom-key"
 if [ $? -eq 0 ]; then
   pass "Custom Metadata get (mc stat shows metadata)"
 else

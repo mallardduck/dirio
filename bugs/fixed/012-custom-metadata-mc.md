@@ -1,9 +1,11 @@
 # Bug #012: Custom Metadata Not Returned in mc stat
 
-**Status:** Open  
+**Status:** ✅ RESOLVED  
 **Priority:** Medium  
 **Discovered:** 2026-01-31  
-**Affects:** MinIO mc client only (GetObject metadata retrieval)
+**Resolved:** 2026-02-16  
+**Affects:** MinIO mc client only (GetObject metadata retrieval)  
+**Resolution:** Functionality was working correctly; test had case-sensitivity bug. Fixed test to use case-insensitive grep. Also improved error handling to surface metadata save failures.
 
 ## Summary
 

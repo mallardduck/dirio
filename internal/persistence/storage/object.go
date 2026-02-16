@@ -216,8 +216,19 @@ func (s *Storage) PutObject(ctx context.Context, bucket, key string, content io.
 		CustomMetadata: customMetadata,
 	}
 	if err := s.metadata.PutObjectMetadata(ctx, bucket, key, meta); err != nil {
-		// Log error but don't fail the operation
-		// Metadata can be regenerated if needed
+		// If custom metadata was provided, fail the operation since user's explicit request cannot be fulfilled
+		// Basic metadata (ContentType, Size, ETag) can be regenerated if needed
+		if len(customMetadata) > 0 {
+			// Clean up the object file to maintain atomicity (S3 API contract: PutObject succeeds completely or not at all)
+			// This prevents orphaned objects with missing custom metadata
+			if removeErr := bucketFS.Remove(objectPath); removeErr != nil {
+				s.log.Error("failed to remove object after metadata save failure - object may be orphaned",
+					"bucket", bucket, "key", key, "metadata_error", err, "cleanup_error", removeErr)
+				return "", fmt.Errorf("failed to save object metadata and failed to cleanup object file: metadata error: %w, cleanup error: %v", err, removeErr)
+			}
+			return "", fmt.Errorf("failed to save custom metadata (object upload rolled back to maintain consistency): %w", err)
+		}
+		// Just log warning for basic metadata (can be regenerated)
 		s.log.Warn("failed to save object metadata", "bucket", bucket, "key", key, "error", err)
 	}
 
