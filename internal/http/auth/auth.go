@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
@@ -135,4 +136,43 @@ func (a *Authenticator) AuthenticateRequest(r *http.Request) (*metadata.User, er
 	}
 
 	return user, nil
+}
+
+// AuthenticatePresignedRequest validates an HTTP request using AWS Signature V4 pre-signed URL authentication.
+// This is used for temporary access via pre-signed URLs embedded in query parameters.
+//
+// Returns the authenticated user and expiration time if successful, or an error:
+// - ErrMissingPresignedParams: Required query parameters missing
+// - ErrPresignedURLExpired: The pre-signed URL has expired
+// - ErrUserNotFound: Access key doesn't exist
+// - ErrUserInactive: User account is not active
+// - ErrSignatureMismatch: Signature verification failed
+func (a *Authenticator) AuthenticatePresignedRequest(r *http.Request) (*metadata.User, time.Time, error) {
+	// Extract access key from X-Amz-Credential query parameter
+	accessKey, err := GetAccessKeyFromPresignedURL(r)
+	if err != nil {
+		return nil, time.Time{}, fmt.Errorf("%w: %v", ErrAuthenticationFailed, err)
+	}
+
+	// Look up user and get secret key
+	user, err := a.GetUserForAccessKey(r.Context(), accessKey)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	if user == nil {
+		return nil, time.Time{}, ErrUserNotFound
+	}
+
+	// Check if user account is active
+	if user.Status != "on" {
+		return nil, time.Time{}, ErrUserInactive
+	}
+
+	// Verify pre-signed URL signature and get expiration time
+	expiresAt, err := VerifyPresignedSignature(r, user.SecretKey)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+
+	return user, expiresAt, nil
 }

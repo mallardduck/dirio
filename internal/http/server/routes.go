@@ -313,6 +313,17 @@ func setupS3Routes(r *teapot.Router, deps *s3RouteDeps) {
 	r.GET("/{bucket}", deps.listObjects).Name("buckets.show").Action("s3:ListObjects")
 	r.DELETE("/{bucket}", deps.deleteBucket).Name("buckets.destroy").Action("s3:DeleteBucket")
 
+	// TODO(Future - MinIO compatibility): POST Policy Uploads (Browser-based Form Upload)
+	// MinIO mc `share upload` uses S3 POST policy for browser-based form uploads with multipart/form-data
+	// This is S3-compliant but different from pre-signed PUT URLs (which already work)
+	// Spec: https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html
+	// Handler would need to:
+	//   1. Parse multipart/form-data with policy document
+	//   2. Validate policy signature and expiration
+	//   3. Extract file from form field
+	//   4. Enforce policy conditions (bucket, key, content-type, etc.)
+	// r.POST("/{bucket}", deps.postObject).Name("buckets.post-policy-upload").Action("s3:PutObject")
+
 	// Query-based bucket operations
 	// ListObjectsV2 (preferred over v1)
 	r.QueryGET("/{bucket}", deps.listObjectsV2).QueryValue("list-type", "2").Name("buckets.listv2").Action("s3:ListObjectsV2")

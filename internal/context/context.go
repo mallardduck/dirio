@@ -25,6 +25,14 @@ const (
 	// IsAnonymousRequestKey marks a request as explicitly anonymous
 	// Set by auth middleware when no Authorization header is present
 	IsAnonymousRequestKey KeyID = "isAnonymousRequest"
+
+	// IsPreSignedRequestKey marks a request authenticated via pre-signed URL
+	// Set by auth middleware when request uses query-based authentication
+	IsPreSignedRequestKey KeyID = "isPreSignedRequest"
+
+	// PreSignedExpiresAtKey stores the expiration time of the pre-signed URL
+	// Used for auditing and logging purposes
+	PreSignedExpiresAtKey KeyID = "preSignedExpiresAt"
 )
 
 // WithAuthzDecision returns a new context with the authorization decision set
@@ -61,4 +69,29 @@ func GetUser(ctx context.Context) (*iam.User, error) {
 		return userdata, nil
 	}
 	return nil, fmt.Errorf("cannot get user from request context")
+}
+
+// WithPreSignedUser adds a user authenticated via pre-signed URL to context
+// Also marks the request as pre-signed and stores expiration for auditing
+func WithPreSignedUser(ctx context.Context, user *iam.User, expiresAt interface{}) context.Context {
+	ctx = context.WithValue(ctx, RequestUserKey, user)
+	ctx = context.WithValue(ctx, IsPreSignedRequestKey, true)
+	ctx = context.WithValue(ctx, PreSignedExpiresAtKey, expiresAt)
+	return ctx
+}
+
+// IsPreSignedRequest returns true if request was authenticated via pre-signed URL
+func IsPreSignedRequest(ctx context.Context) bool {
+	if v, ok := ctx.Value(IsPreSignedRequestKey).(bool); ok {
+		return v
+	}
+	return false
+}
+
+// GetPreSignedExpiresAt returns the expiration time of the pre-signed URL
+func GetPreSignedExpiresAt(ctx context.Context) (interface{}, bool) {
+	if t := ctx.Value(PreSignedExpiresAtKey); t != nil {
+		return t, true
+	}
+	return nil, false
 }

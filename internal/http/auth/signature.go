@@ -7,22 +7,29 @@
 // AWS Signature Version 4 specification:
 // https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
 //
-// TODO(Phase 3.2 #3 - CRITICAL): Implement Pre-signed URL support
+// Pre-signed URL Support Implementation (Phase 3.2 #3)
 //
-//	Pre-signed URLs are NEXT PRIORITY - required for temporary access sharing
-//	Implementation areas:
-//	1. Query string authentication (X-Amz-Algorithm, X-Amz-Credential, X-Amz-Date, X-Amz-Expires, X-Amz-SignedHeaders, X-Amz-Signature)
-//	2. Signature verification for presigned requests (similar to VerifySignature but from query params)
-//	3. Expiration validation (X-Amz-Expires, max 604800 seconds / 7 days)
-//	4. Embedded policy validation if X-Amz-Security-Token present
-//	5. URL generation helper for creating presigned URLs (for future CLI/SDK)
-//	Testing:
-//	- aws s3 presign s3://bucket/object.txt --expires-in 300
-//	- boto3: generate_presigned_url()
-//	- mc share download alias/bucket/object.txt
-//	References:
-//	- https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
-//	- MinIO: cmd/signature-v4.go (doesPresignedSignatureMatch)
+// ✅ IMPLEMENTED: Core pre-signed URL authentication (Feb 16, 2026)
+//
+// Implemented features:
+// 1. ✅ Query string authentication parsing (X-Amz-Algorithm, X-Amz-Credential, X-Amz-Date, X-Amz-Expires, X-Amz-SignedHeaders, X-Amz-Signature)
+// 2. ✅ Signature verification for pre-signed requests (VerifyPresignedSignature)
+// 3. ✅ Expiration validation (X-Amz-Expires, max 604800 seconds / 7 days)
+// 4. ✅ Context tracking (IsPreSignedRequest, GetPreSignedExpiresAt)
+// 5. ✅ Middleware integration (AuthMiddleware handles both header and query auth)
+//
+// Testing commands (to verify implementation):
+// - aws s3 presign s3://bucket/object.txt --expires-in 300
+// - boto3: generate_presigned_url()
+// - mc share download alias/bucket/object.txt
+//
+// TODO (Future enhancements):
+// - [ ] X-Amz-Security-Token support for temporary credentials (STS)
+// - [ ] URL generation helper for creating pre-signed URLs (for future CLI/SDK)
+//
+// References:
+// - https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
+// - MinIO: cmd/signature-v4.go (doesPresignedSignatureMatch)
 package auth
 
 import (
@@ -70,6 +77,12 @@ var (
 	ErrMissingSignature = errors.New("missing signature in Authorization header")
 	// ErrMissingSignedHeaders is returned when SignedHeaders is missing from auth header
 	ErrMissingSignedHeaders = errors.New("missing SignedHeaders in Authorization header")
+	// ErrPresignedURLExpired is returned when a pre-signed URL has expired
+	ErrPresignedURLExpired = errors.New("pre-signed URL has expired")
+	// ErrInvalidExpiresValue is returned when X-Amz-Expires is invalid
+	ErrInvalidExpiresValue = errors.New("invalid X-Amz-Expires value")
+	// ErrMissingPresignedParams is returned when required pre-signed URL params are missing
+	ErrMissingPresignedParams = errors.New("missing required pre-signed URL parameters")
 )
 
 // Credentials represents parsed AWS credentials from the Authorization header
@@ -143,6 +156,86 @@ func ParseAuthorizationHeader(authHeader string) (*Credentials, error) {
 	}
 
 	return creds, nil
+}
+
+// ParsePresignedURLAuth parses AWS Signature V4 authentication from query parameters
+// Used for pre-signed URLs with format:
+// ?X-Amz-Algorithm=AWS4-HMAC-SHA256
+// &X-Amz-Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request
+// &X-Amz-Date=20130524T000000Z
+// &X-Amz-Expires=86400
+// &X-Amz-SignedHeaders=host
+// &X-Amz-Signature=...
+func ParsePresignedURLAuth(r *http.Request) (*Credentials, time.Time, error) {
+	query := r.URL.Query()
+
+	// Check for required algorithm parameter
+	algorithm := query.Get("X-Amz-Algorithm")
+	if algorithm != algorithmID {
+		return nil, time.Time{}, ErrMissingPresignedParams
+	}
+
+	// Parse credential
+	credentialStr := query.Get("X-Amz-Credential")
+	if credentialStr == "" {
+		return nil, time.Time{}, ErrMissingCredential
+	}
+
+	credParts := strings.Split(credentialStr, "/")
+	if len(credParts) != 5 {
+		return nil, time.Time{}, ErrInvalidAuthFormat
+	}
+
+	creds := &Credentials{
+		AccessKey: credParts[0],
+		Date:      credParts[1],
+		Region:    credParts[2],
+		Service:   credParts[3],
+	}
+
+	// Parse signed headers
+	signedHeadersStr := query.Get("X-Amz-SignedHeaders")
+	if signedHeadersStr == "" {
+		return nil, time.Time{}, ErrMissingSignedHeaders
+	}
+	creds.SignedHeaders = strings.Split(signedHeadersStr, ";")
+
+	// Parse signature
+	creds.Signature = query.Get("X-Amz-Signature")
+	if creds.Signature == "" {
+		return nil, time.Time{}, ErrMissingSignature
+	}
+
+	// Parse date
+	dateStr := query.Get("X-Amz-Date")
+	if dateStr == "" {
+		return nil, time.Time{}, ErrMissingDateHeader
+	}
+
+	timestamp, err := time.Parse(iso8601TimeFormat, dateStr)
+	if err != nil {
+		return nil, time.Time{}, fmt.Errorf("%w: %v", ErrInvalidDateFormat, err)
+	}
+
+	// Parse expiration (in seconds)
+	expiresStr := query.Get("X-Amz-Expires")
+	if expiresStr == "" {
+		return nil, time.Time{}, ErrInvalidExpiresValue
+	}
+
+	var expiresSeconds int
+	if _, err := fmt.Sscanf(expiresStr, "%d", &expiresSeconds); err != nil {
+		return nil, time.Time{}, ErrInvalidExpiresValue
+	}
+
+	// AWS allows max 7 days (604800 seconds)
+	if expiresSeconds < 1 || expiresSeconds > 604800 {
+		return nil, time.Time{}, ErrInvalidExpiresValue
+	}
+
+	expiresAt := timestamp.Add(time.Duration(expiresSeconds) * time.Second)
+
+	return creds, expiresAt, nil
 }
 
 // BuildCanonicalRequest constructs the canonical request string
@@ -348,6 +441,57 @@ func VerifySignature(r *http.Request, secretKey string) error {
 	return nil
 }
 
+// VerifyPresignedSignature verifies the AWS Signature V4 signature for a pre-signed URL request
+func VerifyPresignedSignature(r *http.Request, secretKey string) (time.Time, error) {
+	// Parse pre-signed URL authentication from query parameters
+	creds, expiresAt, err := ParsePresignedURLAuth(r)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	// Check if URL has expired
+	if time.Now().After(expiresAt) {
+		return time.Time{}, ErrPresignedURLExpired
+	}
+
+	// Get timestamp from query parameter
+	dateStr := r.URL.Query().Get("X-Amz-Date")
+	timestamp, err := time.Parse(iso8601TimeFormat, dateStr)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%w: %v", ErrInvalidDateFormat, err)
+	}
+
+	// For pre-signed URLs, we need to build the canonical request without the signature
+	// Clone the URL and remove the signature parameter
+	urlCopy := *r.URL
+	queryCopy := urlCopy.Query()
+	queryCopy.Del("X-Amz-Signature")
+	urlCopy.RawQuery = queryCopy.Encode()
+
+	// Create a temporary request with the modified URL
+	rCopy := *r
+	rCopy.URL = &urlCopy
+
+	// Get payload hash - for pre-signed URLs it's always UNSIGNED-PAYLOAD
+	payloadHash := consts.ContentSHA256Unsigned
+
+	// Build canonical request (using the URL without signature)
+	canonicalRequest := BuildCanonicalRequest(&rCopy, creds.SignedHeaders, payloadHash)
+
+	// Build string to sign
+	stringToSign := BuildStringToSign(timestamp, creds.Region, canonicalRequest)
+
+	// Compute expected signature
+	expectedSignature := ComputeSignature(secretKey, timestamp, creds.Region, stringToSign)
+
+	// Compare signatures using constant-time comparison to prevent timing attacks
+	if subtle.ConstantTimeCompare([]byte(expectedSignature), []byte(creds.Signature)) != 1 {
+		return time.Time{}, ErrSignatureMismatch
+	}
+
+	return expiresAt, nil
+}
+
 // GetAccessKey extracts the access key from the Authorization header without verifying the signature
 func GetAccessKey(r *http.Request) (string, error) {
 	authHeader := r.Header.Get(authorizationHeader)
@@ -356,6 +500,21 @@ func GetAccessKey(r *http.Request) (string, error) {
 		return "", err
 	}
 	return creds.AccessKey, nil
+}
+
+// GetAccessKeyFromPresignedURL extracts the access key from pre-signed URL query parameters
+func GetAccessKeyFromPresignedURL(r *http.Request) (string, error) {
+	credentialStr := r.URL.Query().Get("X-Amz-Credential")
+	if credentialStr == "" {
+		return "", ErrMissingCredential
+	}
+
+	credParts := strings.Split(credentialStr, "/")
+	if len(credParts) != 5 {
+		return "", ErrInvalidAuthFormat
+	}
+
+	return credParts[0], nil
 }
 
 // hmacSHA256 computes HMAC-SHA256

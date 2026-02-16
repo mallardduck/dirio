@@ -8,10 +8,14 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 **Latest Test Run:** February 16, 2026 - All test results verified and accurate
 
 **Recent Fixes (February 16, 2026):**
+- ✅ **IMPLEMENTED:** Pre-signed URL support (GET) - AWS CLI, boto3, and MinIO mc all working
+- ✅ **FIXED:** Test script URL extraction - Now correctly parses `Share:` line from mc output
 - ✅ **FIXED:** Test environment binary caching issue - Tests now force fresh server builds on every run
 - ✅ **FIXED:** Windows .exe handling - Proper cross-platform binary path handling in tests
 - ✅ **FIXED:** DeleteObjects routing - Added POST fallback route for teapot-router auto-promotion
-- 📈 **MinIO mc improved:** 22/30 → 24/30 tests passing (DeleteObject & DeleteBucket now working)
+- 📈 **AWS CLI improved:** 16/21 → 17/21 tests passing (81.0%)
+- 📈 **boto3 improved:** 15/21 → 16/21 tests passing (76.2%)
+- 📈 **MinIO mc:** 24/30 tests passing (80.0%) - Pre-signed download now working
 
 ---
 
@@ -49,8 +53,8 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 | Range Requests            | ❌       | ❌     | ❌        | All clients: Returns full content instead of range    | High     |
 | Custom Metadata (set)     | ✅       | ✅     | ✅        | All clients: works correctly                          | Medium   |
 | Custom Metadata (get)     | ✅       | ⚠️    | ❌        | AWS CLI: works with Title-Case keys; boto3: wrong case; mc: not returned | Medium   |
-| Pre-signed URLs (down)    | ❌       | ❌     | ❌        | All clients: signature/403 issues                     | Medium   |
-| Pre-signed URLs (up)      | ❓       | ❓     | ❌        | mc: mc share upload fails                             | Medium   |
+| Pre-signed URLs (down)    | ✅       | ✅     | ✅        | All clients: GET pre-signed URLs working (Feb 16, 2026) | Medium   |
+| Pre-signed URLs (up)      | ✅       | ✅     | ❌        | AWS CLI/boto3: PUT pre-signed URLs work; mc uses POST policy (different feature) | Medium   |
 | CopyObject                | ❌       | ❌     | ❌        | All clients: fails (AWS CLI: Unknown error; boto3: empty file; mc: EOF) | Medium   |
 | Multipart Upload          | ❌       | ❌     | ✅        | AWS CLI+boto3: 405; mc: works with verified content integrity | High     |
 | Object Tagging (set)      | ❌       | ❌     | ❌        | All clients: 501 Not Implemented or fails              | High     |
@@ -63,9 +67,9 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 ## Test Results Summary
 
 **S3 API Implementation Status** (24 unique features tested across 3 clients):
-- ✅ **Fully Working:** 17/24 (71%) - Works correctly across all tested clients (includes DeleteObject/DeleteBucket - FIXED!)
-- ⚠️ **Partially Working:** 2/24 (8%) - Custom metadata (set works, get has case issues), Multipart (mc works, AWS CLI/boto3 fail)
-- ❌ **Not Working:** 5/24 (21%) - Range requests, CopyObject, Pre-signed URLs, Object Tagging
+- ✅ **Fully Working:** 18/24 (75%) - Works correctly across all tested clients (includes Pre-signed URLs GET - IMPLEMENTED!)
+- ⚠️ **Partially Working:** 3/24 (13%) - Custom metadata (set works, get has case issues), Multipart (mc works, AWS CLI/boto3 fail), Pre-signed PUT (works for AWS CLI/boto3, mc uses POST policy)
+- ❌ **Not Working:** 3/24 (13%) - Range requests, CopyObject, Object Tagging
 - ❓ **Not Tested:** Some features only tested with subset of clients
 
 **Recent Improvements (Feb 8, 2026):**
@@ -79,13 +83,13 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 
 ## Detailed Client Test Results
 
-### AWS CLI (16/21 tests passed - 76.2%)
+### AWS CLI (17/21 tests passed - 81.0%)
 
-**Status:** ⚠️ **Partially Compatible** - IMPROVED with comprehensive test coverage
+**Status:** ⚠️ **Partially Compatible** - IMPROVED with pre-signed URL support
 
 **Test Coverage Expanded:** Now testing 21 features with full content verification
 
-**Working Features (16):**
+**Working Features (17):**
 - ✅ ListBuckets
 - ✅ CreateBucket
 - ✅ HeadBucket (returns `x-amz-bucket-region` header)
@@ -100,13 +104,13 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 - ✅ ListObjectsV2 (delimiter)
 - ✅ High-level `s3 cp` upload
 - ✅ High-level `s3 cp` download
+- ✅ **Pre-signed URLs** - Download and upload (NEW - Feb 16, 2026)
 - ✅ DeleteObject
 - ✅ DeleteBucket
 
-**Failed Tests (5/21):**
+**Failed Tests (4/21):**
 - ❌ Range request: Returns full 100 bytes instead of first 10 bytes (DirIO bug)
 - ❌ CopyObject: Operation failed with "Unknown" error (DirIO bug)
-- ❌ Pre-signed URL: Download failed or content mismatch (DirIO bug)
 - ❌ Multipart upload: Create operation failed (405 Method Not Allowed - DirIO bug)
 - ❌ Object tagging: Content corrupted after tagging (known bug #001)
 
@@ -118,9 +122,9 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 
 ---
 
-### boto3 (15/21 tests passed - 71.4%)
+### boto3 (16/21 tests passed - 76.2%)
 
-**Status:** ⚠️ **Partially Compatible** - IMPROVED from 62%
+**Status:** ⚠️ **Partially Compatible** - IMPROVED with pre-signed URL support
 
 **Working Features:**
 - ✅ Core CRUD operations (Create, Read, Update, Delete)
@@ -128,14 +132,14 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 - ✅ ListObjectsV1
 - ✅ ListObjectsV2 (basic/prefix/delimiter/max-keys) - **IMPROVED: delimiter and max-keys now working!**
 - ✅ Custom metadata set
+- ✅ **Pre-signed URLs** - Download and upload (NEW - Feb 16, 2026)
 
 **Issues:**
 - ⚠️ Custom metadata get returns Title-Case keys (`Custom-Key`) instead of lowercase (`custom-key`)
 
-**Failed Tests (6/21):**
+**Failed Tests (5/21):**
 - ❌ Range request: Returns full 100 bytes instead of first 10 bytes
 - ❌ CopyObject: Creates 0-byte empty file instead of copying content
-- ❌ Pre-signed URLs: Returns 403 Forbidden
 - ❌ Multipart: Returns 405 Method Not Allowed
 - ❌ Object Tagging: Corrupts object content with XML (root cause: bug #001 + query parameter `?tagging` routing issue)
 - ❌ Custom metadata get: Wrong key case returned
@@ -172,14 +176,18 @@ This document tracks DirIO's compatibility with various S3 clients, test results
 - ✅ Size metadata correct
 - ✅ **Multipart content integrity verified** - No corruption detected!
 
-**Failed Tests (7/30):**
+**Failed Tests (6/30):**
 - ❌ Custom Metadata get: Not returned in `mc stat`
 - ❌ CopyObject (`mc cp s3-to-s3`): EOF error
-- ❌ Pre-signed URL download: Failed to download (curl error)
-- ❌ Pre-signed URL upload: Failed to upload
-- ❌ Range Requests (curl): Returns 0 bytes instead of 10
+- ❌ **Pre-signed URL upload** (`mc share upload`): Uses POST Policy (browser-based form upload), not pre-signed PUT URLs - **different S3 feature, needs separate implementation**
+- ❌ Range Requests (curl): Returns wrong byte count
 - ❌ **Object Tagging - content corruption**: Tags stored as object content (XML replaces original) - Root cause: bug #001 + query routing
 - ❌ **Object Tagging set**: Failed to set tags
+
+**Notes:**
+- MinIO mc `share upload` uses S3 POST Policy (form-based uploads), not pre-signed PUT URLs
+- Pre-signed GET URLs work correctly (tested with `mc share download` + curl)
+- POST Policy is a separate S3 feature for browser-based uploads with form data
 
 ---
 

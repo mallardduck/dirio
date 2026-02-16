@@ -191,7 +191,8 @@ else
 fi
 
 # Pre-signed URLs (download)
-PRESIGNED_URL=$(mc share download --expire=1h ${MC_ALIAS}/${BUCKET}/test.txt 2>&1 | grep -o 'https\?://[^ ]*' | head -1)
+# Extract the Share: line which contains the actual pre-signed URL with query params
+PRESIGNED_URL=$(mc share download --expire=1h ${MC_ALIAS}/${BUCKET}/test.txt 2>&1 | awk '/^Share:/ {print $2}')
 if [ -n "$PRESIGNED_URL" ]; then
   # Try to download using the pre-signed URL
   curl -f -s "$PRESIGNED_URL" > /tmp/presigned-download.txt 2>&1
@@ -205,7 +206,8 @@ else
 fi
 
 # Pre-signed URLs (upload)
-UPLOAD_URL=$(mc share upload --expire=1h ${MC_ALIAS}/${BUCKET}/presigned-upload.txt 2>&1 | grep -o 'curl.*' | sed 's/.*-X PUT //' | grep -o 'https\?://[^ ]*' | head -1)
+# Extract the Share: line which contains the actual pre-signed URL with query params
+UPLOAD_URL=$(mc share upload --expire=1h ${MC_ALIAS}/${BUCKET}/presigned-upload.txt 2>&1 | awk '/^Share:/ {print $2}')
 if [ -n "$UPLOAD_URL" ]; then
   echo "presigned upload content" > /tmp/presigned-upload.txt
   curl -f -s -X PUT -T /tmp/presigned-upload.txt "$UPLOAD_URL" 2>&1 >/dev/null
@@ -296,7 +298,8 @@ rm -f /tmp/large-file.dat /tmp/large-file-downloaded.dat
 
 # Range Requests (partial download)
 # mc doesn't have direct range request support, but we can test via curl with mc share
-RANGE_URL=$(mc share download --expire=1h ${MC_ALIAS}/${BUCKET}/metadata-test.txt 2>&1 | grep -o 'https\?://[^ ]*' | head -1)
+# Extract the Share: line which contains the actual pre-signed URL with query params
+RANGE_URL=$(mc share download --expire=1h ${MC_ALIAS}/${BUCKET}/metadata-test.txt 2>&1 | awk '/^Share:/ {print $2}')
 if [ -n "$RANGE_URL" ]; then
   # Download only first 10 bytes
   PARTIAL=$(curl -f -s -r 0-9 "$RANGE_URL" 2>&1)
