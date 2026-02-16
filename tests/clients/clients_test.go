@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -143,8 +144,18 @@ func startTestServer(t *testing.T) *TestServer {
 	// Find project root
 	projectRoot := findProjectRoot(t)
 
-	// Build the server
-	buildCmd := exec.Command("go", "build", "-o", filepath.Join(projectRoot, "bin", "dirio-test"), "./cmd/server")
+	// Remove old binary to ensure fresh build
+	binaryPath := filepath.Join(projectRoot, "bin", "dirio-test")
+	os.Remove(binaryPath)          // Remove without .exe
+	os.Remove(binaryPath + ".exe") // Remove .exe version on Windows
+
+	// Build the server (force fresh build)
+	// On Windows, add .exe extension to output path
+	buildOutput := binaryPath
+	if runtime.GOOS == "windows" {
+		buildOutput += ".exe"
+	}
+	buildCmd := exec.Command("go", "build", "-a", "-o", buildOutput, "./cmd/server")
 	buildCmd.Dir = projectRoot
 	output, err := buildCmd.CombinedOutput()
 	require.NoError(t, err, "Failed to build server: %s", string(output))
@@ -161,8 +172,11 @@ func startTestServer(t *testing.T) *TestServer {
 	// Find available port
 	port := findAvailablePort(t)
 
-	// Start server
+	// Start server (on Windows, go build adds .exe automatically)
 	serverPath := filepath.Join(projectRoot, "bin", "dirio-test")
+	if runtime.GOOS == "windows" {
+		serverPath += ".exe"
+	}
 	cmd := exec.Command(serverPath, "serve",
 		"--port", fmt.Sprintf("%d", port),
 		"--data-dir", dataDir,

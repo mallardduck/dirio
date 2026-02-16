@@ -2,10 +2,10 @@
 # Common configuration for all client tests
 
 # Server configuration
-export DIRIO_PORT="${DIRIO_PORT:-9876}"
+export DIRIO_PORT="${DIRIO_PORT:-9000}"
 export DIRIO_ENDPOINT="http://localhost:${DIRIO_PORT}"
-export DIRIO_ACCESS_KEY="${DIRIO_ACCESS_KEY:-testaccess}"
-export DIRIO_SECRET_KEY="${DIRIO_SECRET_KEY:-testsecret}"
+export DIRIO_ACCESS_KEY="${DIRIO_ACCESS_KEY:-dirio-admin}"
+export DIRIO_SECRET_KEY="${DIRIO_SECRET_KEY:-dirio-admin-secret}"
 export DIRIO_REGION="${DIRIO_REGION:-us-east-1}"
 
 # Test data directory (created per test run)

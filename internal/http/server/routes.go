@@ -7,6 +7,8 @@ import (
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 
+	"github.com/mallardduck/dirio/internal/http/server/health"
+
 	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/logging"
 
@@ -34,7 +36,7 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 	r.GET("/favicon.ico", favicon.HandleFavicon).Name("favicon")
 	r.GET("/.internal/routes", teapot.NewListRoutesHandler(r, nil)).Name("debug.routes").Action("dirio:ListRoutes")
 
-	r.GET("/healthz", RouteNotImplemented).Name("health").Action("dirio:Health")
+	r.GET("/healthz", health.HandleHealth).Name("health").Action("dirio:Health")
 
 	// MinIO Admin API routes (authenticated)
 	var adminDeps *adminRouteDeps
