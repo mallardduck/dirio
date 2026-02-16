@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/util"
+	"github.com/google/uuid"
 
 	contextInt "github.com/mallardduck/dirio/internal/context"
 
@@ -45,10 +46,10 @@ type PolicyStatement = iam.Statement
 
 // BucketMetadata represents bucket configuration
 type BucketMetadata struct {
-	Version      string          `json:"version"` // DirIO metadata version
-	Name         string          `json:"name"`
-	Owner        string          `json:"owner"`
-	Created      time.Time       `json:"created"`
+	Version      string          `json:"version"`                // DirIO metadata version
+	Name         string          `json:"name"`                   // Bucket name
+	Owner        *uuid.UUID      `json:"owner,omitempty"`        // User UUID; nil = admin-only (no specific owner)
+	Created      time.Time       `json:"created"`                // Creation timestamp
 	BucketPolicy *PolicyDocument `json:"bucketPolicy,omitempty"` // S3 bucket policy (resource-based)
 
 	// Extended MinIO metadata (imported but may not be actively used yet)
@@ -73,11 +74,12 @@ type BucketMetadata struct {
 
 // ObjectMetadata represents object metadata
 type ObjectMetadata struct {
-	Version        string            `json:"version"` // DirIO metadata version
-	ContentType    string            `json:"contentType"`
-	Size           int64             `json:"size"`
-	ETag           string            `json:"etag"`
-	LastModified   time.Time         `json:"lastModified"`
+	Version        string            `json:"version"`                  // DirIO metadata version
+	Owner          *uuid.UUID        `json:"owner,omitempty"`          // User UUID; nil = admin-only (no specific owner)
+	ContentType    string            `json:"contentType"`              // MIME type
+	Size           int64             `json:"size"`                     // Object size in bytes
+	ETag           string            `json:"etag"`                     // Entity tag (MD5 hash)
+	LastModified   time.Time         `json:"lastModified"`             // Last modification timestamp
 	CustomMetadata map[string]string `json:"customMetadata,omitempty"` // Custom headers like Cache-Control, Content-Disposition, x-amz-meta-*, etc.
 	Tags           map[string]string `json:"tags,omitempty"`           // Object tags (key-value pairs)
 }
@@ -125,10 +127,17 @@ func (m *Manager) CreateBucket(ctx context.Context, bucket string) error {
 		return fmt.Errorf("failed to get user: %w", err)
 	}
 
+	// Determine owner: admin as creator → nil (implicit), regular user → UUID (explicit)
+	var ownerUUID *uuid.UUID
+	if user.UUID != iam.AdminUserUUID {
+		ownerUUID = &user.UUID // Regular user gets explicit ownership
+	}
+	// Admin leaves ownerUUID nil, which omits field with omitempty
+
 	meta := BucketMetadata{
 		Version: BucketMetadataVersion,
 		Name:    bucket,
-		Owner:   user.Username,
+		Owner:   ownerUUID, // nil for admin creator, UUID pointer for user creator
 		Created: time.Now(),
 	}
 
@@ -289,15 +298,28 @@ func (m *Manager) CreateOrUpdateUser(ctx context.Context, user *User) error {
 		return fmt.Errorf("accessKey is required")
 	}
 
-	// Use AccessKey as username (matches MinIO behavior)
-	username := user.AccessKey
+	if user.Username == "" {
+		return fmt.Errorf("username is required")
+	}
+
+	// Generate UUID for new users or preserve existing UUID
+	if user.UUID == uuid.Nil {
+		// Check if user already exists
+		existing, err := m.GetUser(ctx, user.Username)
+		if err == nil && existing != nil && existing.UUID != uuid.Nil {
+			// Preserve existing UUID on update
+			user.UUID = existing.UUID
+		} else {
+			// Generate new UUID for new user
+			user.UUID = uuid.New()
+		}
+	}
 
 	// Set metadata fields
 	user.Version = iam.UserMetadataVersion
-	user.Username = username
 	user.UpdatedAt = time.Now()
 
-	return m.SaveUser(ctx, username, user)
+	return m.SaveUser(ctx, user.Username, user)
 }
 
 // UpdateUser updates an existing user's mutable fields

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/go-git/go-billy/v5/util"
+	"github.com/google/uuid"
 
 	"github.com/mallardduck/dirio/internal/config/data"
 
@@ -95,9 +96,11 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 		for username, minioUser := range result.Users {
 			dirioUser := &User{
 				Version:          iam.UserMetadataVersion,
+				UUID:             uuid.New(), // Generate UUID for imported user
+				Username:         username,   // MinIO uses accessKey as username
 				AccessKey:        minioUser.AccessKey,
 				SecretKey:        minioUser.SecretKey,
-				Status:           minioUser.Status,
+				Status:           iam.UserStatus(minioUser.Status), // Convert string to UserStatus
 				UpdatedAt:        minioUser.UpdatedAt,
 				AttachedPolicies: minioUser.AttachedPolicy,
 			}
@@ -126,7 +129,7 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 			meta := &BucketMetadata{
 				Version:      BucketMetadataVersion,
 				Name:         minioBucket.Name,
-				Owner:        "root", // MinIO doesn't store owner in bucket metadata
+				Owner:        nil, // nil = admin-only (MinIO doesn't store owner, assume admin created)
 				Created:      minioBucket.Created,
 				BucketPolicy: bucketPolicy,
 

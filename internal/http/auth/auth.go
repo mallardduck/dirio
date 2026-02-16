@@ -9,6 +9,7 @@ import (
 
 	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
+	"github.com/mallardduck/dirio/pkg/iam"
 )
 
 var authLogger = logging.Component("auth")
@@ -69,7 +70,7 @@ func (a *Authenticator) ValidateCredentials(ctx context.Context, accessKey, secr
 		return false
 	}
 
-	return user.SecretKey == secretKey && user.Status == "on"
+	return user.SecretKey == secretKey && user.Status.IsActive()
 }
 
 // GetUserForAccessKey retrieves user information for an access key
@@ -77,18 +78,22 @@ func (a *Authenticator) GetUserForAccessKey(ctx context.Context, accessKey strin
 	// Check primary root (CLI admin)
 	if accessKey == a.rootAccessKey {
 		return &metadata.User{
+			UUID:      iam.AdminUserUUID, // AdminUserUUID - stable across key rotation
+			Username:  "admin",
 			AccessKey: a.rootAccessKey,
 			SecretKey: a.rootSecretKey,
-			Status:    "on",
+			Status:    iam.UserStatusActive,
 		}, nil
 	}
 
 	// Check alternative root (data config admin)
 	if a.altRootAccessKey != "" && accessKey == a.altRootAccessKey {
 		return &metadata.User{
+			UUID:      iam.AdminUserUUID, // AdminUserUUID - same UUID for both admins
+			Username:  "admin",
 			AccessKey: a.altRootAccessKey,
 			SecretKey: a.altRootSecretKey,
-			Status:    "on",
+			Status:    iam.UserStatusActive,
 		}, nil
 	}
 
@@ -126,7 +131,7 @@ func (a *Authenticator) AuthenticateRequest(r *http.Request) (*metadata.User, er
 	}
 
 	// Check if user account is active
-	if user.Status != "on" {
+	if !user.Status.IsActive() {
 		return nil, ErrUserInactive
 	}
 
@@ -164,7 +169,7 @@ func (a *Authenticator) AuthenticatePresignedRequest(r *http.Request) (*metadata
 	}
 
 	// Check if user account is active
-	if user.Status != "on" {
+	if !user.Status.IsActive() {
 		return nil, time.Time{}, ErrUserInactive
 	}
 

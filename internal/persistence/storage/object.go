@@ -10,9 +10,12 @@ import (
 	"time"
 
 	"github.com/go-git/go-billy/v5"
+	"github.com/google/uuid"
 
+	contextInt "github.com/mallardduck/dirio/internal/context"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/persistence/path"
+	"github.com/mallardduck/dirio/pkg/iam"
 )
 
 // Object represents an S3 object with content
@@ -206,9 +209,21 @@ func (s *Storage) PutObject(ctx context.Context, bucket, key string, content io.
 		return "", fmt.Errorf("failed to rename object: %w", err)
 	}
 
+	// Get user from context for ownership tracking
+	// Golden Rule: Admin as creator → nil (implicit access), regular user → UUID (explicit ownership)
+	var ownerUUID *uuid.UUID
+	if user, err := contextInt.GetUser(ctx); err == nil && user != nil {
+		// Only set owner UUID if NOT admin (admin access is implicit, not ownership)
+		if user.UUID != iam.AdminUserUUID {
+			ownerUUID = &user.UUID
+		}
+	}
+	// Note: nil owner = admin-only access (if created by admin) or anonymous (if no user context)
+
 	// Store object metadata
 	meta := &metadata.ObjectMetadata{
 		Version:        metadata.ObjectMetadataVersion,
+		Owner:          ownerUUID, // nil for admin, UUID pointer for regular user
 		ContentType:    contentType,
 		Size:           size,
 		ETag:           etag,

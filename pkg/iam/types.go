@@ -1,6 +1,10 @@
 package iam
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 // Metadata format versions
 const (
@@ -10,13 +14,14 @@ const (
 
 // User represents a user with credentials
 type User struct {
-	Version          string    `json:"version"`  // DirIO metadata version
-	Username         string    `json:"username"` // The username (also stored as filename)
-	AccessKey        string    `json:"accessKey"`
-	SecretKey        string    `json:"secretKey"`
-	Status           string    `json:"status"`
-	UpdatedAt        time.Time `json:"updatedAt"`
-	AttachedPolicies []string  `json:"attachedPolicies,omitempty"` // Names of attached IAM policies (supports multiple)
+	Version          string     `json:"version"`                    // DirIO metadata version
+	UUID             uuid.UUID  `json:"uuid"`                       // Stable user identifier (immutable, survives key rotation)
+	Username         string     `json:"username"`                   // Display name (mutable)
+	AccessKey        string     `json:"accessKey"`                  // Rotatable credential
+	SecretKey        string     `json:"secretKey"`                  // Rotatable credential
+	Status           UserStatus `json:"status"`                     // User account status (on/off)
+	UpdatedAt        time.Time  `json:"updatedAt"`                  // Last modification time
+	AttachedPolicies []string   `json:"attachedPolicies,omitempty"` // Names of attached IAM policies (supports multiple)
 }
 
 // PolicyDocument represents an AWS IAM Policy Document (used by both IAM policies and bucket policies)

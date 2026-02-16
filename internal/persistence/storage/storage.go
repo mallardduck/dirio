@@ -235,13 +235,14 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 	var bucketOwner *s3types.Owner
 	if fetchOwner {
 		bucketMeta, err := s.metadata.GetBucketMetadata(ctx, bucket)
-		if err == nil && bucketMeta.Owner != "" {
+		if err == nil && bucketMeta.Owner != nil {
+			ownerStr := bucketMeta.Owner.String()
 			bucketOwner = &s3types.Owner{
-				ID:          bucketMeta.Owner,
-				DisplayName: bucketMeta.Owner,
+				ID:          ownerStr,
+				DisplayName: ownerStr,
 			}
 		}
-		// If we can't get bucket metadata, that's ok - owner will be nil
+		// If we can't get bucket metadata or owner is nil, that's ok - owner will be nil
 	}
 
 	// Collect all matching objects

@@ -16,6 +16,7 @@ import (
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
 	"github.com/mallardduck/dirio/internal/service/policy"
 	"github.com/mallardduck/dirio/internal/service/user"
+	iamPkg "github.com/mallardduck/dirio/pkg/iam"
 )
 
 type userHTTPService struct {
@@ -97,9 +98,9 @@ func (s *userHTTPService) CreateUser(w http.ResponseWriter, r *http.Request) {
 		"adminUser", adminUser.AccessKey,
 	).Info("Creating user")
 
-	status := "off"
+	status := iamPkg.UserStatusDisabled
 	if enabled {
-		status = "on"
+		status = iamPkg.UserStatusActive
 	}
 
 	// Use the user service to create the user
@@ -210,12 +211,12 @@ func (s *userHTTPService) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Convert MinIO status format (enabled/disabled) to our format (on/off)
-	var userStatus string
+	var userStatus iamPkg.UserStatus
 	switch status {
 	case "enabled":
-		userStatus = "on"
+		userStatus = iamPkg.UserStatusActive
 	case "disabled":
-		userStatus = "off"
+		userStatus = iamPkg.UserStatusDisabled
 	default:
 		s.log.Error("Invalid status value", "status", status)
 		w.WriteHeader(http.StatusBadRequest)

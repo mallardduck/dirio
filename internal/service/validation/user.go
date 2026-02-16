@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
+	"github.com/mallardduck/dirio/pkg/iam"
 )
 
 const (
@@ -40,9 +41,6 @@ func ValidateSecretKey(secretKey string) error {
 }
 
 // ValidateStatus validates a user status
-func ValidateStatus(status string) error {
-	if status != "" && status != "on" && status != "off" {
-		return svcerrors.NewValidationError("Status", "status must be 'on' or 'off'")
-	}
-	return nil
+func ValidateStatus(status iam.UserStatus) error {
+	return status.Validate()
 }

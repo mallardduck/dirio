@@ -45,7 +45,7 @@ func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*iam.User
 	// Set default status if not provided
 	status := req.Status
 	if status == "" {
-		status = "on"
+		status = iam.UserStatusActive
 	}
 
 	// Create user with automatic field management

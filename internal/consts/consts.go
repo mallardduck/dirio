@@ -1,5 +1,7 @@
 package consts
 
+import "github.com/google/uuid"
+
 const (
 	DefaultBucketLocation = "us-east-1"
 )
@@ -23,4 +25,12 @@ const (
 
 	// ContentSHA256Unsigned is the value for unsigned payloads
 	ContentSHA256Unsigned = "UNSIGNED-PAYLOAD"
+)
+
+const (
+	AdminUUIDString = "badfc0de-fadd-fc0f-fee0-000dadbeef00"
+)
+
+var (
+	AdminUUID uuid.UUID = uuid.MustParse(AdminUUIDString)
 )
