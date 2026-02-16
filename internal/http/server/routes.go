@@ -105,7 +105,7 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 			deleteObjects:           bucket(deps.APIHandler.S3Handler.DeleteObjects),
 			headObject:              object(deps.APIHandler.S3Handler.HeadObject),
 			putObject:               object(deps.APIHandler.S3Handler.PutObject),
-			copyObject:              RouteNotImplemented,
+			copyObject:              object(deps.APIHandler.S3Handler.CopyObject),
 			getObject:               object(deps.APIHandler.S3Handler.GetObject),
 			deleteObject:            object(deps.APIHandler.S3Handler.DeleteObject),
 			getObjectACL:            RouteNotImplemented,

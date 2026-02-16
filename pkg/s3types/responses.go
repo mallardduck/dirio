@@ -58,3 +58,10 @@ type DeleteObjectsResult struct {
 	Deleted []DeletedObject `xml:"Deleted,omitempty"`
 	Errors  []DeleteError   `xml:"Error,omitempty"`
 }
+
+// CopyObjectResult is the response for CopyObject operation
+type CopyObjectResult struct {
+	XMLName      xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CopyObjectResult"`
+	LastModified string   `xml:"LastModified"`
+	ETag         string   `xml:"ETag"`
+}
