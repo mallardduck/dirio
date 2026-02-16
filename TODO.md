@@ -1,218 +1,101 @@
 # DirIO Development Roadmap
 
-Current status: **Phase 3.2 - Features with Policy Integration** (Policy Engine Foundation complete!)
+Current status: **Phase 3.2 COMPLETE** - All critical S3 features implemented!
 
 ## Recent Updates
 
-**February 16, 2026:**
-- ✅ **Phase 3.2 COMPLETE** - All critical S3 features implemented!
-  - **Test Framework Refactored** - Structured JSON output with automated feature matrix
-  - AWS CLI: **21/23 tests passed (91%)** with content integrity validation
-  - boto3: **22/23 tests passed (96%)** with content integrity validation 🎉
-  - MinIO mc: **20/23 tests passed (87%)** with content integrity validation
-  - All clients test same 23 canonical S3 operations for consistent comparison
-- ✅ **Multipart Upload** - All 5 handlers implemented and working across all clients
-- ✅ **Pre-signed URLs** - Query-based SigV4 authentication with expiration validation
-- ✅ **CopyObject** - S3-to-S3 copy with metadata, ISO 8601 dates for MinIO mc compatibility
-- ✅ **Range Requests** - 206 Partial Content support for resumable downloads
-- ✅ **DeleteObject/DeleteBucket for MinIO mc** - POST fallback route for QueryPOST auto-promotion
-- ✅ **Custom Metadata** - Resolved via case-insensitive tests (HTTP spec compliant)
-- ✅ **ListObjectsV2 Pagination** - Bug #007 FIXED - NextContinuationToken and StartAfter now populated
-- ✅ **ListObjectsV2 Delimiter** - Bug #006 FIXED - CommonPrefixes now working for boto3
-- ✅ **Object Tagging** - Working correctly with content preservation!
-- ⚠️ **Known Issue:** MinIO mc PreSignedURL_Upload has content mismatch (new framework caught this!)
+**February 16, 2026 - Phase 3.2 Complete:**
+- ✅ **Core S3 Features:** Multipart upload, pre-signed URLs, CopyObject, range requests, object tagging
+- ✅ **Test Framework:** Structured JSON output with content integrity validation (MD5 hashes)
+- ✅ **Client Compatibility:** AWS CLI (91%), boto3 (96%), MinIO mc (87%) - 23 canonical operations tested
+- ✅ **Bug Fixes:** ListObjectsV2 pagination & delimiter, chunked encoding, MinIO mc DELETE operations
+- 📁 **Known Issues:** See [bugs/](bugs/) for tracking (1 minor issue: MinIO mc PreSignedURL_Upload)
 
-**📁 Known Issues:** See [bugs/](bugs/) directory for detailed bug reports and tracking
+## Phase 1: MVP Core ✅
 
-## Phase 1: MVP Core ✅ (Scaffolded)
+- [x] Project structure and HTTP server setup
+- [x] Storage backend interface and metadata manager
+- [x] API handlers (skeleton) and MinIO import logic
+- [x] Integration tests for bucket, object, and ListObjectsV2 operations
+- [x] Basic logging and error handling
 
-### Completed (Scaffold)
-- [x] Project structure
-- [x] Basic HTTP server setup
-- [x] Storage backend interface
-- [x] Metadata manager
-- [x] API handlers (skeleton)
-- [x] MinIO import logic (skeleton)
-
-### Remaining for Phase 1
-- [x] Fix compilation errors
-- [x] Implement missing storage error types in API handlers
-- [x] Add go.sum file (run `go mod tidy`)
-- [x] Test basic server startup
-- [x] Test bucket operations (create, list, delete) - Integration tests in `tests/integration/bucket_test.go`
-- [x] Test object operations (put, get, head, delete) - Integration tests in `tests/integration/object_test.go`
-- [x] Test ListObjectsV2 with various parameters - Integration tests in `tests/integration/list_objects_test.go`
-- [x] Add basic logging
-
-## Phase 1.5: Configuration & Service Discovery
+## Phase 1.5: Configuration & Service Discovery ✅
 
 ### Configuration Framework
-- [x] Add spf13/cobra for CLI command structure
-- [x] Add spf13/viper for configuration management
-- [x] Define configuration structure (ServerConfig)
-- [x] Support CLI flags, ENV vars, and YAML config file
-- [x] Default config locations (`~/.dirio/config.yaml`, `/etc/dirio/config.yaml`)
-- [x] Global config values system similar to [SCC-Operator internal/config](https://github.com/rancher/scc-operator/tree/main/internal/config) (minus ConfigMap support) - Implemented in `internal/config/`
-- [x] Config validation and sensible defaults - Settings.Validate() in `internal/config/config.go`
+- [x] Cobra CLI structure, Viper config management
+- [x] Support CLI flags, ENV vars, YAML config (`~/.dirio/config.yaml`, `/etc/dirio/config.yaml`)
+- [x] Global config system (`internal/config/`) with validation
 
-### mDNS Service Discovery ✅
-- Q: How do we know the IP to use for mDNS record?
-  - A: Use the "outbound IP" method: create a UDP connection to 8.8.8.8:80 (doesn't send packets) and get the local address the OS would use. Fallback: enumerate network interfaces and pick first non-loopback IPv4. See `internal/mdns/ip.go`.
-- Q: Assume we must support simple ":9000" port binding - how do we look up IP?
-  - A: Same approach - `GetLocalIP()` in `internal/mdns/ip.go` auto-detects the appropriate IP address.
-- [x] Add github.com/hashicorp/mdns dependency
-- [x] Implement mDNS service registration - `internal/mdns/mdns.go`
-- [x] Multi-instance support: mDNS name format `{service}-{hostname}.local` (e.g., `dirio-s3-macbook.local`)
-  - Allows multiple DirIO instances to coexist on the same network
-  - `--mdns-name` flag configures service name (default: `dirio-s3`)
-  - `--mdns-hostname` flag overrides hostname component (default: system hostname)
-  - Advertised as: `{mdns-name}.{mdns-hostname}.local`
-- [x] Graceful mDNS shutdown on server stop - integrated with signal handling in `internal/server/server.go`
-- [x] Graceful HTTP server shutdown with SIGINT/SIGTERM handling
+### mDNS Service Discovery
+- [x] Service registration with auto IP detection (`internal/mdns/mdns.go`)
+- [x] Multi-instance support: `{service}-{hostname}.local` format
+- [x] Graceful shutdown with SIGINT/SIGTERM handling
 
-### Domain-Aware URL Generation ✅
-- [x] Add CanonicalDomain configuration option
-- [x] Implement request domain detection (Host header)
-- [x] Build URL generation helpers (internal vs canonical)
-- [x] Update API responses to use appropriate domain
-- [x] Mock/test domain-aware URL generation
+### Domain-Aware URL Generation
+- [x] CanonicalDomain configuration with Host header detection
+- [x] URL generation helpers for internal vs canonical domains
 
 ### Testing
-- [x] Test MinIO import with real data - Comprehensive tests in `internal/minio/import_test.go`
-- [x] Test mDNS registration and discovery - Unit tests in `internal/mdns/mdns_test.go`
-- [x] Test URL generation with different Host headers - Tests in `internal/urlbuilder/urlbuilder_test.go`
-- [x] Test config loading from CLI/ENV/file with precedence - Tests in `internal/config/config_test.go`
+- [x] MinIO import, mDNS discovery, URL generation, config precedence tests
 
-## Phase 2: Authentication, Security Enhance & Improved MinIO Imports
+## Phase 2: Authentication, Security & MinIO Import ✅
 
-### Authentication ✅
-- [x] Add request ID generation
-- [x] Add access logging
-- [x] Add authentication middleware
-- [x] Implement AWS Signature V4 authentication
-- [x] Test with AWS CLI
+### Authentication
+- [x] AWS Signature V4 authentication with request ID and access logging
+- [x] Authentication middleware, tested with AWS CLI
 
-### Security Enhance
-- [x] Import github.com/go-git/go-billy
-- [x] Create an internal path package to make using go-billy easier
-  - It should provide FS helpers that will be helpful for how we read/write to buckets
-  - There should be a R/O FS exposed to access and read the Minio metadata.
-  - There should be a R/W FS exposed for DirIO metadata
-  - A helper to get FS for specific buckets
-  - A helper to get "root data dir" for creating new bucket Dirs
-- [x] Refactor and replace all stdlib os.Open (and similar FS) calls with new go-billy based pkg
+### Security Enhancement
+- [x] go-billy filesystem abstraction layer (`internal/path/`)
+- [x] R/O FS for MinIO metadata, R/W FS for DirIO metadata
+- [x] Refactored all stdlib file operations to use go-billy
 
-### Improved MinIO Imports ✅
-- [x] Parse MinIO's Created timestamp in import
-- [x] Per-object metadata import and storage (fs.json)
-  - [x] Parse fs.json files during import
-  - [x] Store custom metadata (x-amz-meta-*, Cache-Control, Content-Disposition, etc.)
-  - [x] Return custom metadata in GetObject/HeadObject responses
-  - [x] Accept and store custom metadata in PutObject requests
-- [x] Ensure all minio metadata files and data has been audited for parity in DirIO
-  - [x] Import additional bucket metadata fields (NotificationConfig, LifecycleConfig, ObjectLockConfig, VersioningConfig, EncryptionConfig, TaggingConfig, QuotaConfig, ReplicationConfig, BucketTargetsConfig)
-  - [x] Tested with both MinIO 2019 and 2022 to understand FS mode evolution
-  - **Decision:** Skip bitrot/checksums - never implemented in MinIO FS mode, rely on underlying filesystem (ZFS/Btrfs/RAID)
-  - All metadata now imported and stored in versioned compact JSON format, ready for future features 
+### Improved MinIO Imports
+- [x] Parse MinIO Created timestamps and fs.json metadata
+- [x] Import all bucket metadata (NotificationConfig, LifecycleConfig, etc.)
+- [x] Tested with MinIO 2019 and 2022 formats
+- [x] Custom metadata support (x-amz-meta-*, Cache-Control, etc.)
+- **Decision:** Skip bitrot/checksums (not in MinIO FS mode, rely on filesystem) 
 
 ## Phase 2.5: Client Testing & Validation ✅
 
-**Goal:** Test with real S3 clients, document what works/fails, use failures to drive Phase 3 priorities.
+**Goal:** Test with real S3 clients, document compatibility, drive Phase 3 priorities.
 
-**Status:** COMPLETE with significant improvements documented
+### Test Framework
+- [x] Test framework with structured JSON output and content integrity validation (MD5)
+- [x] Generic S3 setup scripts for any endpoint (`scripts/s3-generic-setup.sh` & `.ps1`)
 
-### Test Framework Setup
-- [x] Create `tests/clients/` directory with test scripts
-- [x] Document baseline: what currently works with basic operations
-- [x] Create generic S3 setup scripts for any endpoint (`scripts/s3-generic-setup.sh` & `.ps1`)
-  - Can point at any S3 API (DirIO, MinIO, AWS, etc.)
-  - Uses mc (MinIO client) to create buckets, objects, metadata
-  - Useful for creating consistent test state regardless of client
+### Client Compatibility (23 canonical S3 operations)
+- [x] **AWS CLI:** 21/23 passed (91%) - All core features working
+- [x] **boto3:** 22/23 passed (96%) - Excellent compatibility
+- [x] **MinIO mc:** 20/23 passed (87%) - Core operations working
+- [x] S3 Compatibility Matrix created
 
-### Client Compatibility Testing
-- [x] Test with AWS CLI - comprehensive S3 operations
-  - **Result:** 21/23 passed - 91% success rate (via testcontainers-go, Feb 16, 2026) ⬆️ **EXCELLENT**
-  - ✅ All 23 canonical S3 operations tested with structured JSON output
-  - ✅ Core CRUD operations all work with content integrity validation (MD5 hashes)
-  - ✅ High-level s3 commands (cp upload/download) work
-  - ✅ HeadBucket returns x-amz-bucket-region header
-  - ✅ DeleteObject and DeleteBucket both working
-  - ✅ Range requests, CopyObject, Pre-signed URLs, Multipart upload, Object tagging all working
-  - ⏭️ Skipped: ListObjectsV1 (uses V2 by default), PreSignedURL_Upload (complex setup)
-- [x] Test with boto3 (Python) - programmatic access patterns
-  - **Result:** 22/23 passed - 96% success rate (via testcontainers-go, Feb 16, 2026) ⬆️ **EXCELLENT**
-  - ✅ All 23 canonical S3 operations tested with structured JSON output
-  - ✅ Core CRUD operations all work with content integrity validation
-  - ✅ GetBucketLocation, ListObjectsV1, ListObjectsV2 (basic/prefix/delimiter/max-keys) working
-  - ✅ Custom metadata set/get works (case-insensitive tests)
-  - ✅ Range requests, CopyObject, Pre-signed URLs, Multipart upload, Object tagging all working
-  - ⏭️ Skipped: PreSignedURL_Upload (complex PUT request setup)
-- [x] Test with MinIO client (mc) - migration compatibility
-  - **Result:** 20/23 passed - 87% success rate (via testcontainers-go, Feb 16, 2026) ⬆️ **IMPROVED**
-  - ✅ All 23 canonical S3 operations tested with structured JSON output
-  - ✅ **All core operations working!** PutObject, HeadObject, GetObject, DeleteObject, DeleteBucket
-  - ✅ Working: alias, ListBuckets, CreateBucket, HeadBucket, GetBucketLocation, ListObjectsV2, Multipart uploads, CopyObject, Range requests, Pre-signed GET, Custom metadata set/get, Object tagging
-  - ❌ Failed: PreSignedURL_Upload (content mismatch - real bug found by new validation framework!)
-  - ⏭️ Skipped: ListObjectsV1 (uses V2 by default), ListObjectsV2_MaxKeys (mc doesn't expose pagination)
-- [x] Create S3 Compatibility Matrix (document ✅ ❌ ⏭️ for each feature/client)
+**📊 Detailed Results:** See [CLIENTS.md](CLIENTS.md) for complete compatibility matrix
 
-### Real-World Scenarios
-- [x] Test mDNS discovery from other machines on LAN
-  - After removing lots of wrapper code it works on external machines
+## Phase 2.75: Configuration Architecture ✅
 
-**📊 Detailed Results:** See [CLIENTS.md](CLIENTS.md) for complete compatibility matrix, test results, and known issues
-
-## Phase 2.75: Configuration Architecture Refactoring ✅
-
-**Goal:** Separate data directory configuration from application configuration for proper data portability.
+**Goal:** Separate data config from app config for data portability.
 
 ### Data Directory Config (`internal/dataconfig`)
-- [x] Create `DataConfig` structure for `.dirio/config.json`
-- [x] Support region, credentials, compression, WORM, storage class
-- [x] Import MinIO config (both 2019 and 2022 formats)
-- [x] Save DataConfig during MinIO import
-- [x] Init logic: CLI flags provide initial values for new data directories
-- [x] Load logic: Data config takes precedence, warn when CLI differs (region only)
+- [x] `DataConfig` structure for `.dirio/config.json` (region, credentials, compression, WORM, storage class)
+- [x] Import MinIO config (2019 and 2022 formats)
+- [x] Data config takes precedence, CLI provides initial values for new directories
 - [x] Support both data config admin AND CLI admin credentials simultaneously
-- [x] Migration for existing installations
-- [x] Update documentation and examples
 
-### Configuration Philosophy
-- **Data Config** (`.dirio/config.json`): Controls how data must be handled, travels with data, takes precedence
-- **App Config** (CLI flags/ENV/YAML): Controls how tool runs, local preferences
-- **Credentials Strategy**: Support both data config admin (official) and CLI admin (temporary/alternative) simultaneously
-- **Region Updates**: CLI flags ignored if data config exists (log warning), require explicit update command
+**Philosophy:** Data config travels with data and takes precedence; app config controls tool behavior locally.
 
 ## Known Issues / Questions
 
-1. ~~Need to test msgpack decoding of MinIO Created timestamp~~ ✅ Resolved in Phase 2
-2. ~~Should we store per-object metadata separately or rely on fs.json import?~~ ✅ Resolved - using fs.json
-3. Need to decide on object metadata caching strategy → Phase 3.5
-4. Need to implement proper ETag calculation for multipart uploads → Phase 3 (Medium Priority)
-5. Virtual-hosted-style buckets will require DNS wildcard or mDNS wildcard → Phase N+
-6. Admin CLI and Web UI will need app-level audit logging beyond HTTP middleware → Phase 7
-7. ~~Need to decide data vs app config architecture~~ ✅ Resolved - Phase 2.75 (split into dataconfig + app config)
-8. **🎉 Bug #001: FULLY RESOLVED** - AWS SigV4 Chunked Encoding Corruption (Feb 16, 2026)
-   - ✅ PutObject, GetObject, Multipart uploads, and Object tagging all working correctly
-   - See [bugs/fixed/](bugs/fixed/) directory for resolution details
-9. **📋 10 Bugs RESOLVED** - February 16, 2026
-   - ✅ Bug #002: DeleteObject for MinIO mc
-   - ✅ Bug #003: DeleteBucket for MinIO mc
-   - ✅ Bug #004: Object tagging content corruption (chunked encoding issue)
-   - ✅ Bug #005: Multipart content corruption
-   - ✅ Bug #006: ListObjectsV2 delimiter (CommonPrefixes empty in boto3)
-   - ✅ Bug #007: ListObjectsV2 MaxKeys parameter ignored (pagination broken)
-   - ✅ Bug #008: Range requests
-   - ✅ Bug #009: CopyObject
-   - ✅ Bug #010: Pre-signed URLs
-   - ✅ Bug #011: Custom metadata key case
-   - ✅ Bug #013: Multipart upload 405
-   - See [bugs/fixed/](bugs/fixed/) directory for resolution details
-10. **🐛 New Bug Found** - MinIO mc PreSignedURL_Upload Content Mismatch (Feb 16, 2026)
-   - Discovered by new content integrity validation framework
-   - Content hash mismatch: expected `ec9eadb8b71af4c664405284ac9323de`, got `f840e1434e8ff5782497a5c5b1b8a922`
-   - Only affects MinIO mc client, AWS CLI and boto3 work correctly (skip this test)
-   - Needs investigation - see [CLIENTS.md](CLIENTS.md) for details
+### Active Issues
+1. MinIO mc PreSignedURL_Upload content mismatch - see [CLIENTS.md](CLIENTS.md) for details
+2. Object metadata caching strategy → Phase 3.5
+3. ETag calculation for multipart uploads → Phase 3.5
+
+### Design Decisions (Deferred)
+- Virtual-hosted-style buckets (DNS/mDNS wildcard) → Phase N+
+- App-level audit logging for Admin/Web UI → Phase 7
+
+**📋 Resolved Issues:** 11 bugs fixed in Phase 3.2 - see [bugs/fixed/](bugs/fixed/) directory
 
 ## Phase 3: Essential S3 Features
 
@@ -220,138 +103,43 @@ Current status: **Phase 3.2 - Features with Policy Integration** (Policy Engine 
 
 **Prioritize based on Phase 2.5 findings:**
 
-### **HIGHEST PRIORITY: Policy Engine Foundation** ✅ COMPLETE (Feb 2026)
+### Policy Engine Foundation ✅ COMPLETE (Feb 2026)
 
-**Goal:** Build out a comprehensive policy system to enable public bucket access and lay groundwork for Phase 5 IAM.
+**Goal:** Comprehensive policy system for public bucket access and IAM groundwork.
 
-**Status:** Core policy engine implemented and integrated. Public bucket access now works!
+**Status:** Fully implemented and integrated. Public bucket access working!
 
-#### Policy Evaluation Engine (Core) ✅
-- [x] **Policy evaluation engine** - Core authorization logic (`internal/policy/`)
-  - Statement evaluation (Effect: Allow/Deny)
-  - Action matching with wildcards (s3:GetObject, s3:*, s3:Get*, etc.)
-  - Resource matching with ARN patterns (arn:aws:s3:::bucket/*, arn:aws:s3:::bucket/prefix/*)
-  - Principal matching (* for public, specific users via ARN)
-  - Statement evaluation order (explicit Deny > Allow > implicit Deny)
-- [x] **Action-to-Permission Mapping** (`internal/policy/action_mapper.go`)
-  - S3 actions don't always match IAM permissions (HeadObject → s3:GetObject)
-  - Multi-resource operations (CopyObject → s3:GetObject + s3:PutObject)
-  - See `docs/action-permission-mapping.md` for complete specification
-- [x] **Default policies** - Start simple, expand later
-  - Admin bypass: authenticated admin can do everything
-  - Default deny: anonymous/non-admin denied unless bucket policy allows
-  - Public bucket support: bucket policies can grant anonymous access
+#### Core Components
+- [x] **Policy evaluation engine** - Action/Resource/Principal/Effect matching with wildcards
+- [x] **Action mapper** - S3 to IAM permission translation (HeadObject→GetObject, CopyObject→Get+Put)
+- [x] **Thread-safe cache** - In-memory policy cache with RWMutex
+- [x] **Persistence** - Bucket policies in `.dirio/buckets/{bucket}.json`
+- [x] **Anonymous requests** - Unauthenticated requests supported for public buckets
+- [x] **Authorization middleware** - All S3 routes evaluated against policies
+- [x] **Admin bypass** - Root credentials skip policy checks
 
-#### Policy Engine Architecture ✅
-- [x] **Thread-safe policy cache** (`internal/policy/cache.go`)
-  - In-memory cache of bucket policies for fast access
-  - RWMutex for concurrent read/write safety
-  - Load policies on startup, update cache on policy changes
-- [x] **Policy persistence** - Uses existing bucket metadata
-  - Bucket policies stored in `.dirio/buckets/{bucket}.json`
-  - `GetAllBucketPolicies()` loads all policies at startup
-  - Service layer notifies engine on PutBucketPolicy/DeleteBucketPolicy
-- [x] **Server integration** (`internal/http/server/server.go`)
-  - Policy engine initialized at startup
-  - Bucket policies loaded from metadata
-  - Engine passed to route dependencies
+**Connection to Phase 5:** Policy engine will extend to IAM user/group policies.
 
-#### Conditional Auth Middleware ✅
-- [x] **Anonymous request support** (`internal/http/auth/middleware.go`)
-  - Requests without Authorization header pass through as anonymous
-  - Explicit `IsAnonymousRequestKey` set in context
-  - Authorization middleware decides based on bucket policies
-- [x] **Authorization middleware** (`internal/policy/middleware.go`)
-  - Evaluates all S3 requests against bucket policies
-  - Admin bypass for root access keys
-  - Multi-resource support for CopyObject/UploadPartCopy
-  - Returns 403 AccessDenied for unauthorized requests
+### Phase 3.2 Features ✅ COMPLETE
 
-#### Bucket Policy Enforcement ✅
-- [x] Policy document parsing (uses existing `pkg/iam` types)
-- [x] Enforce public-read bucket policies
-  - Anonymous requests can read from public buckets
-  - Policy evaluation for GetObject, HeadObject, ListObjects, etc.
-- [x] Complex policy statement support
-  - Principal, Action, Resource, Effect matching
-  - Wildcard support in all fields
-  - Statement evaluation order and deny precedence
+**All Core S3 Features Implemented:**
+- [x] DeleteObject & DeleteBucket (MinIO mc compatibility)
+- [x] Pre-signed URLs (query-based SigV4 with expiration)
+- [x] CopyObject (S3-to-S3 with metadata)
+- [x] Range requests (206 Partial Content)
+- [x] ListObjectsV2 pagination (NextContinuationToken, StartAfter)
+- [x] Multipart upload (all 5 handlers)
+- [x] Object tagging (with content preservation)
+- [x] Custom metadata (case-insensitive, HTTP spec compliant)
 
-#### Remaining for Phase 3.2+
-- [ ] **Condition evaluation** - IpAddress, StringEquals, DateLessThan, etc.
-- [ ] **Result filtering for List* operations** - ListBuckets should filter by permission
-- [ ] **NotAction, NotResource, NotPrincipal** - Inverse matching
+### Remaining Work
+
+**Phase 3.5+ (Deferred):**
+- [ ] **ListBuckets/ListObjects result filtering** - Filter results per-item based on permissions
+- [ ] **Policy condition evaluation** - IpAddress, StringEquals, DateLessThan, etc.
+- [ ] **NotAction/NotResource/NotPrincipal** - Inverse matching support
 - [ ] **Policy variables** - ${aws:username}, ${aws:userid}, etc.
-
-**Connection to Phase 5:** This policy engine will be extended to handle IAM user/group policies in addition to bucket policies.
-
-### High Priority (Core S3 compatibility - policy engine now ready! ✅)
-
-**Note:** Most features now complete! Only object tagging and list filtering remain.
-
-- [x] ~~**DeleteObject** for MinIO mc~~ ✅ COMPLETE (Feb 16, 2026)
-- [x] ~~**DeleteBucket** for MinIO mc~~ ✅ COMPLETE (Feb 16, 2026)
-- [x] ~~**Pre-signed URLs**~~ ✅ COMPLETE (Feb 16, 2026)
-- [x] ~~**CopyObject**~~ ✅ COMPLETE (Feb 16, 2026)
-- [x] ~~**Range requests**~~ ✅ COMPLETE (Feb 16, 2026)
-- [x] ~~**ListObjects continuation tokens**~~ ✅ COMPLETE (Feb 16, 2026)
-  - Bug #007 FIXED: NextContinuationToken and StartAfter fields now populated
-  - Pagination fully working for MaxKeys parameter
-
-### Medium Priority (Less critical, but still need policy checks)
-- [x] ~~**Multipart upload**~~ ✅ COMPLETE - All 5 handlers implemented (Feb 16, 2026)
-- [x] ~~**Object tagging**~~ ✅ COMPLETE (Feb 16, 2026)
-  - Bug #004 FIXED: Content preservation working correctly
-  - `s3:PutObjectTagging`/`s3:GetObjectTagging` permission checks in place
-- [x] ~~**Fix custom metadata key case**~~ ✅ COMPLETE (Feb 16, 2026)
-
-### Real-World Scenarios
-- [ ] Test migration from actual MinIO instance
-- [ ] Test behind reverse proxy (nginx) with canonical domain
-
-### Recommended Priority Order
-
-Based on client testing results (see [CLIENTS.md](CLIENTS.md)) and architectural dependencies:
-
-**✅ COMPLETED:**
-1. ~~Fix AWS SigV4 Chunked Encoding Handling~~ - ✅ FULLY RESOLVED (Feb 16, 2026)
-2. ~~CommonPrefixes in ListObjectsV2~~ - ✅ Bug #006 FIXED - Working in all clients (Feb 16, 2026)
-3. ~~ListObjectsV2 max-keys/pagination~~ - ✅ Bug #007 FIXED - NextContinuationToken & StartAfter fields populated (Feb 16, 2026)
-4. ~~Multipart Upload~~ - ✅ Working in all clients with content integrity (Feb 16, 2026)
-5. ~~Object Tagging~~ - ✅ Working correctly with content preservation (Feb 16, 2026)
-
-**🔴 REVISED PRIORITIES (Architecture-First Approach):**
-
-**Phase 3.1: Policy Engine Foundation** ✅ COMPLETE (Feb 2026)
-1. ✅ **Policy Evaluation Engine** - Core authorization logic (Action/Resource/Principal/Effect matching)
-2. ✅ **Action Mapper** - S3 action to IAM permission translation (HeadObject→GetObject, CopyObject→Get+Put)
-3. ✅ **Policy Cache** - Thread-safe in-memory cache with startup loading
-4. ✅ **Authorization Middleware** - Enforces policies on all S3 routes
-5. ✅ **Anonymous Request Support** - Auth middleware allows unauthenticated requests through
-6. ✅ **Admin Bypass** - Root access keys skip all policy checks
-7. ✅ **Service Notifications** - PutBucketPolicy/DeleteBucketPolicy update cache immediately
-
-**Phase 3.2: Features with Policy Integration** ✅ COMPLETE (Feb 16, 2026)
-1. ✅ **DeleteObject for MinIO mc** - Working (POST fallback route added)
-2. ✅ **DeleteBucket for MinIO mc** - Working (POST fallback route added)
-3. ✅ **Pre-signed URLs** - Query-based SigV4 auth with expiration validation (Feb 16, 2026)
-4. ✅ **CopyObject** - S3-to-S3 copy with metadata, ISO 8601 dates for MinIO mc (Feb 16, 2026)
-5. ✅ **Range requests** - 206 Partial Content support (Feb 16, 2026)
-6. ✅ **ListObjectsV2 pagination** - NextContinuationToken and StartAfter fields (Bug #006, #007 FIXED)
-7. ✅ **Multipart Upload** - All 5 handlers implemented (Create, UploadPart, UploadPartCopy, Complete, Abort, ListParts) (Feb 16, 2026)
-8. ✅ **Object Tagging** - Content preservation working, `s3:*ObjectTagging` checks in place
-9. ✅ **Custom metadata key case** - Resolved via case-insensitive tests (HTTP spec compliant)
-
-**Deferred to Phase 3.5+:**
-10. [ ] **ListBuckets/ListObjects result filtering** - Filter results per-item based on permissions
-11. [ ] **Condition evaluation** - IpAddress, StringEquals, DateLessThan, etc.
-12. [ ] **POST Policy Uploads** (Optional MinIO feature) - Browser-based form uploads for `mc share upload`
-
-**Why This Order:**
-- ✅ Policy engine built first - all features get proper authorization from day one
-- Pre-signed URLs are next critical dependency
-- CopyObject, Delete operations now have authorization infrastructure
-- Clean foundation for Phase 5 (IAM) instead of accumulating technical debt
+- [ ] **POST Policy Uploads** - Browser-based form uploads (optional MinIO feature for `mc share upload`)
 
 ## Phase 3.5: Stability & Performance
 
@@ -360,11 +148,12 @@ Based on client testing results (see [CLIENTS.md](CLIENTS.md)) and architectural
 - [ ] Optimize ListObjects for large buckets
 - [ ] Memory profiling and leak detection
 
-### Stability
+### Stability & Testing
 - [ ] Concurrent access testing
 - [ ] Error handling audit across all API handlers
-- [ ] Load testing with large files
-- [ ] Load testing with many small files
+- [ ] Load testing with large files and many small files
+- [ ] Test migration from actual MinIO instance
+- [ ] Test behind reverse proxy (nginx) with canonical domain
 
 ## Phase 4: Production Readiness & Operations
 
