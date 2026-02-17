@@ -32,17 +32,32 @@ type PolicyDocument struct {
 	Statement []Statement `json:"Statement"`    // List of policy statements
 }
 
-// Statement represents a single statement in a policy document
+// Statement represents a single statement in a policy document.
+//
+// AWS IAM policy statements use dynamic JSON types, so the Principal, Action, and Resource
+// fields must be interface{} to support multiple formats:
+//
+//   - Principal: "*", {"AWS": "*"}, {"AWS": "arn:..."}, or {"AWS": ["arn:...", "arn:..."]}
+//   - Action: "s3:GetObject" or ["s3:GetObject", "s3:PutObject"]
+//   - Resource: "arn:aws:s3:::bucket/*" or ["arn:aws:s3:::bucket1", "arn:aws:s3:::bucket2"]
+//
+// The actual types after JSON unmarshaling will be one of:
+//   - string: single value
+//   - []string: array of values (sometimes)
+//   - []interface{}: array of values (from JSON unmarshaling)
+//   - map[string]interface{}: structured value (for Principal only)
+//
+// Use the validation functions in internal/policy to validate these fields after unmarshaling.
 type Statement struct {
-	Sid          string                 `json:"Sid,omitempty"`          // Optional statement ID
-	Effect       string                 `json:"Effect"`                 // "Allow" or "Deny"
-	Principal    interface{}            `json:"Principal,omitempty"`    // Who (can be string, map, or array)
-	NotPrincipal interface{}            `json:"NotPrincipal,omitempty"` // Inverse principal matching
-	Action       interface{}            `json:"Action,omitempty"`       // What actions (string or []string)
-	NotAction    interface{}            `json:"NotAction,omitempty"`    // Inverse action matching
-	Resource     interface{}            `json:"Resource,omitempty"`     // What resources (string or []string)
-	NotResource  interface{}            `json:"NotResource,omitempty"`  // Inverse resource matching
-	Condition    map[string]interface{} `json:"Condition,omitempty"`    // Optional conditions
+	Sid          string         `json:"Sid,omitempty"`          // Optional statement ID for debugging
+	Effect       string         `json:"Effect"`                 // "Allow" or "Deny"
+	Principal    any            `json:"Principal,omitempty"`    // Who - see type documentation above
+	NotPrincipal any            `json:"NotPrincipal,omitempty"` // Inverse principal matching
+	Action       any            `json:"Action,omitempty"`       // What actions - string or array
+	NotAction    any            `json:"NotAction,omitempty"`    // Inverse action matching
+	Resource     any            `json:"Resource,omitempty"`     // What resources - string or array
+	NotResource  any            `json:"NotResource,omitempty"`  // Inverse resource matching
+	Condition    map[string]any `json:"Condition,omitempty"`    // Optional conditions map[operator]map[key]value
 }
 
 // Policy represents an IAM policy (attached to users/roles)
