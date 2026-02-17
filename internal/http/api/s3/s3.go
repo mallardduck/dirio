@@ -89,16 +89,7 @@ func (h *HTTPHandler) ListBuckets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Filter buckets based on permissions
-	filteredBuckets, err := h.filterBuckets(r.Context(), buckets, r)
-	if err != nil {
-		requestID := middleware.GetRequestID(r.Context())
-		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
-			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error filtering buckets and additional error writing XML error response")
-			return
-		}
-		s3Logger.With("err", err).Warn("encountered error filtering buckets")
-		return
-	}
+	filteredBuckets := h.filterBuckets(r.Context(), buckets, r)
 
 	// Get owner from request context
 	owner := buildOwnerFromContext(r.Context())

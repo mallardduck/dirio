@@ -192,16 +192,7 @@ func (h *HTTPHandler) ListObjects(w http.ResponseWriter, r *http.Request, bucket
 	}
 
 	// Filter objects based on permissions
-	filteredObjects, err := h.filterObjects(r.Context(), bucket, objects, r)
-	if err != nil {
-		requestID := middleware.GetRequestID(r.Context())
-		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
-			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error filtering objects and additional error writing XML error response")
-			return
-		}
-		s3Logger.With("err", err).Warn("encountered error filtering objects")
-		return
-	}
+	filteredObjects := h.filterObjects(r.Context(), bucket, objects, r)
 
 	response := s3types.ListBucketResult{
 		Name:        bucket,
@@ -257,16 +248,7 @@ func (h *HTTPHandler) ListObjectsV2(w http.ResponseWriter, r *http.Request, buck
 	}
 
 	// Filter objects based on permissions
-	filteredObjects, err := h.filterObjects(r.Context(), bucket, objects.Objects, r)
-	if err != nil {
-		requestID := middleware.GetRequestID(r.Context())
-		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
-			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error filtering objects and additional error writing XML error response")
-			return
-		}
-		s3Logger.With("err", err).Warn("encountered error filtering objects")
-		return
-	}
+	filteredObjects := h.filterObjects(r.Context(), bucket, objects.Objects, r)
 
 	// Per S3 spec: KeyCount is the number of keys returned, including both objects and common prefixes
 	// "each common prefix counts as a single return when calculating the number of returns"

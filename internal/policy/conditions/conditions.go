@@ -196,7 +196,7 @@ func (e *Evaluator) evaluateSingleCondition(op Operator, key string, value inter
 }
 
 // evaluateConditionValue evaluates a single value against the context
-func (e *Evaluator) evaluateConditionValue(op Operator, key string, contextValue, conditionValue interface{}) (bool, error) {
+func (e *Evaluator) evaluateConditionValue(op Operator, _ string, contextValue, conditionValue interface{}) (bool, error) {
 	switch op {
 	// String operators
 	case OpStringEquals:
@@ -212,8 +212,7 @@ func (e *Evaluator) evaluateConditionValue(op Operator, key string, contextValue
 	case OpStringLike:
 		return evaluateStringLike(contextValue, conditionValue, false)
 	case OpStringNotLike:
-		match, err := evaluateStringLike(contextValue, conditionValue, false)
-		return !match, err
+		return evaluateStringLike(contextValue, conditionValue, true)
 
 	// Numeric operators
 	case OpNumericEquals:
@@ -249,8 +248,7 @@ func (e *Evaluator) evaluateConditionValue(op Operator, key string, contextValue
 	case OpIpAddress:
 		return evaluateIpAddress(contextValue, conditionValue, false)
 	case OpNotIpAddress:
-		match, err := evaluateIpAddress(contextValue, conditionValue, false)
-		return !match, err
+		return evaluateIpAddress(contextValue, conditionValue, true)
 
 	// Boolean operator
 	case OpBool:
@@ -318,14 +316,14 @@ func (e *Evaluator) getContextValue(key string) (interface{}, error) {
 }
 
 // Helper function to convert interface{} to string
-func toString(v interface{}) (string, error) {
+func toString(v interface{}) string {
 	switch val := v.(type) {
 	case string:
-		return val, nil
+		return val
 	case fmt.Stringer:
-		return val.String(), nil
+		return val.String()
 	default:
-		return fmt.Sprintf("%v", v), nil
+		return fmt.Sprintf("%v", v)
 	}
 }
 

@@ -11,15 +11,8 @@ import (
 
 // evaluateStringEquals performs exact string matching
 func evaluateStringEquals(contextValue, conditionValue interface{}, ignoreCase bool) (bool, error) {
-	ctxStr, err := toString(contextValue)
-	if err != nil {
-		return false, err
-	}
-
-	condStr, err := toString(conditionValue)
-	if err != nil {
-		return false, err
-	}
+	ctxStr := toString(contextValue)
+	condStr := toString(conditionValue)
 
 	if ignoreCase {
 		return strings.EqualFold(ctxStr, condStr), nil
@@ -30,15 +23,8 @@ func evaluateStringEquals(contextValue, conditionValue interface{}, ignoreCase b
 // evaluateStringLike performs glob pattern matching
 // Supports * (any characters) and ? (single character)
 func evaluateStringLike(contextValue, conditionValue interface{}, negate bool) (bool, error) {
-	ctxStr, err := toString(contextValue)
-	if err != nil {
-		return false, err
-	}
-
-	pattern, err := toString(conditionValue)
-	if err != nil {
-		return false, err
-	}
+	ctxStr := toString(contextValue)
+	pattern := toString(conditionValue)
 
 	// Convert glob pattern to regex
 	regexPattern := globToRegex(pattern)
@@ -48,6 +34,9 @@ func evaluateStringLike(contextValue, conditionValue interface{}, negate bool) (
 		return false, fmt.Errorf("invalid pattern: %w", err)
 	}
 
+	if negate {
+		return !matched, nil
+	}
 	return matched, nil
 }
 
@@ -191,10 +180,7 @@ func evaluateIpAddress(contextValue, conditionValue interface{}, negate bool) (b
 		return false, err
 	}
 
-	cidrStr, err := toString(conditionValue)
-	if err != nil {
-		return false, err
-	}
+	cidrStr := toString(conditionValue)
 
 	// Check if it's a CIDR or a plain IP
 	if !strings.Contains(cidrStr, "/") {
@@ -211,7 +197,11 @@ func evaluateIpAddress(contextValue, conditionValue interface{}, negate bool) (b
 		return false, fmt.Errorf("invalid CIDR: %w", err)
 	}
 
-	return ipNet.Contains(ctxIP), nil
+	contains := ipNet.Contains(ctxIP)
+	if negate {
+		return !contains, nil
+	}
+	return contains, nil
 }
 
 // Boolean Operator

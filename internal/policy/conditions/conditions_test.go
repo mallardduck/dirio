@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/mallardduck/dirio/internal/policy/variables"
 )
 

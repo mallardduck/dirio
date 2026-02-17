@@ -345,7 +345,7 @@ func evaluateStatement(stmt *iam.Statement, req *RequestContext) Decision {
 	}
 
 	// 4. Check conditions (Phase 3.3)
-	if stmt.Condition != nil && len(stmt.Condition) > 0 {
+	if len(stmt.Condition) > 0 {
 		secureTransport := false
 		if req.Conditions != nil {
 			secureTransport = req.Conditions.SecureTransport

@@ -7,9 +7,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/mallardduck/go-http-helpers/pkg/headers"
+
 	contextInt "github.com/mallardduck/dirio/internal/context"
 	"github.com/mallardduck/dirio/pkg/iam"
-	"github.com/mallardduck/go-http-helpers/pkg/headers"
 )
 
 // FromRequest builds a variable context from an HTTP request

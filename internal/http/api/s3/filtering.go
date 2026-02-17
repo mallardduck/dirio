@@ -31,14 +31,14 @@ var filterLogger = logging.Component("filter")
 //     c. Evaluate permission via policy engine
 //     d. Include if allowed
 //  4. Return filtered list
-func (h *HTTPHandler) filterBuckets(ctx stdcontext.Context, buckets []s3types.Bucket, r *http.Request) ([]s3types.Bucket, error) {
+func (h *HTTPHandler) filterBuckets(ctx stdcontext.Context, buckets []s3types.Bucket, r *http.Request) []s3types.Bucket {
 	// Extract principal from context
 	principal := getRequestPrincipal(ctx, h.rootAccessKey, h.altRootAccessKey)
 
 	// Admin fast path - return all buckets
 	if principal.IsAdmin {
 		filterLogger.Debug("admin bypass - returning all buckets")
-		return buckets, nil
+		return buckets
 	}
 
 	// Build condition context for policy evaluation
@@ -100,7 +100,7 @@ func (h *HTTPHandler) filterBuckets(ctx stdcontext.Context, buckets []s3types.Bu
 		"denied", deniedCount,
 	).Debug("filtered bucket list")
 
-	return filtered, nil
+	return filtered
 }
 
 // filterObjects filters a list of objects based on s3:GetObject permission.
@@ -116,14 +116,14 @@ func (h *HTTPHandler) filterBuckets(ctx stdcontext.Context, buckets []s3types.Bu
 //     c. Evaluate permission via policy engine
 //     d. Include if allowed
 //  5. Return filtered list
-func (h *HTTPHandler) filterObjects(ctx stdcontext.Context, bucket string, objects []s3types.Object, r *http.Request) ([]s3types.Object, error) {
+func (h *HTTPHandler) filterObjects(ctx stdcontext.Context, bucket string, objects []s3types.Object, r *http.Request) []s3types.Object {
 	// Extract principal from context
 	principal := getRequestPrincipal(ctx, h.rootAccessKey, h.altRootAccessKey)
 
 	// Admin fast path - return all objects
 	if principal.IsAdmin {
 		filterLogger.Debug("admin bypass - returning all objects", "bucket", bucket)
-		return objects, nil
+		return objects
 	}
 
 	// Build condition context for policy evaluation
@@ -202,7 +202,7 @@ func (h *HTTPHandler) filterObjects(ctx stdcontext.Context, bucket string, objec
 		"filter_ratio", filterRatio,
 	).Debug("filtered object list")
 
-	return filtered, nil
+	return filtered
 }
 
 // getRequestPrincipal extracts the principal from request context and builds a Principal.
