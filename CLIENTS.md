@@ -2,7 +2,7 @@
 
 DirIO's compatibility status with major S3 clients.
 
-**Last Updated:** February 16, 2026
+**Last Updated:** February 16, 2026 (19:46 EST)
 **Test Framework:** Structured JSON output with automated feature matrix
 **Test Location:** `tests/clients/`
 
@@ -81,11 +81,11 @@ All clients test the same 23 canonical S3 operations defined in `tests/clients/f
 ### Active Bugs
 
 **MinIO mc PreSignedURL_Upload - Content Mismatch**
-- **Status:** ❌ FAILING
+- **Status:** ❌ FAILING (Confirmed Feb 16, 2026 19:46)
 - **Clients Affected:** MinIO mc only
-- **Error:** Content integrity check failed (hash mismatch: expected `ec9eadb8b71af4c664405284ac9323de`, got `f840e1434e8ff5782497a5c5b1b8a922`)
+- **Error:** Content integrity check failed (hash mismatch: expected `ec9eadb8b71af4c664405284ac9323de`, got `de2e3f58dd76cb4f71bc2a76e60ed24c`)
 - **Impact:** Pre-signed PUT URLs return different content than what was uploaded
-- **Note:** This is a real bug found by the new content integrity validation
+- **Note:** This is a real bug found by the content integrity validation. Hash varies between test runs, indicating data corruption during upload.
 
 ### Optional Features (Intentionally Skipped)
 
@@ -168,6 +168,15 @@ cat tests/clients/results/mc.json
 ---
 
 ## Recent Changes
+
+### February 16, 2026 (19:46) - Test Results Confirmed
+
+**Test Run Results:**
+- ✅ AWS CLI: 21/23 passed (91%) - 2 skipped (ListObjectsV1, PreSignedURL_Upload)
+- ✅ boto3: 22/23 passed (96%) - 1 skipped (PreSignedURL_Upload)
+- ⚠️ MinIO mc: 20/23 passed (87%) - 1 failed (PreSignedURL_Upload), 2 skipped (ListObjectsV1, MaxKeys)
+
+**Status:** All core functionality working. Single known issue with MinIO mc PreSignedURL_Upload persists.
 
 ### February 16, 2026 - Test Framework Refactoring
 

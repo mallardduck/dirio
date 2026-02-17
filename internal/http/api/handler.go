@@ -27,7 +27,15 @@ type URLBuilder interface {
 }
 
 // New creates a new DirIO API handler
-func New(storage *storage.Storage, metadata *metadata.Manager, auth *auth.Authenticator, urlBuilder URLBuilder, policyEngine *policy.Engine) *Handler {
+func New(
+	storage *storage.Storage,
+	metadata *metadata.Manager,
+	auth *auth.Authenticator,
+	urlBuilder URLBuilder,
+	policyEngine *policy.Engine,
+	rootAccessKey string,
+	altRootAccessKey string,
+) *Handler {
 	serviceFactory := service.NewServiceFactory(storage, metadata, policyEngine)
 	return &Handler{
 		auth:           auth,
@@ -35,6 +43,10 @@ func New(storage *storage.Storage, metadata *metadata.Manager, auth *auth.Authen
 		S3Handler: s3.New(
 			serviceFactory,
 			urlBuilder,
+			metadata,
+			policyEngine,
+			rootAccessKey,
+			altRootAccessKey,
 		),
 		IAMHandler: iam.New(
 			serviceFactory,

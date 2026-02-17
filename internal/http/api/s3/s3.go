@@ -29,6 +29,8 @@ import (
 
 	"github.com/mallardduck/dirio/internal/http/middleware"
 	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
+	"github.com/mallardduck/dirio/internal/persistence/metadata"
+	"github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/service"
 	svcs3 "github.com/mallardduck/dirio/internal/service/s3"
 	"github.com/mallardduck/dirio/pkg/s3types"
@@ -36,8 +38,12 @@ import (
 
 // HTTPHandler handles S3 API requests
 type HTTPHandler struct {
-	s3Service  *svcs3.Service
-	urlBuilder URLBuilder
+	s3Service        *svcs3.Service
+	urlBuilder       URLBuilder
+	metadata         *metadata.Manager // For ownership lookups during filtering
+	policyEngine     *policy.Engine    // For permission checks during filtering
+	rootAccessKey    string            // Primary admin access key
+	altRootAccessKey string            // Alternative admin access key
 }
 
 // URLBuilder defines the interface for generating URLs in S3 API responses
@@ -47,10 +53,21 @@ type URLBuilder interface {
 }
 
 // New creates a new S3 API handler
-func New(serviceFactory *service.ServicesFactory, urlBuilder URLBuilder) *HTTPHandler {
+func New(
+	serviceFactory *service.ServicesFactory,
+	urlBuilder URLBuilder,
+	metadata *metadata.Manager,
+	policyEngine *policy.Engine,
+	rootAccessKey string,
+	altRootAccessKey string,
+) *HTTPHandler {
 	return &HTTPHandler{
-		s3Service:  serviceFactory.S3(),
-		urlBuilder: urlBuilder,
+		s3Service:        serviceFactory.S3(),
+		urlBuilder:       urlBuilder,
+		metadata:         metadata,
+		policyEngine:     policyEngine,
+		rootAccessKey:    rootAccessKey,
+		altRootAccessKey: altRootAccessKey,
 	}
 }
 
@@ -71,12 +88,24 @@ func (h *HTTPHandler) ListBuckets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Filter buckets based on permissions
+	filteredBuckets, err := h.filterBuckets(r.Context(), buckets, r)
+	if err != nil {
+		requestID := middleware.GetRequestID(r.Context())
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
+			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error filtering buckets and additional error writing XML error response")
+			return
+		}
+		s3Logger.With("err", err).Warn("encountered error filtering buckets")
+		return
+	}
+
+	// Get owner from request context
+	owner := buildOwnerFromContext(r.Context())
+
 	response := s3types.ListBucketsResponse{
-		Buckets: buckets,
-		Owner: s3types.Owner{
-			ID:          "root",
-			DisplayName: "root",
-		},
+		Buckets: filteredBuckets,
+		Owner:   owner,
 	}
 
 	if writeErr := WriteXMLResponse(w, http.StatusOK, response); writeErr != nil {

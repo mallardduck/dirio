@@ -169,6 +169,13 @@ func (s *Server) setupRoutes() {
 	s.router.Use(teapot.RouteContextMiddleware(s.router))
 	s.router.Use(loggingHttp.PrepareAccessLogMiddleware(s.log))
 
+	// Get root access keys for authorization middleware and filtering
+	rootAccessKey := s.config.AccessKey
+	altRootAccessKey := ""
+	if s.config.DataConfig != nil {
+		altRootAccessKey = s.config.DataConfig.Credentials.AccessKey
+	}
+
 	// Create API handler
 	apiHandler := api.New(
 		s.storage,
@@ -176,14 +183,9 @@ func (s *Server) setupRoutes() {
 		s.auth,
 		urlbuilder.New(s.config.CanonicalDomain),
 		s.policyEngine,
+		rootAccessKey,
+		altRootAccessKey,
 	)
-
-	// Get root access keys for authorization middleware
-	rootAccessKey := s.config.AccessKey
-	altRootAccessKey := ""
-	if s.config.DataConfig != nil {
-		altRootAccessKey = s.config.DataConfig.Credentials.AccessKey
-	}
 
 	// Setup routes using shared function
 	deps := &RouteDependencies{

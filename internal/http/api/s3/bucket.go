@@ -191,6 +191,18 @@ func (h *HTTPHandler) ListObjects(w http.ResponseWriter, r *http.Request, bucket
 		return
 	}
 
+	// Filter objects based on permissions
+	filteredObjects, err := h.filterObjects(r.Context(), bucket, objects, r)
+	if err != nil {
+		requestID := middleware.GetRequestID(r.Context())
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
+			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error filtering objects and additional error writing XML error response")
+			return
+		}
+		s3Logger.With("err", err).Warn("encountered error filtering objects")
+		return
+	}
+
 	response := s3types.ListBucketResult{
 		Name:        bucket,
 		Prefix:      prefix,
@@ -198,7 +210,7 @@ func (h *HTTPHandler) ListObjects(w http.ResponseWriter, r *http.Request, bucket
 		Marker:      marker,
 		MaxKeys:     maxKeys,
 		IsTruncated: false,
-		Contents:    objects,
+		Contents:    filteredObjects,
 	}
 
 	if writeErr := WriteXMLResponse(w, http.StatusOK, response); writeErr != nil {
@@ -244,9 +256,22 @@ func (h *HTTPHandler) ListObjectsV2(w http.ResponseWriter, r *http.Request, buck
 		return
 	}
 
+	// Filter objects based on permissions
+	filteredObjects, err := h.filterObjects(r.Context(), bucket, objects.Objects, r)
+	if err != nil {
+		requestID := middleware.GetRequestID(r.Context())
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
+			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error filtering objects and additional error writing XML error response")
+			return
+		}
+		s3Logger.With("err", err).Warn("encountered error filtering objects")
+		return
+	}
+
 	// Per S3 spec: KeyCount is the number of keys returned, including both objects and common prefixes
 	// "each common prefix counts as a single return when calculating the number of returns"
-	keyCount := len(objects.Objects) + len(objects.CommonPrefixes)
+	// Recalculate after filtering
+	keyCount := len(filteredObjects) + len(objects.CommonPrefixes)
 
 	response := s3types.ListBucketV2Result{
 		Name:                  bucket,
@@ -258,7 +283,7 @@ func (h *HTTPHandler) ListObjectsV2(w http.ResponseWriter, r *http.Request, buck
 		ContinuationToken:     continuationToken,
 		NextContinuationToken: objects.NextMarker,
 		StartAfter:            startAfter,
-		Contents:              objects.Objects,
+		Contents:              filteredObjects,
 		CommonPrefixes:        objects.CommonPrefixes,
 	}
 
