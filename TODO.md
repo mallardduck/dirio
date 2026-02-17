@@ -251,20 +251,24 @@ Current status: **Phase 4 IN PROGRESS** - IAM & User Management (elevated priori
 - [x] Create test scenarios for NotAction/NotResource
 - [x] Create test buckets for result filtering (4 buckets, 60+ objects)
 
-## Phase 4: MinIO-Style IAM & User Management
+## Phase 4: Hybrid IAM & User Management
 
-**Goal:** Implement IAM to unblock Phase 3.3 filtering tests and enable multi-user scenarios.
+**Goal:** Implement hybrid IAM combining S3-native authorization with MinIO-compatible admin API to unblock Phase 3.3 filtering tests and enable multi-user scenarios.
 
 **Why Elevated:** Phase 3.3 filtering tests, client tests, and integration tests are blocked without IAM support. Moving IAM up in priority unblocks critical testing and validation work.
 
-**Strategy:** MinIO-style IAM (see [docs/MINIO-IAM-SUPPORT.md](docs/MINIO-IAM-SUPPORT.md)) - focused on self-hosted operational needs, NOT AWS IAM compatibility.
+**Architecture:** Hybrid approach combining best of S3 and MinIO (see [docs/IAM-ARCHITECTURE.md](docs/IAM-ARCHITECTURE.md))
+- **S3 API layer:** Bucket policies with S3 actions/resources, AWS-standard conditions/variables, UUID-based ownership
+- **MinIO Admin API layer:** User/policy CRUD operations via `mc admin` commands
+- **Shared backend:** Unified IAM metadata in `.dirio/iam/` supporting both APIs
 
-**Compatibility Target:**
-- ✅ MinIO Admin API (subset)
-- ✅ `mc admin` commands (partial - core user/policy management)
-- ✅ Custom DirIO CLI (full functionality)
-- ❌ `aws iam` CLI (explicitly not supported)
-- ❌ Terraform AWS provider (explicitly not supported)
+**Compatibility:**
+- ✅ S3 API (bucket policies via AWS CLI, boto3, MinIO mc - data plane)
+- ✅ MinIO Admin API (`mc admin` for user/policy management - control plane)
+- ✅ S3-standard policy documents (Principal, Action, Resource, Condition, NotAction, NotResource)
+- ✅ AWS-like authorization (ownership, conditions, variables, result filtering)
+- ❌ AWS IAM API (`aws iam` commands - explicitly not supported)
+- ❌ Terraform AWS provider (requires AWS IAM API - explicitly not supported)
 
 ### User Management
 - [ ] AddUser - Create new user with credentials (MinIO Admin API)
@@ -442,7 +446,7 @@ Using "Core + Sidecar" approach:
 - [ ] Migration guide from MinIO
 - [ ] Configuration guide (CLI/ENV/YAML)
 - [x] Client compatibility guide - See [CLIENTS.md](CLIENTS.md)
-- [ ] IAM/Admin API design decision - See [MINIO-IAM-SUPPORT.md](docs/MINIO-IAM-SUPPORT.md)
+- [x] IAM/Admin API design decision - See [IAM-ARCHITECTURE.md](docs/IAM-ARCHITECTURE.md)
 - [ ] mDNS setup and troubleshooting
 - [ ] Reverse proxy setup guide (nginx examples)
 - [ ] S3 API compliance status

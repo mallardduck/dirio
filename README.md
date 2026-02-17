@@ -79,10 +79,39 @@ Objects in `buckets/` are regular files. Nothing special.
 
 ## Supported Operations
 
-**Objects**: GET, PUT, HEAD, DELETE, LIST  
-**Buckets**: CREATE, DELETE, HEAD, LIST, GetLocation
+**Objects**: GET, PUT, HEAD, DELETE, LIST, COPY, Multipart Upload
+**Buckets**: CREATE, DELETE, HEAD, LIST, GetLocation, Policy (GET/PUT/DELETE)
+**Metadata**: Custom metadata, Object tagging
+**Advanced**: Presigned URLs, Range requests
 
-That's the MVP. More operations coming in future phases.
+## IAM & Authorization
+
+DirIO uses a **hybrid IAM approach** combining the best of S3 and MinIO:
+
+**S3 API Layer (Data Plane):**
+- Bucket policies with AWS-standard actions (`s3:GetObject`, `s3:PutObject`)
+- Policy conditions (IpAddress, StringEquals, DateLessThan, etc.)
+- Policy variables (`${aws:username}`, `${aws:SourceIp}`)
+- UUID-based ownership (AWS-like implicit permissions)
+- Result filtering (ListBuckets/ListObjects based on permissions)
+
+**MinIO Admin API (Control Plane):**
+- User management via `mc admin user add/remove/list`
+- Policy management via `mc admin policy create/attach`
+- Compatible with MinIO `mc` client
+
+**Shared Backend:**
+- Unified IAM metadata in `.dirio/iam/`
+- S3-standard PolicyDocument format
+- Thread-safe policy evaluation engine
+
+**What's Supported:**
+- ✅ S3 bucket policies (AWS CLI, boto3, MinIO mc)
+- ✅ MinIO Admin API (`mc admin` commands)
+- ❌ AWS IAM API (`aws iam` - explicitly not supported)
+- ❌ Terraform AWS provider (requires AWS IAM API)
+
+See [docs/IAM-ARCHITECTURE.md](docs/IAM-ARCHITECTURE.md) for complete details.
 
 ## MinIO Migration
 
