@@ -47,6 +47,10 @@ type Settings struct {
 
 	// CLIRegionExplicitlySet tracks whether region was explicitly provided
 	CLIRegionExplicitlySet bool
+
+	// Console settings
+	ConsoleEnabled bool
+	ConsoleAddress string
 }
 
 // Validate checks that the configured settings are valid
@@ -134,6 +138,10 @@ func LoadConfig(flags *pflag.FlagSet, v *viper.Viper) (*Settings, error) {
 
 		// Track if region was explicitly set
 		CLIRegionExplicitlySet: resolver.WasExplicitlySet(Region),
+
+		// Console settings
+		ConsoleEnabled: resolver.GetBool(ConsoleEnabled),
+		ConsoleAddress: resolver.Get(ConsoleAddress),
 	}
 
 	// Debug flag overrides log level

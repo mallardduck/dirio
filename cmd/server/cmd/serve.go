@@ -54,6 +54,10 @@ func init() {
 	serveCmd.Flags().String(config.MDNSMode.GetFlagKey(), config.MDNSMode.GetDefaultAsString(), "controls mDNS responder mode detection")
 	serveCmd.Flags().String(config.CanonicalDomain.GetFlagKey(), config.CanonicalDomain.GetDefaultAsString(), "Canonical domain for URL generation (e.g., s3.example.com)")
 
+	// Console flags
+	serveCmd.Flags().Bool(config.ConsoleEnabled.GetFlagKey(), true, "Enable the embedded web admin console (default: true; use --console=false to disable)")
+	serveCmd.Flags().String(config.ConsoleAddress.GetFlagKey(), config.ConsoleAddress.GetDefaultAsString(), "Optional separate listen address for the console (e.g. :9001); defaults to main port at /dirio/ui/")
+
 	// Bind flags to viper for config file support
 	_ = viper.BindPFlag(config.DataDir.GetViperKey(), serveCmd.Flags().Lookup(config.DataDir.GetFlagKey()))
 	_ = viper.BindPFlag(config.Port.GetViperKey(), serveCmd.Flags().Lookup(config.Port.GetFlagKey()))
@@ -69,6 +73,8 @@ func init() {
 	_ = viper.BindPFlag(config.MDNSHostname.GetViperKey(), serveCmd.Flags().Lookup(config.MDNSHostname.GetFlagKey()))
 	_ = viper.BindPFlag(config.MDNSMode.GetViperKey(), serveCmd.Flags().Lookup(config.MDNSMode.GetFlagKey()))
 	_ = viper.BindPFlag(config.CanonicalDomain.GetViperKey(), serveCmd.Flags().Lookup(config.CanonicalDomain.GetFlagKey()))
+	_ = viper.BindPFlag(config.ConsoleEnabled.GetViperKey(), serveCmd.Flags().Lookup(config.ConsoleEnabled.GetFlagKey()))
+	_ = viper.BindPFlag(config.ConsoleAddress.GetViperKey(), serveCmd.Flags().Lookup(config.ConsoleAddress.GetFlagKey()))
 }
 
 func runServer(cmd *cobra.Command, args []string) error {
@@ -135,6 +141,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
 	}
+
+	// Wire the web admin console (no-op when built with -tags noconsole)
+	setupConsole(srv, settings.ConsoleEnabled, settings.ConsoleAddress)
 
 	log.Info("starting server", "port", settings.Port, "data_dir", settings.DataDir)
 

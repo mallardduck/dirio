@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -67,6 +68,29 @@ type Server struct {
 	policyEngine *policy.Engine
 	mdns         *mdns.Service
 	log          *slog.Logger
+
+	// console is the optional web admin console handler.
+	// Set via SetConsole before calling Start.
+	consoleHandler http.Handler
+	consoleAddress string // empty = same port at /dirio/ui/
+}
+
+// Metadata returns the metadata manager (used by the console wire file).
+func (s *Server) Metadata() *metadata.Manager { return s.metadata }
+
+// Storage returns the storage backend (used by the console wire file).
+func (s *Server) Storage() *storage.Storage { return s.storage }
+
+// PolicyEngine returns the policy engine (used by the console wire file).
+func (s *Server) PolicyEngine() *policy.Engine { return s.policyEngine }
+
+// SetConsole registers the console handler with the server. When address is
+// empty the console is mounted at /dirio/ui/ on the main port. When address
+// is non-empty (e.g. ":9001") a separate listener is started for the console.
+// Must be called before Start.
+func (s *Server) SetConsole(h http.Handler, address string) {
+	s.consoleHandler = h
+	s.consoleAddress = address
 }
 
 // New creates a new server instance
@@ -203,6 +227,31 @@ func (s *Server) setupRoutes() {
 	SetupRoutes(s.router, deps)
 }
 
+// consoleSamePort reports whether the console should be mounted on the main
+// port. This is true when no separate address is configured, or when the
+// configured address resolves to the same port as the main server.
+func (s *Server) consoleSamePort() bool {
+	if s.consoleAddress == "" {
+		return true
+	}
+	return s.consoleAddress == fmt.Sprintf(":%d", s.config.Port)
+}
+
+// buildHandler constructs the top-level http.Handler, mounting the console when
+// it is configured for same-port operation.
+func (s *Server) buildHandler() http.Handler {
+	if s.consoleHandler == nil || !s.consoleSamePort() {
+		return s.router
+	}
+
+	// Same-port console: mount at /dirio/ui/, everything else goes to the S3 router.
+	mux := http.NewServeMux()
+	mux.Handle("/dirio/ui/", http.StripPrefix("/dirio/ui", s.consoleHandler))
+	mux.Handle("/", s.router)
+	s.log.Info("console mounted on main port", "path", "/dirio/ui/")
+	return mux
+}
+
 // Start begins serving HTTP requests with graceful shutdown support.
 // It listens for SIGINT and SIGTERM to trigger a graceful shutdown,
 // properly stopping mDNS service and draining HTTP connections.
@@ -212,10 +261,27 @@ func (s *Server) Start() error {
 	// Create HTTP server with timeouts
 	httpServer := &http.Server{
 		Addr:         addr,
-		Handler:      s.router,
+		Handler:      s.buildHandler(),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
+	}
+
+	// Start separate console listener if configured on a different port
+	if s.consoleHandler != nil && !s.consoleSamePort() {
+		consoleServer := &http.Server{
+			Addr:         s.consoleAddress,
+			Handler:      s.consoleHandler,
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 30 * time.Second,
+			IdleTimeout:  60 * time.Second,
+		}
+		go func() {
+			s.log.Info("console listening on separate port", "addr", s.consoleAddress)
+			if err := consoleServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				s.log.Error("console server error", "error", err)
+			}
+		}()
 	}
 
 	// Start mDNS service if enabled

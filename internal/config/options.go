@@ -59,3 +59,14 @@ var (
 	// Note: If data config exists, this flag is informational only
 	Region = option.NewOption("region", "us-east-1")
 )
+
+// Console configuration options
+var (
+	// ConsoleEnabled controls whether the embedded web admin console is served
+	ConsoleEnabled = option.NewOption("console", true)
+
+	// ConsoleAddress is the optional separate listen address for the console.
+	// When empty (default), the console is mounted at /dirio/ui/ on the main port.
+	// When set (e.g. ":9001"), the console gets its own listener at that address.
+	ConsoleAddress = option.NewOption("console-address", "")
+)
