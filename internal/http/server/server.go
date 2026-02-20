@@ -99,31 +99,32 @@ func New(config *Config) (*Server, error) {
 	// Initialize authenticator with appropriate credentials
 	var authenticator *auth.Authenticator
 
-	if config.DataConfig != nil {
-		// Data config exists - use smart credential selection
-		if config.CLICredentialsExplicitlySet {
-			// User explicitly configured CLI credentials - use dual admin mode
-			log.Info("Configured dual admin access",
-				"cli_admin", config.AccessKey,
-				"data_admin", config.DataConfig.Credentials.AccessKey)
-			authenticator = auth.New(metaMgr, config.AccessKey, config.SecretKey)
-			authenticator = authenticator.WithAlternativeRoot(
-				config.DataConfig.Credentials.AccessKey,
-				config.DataConfig.Credentials.SecretKey,
-			)
-		} else {
-			// CLI credentials not explicitly set - only use data config admin
-			log.Info("Using data config admin credentials only (CLI credentials not explicitly set)",
-				"data_admin", config.DataConfig.Credentials.AccessKey)
-			authenticator = auth.New(metaMgr,
-				config.DataConfig.Credentials.AccessKey,
-				config.DataConfig.Credentials.SecretKey,
-			)
-		}
+	dataCredsConfigured := config.DataConfig != nil && config.DataConfig.Credentials.IsConfigured()
+
+	if dataCredsConfigured && config.CLICredentialsExplicitlySet {
+		// Both data config credentials and explicit CLI credentials present — dual admin mode.
+		log.Info("Configured dual admin access",
+			"cli_admin", config.AccessKey,
+			"data_admin", config.DataConfig.Credentials.AccessKey)
+		authenticator = auth.New(metaMgr, config.AccessKey, config.SecretKey)
+		authenticator = authenticator.WithAlternativeRoot(
+			config.DataConfig.Credentials.AccessKey,
+			config.DataConfig.Credentials.SecretKey,
+		)
+	} else if dataCredsConfigured {
+		// Data config credentials configured, no explicit CLI override — data config admin only.
+		log.Info("Using data config admin credentials",
+			"data_admin", config.DataConfig.Credentials.AccessKey)
+		authenticator = auth.New(metaMgr,
+			config.DataConfig.Credentials.AccessKey,
+			config.DataConfig.Credentials.SecretKey,
+		)
 	} else {
-		// No data config exists - use CLI credentials (needed for initial setup)
+		// No configured data credentials — fall back to CLI/env credentials.
+		// This covers: new data dirs, or existing dirs where credentials haven't
+		// been set yet via "dirio init".
 		if !config.CLICredentialsExplicitlySet {
-			log.Warn("Using default credentials - change these in production!",
+			log.Warn("No admin credentials configured — using defaults. Run \"dirio init\" to set up admin credentials.",
 				"admin", config.AccessKey)
 		}
 		authenticator = auth.New(metaMgr, config.AccessKey, config.SecretKey)
@@ -169,10 +170,11 @@ func (s *Server) setupRoutes() {
 	s.router.Use(teapot.RouteContextMiddleware(s.router))
 	s.router.Use(loggingHttp.PrepareAccessLogMiddleware(s.log))
 
-	// Get root access keys for authorization middleware and filtering
+	// Get root access keys for authorization middleware and filtering.
+	// altRootAccessKey is only set when data config credentials are explicitly configured.
 	rootAccessKey := s.config.AccessKey
 	altRootAccessKey := ""
-	if s.config.DataConfig != nil {
+	if s.config.DataConfig != nil && s.config.DataConfig.Credentials.IsConfigured() {
 		altRootAccessKey = s.config.DataConfig.Credentials.AccessKey
 	}
 

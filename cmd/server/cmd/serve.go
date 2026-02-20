@@ -72,7 +72,7 @@ func init() {
 }
 
 func runServer(cmd *cobra.Command, args []string) error {
-	// Initialise credential encryption before any data config or metadata
+	// Initialize credential encryption before any data config or metadata
 	// operations. Read the data dir flag early — cobra has already parsed flags
 	// before RunE fires, so this is safe even before full config loading.
 	dataDir, _ := cmd.Flags().GetString(config.DataDir.GetFlagKey())
@@ -195,13 +195,21 @@ func initOrMigrateDataConfig(settings *config.Settings) error {
 		log.Info("Initializing new DirIO data directory")
 	}
 
-	// Create data config with CLI-provided credentials and region
+	// Create data config with region and storage defaults.
 	dc := data.DefaultDataConfig()
-	dc.Credentials.AccessKey = settings.AccessKey
-	dc.Credentials.SecretKey = settings.SecretKey
-	dc.Region = settings.Region // Use CLI region for new data directories
-	// Compression settings use defaults (disabled)
-	// WORM defaults to disabled
+	dc.Region = settings.Region
+
+	// Only persist credentials if they were explicitly provided — never bake
+	// defaults into config.json. Use "dirio init" to configure admin credentials.
+	if settings.CLICredentialsExplicitlySet {
+		dc.Credentials.AccessKey = settings.AccessKey
+		dc.Credentials.SecretKey = settings.SecretKey
+		log.Info("persisting explicit CLI credentials to data config", "access_key", settings.AccessKey)
+	} else {
+		log.Info("no explicit credentials provided — data config created without credentials",
+			"hint", "run \"dirio init --access-key ... --secret-key ...\" or \"dirio credentials set\" to configure admin credentials",
+		)
+	}
 
 	if err := data.SaveDataConfig(fs, dc); err != nil {
 		return fmt.Errorf("failed to save data config: %w", err)

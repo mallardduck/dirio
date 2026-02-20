@@ -2,10 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
+	"github.com/mallardduck/dirio/internal/cli/output"
 	"github.com/mallardduck/dirio/internal/config"
 	"github.com/mallardduck/dirio/internal/crypto"
 )
@@ -88,13 +88,16 @@ func runKeyRotate(cmd *cobra.Command, _ []string) error {
 
 	keyringPath := dataDir + "/.dirio/keyring"
 
-	fmt.Fprintf(os.Stderr, "\n[dirio] Encryption key rotated successfully.\n")
-	fmt.Fprintf(os.Stderr, "[dirio] New key:     %s\n", newKey)
-	fmt.Fprintf(os.Stderr, "[dirio] Keyring:     %s\n", keyringPath)
-	fmt.Fprintf(os.Stderr, "[dirio] Next steps:\n")
-	fmt.Fprintf(os.Stderr, "[dirio]   1. Restart dirio — new writes will use the new key.\n")
-	fmt.Fprintf(os.Stderr, "[dirio]   2. Old values will continue to decrypt via the fallback list.\n")
-	fmt.Fprintf(os.Stderr, "[dirio]   3. Once all credentials are re-encrypted, remove old key lines from the keyring.\n\n")
+	output.Blank()
+	output.Success("Encryption key rotated")
+	output.Field("New key", newKey)
+	output.Field("Keyring", keyringPath)
+	output.Steps("Next steps:", []string{
+		"Restart dirio — new writes will use the new key.",
+		"Old values will continue to decrypt via the fallback list.",
+		"Once all credentials are re-encrypted, remove old key lines from the keyring.",
+	})
+	output.Blank()
 
 	return nil
 }

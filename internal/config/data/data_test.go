@@ -13,15 +13,15 @@ func TestDefaultDataConfig(t *testing.T) {
 	config := DefaultDataConfig()
 
 	assert.Equal(t, ConfigDataVersion, config.Version)
-	assert.Equal(t, "dirio-admin", config.Credentials.AccessKey)
-	assert.Equal(t, "dirio-admin-secret", config.Credentials.SecretKey)
-	assert.Equal(t, "us-east-1", config.Region) // Default region is now us-east-1
+	// Credentials are intentionally empty in defaults — set via "dirio init".
+	assert.False(t, config.Credentials.IsConfigured())
+	assert.Equal(t, "us-east-1", config.Region)
 	assert.False(t, config.Compression.Enabled)
 	assert.False(t, config.WORMEnabled)
 	assert.NotZero(t, config.CreatedAt)
 	assert.NotZero(t, config.UpdatedAt)
 
-	// Validate should pass
+	// Validate should pass even with empty credentials.
 	err := config.Validate()
 	assert.NoError(t, err)
 }
@@ -51,19 +51,7 @@ func TestDataConfig_Validate(t *testing.T) {
 			errMsg:    "version is required",
 		},
 		{
-			name: "missing access key",
-			config: &ConfigData{
-				Version: ConfigDataVersion,
-				Credentials: CredentialsConfig{
-					AccessKey: "",
-					SecretKey: "secret",
-				},
-			},
-			expectErr: true,
-			errMsg:    "credentials.accessKey is required",
-		},
-		{
-			name: "missing secret key",
+			name: "only access key set",
 			config: &ConfigData{
 				Version: ConfigDataVersion,
 				Credentials: CredentialsConfig{
@@ -72,7 +60,27 @@ func TestDataConfig_Validate(t *testing.T) {
 				},
 			},
 			expectErr: true,
-			errMsg:    "credentials.secretKey is required",
+			errMsg:    "must both be set or both be empty",
+		},
+		{
+			name: "only secret key set",
+			config: &ConfigData{
+				Version: ConfigDataVersion,
+				Credentials: CredentialsConfig{
+					AccessKey: "",
+					SecretKey: "secret",
+				},
+			},
+			expectErr: true,
+			errMsg:    "must both be set or both be empty",
+		},
+		{
+			name: "both credentials empty is valid",
+			config: &ConfigData{
+				Version:     ConfigDataVersion,
+				Credentials: CredentialsConfig{},
+			},
+			expectErr: false,
 		},
 	}
 
@@ -185,11 +193,11 @@ func TestLoadDataConfig_InvalidData(t *testing.T) {
 	require.NoError(t, err)
 	f.Close()
 
-	// Loading should fail validation
+	// Loading should fail validation — mismatched credentials (one set, one empty).
 	_, err = LoadDataConfig(fs)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid data config")
-	assert.Contains(t, err.Error(), "credentials.accessKey is required")
+	assert.Contains(t, err.Error(), "must both be set or both be empty")
 }
 
 func TestSaveDataConfig_UpdatesTimestamp(t *testing.T) {

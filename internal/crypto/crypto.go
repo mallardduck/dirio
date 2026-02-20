@@ -41,6 +41,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -177,9 +178,11 @@ func loadOrCreateKeyring(dataDir string) (current []byte, previous [][]byte, err
 		return nil, nil, fmt.Errorf("write %s: %w", keyringPath, err)
 	}
 
-	_, _ = fmt.Fprintf(os.Stderr, "\n[dirio] Encryption key generated: %s\n", keyringPath)
-	_, _ = fmt.Fprintf(os.Stderr, "[dirio] Back this file up — losing it means encrypted credentials cannot be recovered.\n")
-	_, _ = fmt.Fprintf(os.Stderr, "[dirio] For production deployments, set %s instead.\n\n", EnvKey)
+	slog.Info("encryption keyring generated",
+		"path", keyringPath,
+		"hint_backup", "back this file up — losing it means encrypted credentials cannot be recovered",
+		"hint_production", "for production deployments, set "+EnvKey+" instead",
+	)
 
 	return key, nil, nil
 }

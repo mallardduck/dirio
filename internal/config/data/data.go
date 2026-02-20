@@ -47,10 +47,18 @@ type ConfigData struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// CredentialsConfig contains root access credentials
+// CredentialsConfig contains root access credentials for this data directory.
+// Both fields are optional — an unconfigured CredentialsConfig means the server
+// falls back to CLI/env credentials. Use "dirio init" or "dirio credentials set"
+// to configure them explicitly.
 type CredentialsConfig struct {
-	AccessKey string `json:"accessKey"`
-	SecretKey string `json:"secretKey"`
+	AccessKey string `json:"accessKey,omitempty"`
+	SecretKey string `json:"secretKey,omitempty"`
+}
+
+// IsConfigured reports whether both access key and secret key are set.
+func (c CredentialsConfig) IsConfigured() bool {
+	return c.AccessKey != "" && c.SecretKey != ""
 }
 
 // CompressionConfig defines compression behavior
@@ -77,15 +85,14 @@ type StorageClassConfig struct {
 	RRS string `json:"rrs,omitempty"`
 }
 
-// DefaultDataConfig returns a ConfigData with sensible defaults
+// DefaultDataConfig returns a ConfigData with sensible defaults.
+// Credentials are intentionally left empty — set them explicitly via
+// "dirio init" or "dirio credentials set" rather than baking in defaults.
 func DefaultDataConfig() *ConfigData {
 	return &ConfigData{
-		Version: ConfigDataVersion,
-		Credentials: CredentialsConfig{
-			AccessKey: "dirio-admin",
-			SecretKey: "dirio-admin-secret",
-		},
-		Region: "us-east-1", // AWS-style region for consistency
+		Version:     ConfigDataVersion,
+		Credentials: CredentialsConfig{}, // empty — must be configured explicitly
+		Region:      "us-east-1",         // AWS-style region for consistency
 		Compression: CompressionConfig{
 			Enabled:         false,
 			AllowEncryption: false,
@@ -102,20 +109,15 @@ func DefaultDataConfig() *ConfigData {
 	}
 }
 
-// Validate checks if the ConfigData is valid
+// Validate checks if the ConfigData is valid.
+// Credentials are optional — either both fields must be set, or neither.
 func (dc *ConfigData) Validate() error {
-	// TODO: Decide validation strategy for invalid/missing configs
-	// Options: (A) Fail fast, (B) Merge with defaults, (C) Warn and use defaults
-	// Current: Fail fast for required fields
-
 	if dc.Version == "" {
 		return fmt.Errorf("version is required")
 	}
-	if dc.Credentials.AccessKey == "" {
-		return fmt.Errorf("credentials.accessKey is required")
-	}
-	if dc.Credentials.SecretKey == "" {
-		return fmt.Errorf("credentials.secretKey is required")
+	// Credentials are optional, but must be a consistent pair.
+	if (dc.Credentials.AccessKey == "") != (dc.Credentials.SecretKey == "") {
+		return fmt.Errorf("credentials: accessKey and secretKey must both be set or both be empty")
 	}
 	return nil
 }
@@ -134,12 +136,14 @@ func LoadDataConfig(rootFS billy.Filesystem) (*ConfigData, error) {
 		return nil, fmt.Errorf("failed to parse data config: %w", err)
 	}
 
-	// Decrypt secret key if stored encrypted.
-	decrypted, err := crypto.Decrypt(config.Credentials.SecretKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt credentials: %w", err)
+	// Decrypt secret key if stored encrypted (skip when credentials are not configured).
+	if config.Credentials.SecretKey != "" {
+		decrypted, err := crypto.Decrypt(config.Credentials.SecretKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt credentials: %w", err)
+		}
+		config.Credentials.SecretKey = decrypted
 	}
-	config.Credentials.SecretKey = decrypted
 
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid data config: %w", err)
@@ -164,15 +168,17 @@ func SaveDataConfig(rootFS billy.Filesystem, config *ConfigData) error {
 
 	configPath := ".dirio/config.json"
 
-	// Encrypt secret key before persisting.
-	encryptedSecret, err := crypto.Encrypt(config.Credentials.SecretKey)
-	if err != nil {
-		return fmt.Errorf("failed to encrypt credentials: %w", err)
-	}
-
 	// Work on a shallow copy so the in-memory config keeps the plaintext value.
 	toSave := *config
-	toSave.Credentials.SecretKey = encryptedSecret
+
+	// Encrypt secret key before persisting (skip when credentials are not configured).
+	if config.Credentials.SecretKey != "" {
+		encryptedSecret, err := crypto.Encrypt(config.Credentials.SecretKey)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt credentials: %w", err)
+		}
+		toSave.Credentials.SecretKey = encryptedSecret
+	}
 
 	// Marshal with indentation for readability
 	data, err := json.MarshalIndent(toSave, "", "  ")
