@@ -359,9 +359,12 @@ Current status: **Phase 4.2 COMPLETE** → **4.3** Console foundation → **4.4*
 **Key decisions:**
 - `consoleapi/` package defines the interface seam — the only coupling point between console and server
 - `console/` package lives outside `internal/`, imports only `consoleapi/` — extractable later
+  - Should be where all Web assets for web console live at. 
 - `internal/console/adapter.go` implements the interface by calling the service layer directly (no HTTP round-trips)
 - Build tag `noconsole` strips it entirely: `go build -tags noconsole`
-- Served at `/_dirio/ui/` on main port by default; `--console-address :9001` for separate port
+- Served at `/dirio/ui/` on main port by default; `--console-address :9001` for separate port
+  - When on different port, the UI should be at `/`
+  - When on the same port, the UI will prevent access to a "dirio" named bucket
 - MinIO admin API stays on main port always — `mc` compatibility requires this
 
 ### Package Structure

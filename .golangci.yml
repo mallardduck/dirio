@@ -5,12 +5,21 @@ run:
   tests: true
 linters:
   enable:
+    - depguard
     - misspell
     - prealloc
     - revive
     - unconvert
     - unparam
   settings:
+    depguard:
+      rules:
+        console-no-internal:
+          files:
+            - "**/console/**/*.go"
+          deny:
+            - pkg: "github.com/mallardduck/dirio/internal"
+              desc: "console/ must not import internal/ — use consoleapi/ interface only"
     errcheck:
       check-type-assertions: false
       check-blank: false
