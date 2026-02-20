@@ -100,7 +100,7 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 				Username:         username,   // MinIO uses accessKey as username
 				AccessKey:        minioUser.AccessKey,
 				SecretKey:        minioUser.SecretKey,
-				Status:           iam.UserStatus(minioUser.Status), // Convert string to UserStatus
+				Status:           convertMinIOStatus(minioUser.Status),
 				UpdatedAt:        minioUser.UpdatedAt,
 				AttachedPolicies: minioUser.AttachedPolicy,
 			}
@@ -238,6 +238,15 @@ func (m *Manager) getImportState() (*ImportState, error) {
 // saveImportState saves the import state
 func (m *Manager) saveImportState(state *ImportState) error {
 	return jsonutil.MarshalToFile(m.metadataFS, ".import-state", state)
+}
+
+// convertMinIOStatus maps MinIO user status strings ("enabled"/"disabled") to DirIO UserStatus ("on"/"off").
+// Any unrecognised value defaults to disabled for safety.
+func convertMinIOStatus(minioStatus string) iam.UserStatus {
+	if minioStatus == "enabled" {
+		return iam.UserStatusActive
+	}
+	return iam.UserStatusDisabled
 }
 
 // getMinIOModTime gets the last modification time of MinIO data

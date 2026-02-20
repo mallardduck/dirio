@@ -155,6 +155,14 @@ func (s *Service) AttachPolicy(ctx context.Context, accessKey, policyName string
 		return err
 	}
 
+	// Verify the policy exists before attaching
+	if _, err := s.metadata.GetPolicy(ctx, policyName); err != nil {
+		if errors.Is(err, metadata.ErrPolicyNotFound) {
+			return svcerrors.ErrPolicyNotFound
+		}
+		return err
+	}
+
 	// Get existing user
 	user, err := s.Get(ctx, accessKey)
 	if err != nil {

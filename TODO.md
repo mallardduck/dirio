@@ -1,8 +1,18 @@
 # DirIO Development Roadmap
 
-Current status: **Phase 4.2 NEARLY COMPLETE** - Core IAM mostly done, a few gaps remain → **4.3** Console foundation → **4.4** Extended IAM + console stopgaps
+Current status: **Phase 4.2 COMPLETE** → **4.3** Console foundation → **4.4** Extended IAM + console stopgaps
 
 ## Recent Updates
+
+**February 20, 2026 - Phase 4.2 Complete:**
+- ✅ **Admin Integration Test Suite** (`tests/admin/`, 37 tests) — New test area separate from S3 integration tests
+  - User CRUD, policy CRUD, attach/detach, policy-entities — all endpoints covered
+  - madmin encryption protocol tested end-to-end (EncryptData/DecryptData)
+- ✅ **MinIO IAM Import Tests** (`tests/admin/minio_import_test.go`) — End-to-end import verification
+  - Users, policies, mappings, disabled status, idempotent restart, post-import management
+- 🐛 **Bug Fix:** MinIO "enabled"/"disabled" status not converted to DirIO "on"/"off" on import
+- 🐛 **Bug Fix:** `AttachPolicy` silently accepted non-existent policy names — now returns 404
+- ✅ **UnsetPolicy HTTP endpoint** confirmed complete (`/idp/builtin/policy/detach`)
 
 **February 16, 2026 (19:46) - Phase 3.3 Status Update:**
 - ✅ **Client Compatibility Tests Confirmed:**
@@ -290,9 +300,9 @@ Current status: **Phase 4.2 NEARLY COMPLETE** - Core IAM mostly done, a few gaps
 - ✅ Client filtering tests implemented (25 tests, require IAM users to activate)
 - ✅ Setup scripts with comprehensive policy test scenarios
 
-### Phase 4.2: Core IAM — mc-Compatible User & Policy Management ⏳ NEARLY COMPLETE
+### Phase 4.2: Core IAM — mc-Compatible User & Policy Management ✅ COMPLETE
 
-**Status:** ⏳ Mostly implemented — a few gaps remain (UnsetPolicy HTTP endpoint, credential encryption, tests)
+**Status:** ✅ COMPLETE (Feb 20, 2026) — All endpoints implemented and tested. Credential encryption at rest is deferred to Phase 4.4.
 
 **Goal:** Complete the MinIO-compatible IAM backbone — everything `mc admin` can drive. Groups, service accounts, and DirIO-specific IAM features move to Phase 4.4 (after the console foundation is in place).
 
@@ -310,7 +320,7 @@ Current status: **Phase 4.2 NEARLY COMPLETE** - Core IAM mostly done, a few gaps
 - ✅ GetPolicy — `GET /minio/admin/v3/info-canned-policy`
 - ✅ SetPolicy (attach) — `POST /minio/admin/v3/set-policy` + `POST /minio/admin/v3/idp/builtin/policy/attach`
 - ✅ ListPolicyEntities — `GET /minio/admin/v3/policy-entities`
-- ✅ UnsetPolicy (detach) — service layer exists (`DetachPolicy`), no HTTP endpoint yet
+- ✅ UnsetPolicy (detach) — `POST /minio/admin/v3/idp/builtin/policy/detach` + encrypted body support
 
 ### Storage & Data Model
 - ✅ IAM metadata storage structure (`.dirio/iam/users/`, `.dirio/iam/policies/`)
@@ -329,12 +339,16 @@ Current status: **Phase 4.2 NEARLY COMPLETE** - Core IAM mostly done, a few gaps
 - ✅ Multi-user credential lookup — user injected into request context via middleware
 
 ### Testing
-- [ ] Unit tests for user/policy CRUD (`internal/service/user/`, `internal/service/policy/`)
-- [ ] Integration tests with `mc admin` commands
-- [ ] Multi-user S3 access scenarios (alice/bob test users)
-- [ ] Test migration from MinIO IAM metadata
-- [ ] **Activate client filtering tests** — create alice/bob users to run existing filtering tests
-- [ ] **Create integration tests** — `tests/integration/list_filtering_test.go` for result filtering
+- ✅ Admin API integration tests — `tests/admin/` (37 tests covering all user/policy CRUD + attach/detach/entities)
+  - ✅ User CRUD: create, list, info, delete, enable/disable, validation errors, duplicate detection
+  - ✅ Policy CRUD: create, list, info, delete, invalid doc rejection, missing name
+  - ✅ Policy attach/detach: attach, detach, idempotent attach, policy-entities, policy-not-found now returns 404
+  - ✅ madmin encryption protocol tested (add-user uses EncryptData/DecryptData)
+- ✅ MinIO IAM import integration tests — `tests/admin/minio_import_test.go`
+  - ✅ Users, policies, user-policy mappings imported on startup
+  - ✅ Disabled users imported with correct "off" status (bug found + fixed)
+  - ✅ Idempotent re-import (state file prevents duplicate import on restart)
+  - ✅ Post-import user management via admin API
 
 ## Phase 4.3: Web Admin Console Foundation
 
@@ -411,6 +425,10 @@ Current status: **Phase 4.2 NEARLY COMPLETE** - Core IAM mostly done, a few gaps
 - [ ] Integration tests for group policy inheritance
 - [ ] Service account delegation and expiration testing
 - [ ] Console stopgap feature testing
+- [ ] Integration tests with live `mc admin` CLI (manual, requires `mc` binary + running server)
+- [ ] Multi-user S3 access scenarios (alice/bob test users)
+- [ ] **Activate client filtering tests** — create alice/bob users to run existing filtering tests
+- [ ] **Create integration tests** — `tests/integration/list_filtering_test.go` for result filtering
 
 ---
 
