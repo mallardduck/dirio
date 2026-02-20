@@ -1,6 +1,6 @@
 # DirIO Development Roadmap
 
-Current status: **Phase 4.2 IN PROGRESS** - Building MinIO Admin API for multi-user IAM support
+Current status: **Phase 4.2 NEARLY COMPLETE** - Core IAM mostly done, a few gaps remain → **4.3** Console foundation → **4.4** Extended IAM + console stopgaps
 
 ## Recent Updates
 
@@ -290,81 +290,129 @@ Current status: **Phase 4.2 IN PROGRESS** - Building MinIO Admin API for multi-u
 - ✅ Client filtering tests implemented (25 tests, require IAM users to activate)
 - ✅ Setup scripts with comprehensive policy test scenarios
 
-### Phase 4.2: IAM User & Admin API ⏳ IN PROGRESS
+### Phase 4.2: Core IAM — mc-Compatible User & Policy Management ⏳ NEARLY COMPLETE
 
-**Status:** ⏳ IN PROGRESS - Building MinIO Admin API for user/group/policy management
+**Status:** ⏳ Mostly implemented — a few gaps remain (UnsetPolicy HTTP endpoint, credential encryption, tests)
 
-**Goal:** Enable multi-user scenarios with `mc admin` commands for user/group/policy CRUD operations.
+**Goal:** Complete the MinIO-compatible IAM backbone — everything `mc admin` can drive. Groups, service accounts, and DirIO-specific IAM features move to Phase 4.4 (after the console foundation is in place).
 
 ### User Management
-- [ ] AddUser - Create new user with credentials (MinIO Admin API)
-- [ ] RemoveUser - Delete user
-- [ ] ListUsers - List all users
-- [ ] GetUserInfo - Get user details and policies
-- [ ] EnableUser - Enable disabled user
-- [ ] DisableUser - Disable user (soft delete)
-- [ ] SetUserStatus - Change user enabled/disabled state
-
-### Service Account Management
-- [ ] AddServiceAccount - Create service account for a user (long-lived credentials)
-- [ ] RemoveServiceAccount - Delete service account
-- [ ] ListServiceAccounts - List service accounts for a user
-- [ ] GetServiceAccountInfo - Get service account details
-- [ ] UpdateServiceAccount - Update service account policy/description
-
-### Group Management
-- [ ] AddGroup - Create user group
-- [ ] RemoveGroup - Delete group
-- [ ] ListGroups - List all groups
-- [ ] GetGroupInfo - Get group details and members
-- [ ] GroupAdd - Add user(s) to group
-- [ ] GroupRemove - Remove user(s) from group
+- ✅ AddUser — `PUT /minio/admin/v3/add-user` (`internal/http/api/iam/user.go`)
+- ✅ RemoveUser — `POST /minio/admin/v3/remove-user`
+- ✅ ListUsers — `GET /minio/admin/v3/list-users`
+- ✅ GetUserInfo — `GET /minio/admin/v3/user-info`
+- ✅ SetUserStatus (enable/disable) — `POST /minio/admin/v3/set-user-status`
 
 ### Policy Management
-- [ ] AddPolicy - Create new policy (JSON document, S3-style actions/resources)
-- [ ] RemovePolicy - Delete policy
-- [ ] ListPolicies - List all policies
-- [ ] GetPolicy - Retrieve policy document
-- [ ] SetPolicy - Attach policy to user or group
-- [ ] UnsetPolicy - Detach policy from user or group
-
-### Access Key Management
-- [ ] User access keys (access key ID + secret key pairs)
-- [ ] Key rotation support
-- [ ] Multiple keys per user support
-- [ ] Key enable/disable (without deletion)
+- ✅ AddPolicy — `POST|PUT /minio/admin/v3/add-canned-policy` (`internal/http/api/iam/policy.go`)
+- ✅ RemovePolicy — `POST /minio/admin/v3/remove-canned-policy`
+- ✅ ListPolicies — `GET /minio/admin/v3/list-canned-policies`
+- ✅ GetPolicy — `GET /minio/admin/v3/info-canned-policy`
+- ✅ SetPolicy (attach) — `POST /minio/admin/v3/set-policy` + `POST /minio/admin/v3/idp/builtin/policy/attach`
+- ✅ ListPolicyEntities — `GET /minio/admin/v3/policy-entities`
+- ✅ UnsetPolicy (detach) — service layer exists (`DetachPolicy`), no HTTP endpoint yet
 
 ### Storage & Data Model
-- [ ] Design IAM metadata storage structure (.dirio/iam/)
-- [ ] User metadata schema (access keys, enabled status, policies, group memberships)
-- [ ] Group metadata schema (policies, members)
-- [ ] Service account metadata schema (parent user, policies, description)
-- [ ] Policy metadata schema (JSON policy documents with S3 actions/resources)
-- [ ] Secure credential storage (encrypted access keys)
+- ✅ IAM metadata storage structure (`.dirio/iam/users/`, `.dirio/iam/policies/`)
+- ✅ User metadata schema — UUID, accessKey, secretKey, status, attachedPolicies (`pkg/iam/types.go`)
+- ✅ Policy metadata schema — name, PolicyDocument, timestamps (`pkg/iam/types.go`)
+- [ ] Credential encryption at rest — currently stored as plaintext JSON (only encrypted in transit)
 
 ### API Design
-- [ ] **MinIO Admin API** - REST-based endpoints, configurable port strategy
-  - **Default (same port):** `/minio/admin/v3/*` on port 9000 - full `mc` compatibility
-  - **Optional (separate port):** `/minio/admin/v3/*` on port 9001 - cleaner separation
-- [ ] Path-based routing middleware (check prefix before S3 routing)
-- [ ] JSON request/response format (NOT XML Query API)
-- [ ] Standard HTTP methods (POST/GET/DELETE)
-- [ ] **mDNS registration** for admin endpoints
-- [ ] Configuration options for admin API
+- ✅ MinIO Admin API endpoints (`/minio/admin/v3/*`) on main port (`internal/http/server/routes.go`)
+- ✅ Path-based routing middleware (teapot router)
+- ✅ JSON request/response format
+- ✅ mDNS registration for admin endpoints (`internal/mdns/mdns.go`)
 
 ### Authentication Integration
-- [ ] Refactor auth package to support multiple users (currently single admin only)
-- [ ] Multi-user credential storage and lookup
-- [ ] Admin API authentication (SigV4 for `/minio/admin/v3/*` endpoints)
+- ✅ Multi-user auth support — checks root, alt-root, then IAM users (`internal/http/auth/auth.go`)
+- ✅ Multi-user credential lookup — user injected into request context via middleware
 
 ### Testing
-- [ ] Unit tests for user/group/policy CRUD operations
+- [ ] Unit tests for user/policy CRUD (`internal/service/user/`, `internal/service/policy/`)
 - [ ] Integration tests with `mc admin` commands
 - [ ] Multi-user S3 access scenarios (alice/bob test users)
-- [ ] Service account delegation testing
 - [ ] Test migration from MinIO IAM metadata
-- [ ] **Activate client filtering tests** - Create alice/bob users to run existing filtering tests
-- [ ] **Create integration tests** - Build tests/integration/list_filtering_test.go for result filtering
+- [ ] **Activate client filtering tests** — create alice/bob users to run existing filtering tests
+- [ ] **Create integration tests** — `tests/integration/list_filtering_test.go` for result filtering
+
+## Phase 4.3: Web Admin Console Foundation
+
+**Goal:** Build an embedded admin console into the DirIO server as the primary interface for DirIO-specific hybrid IAM features that `mc` and S3 clients cannot reach.
+
+**Architecture:** See [docs/CONSOLE-ARCHITECTURE.md](docs/CONSOLE-ARCHITECTURE.md) for full design.
+
+**Key decisions:**
+- `consoleapi/` package defines the interface seam — the only coupling point between console and server
+- `console/` package lives outside `internal/`, imports only `consoleapi/` — extractable later
+- `internal/console/adapter.go` implements the interface by calling the service layer directly (no HTTP round-trips)
+- Build tag `noconsole` strips it entirely: `go build -tags noconsole`
+- Served at `/_dirio/ui/` on main port by default; `--console-address :9001` for separate port
+- MinIO admin API stays on main port always — `mc` compatibility requires this
+
+### Package Structure
+- [ ] Create `consoleapi/` with `ConsoleAPI` interface + request/response types
+- [ ] Create `console/` package with `http.Handler` wired via `ConsoleAPI`
+- [ ] Create `internal/console/adapter.go` implementing `ConsoleAPI` via service layer
+- [ ] Create `cmd/dirio/wire_console.go` + `wire_console_stub.go` with build tags
+- [ ] Embed static assets (`console/static/` via Go `embed`)
+
+### Configuration
+- [ ] `console.enabled` / `--console` flag (default: true)
+- [ ] `console.address` / `--console-address` for optional separate port
+
+### Stopgap Priorities (DirIO-specific features mc cannot access)
+- [ ] **Ownership management** — view bucket/object owners, transfer ownership
+- [ ] **Policy observability** — effective permissions view + request simulator (show why allow/deny)
+- [ ] **Full S3 bucket policy editor** — JSON editor with conditions/variables (beyond `mc policy set` canned policies)
+
+### Foundation UI
+- [ ] Basic auth (reuse admin credentials from data config)
+- [ ] Dashboard: server status, bucket count, user count
+- [ ] Bucket list with owner display and policy summary
+- [ ] User list with attached policies
+
+### Later: Full MinIO-Style UI (expand in place)
+- [ ] User/policy CRUD, service account management, group management
+- [ ] IAM policy tester (simulate request → show evaluation trace)
+
+---
+
+## Phase 4.4: Extended IAM + Console Stopgaps
+
+**Goal:** Build out the IAM features that go beyond what `mc` alone can drive, using the Phase 4.3 console as their primary interface. These features require the console foundation to be in place first.
+
+### Group Management (mc-compatible, but lower priority)
+- [ ] AddGroup, RemoveGroup, ListGroups, GetGroupInfo
+- [ ] GroupAdd / GroupRemove — add/remove users from groups
+- [ ] Attach/detach policies to groups
+- [ ] Console UI: group list, membership management
+
+### Service Account Management (mc-compatible + DirIO extensions)
+- [ ] AddServiceAccount — long-lived or temporary credentials scoped to parent user (with optional expiration)
+- [ ] RemoveServiceAccount, ListServiceAccounts, GetServiceAccountInfo, UpdateServiceAccount
+- [ ] Policy inheritance from parent user with optional override
+- [ ] Console UI: service account list, expiration management
+
+### Access Key Management
+- [ ] Key rotation support
+- [ ] Multiple keys per user
+- [ ] Key enable/disable (without deletion)
+- [ ] Console UI: key management per user
+
+### Console Stopgaps (DirIO-specific — no mc equivalent)
+- [ ] **Ownership management UI** — view bucket/object owners, transfer ownership
+- [ ] **Effective permissions view** — show a user's combined access (bucket policy + IAM policies)
+- [ ] **Request simulator** — given user + bucket + action, show allow/deny and which rule decided it
+- [ ] **Full S3 bucket policy editor** — JSON editor with conditions/variables (beyond `mc policy set` canned policies)
+
+### Testing
+- [ ] Unit tests for group/service account CRUD
+- [ ] Integration tests for group policy inheritance
+- [ ] Service account delegation and expiration testing
+- [ ] Console stopgap feature testing
+
+---
 
 ## Phase 4.5: Stability & Performance
 
@@ -435,13 +483,13 @@ Current status: **Phase 4.2 IN PROGRESS** - Building MinIO Admin API for multi-u
 - [ ] Audit log rotation support
 - [ ] Document distinction: HTTP audit log vs full app audit log
 
-## Phase 8: Web UI (Lowest Priority)
+## Phase 8: Web UI — Extended Features
 
-- [ ] Basic file browser
-- [ ] Upload interface
-- [ ] User management UI (IAM users, groups, roles)
-- [ ] Bucket policy editor
-- [ ] IAM policy editor and tester
+**Foundation built in Phase 4.3. This phase covers features beyond IAM stopgaps.**
+
+- [ ] File browser (browse bucket contents, preview objects)
+- [ ] Upload interface (drag-and-drop, progress)
+- [ ] Audit log viewer (when Phase 7 audit logging is implemented)
 - [ ] (Note: UI actions will need audit logging separate from HTTP middleware)
 
 ## Phase N+: Any future work
@@ -468,6 +516,7 @@ Using "Core + Sidecar" approach:
 - [ ] Configuration guide (CLI/ENV/YAML)
 - [x] Client compatibility guide - See [CLIENTS.md](CLIENTS.md)
 - [x] IAM/Admin API design decision - See [IAM-ARCHITECTURE.md](docs/IAM-ARCHITECTURE.md)
+- [x] Console architecture - See [CONSOLE-ARCHITECTURE.md](docs/CONSOLE-ARCHITECTURE.md)
 - [ ] mDNS setup and troubleshooting
 - [ ] Reverse proxy setup guide (nginx examples)
 - [ ] S3 API compliance status

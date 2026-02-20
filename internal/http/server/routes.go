@@ -67,7 +67,8 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 			deleteCannedPolicy:    policyHandler.RemoveHandler,
 			getCannedPolicyInfo:   policyHandler.InfoHandler,
 			setPolicy:             policyHandler.SetHandler,
-			attachPolicy:          policyHandler.AddHandler,
+			attachPolicy:          policyHandler.SetHandler,
+			detachPolicy:          policyHandler.DetachHandler,
 			listPolicyEntities:    policyHandler.ListEntitiesHandler,
 			Info:                  RouteNotImplemented,
 			Health:                RouteNotImplemented,
@@ -211,6 +212,7 @@ type adminRouteDeps struct {
 	// Policy Attachments
 	setPolicy          http.HandlerFunc
 	attachPolicy       http.HandlerFunc
+	detachPolicy       http.HandlerFunc
 	listPolicyEntities http.HandlerFunc
 	// Server Info & Health (not yet implemented)
 	Info   http.HandlerFunc
@@ -253,7 +255,9 @@ func setupAdminRoutes(r *teapot.Router, deps *adminRouteDeps) {
 
 	// Policy Attachments
 	r.POST("/set-policy", deps.setPolicy).Name("policies.set") // deprecated: mc admin policy set
+	r.PUT("/set-user-or-group-policy", deps.setPolicy).Name("policies.set-user-or-group")
 	r.POST("/idp/builtin/policy/attach", deps.attachPolicy).Name("policies.attach")
+	r.POST("/idp/builtin/policy/detach", deps.detachPolicy).Name("policies.detach")
 	r.GET("/policy-entities", deps.listPolicyEntities).Name("policies.entities")
 
 	// Server Info & Health (not yet implemented)

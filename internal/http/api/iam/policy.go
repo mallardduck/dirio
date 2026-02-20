@@ -285,6 +285,112 @@ func (s policyHTTPService) SetPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s policyHTTPService) DetachPolicy(w http.ResponseWriter, r *http.Request) {
+	var policyName, userOrGroup string
+	var isGroup bool
+
+	if r.Header.Get(headers.ContentType) == "application/octet-stream" && r.ContentLength > 0 {
+		adminUser := auth.GetRequestUser(r.Context())
+		if adminUser == nil {
+			s.log.Error("No authenticated user in context")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		var req struct {
+			User     string   `json:"User"`
+			Group    string   `json:"Group"`
+			Policies []string `json:"Policies"`
+		}
+		if err := jsonutil.DecryptAndUnmarshal(adminUser.SecretKey, r.Body, &req); err != nil {
+			s.log.Error("Failed to decrypt/parse request body", "error", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		s.log.Debug("Decrypted request", "user", req.User, "group", req.Group, "policies", req.Policies)
+
+		if req.User != "" {
+			userOrGroup = req.User
+			isGroup = false
+		} else if req.Group != "" {
+			userOrGroup = req.Group
+			isGroup = true
+		}
+		if len(req.Policies) > 0 {
+			policyName = req.Policies[0]
+		}
+
+		s.log.Debug("Parsed encrypted request", "policy", policyName, "userOrGroup", userOrGroup, "isGroup", isGroup)
+	} else {
+		policyName = query.String(r, "policyName", "")
+		userOrGroup = query.String(r, "userOrGroup", "")
+		isGroup = query.Bool(r, "isGroup", false)
+
+		s.log.Debug("Parsed query parameters", "policy", policyName, "userOrGroup", userOrGroup, "isGroup", isGroup)
+	}
+
+	if policyName == "" || userOrGroup == "" {
+		s.log.Error("Missing required parameters", "policyName", policyName, "userOrGroup", userOrGroup)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if isGroup {
+		s.log.Error("Group policies not yet supported")
+		w.WriteHeader(http.StatusNotImplemented)
+		return
+	}
+
+	if err := s.users.DetachPolicy(r.Context(), userOrGroup, policyName); err != nil {
+		s.log.Error("Failed to detach policy", "error", err, "user", userOrGroup, "policy", policyName)
+
+		if svcerrors.IsNotFound(err) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if svcerrors.IsValidation(err) {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	s.log.Info("Policy detached successfully", "user", userOrGroup, "policy", policyName)
+
+	if r.Header.Get(headers.ContentType) == "application/octet-stream" {
+		adminUser := auth.GetRequestUser(r.Context())
+		if adminUser == nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		response := map[string]interface{}{
+			"updatedAt":        nil,
+			"policiesAttached": []string{},
+			"policiesDetached": []string{policyName},
+		}
+
+		encrypted, err := jsonutil.MarshalAndEncrypt(adminUser.SecretKey, response)
+		if err != nil {
+			s.log.Error("Failed to marshal/encrypt response", "error", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set(headers.ContentType, "application/octet-stream")
+		w.WriteHeader(http.StatusOK)
+		_, err = w.Write(encrypted)
+		if err != nil {
+			s.log.Error("Failed to write response", "error", err)
+			return
+		}
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
 func (s policyHTTPService) PolicyEntitiesList(w http.ResponseWriter, r *http.Request) {
 	policyName := query.String(r, "policy", "")
 	if policyName == "" {

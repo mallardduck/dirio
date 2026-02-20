@@ -110,6 +110,7 @@ type policyHandler struct {
 	RemoveHandler       http.HandlerFunc
 	InfoHandler         http.HandlerFunc
 	SetHandler          http.HandlerFunc
+	DetachHandler       http.HandlerFunc
 	ListEntitiesHandler http.HandlerFunc
 }
 
@@ -149,6 +150,13 @@ func (h *Handler) PolicyResourceHandler() policyHandler {
 				data.Action = "minio.v3.SetPolicy"
 			}
 			h.PolicyHTTPService().SetPolicy(w, r)
+		},
+		DetachHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "minio.v3.DetachPolicy"
+			}
+			h.PolicyHTTPService().DetachPolicy(w, r)
 		},
 		ListEntitiesHandler: func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
