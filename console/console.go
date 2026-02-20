@@ -27,25 +27,15 @@ func New(api consoleapi.API) http.Handler {
 	if err != nil {
 		panic("console: failed to create static sub-filesystem: " + err.Error())
 	}
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
-
-	// Server-side rendered HTML pages
+	// Server-side rendered HTML pages (registered before the catch-all file server).
 	h := handlers.New(api)
 	mux.HandleFunc("/users", h.Users)
 	mux.HandleFunc("/policies", h.Policies)
 	mux.HandleFunc("/buckets", h.Buckets)
 
-	// Root: serve the static index.html placeholder.
-	// When the dashboard is implemented it will call api methods and render HTML directly.
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		data, err := staticFiles.ReadFile("static/index.html")
-		if err != nil {
-			http.Error(w, "console index not found", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write(data)
-	})
+	// Catch-all: serve static files (index.html, dirio_logo.svg, etc.).
+	// http.FileServer handles directory requests by looking for index.html automatically.
+	mux.Handle("/", http.FileServer(http.FS(staticFS)))
 
 	return mux
 }

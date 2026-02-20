@@ -1,8 +1,17 @@
 # DirIO Development Roadmap
 
-Current status: **Phase 4.2 COMPLETE** → **4.3** Console foundation → **4.4** Extended IAM + console stopgaps
+Current status: **Phase 4.3 IN PROGRESS** — console package skeleton in place, serving placeholder UI
 
 ## Recent Updates
+
+**February 20, 2026 - Phase 4.3 Started (skeleton only):**
+- ✅ `consoleapi/` package — `ConsoleAPI` interface + request/response types (the seam between console and server)
+- ✅ `console/` package skeleton — `http.Handler` wired via `ConsoleAPI`; stub handlers for `/users`, `/policies`, `/buckets`
+- ✅ `internal/console/adapter.go` — implements `ConsoleAPI` via service layer; read operations wired, ownership/observability return `ErrNotImplemented`
+- ✅ `cmd/server/cmd/wire_console.go` + `wire_console_stub.go` — build tag wiring (`-tags noconsole` strips console entirely)
+- ✅ Static assets embedded via Go `embed` — placeholder `index.html` served at `/dirio/ui/`
+- ✅ `--console` flag (default: true) and `--console-address` flag for optional separate port
+- ✅ Same-port mount logic: console address equal to main port treated the same as empty (bug fix)
 
 **February 20, 2026 - Phase 4.2 Complete:**
 - ✅ **Admin Integration Test Suite** (`tests/admin/`, 37 tests) — New test area separate from S3 integration tests
@@ -367,16 +376,18 @@ Current status: **Phase 4.2 COMPLETE** → **4.3** Console foundation → **4.4*
   - When on the same port, the UI will prevent access to a "dirio" named bucket
 - MinIO admin API stays on main port always — `mc` compatibility requires this
 
-### Package Structure
-- [ ] Create `consoleapi/` with `ConsoleAPI` interface + request/response types
-- [ ] Create `console/` package with `http.Handler` wired via `ConsoleAPI`
-- [ ] Create `internal/console/adapter.go` implementing `ConsoleAPI` via service layer
-- [ ] Create `cmd/dirio/wire_console.go` + `wire_console_stub.go` with build tags
-- [ ] Embed static assets (`console/static/` via Go `embed`)
+### Package Structure (skeleton only — implementations still needed)
+- ✅ `consoleapi/` package exists with `ConsoleAPI` interface + request/response types
+- ✅ `console/` package exists — serves placeholder `index.html`; stub handlers return 501
+- ✅ `internal/console/adapter.go` exists — skeleton only, most methods return `ErrNotImplemented`
+- ✅ `cmd/server/cmd/wire_console.go` + `wire_console_stub.go` build tag wiring in place
+- ✅ Static assets embedded via Go `embed`; placeholder `index.html` served at `/dirio/ui/`
+- [ ] Implement console handlers as server-side rendered HTML pages (not JSON APIs)
+- [ ] Implement adapter methods: bucket policy get/set, ownership, effective permissions, simulate
 
 ### Configuration
-- [ ] `console.enabled` / `--console` flag (default: true)
-- [ ] `console.address` / `--console-address` for optional separate port
+- ✅ `console.enabled` / `--console` flag (default: true)
+- ✅ `console.address` / `--console-address` for optional separate port
 
 ### Stopgap Priorities (DirIO-specific features mc cannot access)
 - [ ] **Ownership management** — view bucket/object owners, transfer ownership
