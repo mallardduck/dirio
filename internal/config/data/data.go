@@ -7,6 +7,8 @@ import (
 
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/util"
+
+	"github.com/mallardduck/dirio/internal/crypto"
 )
 
 // ConfigDataVersion represents the version of the configuration data format
@@ -132,6 +134,13 @@ func LoadDataConfig(rootFS billy.Filesystem) (*ConfigData, error) {
 		return nil, fmt.Errorf("failed to parse data config: %w", err)
 	}
 
+	// Decrypt secret key if stored encrypted.
+	decrypted, err := crypto.Decrypt(config.Credentials.SecretKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt credentials: %w", err)
+	}
+	config.Credentials.SecretKey = decrypted
+
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid data config: %w", err)
 	}
@@ -155,8 +164,18 @@ func SaveDataConfig(rootFS billy.Filesystem, config *ConfigData) error {
 
 	configPath := ".dirio/config.json"
 
+	// Encrypt secret key before persisting.
+	encryptedSecret, err := crypto.Encrypt(config.Credentials.SecretKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt credentials: %w", err)
+	}
+
+	// Work on a shallow copy so the in-memory config keeps the plaintext value.
+	toSave := *config
+	toSave.Credentials.SecretKey = encryptedSecret
+
 	// Marshal with indentation for readability
-	data, err := json.MarshalIndent(config, "", "  ")
+	data, err := json.MarshalIndent(toSave, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal data config: %w", err)
 	}

@@ -316,7 +316,7 @@ Current status: **Phase 4.2 NEARLY COMPLETE** - Core IAM mostly done, a few gaps
 - ✅ IAM metadata storage structure (`.dirio/iam/users/`, `.dirio/iam/policies/`)
 - ✅ User metadata schema — UUID, accessKey, secretKey, status, attachedPolicies (`pkg/iam/types.go`)
 - ✅ Policy metadata schema — name, PolicyDocument, timestamps (`pkg/iam/types.go`)
-- [ ] Credential encryption at rest — currently stored as plaintext JSON (only encrypted in transit)
+- ✅ Credential encryption at rest — currently stored as plaintext JSON (only encrypted in transit)
 
 ### API Design
 - ✅ MinIO Admin API endpoints (`/minio/admin/v3/*`) on main port (`internal/http/server/routes.go`)

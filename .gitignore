@@ -8,6 +8,8 @@ s3-homelab-client
 *.dylib
 dist/
 bin/
+.claude
+.mcp.json
 
 # Test binary
 *.test

@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/mallardduck/dirio/internal/crypto"
 	"github.com/mallardduck/dirio/internal/http/server"
 
 	"github.com/mallardduck/dirio/internal/config"
@@ -71,6 +72,17 @@ func init() {
 }
 
 func runServer(cmd *cobra.Command, args []string) error {
+	// Initialise credential encryption before any data config or metadata
+	// operations. Read the data dir flag early — cobra has already parsed flags
+	// before RunE fires, so this is safe even before full config loading.
+	dataDir, _ := cmd.Flags().GetString(config.DataDir.GetFlagKey())
+	if dataDir == "" {
+		dataDir = config.DataDir.GetDefaultAsString()
+	}
+	if err := crypto.Init(dataDir); err != nil {
+		return fmt.Errorf("failed to initialise encryption: %w", err)
+	}
+
 	// Load configuration using the new config system
 	settings, err := config.LoadConfig(cmd.Flags(), nil)
 	if err != nil {

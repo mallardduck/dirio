@@ -14,6 +14,7 @@ import (
 
 	contextInt "github.com/mallardduck/dirio/internal/context"
 
+	"github.com/mallardduck/dirio/internal/crypto"
 	"github.com/mallardduck/dirio/internal/persistence/path"
 
 	"github.com/mallardduck/dirio/internal/jsonutil"
@@ -280,6 +281,13 @@ func (m *Manager) GetUser(ctx context.Context, username string) (*User, error) {
 		return nil, err
 	}
 
+	// Decrypt secret key if stored encrypted.
+	decrypted, err := crypto.Decrypt(user.SecretKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt secret key for user %s: %w", username, err)
+	}
+	user.SecretKey = decrypted
+
 	// Backwards compatibility: populate Username from filename if not set
 	if user.Username == "" {
 		user.Username = username
@@ -355,15 +363,26 @@ func (m *Manager) UpdateUser(ctx context.Context, username string, updates *User
 	return m.SaveUser(ctx, username, existing)
 }
 
-// SaveUser saves a single user (atomic operation)
+// SaveUser saves a single user (atomic operation).
+// The SecretKey is encrypted before writing; the in-memory user is unchanged.
 func (m *Manager) SaveUser(ctx context.Context, username string, user *User) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("context cancelled: %w", err)
 	}
 
+	// Encrypt secret key before persisting.
+	encryptedSecret, err := crypto.Encrypt(user.SecretKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt secret key for user %s: %w", username, err)
+	}
+
+	// Work on a shallow copy so the in-memory user keeps the plaintext value.
+	toSave := *user
+	toSave.SecretKey = encryptedSecret
+
 	userPath := filepath.Join("iam", "users", username+".json")
 
-	return jsonutil.MarshalToFile(m.metadataFS, userPath, user)
+	return jsonutil.MarshalToFile(m.metadataFS, userPath, &toSave)
 }
 
 // DeleteUser removes a user
