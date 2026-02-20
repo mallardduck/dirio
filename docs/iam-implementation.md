@@ -275,7 +275,7 @@ mc admin policy remove local readonly
 ## What's Not Yet Implemented
 
 ❌ **Groups** - Group management and group policy attachment
-❌ **Service Accounts** - Temporary credentials
+❌ **Service Accounts** - Long-lived or temporary credentials scoped to parent user (with optional expiration)
 ❌ **Assume Role** - Role-based access control
 ❌ **MFA** - Multi-factor authentication
 ❌ **Session Tokens** - Temporary session credentials

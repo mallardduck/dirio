@@ -278,9 +278,11 @@ Both bucket policies (S3 API) and user policies (Admin API) are evaluated togeth
 
 ### Policy Evaluation Order
 
-1. **Explicit Deny:** If any policy (bucket or user) denies access → **Request DENIED**
-2. **Explicit Allow:** If any policy (bucket or user) allows access → **Request ALLOWED**
-3. **Default Deny:** If no policy allows → **Request DENIED**
+1. **Admin Fast Path:** Admin user bypasses all policy checks → **Request ALLOWED**
+2. **Owner Check:** Bucket/object owner gets implicit permissions → **Request ALLOWED**
+3. **Explicit Deny:** If any policy (bucket or user) denies access → **Request DENIED**
+4. **Explicit Allow:** If any policy (bucket or user) allows access → **Request ALLOWED**
+5. **Default Deny:** If no policy allows → **Request DENIED**
 
 ### Example 11: Combining Bucket Policy + User Policy
 

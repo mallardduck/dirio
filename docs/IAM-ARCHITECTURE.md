@@ -224,7 +224,7 @@ UUID-based ownership (AWS-like):
 - Objects have `OwnerID` (UUID) and `OwnerPrincipal` (ARN) fields
 - Bucket owners have implicit full access to all objects in bucket
 - Explicit deny in policies overrides ownership permissions
-- Admin UUID constant (`00000000-0000-0000-0000-000000000000`) for root-owned resources
+- Admin UUID constant (`badfc0de-fadd-fc0f-fee0-000dadbeef00`) for root-owned resources
 
 #### Result Filtering
 AWS-like list operation filtering:
@@ -259,13 +259,13 @@ Implemented via `/minio/admin/v3/*` endpoints (same port as S3, path-based routi
 #### Service Accounts (Routes Exist, Implementation Pending)
 - AddServiceAccount, RemoveServiceAccount, ListServiceAccounts
 - InfoServiceAccount, UpdateServiceAccount
-- Long-lived credentials scoped to parent user
+- Long-lived or temporary credentials scoped to parent user (with optional expiration)
 - Policy inheritance from parent user with optional override
 
 ### ✅ Shared IAM Backend
 
 #### Metadata Storage (`.dirio/iam/`)
-- **Users:** `.dirio/iam/users/{access-key}.json`
+- **Users:** `.dirio/iam/users/{uuid}.json`
   - Fields: UUID, Username, AccessKey, SecretKey (hashed), Status, AttachedPolicies, CreatedAt, UpdatedAt
 - **Policies:** `.dirio/iam/policies/{policy-name}.json`
   - S3-standard PolicyDocument format
