@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -56,6 +57,10 @@ type Config struct {
 	// CLICredentialsExplicitlySet tracks whether AccessKey/SecretKey were
 	// explicitly provided (via env, flag, or config) vs using defaults
 	CLICredentialsExplicitlySet bool
+
+	// ShutdownTimeout is how long to wait for in-flight requests to finish
+	// during graceful shutdown before connections are forcefully closed.
+	ShutdownTimeout time.Duration
 }
 
 // Server represents the S3-compatible HTTP server
@@ -73,6 +78,10 @@ type Server struct {
 	// Set via SetConsole before calling Start.
 	consoleHandler http.Handler
 	consolePort    int // 0 = same port at /dirio/ui/
+
+	// HTTP servers, set during Start.
+	httpServer    *http.Server
+	consoleServer *http.Server
 }
 
 // Metadata returns the metadata manager (used by the console wire file).
@@ -250,13 +259,12 @@ func (s *Server) buildHandler() http.Handler {
 }
 
 // Start begins serving HTTP requests with graceful shutdown support.
-// It listens for SIGINT and SIGTERM to trigger a graceful shutdown,
-// properly stopping mDNS service and draining HTTP connections.
-func (s *Server) Start() error {
+// It listens for SIGINT, SIGTERM, and ctx cancellation to trigger a graceful
+// shutdown, draining both the main and console HTTP servers before stopping.
+func (s *Server) Start(ctx context.Context) error {
 	addr := fmt.Sprintf(":%d", s.config.Port)
 
-	// Create HTTP server with timeouts
-	httpServer := &http.Server{
+	s.httpServer = &http.Server{
 		Addr:         addr,
 		Handler:      s.buildHandler(),
 		ReadTimeout:  30 * time.Second,
@@ -264,10 +272,10 @@ func (s *Server) Start() error {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Start separate console listener if configured on a different port
+	// Start separate console listener if configured on a different port.
 	if s.consoleHandler != nil && !s.consoleSamePort() {
 		consoleAddr := fmt.Sprintf(":%d", s.consolePort)
-		consoleServer := &http.Server{
+		s.consoleServer = &http.Server{
 			Addr:         consoleAddr,
 			Handler:      s.consoleHandler,
 			ReadTimeout:  30 * time.Second,
@@ -276,13 +284,13 @@ func (s *Server) Start() error {
 		}
 		go func() {
 			s.log.Info("console listening on separate port", "addr", consoleAddr)
-			if err := consoleServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			if err := s.consoleServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				s.log.Error("console server error", "error", err)
 			}
 		}()
 	}
 
-	// Start mDNS service if enabled
+	// Start mDNS service if enabled.
 	if s.config.MDNSEnabled {
 		mdnsSvc, err := mdns.New(&mdns.Config{
 			ServiceName: s.config.MDNSName,
@@ -298,49 +306,64 @@ func (s *Server) Start() error {
 		s.log.Info("mdns service started", "host", mdnsSvc.GetAdvertisedHost())
 	}
 
-	// Channel to receive server errors
 	serverErr := make(chan error, 1)
-
-	// Start HTTP server in a goroutine
 	go func() {
 		s.log.Info("server listening", "addr", addr)
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := s.httpServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 		}
 		close(serverErr)
 	}()
 
-	// Setup signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
 
-	// Wait for either server error or shutdown signal
 	select {
 	case err := <-serverErr:
-		s.shutdown()
+		s.gracefulShutdown()
 		return err
+	case <-ctx.Done():
+		s.log.Info("context cancelled, initiating graceful shutdown")
 	case sig := <-sigChan:
 		s.log.Info("received signal, initiating graceful shutdown", "signal", sig)
 	}
 
-	// Graceful shutdown with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// Stop accepting new connections and drain existing ones
-	if err := httpServer.Shutdown(ctx); err != nil {
-		s.log.Error("http server shutdown error", "error", err)
-	}
-
-	// Stop mDNS service
-	s.shutdown()
-
+	s.gracefulShutdown()
 	s.log.Info("server stopped gracefully")
 	return nil
 }
 
-// shutdown performs cleanup operations during server shutdown
-func (s *Server) shutdown() {
+// gracefulShutdown drains all HTTP servers and stops ancillary services.
+// It uses the configured ShutdownTimeout for draining in-flight requests.
+func (s *Server) gracefulShutdown() {
+	timeout := s.config.ShutdownTimeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	// Shut down both HTTP servers concurrently.
+	var wg sync.WaitGroup
+
+	if s.consoleServer != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := s.consoleServer.Shutdown(ctx); err != nil {
+				s.log.Error("console server shutdown error", "error", err)
+			}
+		}()
+	}
+
+	if err := s.httpServer.Shutdown(ctx); err != nil {
+		s.log.Error("http server shutdown error", "error", err)
+	}
+
+	wg.Wait()
+
+	// Stop mDNS service.
 	if s.mdns != nil {
 		if err := s.mdns.Stop(); err != nil {
 			s.log.Error("mdns shutdown error", "error", err)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/spf13/pflag"
@@ -51,6 +52,9 @@ type Settings struct {
 	// Console settings
 	ConsoleEnabled bool
 	ConsolePort    int
+
+	// Lifecycle settings
+	ShutdownTimeout time.Duration
 }
 
 // Validate checks that the configured settings are valid
@@ -142,6 +146,9 @@ func LoadConfig(flags *pflag.FlagSet, v *viper.Viper) (*Settings, error) {
 		// Console settings
 		ConsoleEnabled: resolver.GetBool(ConsoleEnabled),
 		ConsolePort:    resolver.GetInt(ConsolePort),
+
+		// Lifecycle settings
+		ShutdownTimeout: time.Duration(resolver.GetInt(ShutdownTimeout)) * time.Second,
 	}
 
 	// Debug flag overrides log level

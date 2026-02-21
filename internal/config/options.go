@@ -70,3 +70,10 @@ var (
 	// When set (e.g. 9001), the console gets its own listener on that port.
 	ConsolePort = option.NewOption("console-port", 0)
 )
+
+// Lifecycle configuration options
+var (
+	// ShutdownTimeout is the number of seconds to allow for graceful shutdown
+	// before connections are forcefully closed.
+	ShutdownTimeout = option.NewOption("shutdown-timeout", 30)
+)

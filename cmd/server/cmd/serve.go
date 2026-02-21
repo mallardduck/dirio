@@ -58,6 +58,9 @@ func init() {
 	serveCmd.Flags().Bool(config.ConsoleEnabled.GetFlagKey(), true, "Enable the embedded web admin console (default: true; use --console=false to disable)")
 	serveCmd.Flags().Int(config.ConsolePort.GetFlagKey(), 0, "Optional separate port for the console (e.g. 9001); defaults to main port at /dirio/ui/")
 
+	// Lifecycle flags
+	serveCmd.Flags().Int(config.ShutdownTimeout.GetFlagKey(), 30, "Graceful shutdown timeout in seconds")
+
 	// Bind flags to viper for config file support
 	_ = viper.BindPFlag(config.DataDir.GetViperKey(), serveCmd.Flags().Lookup(config.DataDir.GetFlagKey()))
 	_ = viper.BindPFlag(config.Port.GetViperKey(), serveCmd.Flags().Lookup(config.Port.GetFlagKey()))
@@ -75,6 +78,7 @@ func init() {
 	_ = viper.BindPFlag(config.CanonicalDomain.GetViperKey(), serveCmd.Flags().Lookup(config.CanonicalDomain.GetFlagKey()))
 	_ = viper.BindPFlag(config.ConsoleEnabled.GetViperKey(), serveCmd.Flags().Lookup(config.ConsoleEnabled.GetFlagKey()))
 	_ = viper.BindPFlag(config.ConsolePort.GetViperKey(), serveCmd.Flags().Lookup(config.ConsolePort.GetFlagKey()))
+	_ = viper.BindPFlag(config.ShutdownTimeout.GetViperKey(), serveCmd.Flags().Lookup(config.ShutdownTimeout.GetFlagKey()))
 }
 
 func runServer(cmd *cobra.Command, args []string) error {
@@ -134,6 +138,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 		Debug:                       settings.Debug,
 		DataConfig:                  settings.DataConfig, // Data admin (if exists)
 		CLICredentialsExplicitlySet: settings.CLICredentialsExplicitlySet,
+		ShutdownTimeout:             settings.ShutdownTimeout,
 	}
 
 	// Initialize and start server
@@ -147,7 +152,8 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 	log.Info("starting server", "port", settings.Port, "data_dir", settings.DataDir)
 
-	if err := srv.Start(); err != nil {
+	ctx := cmd.Context()
+	if err := srv.Start(ctx); err != nil {
 		return fmt.Errorf("server error: %w", err)
 	}
 
