@@ -2,6 +2,7 @@ package admin
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -66,7 +67,7 @@ func NewTestServer(t *testing.T) *TestServer {
 		SecretKey: config.SecretKey,
 	}
 
-	go func() { srv.Start() }()
+	go func() { _ = srv.Start(context.Background()) }()
 
 	if !ts.waitForReady(5 * time.Second) {
 		ts.Cleanup()
@@ -105,7 +106,7 @@ func NewTestServerWithDataDir(t *testing.T, dataDir string) *TestServer {
 		SecretKey: config.SecretKey,
 	}
 
-	go func() { srv.Start() }()
+	go func() { _ = srv.Start(context.Background()) }()
 
 	if !ts.waitForReady(5 * time.Second) {
 		ts.Cleanup()

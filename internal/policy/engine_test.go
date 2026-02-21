@@ -11,7 +11,7 @@ import (
 )
 
 func TestEngine_AdminBypass(t *testing.T) {
-	engine := New()
+	engine := New(nil)
 
 	// Admin should always be allowed, even without any policies
 	req := &RequestContext{
@@ -31,7 +31,7 @@ func TestEngine_AdminBypass(t *testing.T) {
 }
 
 func TestEngine_AnonymousDeniedByDefault(t *testing.T) {
-	engine := New()
+	engine := New(nil)
 
 	// Anonymous user with no bucket policy should be denied
 	req := &RequestContext{
@@ -47,7 +47,7 @@ func TestEngine_AnonymousDeniedByDefault(t *testing.T) {
 }
 
 func TestEngine_PublicBucketPolicy(t *testing.T) {
-	engine := New()
+	engine := New(nil)
 
 	// Set up a public read policy
 	publicPolicy := &iam.PolicyDocument{
@@ -108,7 +108,7 @@ func TestEngine_PublicBucketPolicy(t *testing.T) {
 }
 
 func TestEngine_ExplicitDenyWins(t *testing.T) {
-	engine := New()
+	engine := New(nil)
 
 	// Policy with both allow and deny statements
 	mixedPolicy := &iam.PolicyDocument{
@@ -152,7 +152,7 @@ func TestEngine_ExplicitDenyWins(t *testing.T) {
 }
 
 func TestEngine_UserSpecificPolicy(t *testing.T) {
-	engine := New()
+	engine := New(nil)
 
 	// Policy that allows a specific user
 	userPolicy := &iam.PolicyDocument{
@@ -199,7 +199,7 @@ func TestEngine_UserSpecificPolicy(t *testing.T) {
 }
 
 func TestEngine_PolicyLifecycle(t *testing.T) {
-	engine := New()
+	engine := New(nil)
 
 	bucket := "lifecycle-test"
 
@@ -245,7 +245,7 @@ func TestEngine_PolicyLifecycle(t *testing.T) {
 }
 
 func TestEngine_LoadBucketPolicies(t *testing.T) {
-	engine := New()
+	engine := New(nil)
 
 	policies := map[string]*iam.PolicyDocument{
 		"bucket1": {
@@ -276,7 +276,7 @@ func TestEngine_LoadBucketPolicies(t *testing.T) {
 }
 
 func TestEngine_GetActionMapper(t *testing.T) {
-	engine := New()
+	engine := New(nil)
 
 	mapper := engine.GetActionMapper()
 	if mapper == nil {
@@ -291,7 +291,7 @@ func TestEngine_GetActionMapper(t *testing.T) {
 }
 
 func TestEngine_OwnershipBasedAuthorization(t *testing.T) {
-	engine := New()
+	engine := New(nil)
 
 	// Create test users with UUIDs
 	aliceUUID := uuid.New()
@@ -428,7 +428,7 @@ func TestEngine_OwnershipBasedAuthorization(t *testing.T) {
 }
 
 func TestEngine_ExplicitDenyBeatsOwnership(t *testing.T) {
-	engine := New()
+	engine := New(nil)
 
 	aliceUUID := uuid.New()
 	aliceUser := &metadata.User{

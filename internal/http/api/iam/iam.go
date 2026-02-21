@@ -6,18 +6,24 @@ import (
 	"github.com/mallardduck/dirio/internal/logging"
 	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/service"
+	"github.com/mallardduck/dirio/internal/service/group"
 	"github.com/mallardduck/dirio/internal/service/policy"
+	"github.com/mallardduck/dirio/internal/service/serviceaccount"
 	"github.com/mallardduck/dirio/internal/service/user"
 )
 
 // Handler handles IAM API requests
 type Handler struct {
-	user   *user.Service
-	policy *policy.Service
+	user           *user.Service
+	policy         *policy.Service
+	groupSvc       *group.Service
+	serviceAcctSvc *serviceaccount.Service
 
 	// HTTP service wrappers - created once and reused
-	userHTTP   *userHTTPService
-	policyHTTP *policyHTTPService
+	userHTTP           *userHTTPService
+	policyHTTP         *policyHTTPService
+	groupHTTP          *groupHTTPService
+	serviceAccountHTTP *serviceAccountHTTPService
 }
 
 func (h *Handler) UserHTTPService() *userHTTPService {
@@ -28,13 +34,25 @@ func (h *Handler) PolicyHTTPService() *policyHTTPService {
 	return h.policyHTTP
 }
 
+func (h *Handler) GroupHTTPService() *groupHTTPService {
+	return h.groupHTTP
+}
+
+func (h *Handler) ServiceAccountHTTPService() *serviceAccountHTTPService {
+	return h.serviceAccountHTTP
+}
+
 func New(serviceFactory *service.ServicesFactory) *Handler {
 	userService := serviceFactory.User()
 	policyService := serviceFactory.Policy()
+	groupService := serviceFactory.Group()
+	saService := serviceFactory.ServiceAccount()
 
 	return &Handler{
-		user:   userService,
-		policy: policyService,
+		user:           userService,
+		policy:         policyService,
+		groupSvc:       groupService,
+		serviceAcctSvc: saService,
 		userHTTP: &userHTTPService{
 			users:    userService,
 			policies: policyService,
@@ -42,8 +60,17 @@ func New(serviceFactory *service.ServicesFactory) *Handler {
 		},
 		policyHTTP: &policyHTTPService{
 			users:    userService,
+			groups:   groupService,
 			policies: policyService,
 			log:      logging.Component("policy-http-service"),
+		},
+		groupHTTP: &groupHTTPService{
+			groups: groupService,
+			log:    logging.Component("group-http-service"),
+		},
+		serviceAccountHTTP: &serviceAccountHTTPService{
+			serviceAccounts: saService,
+			log:             logging.Component("service-account-http-service"),
 		},
 	}
 }
@@ -100,6 +127,94 @@ func (h *Handler) UserResourceHandler() userHandler {
 				data.Action = "minio.v3.SetUserStatus"
 			}
 			h.UserHTTPService().SetUserStatus(w, r)
+		},
+	}
+}
+
+type groupHandler struct {
+	ListHandler          http.HandlerFunc
+	InfoHandler          http.HandlerFunc
+	UpdateMembersHandler http.HandlerFunc
+	StatusHandler        http.HandlerFunc
+}
+
+func (h *Handler) GroupResourceHandler() groupHandler {
+	return groupHandler{
+		ListHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "minio.v3.ListGroups"
+			}
+			h.GroupHTTPService().ListGroups(w, r)
+		},
+		InfoHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "minio.v3.GetGroupInfo"
+			}
+			h.GroupHTTPService().GetGroupInfo(w, r)
+		},
+		UpdateMembersHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "minio.v3.UpdateGroupMembers"
+			}
+			h.GroupHTTPService().UpdateGroupMembers(w, r)
+		},
+		StatusHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "minio.v3.SetGroupStatus"
+			}
+			h.GroupHTTPService().SetGroupStatus(w, r)
+		},
+	}
+}
+
+type serviceAccountHandler struct {
+	ListHandler   http.HandlerFunc
+	AddHandler    http.HandlerFunc
+	DeleteHandler http.HandlerFunc
+	InfoHandler   http.HandlerFunc
+	UpdateHandler http.HandlerFunc
+}
+
+func (h *Handler) ServiceAccountResourceHandler() serviceAccountHandler {
+	return serviceAccountHandler{
+		ListHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "minio.v3.ListServiceAccounts"
+			}
+			h.ServiceAccountHTTPService().ListServiceAccounts(w, r)
+		},
+		AddHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "minio.v3.AddServiceAccount"
+			}
+			h.ServiceAccountHTTPService().AddServiceAccount(w, r)
+		},
+		DeleteHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "minio.v3.DeleteServiceAccount"
+			}
+			h.ServiceAccountHTTPService().DeleteServiceAccount(w, r)
+		},
+		InfoHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "minio.v3.InfoServiceAccount"
+			}
+			h.ServiceAccountHTTPService().InfoServiceAccount(w, r)
+		},
+		UpdateHandler: func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			if data, ok := loggingHttp.GetLogData(ctx); ok {
+				data.Action = "minio.v3.UpdateServiceAccount"
+			}
+			h.ServiceAccountHTTPService().UpdateServiceAccount(w, r)
 		},
 	}
 }

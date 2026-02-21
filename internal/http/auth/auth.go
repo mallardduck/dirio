@@ -99,11 +99,38 @@ func (a *Authenticator) GetUserForAccessKey(ctx context.Context, accessKey strin
 
 	// Efficient single-user lookup
 	user, err := a.metadata.GetUser(ctx, accessKey)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		return user, nil
 	}
 
-	return user, nil
+	// Fall back to service account lookup
+	if errors.Is(err, metadata.ErrUserNotFound) {
+		sa, saErr := a.metadata.GetServiceAccount(ctx, accessKey)
+		if saErr != nil {
+			// Return the original user-not-found error
+			return nil, err
+		}
+
+		// Check service account expiration
+		if sa.ExpiresAt != nil && sa.ExpiresAt.Before(time.Now()) {
+			return nil, ErrUserInactive
+		}
+
+		// Convert service account to a User representation for the auth pipeline.
+		// ServiceAcctStatus and UserStatus share the same underlying values ("on"/"off").
+		return &metadata.User{
+			Version:          sa.Version,
+			UUID:             sa.UUID,
+			Username:         sa.Username,
+			AccessKey:        sa.AccessKey,
+			SecretKey:        sa.SecretKey,
+			Status:           iam.UserStatus(sa.Status),
+			UpdatedAt:        sa.UpdatedAt,
+			AttachedPolicies: sa.AttachedPolicies,
+		}, nil
+	}
+
+	return nil, err
 }
 
 // AuthenticateRequest validates an HTTP request using AWS Signature V4 authentication.
@@ -141,6 +168,16 @@ func (a *Authenticator) AuthenticateRequest(r *http.Request) (*metadata.User, er
 	}
 
 	return user, nil
+}
+
+// IsServiceAccount checks if the given access key belongs to a service account.
+// Returns the ServiceAccount and true if found, nil and false otherwise.
+func (a *Authenticator) IsServiceAccount(ctx context.Context, accessKey string) (*iam.ServiceAccount, bool) {
+	sa, err := a.metadata.GetServiceAccount(ctx, accessKey)
+	if err != nil {
+		return nil, false
+	}
+	return sa, true
 }
 
 // AuthenticatePresignedRequest validates an HTTP request using AWS Signature V4 pre-signed URL authentication.

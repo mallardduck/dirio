@@ -11,6 +11,7 @@ import (
 
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/policy/variables"
+	"github.com/mallardduck/dirio/pkg/iam"
 )
 
 // RequestContext contains all information needed for policy evaluation
@@ -32,6 +33,11 @@ type Principal struct {
 	User        *metadata.User // nil for anonymous requests
 	IsAnonymous bool           // true if no authentication provided
 	IsAdmin     bool           // true if root admin (bypass all policies)
+
+	// Service account fields (populated by authorization middleware when request is from a SA)
+	IsServiceAccount bool           // true if this principal is a service account
+	ParentUserUUID   *uuid.UUID     // parent user UUID (nil if no parent or not a SA)
+	PolicyMode       iam.PolicyMode // "inherit" or "override" (empty string treated as inherit)
 }
 
 // Resource represents the S3 resource being accessed

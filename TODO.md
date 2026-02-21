@@ -1,8 +1,23 @@
 # DirIO Development Roadmap
 
-Current status: **Phase 4.3 COMPLETE** — console fully functional; ready for Phase 4.4
+Current status: **Phase 4.4 IN PROGRESS** — Group & Service Account admin API complete; SA policy inheritance done; Console UI forms next
 
 ## Recent Updates
+
+**February 21, 2026 - SA Policy Inheritance (Eval-Time Resolution):**
+- ✅ `pkg/iam/serviceaccount.go` — Added `PolicyMode` type (`"inherit"` / `"override"`); replaced `ParentUser *string` with `ParentUserUUID *uuid.UUID` (stable across key rotation)
+- ✅ `internal/context/context.go` — Added `ServiceAccountInfo` struct + `WithServiceAccountInfo`/`GetServiceAccountInfo` context helpers
+- ✅ `internal/http/auth/auth.go` — Added `IsServiceAccount()` method for SA detection
+- ✅ `internal/http/auth/middleware.go` — Stores `ServiceAccountInfo` in context post-auth for non-admin users
+- ✅ `internal/persistence/metadata/metadata.go` — Added UUID→username in-memory index; `GetUserByUUID` is now O(1)
+- ✅ `internal/policy/resolver.go` (new) — `PolicyResolver` interface + `MetadataResolver` implementation
+- ✅ `internal/policy/types.go` — Added `IsServiceAccount`, `ParentUserUUID`, `PolicyMode` to `Principal`
+- ✅ `internal/policy/middleware.go` — Populates SA fields on `Principal` from context
+- ✅ `internal/policy/engine.go` — Added `resolver` field; `New()` takes `PolicyResolver`; step 3 (IAM eval) implemented with `resolveEffectivePolicyNames()` helper
+- ✅ `internal/http/server/server.go` — Wires `MetadataResolver` into `policy.New()`
+- ✅ `internal/service/serviceaccount/serviceaccount.go` — `Create()` resolves parent access key → UUID before persisting
+- ✅ `internal/service/serviceaccount/types.go` — Added `PolicyMode` to `CreateServiceAccountRequest`
+- ✅ `internal/http/api/iam/service_account.go` — `AddServiceAccount` passes `PolicyMode`; `InfoServiceAccount` returns `parentUserUUID` + `policyMode`
 
 **February 21, 2026 - Phase 4.3 Complete:**
 - ✅ `consoleapi/` — full interface seam: Users, Policies, Buckets, Ownership, Policy Observability + all request/response types
@@ -331,9 +346,9 @@ Current status: **Phase 4.3 COMPLETE** — console fully functional; ready for P
 - ✅ RemovePolicy — `POST /minio/admin/v3/remove-canned-policy`
 - ✅ ListPolicies — `GET /minio/admin/v3/list-canned-policies`
 - ✅ GetPolicy — `GET /minio/admin/v3/info-canned-policy`
-- ✅ SetPolicy (attach) — `POST /minio/admin/v3/set-policy` + `POST /minio/admin/v3/idp/builtin/policy/attach`
-- ✅ ListPolicyEntities — `GET /minio/admin/v3/policy-entities`
-- ✅ UnsetPolicy (detach) — `POST /minio/admin/v3/idp/builtin/policy/detach` + encrypted body support
+- ✅ SetPolicy (attach) — `POST /minio/admin/v3/set-policy` + `POST /minio/admin/v3/idp/builtin/policy/attach` (users + groups)
+- ✅ ListPolicyEntities — `GET /minio/admin/v3/policy-entities` (returns both `userMappings` and `groupMappings`)
+- ✅ UnsetPolicy (detach) — `POST /minio/admin/v3/idp/builtin/policy/detach` (users + groups)
 
 ### Storage & Data Model
 - ✅ IAM metadata storage structure (`.dirio/iam/users/`, `.dirio/iam/policies/`)
@@ -415,31 +430,29 @@ Current status: **Phase 4.3 COMPLETE** — console fully functional; ready for P
 **Goal:** Build out the IAM features that go beyond what `mc` alone can drive, using the Phase 4.3 console as their primary interface. These features require the console foundation to be in place first.
 
 ### Group Management (mc-compatible, but lower priority)
-- [ ] AddGroup, RemoveGroup, ListGroups, GetGroupInfo
-- [ ] GroupAdd / GroupRemove — add/remove users from groups
-- [ ] Attach/detach policies to groups
+- ✅ AddGroup, RemoveGroup, ListGroups, GetGroupInfo
+- ✅ GroupAdd / GroupRemove — add/remove users from groups
+- ✅ Attach/detach policies to groups (`/idp/builtin/policy/attach|detach` and `/set-policy` — shared with users via `isGroup` flag)
 - [ ] Console UI: group list, membership management
 
 ### Service Account Management (mc-compatible + DirIO extensions)
-- [ ] AddServiceAccount — long-lived or temporary credentials scoped to parent user (with optional expiration)
-- [ ] RemoveServiceAccount, ListServiceAccounts, GetServiceAccountInfo, UpdateServiceAccount
-- [ ] Policy inheritance from parent user with optional override
+- ✅ AddServiceAccount — long-lived credentials, optional expiration, conflict detection across users + SAs
+- ✅ RemoveServiceAccount, ListServiceAccounts, GetServiceAccountInfo, UpdateServiceAccount
+- ✅ Policy inheritance from parent user with optional override — eval-time resolution via `PolicyMode` (`inherit`/`override`)
 - [ ] Console UI: service account list, expiration management
 
 ### Access Key Management
-- [ ] Key rotation support
-- [ ] Multiple keys per user
-- [ ] Key enable/disable (without deletion)
-- [ ] Console UI: key management per user
+- Service accounts cover the multi-key / per-user scoped credential use case
+- [ ] User secret key rotation (update secret key without changing access key) — simple `update-user` call, no separate endpoint needed
 
 ### Console Stopgaps (DirIO-specific — no mc equivalent)
-- [ ] **Ownership management UI** — view bucket/object owners, transfer ownership
-- [ ] **Effective permissions view** — show a user's combined access (bucket policy + IAM policies)
-- [ ] **Request simulator** — given user + bucket + action, show allow/deny and which rule decided it
-- [ ] **Full S3 bucket policy editor** — JSON editor with conditions/variables (beyond `mc policy set` canned policies)
+- ✅ **Ownership management UI** — view bucket/object owners, transfer ownership
+- ✅ **Effective permissions view** — show a user's combined access (bucket policy + IAM policies)
+- ✅ **Request simulator** — given user + bucket + action, show allow/deny and which rule decided it
+- ✅ **Full S3 bucket policy editor** — JSON editor with conditions/variables (beyond `mc policy set` canned policies)
 
 ### Testing
-- [ ] Unit tests for group/service account CRUD
+- ✅ Unit tests for group/service account CRUD (13 group + 12 SA tests in `tests/admin/`)
 - [ ] Integration tests for group policy inheritance
 - [ ] Service account delegation and expiration testing
 - [ ] Console stopgap feature testing

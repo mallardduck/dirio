@@ -50,6 +50,16 @@ func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 
 			// Add user to context (standard auth)
 			ctx := contextInt.WithUser(r.Context(), user)
+			// Store SA metadata in context for policy evaluation (non-admin users only)
+			isRootAdmin := user.AccessKey == a.rootAccessKey || (a.altRootAccessKey != "" && user.AccessKey == a.altRootAccessKey)
+			if !isRootAdmin {
+				if sa, ok := a.IsServiceAccount(r.Context(), user.AccessKey); ok {
+					ctx = contextInt.WithServiceAccountInfo(ctx, &contextInt.ServiceAccountInfo{
+						ParentUserUUID: sa.ParentUserUUID,
+						PolicyMode:     sa.PolicyMode,
+					})
+				}
+			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
@@ -89,6 +99,16 @@ func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 
 			// Add user to context with pre-signed marker
 			ctx := contextInt.WithPreSignedUser(r.Context(), user, expiresAt)
+			// Store SA metadata in context for policy evaluation (non-admin users only)
+			isRootAdmin := user.AccessKey == a.rootAccessKey || (a.altRootAccessKey != "" && user.AccessKey == a.altRootAccessKey)
+			if !isRootAdmin {
+				if sa, ok := a.IsServiceAccount(r.Context(), user.AccessKey); ok {
+					ctx = contextInt.WithServiceAccountInfo(ctx, &contextInt.ServiceAccountInfo{
+						ParentUserUUID: sa.ParentUserUUID,
+						PolicyMode:     sa.PolicyMode,
+					})
+				}
+			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}

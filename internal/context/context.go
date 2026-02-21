@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/mallardduck/dirio/pkg/iam"
 )
 
@@ -33,7 +34,18 @@ const (
 	// PreSignedExpiresAtKey stores the expiration time of the pre-signed URL
 	// Used for auditing and logging purposes
 	PreSignedExpiresAtKey KeyID = "preSignedExpiresAt"
+
+	// ServiceAccountInfoKey holds service account metadata for policy evaluation.
+	// Set by auth middleware when the authenticated access key belongs to a service account.
+	ServiceAccountInfoKey KeyID = "serviceAccountInfo"
 )
+
+// ServiceAccountInfo holds service account metadata used by the policy engine
+// to resolve effective IAM policies at evaluation time.
+type ServiceAccountInfo struct {
+	ParentUserUUID *uuid.UUID     // UUID of the parent user (nil if no parent)
+	PolicyMode     iam.PolicyMode // "inherit" or "override" (empty = inherit)
+}
 
 // WithAuthzDecision returns a new context with the authorization decision set
 func WithAuthzDecision(ctx context.Context, decision interface{}) context.Context {
@@ -94,4 +106,18 @@ func GetPreSignedExpiresAt(ctx context.Context) (interface{}, bool) {
 		return t, true
 	}
 	return nil, false
+}
+
+// WithServiceAccountInfo returns a new context with service account metadata set.
+func WithServiceAccountInfo(ctx context.Context, info *ServiceAccountInfo) context.Context {
+	return context.WithValue(ctx, ServiceAccountInfoKey, info)
+}
+
+// GetServiceAccountInfo extracts service account metadata from the context.
+// Returns nil if the request was not made by a service account.
+func GetServiceAccountInfo(ctx context.Context) *ServiceAccountInfo {
+	if info, ok := ctx.Value(ServiceAccountInfoKey).(*ServiceAccountInfo); ok {
+		return info
+	}
+	return nil
 }

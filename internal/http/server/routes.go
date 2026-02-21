@@ -46,6 +46,8 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 	if deps != nil {
 		userHandler := deps.APIHandler.IAMHandler.UserResourceHandler()
 		policyHandler := deps.APIHandler.IAMHandler.PolicyResourceHandler()
+		groupHandler := deps.APIHandler.IAMHandler.GroupResourceHandler()
+		saHandler := deps.APIHandler.IAMHandler.ServiceAccountResourceHandler()
 
 		adminDeps = &adminRouteDeps{
 			listUsers:             userHandler.ListHandler,
@@ -53,15 +55,15 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 			removeUser:            userHandler.RemoveHandler,
 			getUserInfo:           userHandler.InfoHandler,
 			setUserStatus:         userHandler.StatusHandler,
-			listServiceAccounts:   RouteNotImplemented,
-			addServiceAccount:     RouteNotImplemented,
-			deleteServiceAccount:  RouteNotImplemented,
-			getServiceAccountInfo: RouteNotImplemented,
-			updateServiceAccount:  RouteNotImplemented,
-			updateGroupMembers:    RouteNotImplemented,
-			getGroupInfo:          RouteNotImplemented,
-			listGroups:            RouteNotImplemented,
-			setGroupStatus:        RouteNotImplemented,
+			listServiceAccounts:   saHandler.ListHandler,
+			addServiceAccount:     saHandler.AddHandler,
+			deleteServiceAccount:  saHandler.DeleteHandler,
+			getServiceAccountInfo: saHandler.InfoHandler,
+			updateServiceAccount:  saHandler.UpdateHandler,
+			updateGroupMembers:    groupHandler.UpdateMembersHandler,
+			getGroupInfo:          groupHandler.InfoHandler,
+			listGroups:            groupHandler.ListHandler,
+			setGroupStatus:        groupHandler.StatusHandler,
 			listCannedPolicies:    policyHandler.ListHandler,
 			addCannedPolicy:       policyHandler.AddHandler,
 			deleteCannedPolicy:    policyHandler.RemoveHandler,

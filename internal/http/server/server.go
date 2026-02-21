@@ -169,8 +169,9 @@ func New(config *Config) (*Server, error) {
 		authenticator = auth.New(metaMgr, config.AccessKey, config.SecretKey)
 	}
 
-	// Initialize policy engine
-	policyEngine := policy.New()
+	// Initialize policy engine with IAM policy resolver
+	resolver := policy.NewMetadataResolver(metaMgr)
+	policyEngine := policy.New(resolver)
 
 	// Load all bucket policies from metadata at startup
 	bucketPolicies, err := metaMgr.GetAllBucketPolicies(context.Background())

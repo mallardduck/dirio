@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/go-git/go-billy/v5"
@@ -29,14 +30,22 @@ const (
 
 // Domain errors
 var (
-	ErrUserNotFound   = errors.New("user not found")
-	ErrPolicyNotFound = errors.New("policy not found")
+	ErrUserNotFound           = errors.New("user not found")
+	ErrPolicyNotFound         = errors.New("policy not found")
+	ErrGroupNotFound          = errors.New("group not found")
+	ErrGroupAlreadyExists     = errors.New("group already exists")
+	ErrServiceAccountNotFound = errors.New("service account not found")
 )
 
 // Manager handles metadata storage and retrieval
 type Manager struct {
 	rootFS     billy.Filesystem
 	metadataFS billy.Filesystem
+
+	// userUUIDIdx provides O(1) lookup of user access key by UUID.
+	// Populated at startup and kept in sync via CreateOrUpdateUser / DeleteUser.
+	userUUIDMu  sync.RWMutex
+	userUUIDIdx map[uuid.UUID]string // UUID → access key (username)
 }
 
 // Type aliases for backward compatibility
@@ -44,6 +53,8 @@ type User = iam.User
 type Policy = iam.Policy
 type PolicyDocument = iam.PolicyDocument
 type PolicyStatement = iam.Statement
+type Group = iam.Group
+type ServiceAccount = iam.ServiceAccount
 
 // BucketMetadata represents bucket configuration
 type BucketMetadata struct {
@@ -110,11 +121,49 @@ func New(rootFS billy.Filesystem) (*Manager, error) {
 	if err := metadataFS.MkdirAll("objects", 0755); err != nil {
 		return nil, fmt.Errorf("failed to create objects directory: %w", err)
 	}
+	if err := metadataFS.MkdirAll("iam/groups", 0755); err != nil {
+		return nil, fmt.Errorf("failed to create IAM groups directory: %w", err)
+	}
+	if err := metadataFS.MkdirAll("iam/service-accounts", 0755); err != nil {
+		return nil, fmt.Errorf("failed to create IAM service-accounts directory: %w", err)
+	}
 
-	return &Manager{
-		rootFS:     rootFS,
-		metadataFS: metadataFS,
-	}, nil
+	mgr := &Manager{
+		rootFS:      rootFS,
+		metadataFS:  metadataFS,
+		userUUIDIdx: make(map[uuid.UUID]string),
+	}
+
+	// Build UUID → access key index from existing user files.
+	// Fail-soft: log and skip users that cannot be loaded.
+	mgr.buildUserUUIDIndex(context.Background())
+
+	return mgr, nil
+}
+
+// buildUserUUIDIndex populates the in-memory UUID index from disk.
+// Called once at startup; individual errors are logged and skipped.
+func (m *Manager) buildUserUUIDIndex(ctx context.Context) {
+	usernames, err := m.ListUsers(ctx)
+	if err != nil {
+		fmt.Printf("Warning: failed to list users while building UUID index: %v\n", err)
+		return
+	}
+
+	m.userUUIDMu.Lock()
+	defer m.userUUIDMu.Unlock()
+
+	for _, username := range usernames {
+		user, err := m.GetUser(ctx, username)
+		if err != nil {
+			fmt.Printf("Warning: failed to load user %s while building UUID index: %v\n", username, err)
+			continue
+		}
+		if user != nil && user.UUID != uuid.Nil {
+			// Index maps UUID → username (the file key used by GetUser).
+			m.userUUIDIdx[user.UUID] = username
+		}
+	}
 }
 
 // CreateBucket creates metadata for a new bucket
@@ -327,7 +376,16 @@ func (m *Manager) CreateOrUpdateUser(ctx context.Context, user *User) error {
 	user.Version = iam.UserMetadataVersion
 	user.UpdatedAt = time.Now()
 
-	return m.SaveUser(ctx, user.Username, user)
+	if err := m.SaveUser(ctx, user.Username, user); err != nil {
+		return err
+	}
+
+	// Keep UUID index in sync. Store Username (the file key) not AccessKey.
+	m.userUUIDMu.Lock()
+	m.userUUIDIdx[user.UUID] = user.Username
+	m.userUUIDMu.Unlock()
+
+	return nil
 }
 
 // UpdateUser updates an existing user's mutable fields
@@ -391,11 +449,22 @@ func (m *Manager) DeleteUser(ctx context.Context, username string) error {
 		return fmt.Errorf("context cancelled: %w", err)
 	}
 
+	// Load user first to get their UUID for index cleanup.
+	user, _ := m.GetUser(ctx, username)
+
 	userPath := filepath.Join("iam", "users", username+".json")
 	err := m.metadataFS.Remove(userPath)
 	if err != nil && !isNotExist(err) {
 		return err
 	}
+
+	// Remove from UUID index if we had the user's UUID.
+	if user != nil && user.UUID != uuid.Nil {
+		m.userUUIDMu.Lock()
+		delete(m.userUUIDIdx, user.UUID)
+		m.userUUIDMu.Unlock()
+	}
+
 	return nil
 }
 
@@ -452,30 +521,21 @@ func (m *Manager) GetUsers(ctx context.Context) (map[string]*User, error) {
 	return users, nil
 }
 
-// GetUserByUUID retrieves a user by their UUID
-// Note: This is currently O(n) as it iterates through all users.
-// TODO: Implement UUID-to-username index for O(1) lookup
+// GetUserByUUID retrieves a user by their UUID using the in-memory index (O(1)).
 func (m *Manager) GetUserByUUID(ctx context.Context, userUUID uuid.UUID) (*User, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	usernames, err := m.ListUsers(ctx)
-	if err != nil {
-		return nil, err
+	m.userUUIDMu.RLock()
+	accessKey, ok := m.userUUIDIdx[userUUID]
+	m.userUUIDMu.RUnlock()
+
+	if !ok {
+		return nil, ErrUserNotFound
 	}
 
-	for _, username := range usernames {
-		user, err := m.GetUser(ctx, username)
-		if err != nil {
-			continue // Skip users we can't load
-		}
-		if user != nil && user.UUID == userUUID {
-			return user, nil
-		}
-	}
-
-	return nil, ErrUserNotFound
+	return m.GetUser(ctx, accessKey)
 }
 
 // SavePolicy saves a single policy
@@ -687,6 +747,366 @@ func (m *Manager) SetBucketOwner(ctx context.Context, bucket string, ownerUUID *
 	}
 	meta.Owner = ownerUUID
 	return m.saveBucketMetadata(ctx, bucket, meta)
+}
+
+// ============================================================================
+// Group Operations
+// ============================================================================
+
+// CreateGroup creates a new empty group. Returns ErrGroupAlreadyExists if it already exists.
+func (m *Manager) CreateGroup(ctx context.Context, groupName string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
+	groupPath := filepath.Join("iam", "groups", groupName+".json")
+
+	// Check if already exists
+	if _, err := m.metadataFS.Stat(groupPath); err == nil {
+		return ErrGroupAlreadyExists
+	}
+
+	now := time.Now()
+	g := &iam.Group{
+		Version:   iam.GroupMetadataVersion,
+		Name:      groupName,
+		Status:    iam.GroupStatusActive,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	return jsonutil.MarshalToFile(m.metadataFS, groupPath, g)
+}
+
+// GetGroup retrieves a group by name.
+func (m *Manager) GetGroup(ctx context.Context, groupName string) (*Group, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
+	groupPath := filepath.Join("iam", "groups", groupName+".json")
+	data, err := util.ReadFile(m.metadataFS, groupPath)
+	if err != nil {
+		if isNotExist(err) {
+			return nil, ErrGroupNotFound
+		}
+		return nil, err
+	}
+
+	var g Group
+	if err := jsonutil.Unmarshal(data, &g); err != nil {
+		return nil, err
+	}
+
+	return &g, nil
+}
+
+// SaveGroup atomically saves a group.
+func (m *Manager) SaveGroup(ctx context.Context, g *Group) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
+	groupPath := filepath.Join("iam", "groups", g.Name+".json")
+	return jsonutil.MarshalToFile(m.metadataFS, groupPath, g)
+}
+
+// DeleteGroup removes a group.
+func (m *Manager) DeleteGroup(ctx context.Context, groupName string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
+	groupPath := filepath.Join("iam", "groups", groupName+".json")
+	err := m.metadataFS.Remove(groupPath)
+	if err != nil && !isNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+// ListGroupNames returns all group names.
+func (m *Manager) ListGroupNames(ctx context.Context) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
+	groupsDir := filepath.Join("iam", "groups")
+	entries, err := m.metadataFS.ReadDir(groupsDir)
+	if err != nil {
+		if isNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		names = append(names, entry.Name()[:len(entry.Name())-5])
+	}
+
+	return names, nil
+}
+
+// GetGroups loads all groups.
+func (m *Manager) GetGroups(ctx context.Context) (map[string]*Group, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
+	names, err := m.ListGroupNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	groups := make(map[string]*Group, len(names))
+	for _, name := range names {
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("context cancelled during group loading: %w", err)
+		}
+		g, err := m.GetGroup(ctx, name)
+		if err != nil {
+			fmt.Printf("Warning: failed to load group %s: %v\n", name, err)
+			continue
+		}
+		groups[name] = g
+	}
+
+	return groups, nil
+}
+
+// AddUserToGroup adds an access key to a group's member list (idempotent).
+func (m *Manager) AddUserToGroup(ctx context.Context, groupName, accessKey string) error {
+	g, err := m.GetGroup(ctx, groupName)
+	if err != nil {
+		return err
+	}
+
+	for _, member := range g.Members {
+		if member == accessKey {
+			return nil // already a member
+		}
+	}
+
+	g.Members = append(g.Members, accessKey)
+	g.UpdatedAt = time.Now()
+
+	return m.SaveGroup(ctx, g)
+}
+
+// RemoveUserFromGroup removes an access key from a group's member list.
+func (m *Manager) RemoveUserFromGroup(ctx context.Context, groupName, accessKey string) error {
+	g, err := m.GetGroup(ctx, groupName)
+	if err != nil {
+		return err
+	}
+
+	filtered := g.Members[:0]
+	for _, member := range g.Members {
+		if member != accessKey {
+			filtered = append(filtered, member)
+		}
+	}
+	g.Members = filtered
+	g.UpdatedAt = time.Now()
+
+	return m.SaveGroup(ctx, g)
+}
+
+// AttachPolicyToGroup adds a policy name to a group's attached policies (idempotent).
+func (m *Manager) AttachPolicyToGroup(ctx context.Context, groupName, policyName string) error {
+	g, err := m.GetGroup(ctx, groupName)
+	if err != nil {
+		return err
+	}
+
+	for _, p := range g.AttachedPolicies {
+		if p == policyName {
+			return nil // already attached
+		}
+	}
+
+	g.AttachedPolicies = append(g.AttachedPolicies, policyName)
+	g.UpdatedAt = time.Now()
+
+	return m.SaveGroup(ctx, g)
+}
+
+// DetachPolicyFromGroup removes a policy name from a group's attached policies.
+func (m *Manager) DetachPolicyFromGroup(ctx context.Context, groupName, policyName string) error {
+	g, err := m.GetGroup(ctx, groupName)
+	if err != nil {
+		return err
+	}
+
+	filtered := g.AttachedPolicies[:0]
+	for _, p := range g.AttachedPolicies {
+		if p != policyName {
+			filtered = append(filtered, p)
+		}
+	}
+	g.AttachedPolicies = filtered
+	g.UpdatedAt = time.Now()
+
+	return m.SaveGroup(ctx, g)
+}
+
+// SetGroupStatus updates a group's status.
+func (m *Manager) SetGroupStatus(ctx context.Context, groupName string, status iam.GroupStatus) error {
+	g, err := m.GetGroup(ctx, groupName)
+	if err != nil {
+		return err
+	}
+
+	g.Status = status
+	g.UpdatedAt = time.Now()
+
+	return m.SaveGroup(ctx, g)
+}
+
+// ============================================================================
+// Service Account Operations
+// ============================================================================
+
+// CreateServiceAccount saves a new service account. Returns error if key already exists.
+func (m *Manager) CreateServiceAccount(ctx context.Context, sa *ServiceAccount) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
+	saPath := filepath.Join("iam", "service-accounts", sa.AccessKey+".json")
+
+	// Check if already exists
+	if _, err := m.metadataFS.Stat(saPath); err == nil {
+		return fmt.Errorf("service account %q already exists", sa.AccessKey)
+	}
+
+	// Encrypt secret key before persisting
+	encryptedSecret, err := crypto.Encrypt(sa.SecretKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt secret key for service account %s: %w", sa.AccessKey, err)
+	}
+	toSave := *sa
+	toSave.SecretKey = encryptedSecret
+
+	return jsonutil.MarshalToFile(m.metadataFS, saPath, &toSave)
+}
+
+// GetServiceAccount retrieves a service account by access key.
+func (m *Manager) GetServiceAccount(ctx context.Context, accessKey string) (*ServiceAccount, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
+	saPath := filepath.Join("iam", "service-accounts", accessKey+".json")
+	data, err := util.ReadFile(m.metadataFS, saPath)
+	if err != nil {
+		if isNotExist(err) {
+			return nil, ErrServiceAccountNotFound
+		}
+		return nil, err
+	}
+
+	var sa ServiceAccount
+	if err := jsonutil.Unmarshal(data, &sa); err != nil {
+		return nil, err
+	}
+
+	// Decrypt secret key
+	decrypted, err := crypto.Decrypt(sa.SecretKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt secret key for service account %s: %w", accessKey, err)
+	}
+	sa.SecretKey = decrypted
+
+	return &sa, nil
+}
+
+// SaveServiceAccount atomically saves a service account (encrypts secret key).
+func (m *Manager) SaveServiceAccount(ctx context.Context, sa *ServiceAccount) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
+	encryptedSecret, err := crypto.Encrypt(sa.SecretKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt secret key for service account %s: %w", sa.AccessKey, err)
+	}
+	toSave := *sa
+	toSave.SecretKey = encryptedSecret
+
+	saPath := filepath.Join("iam", "service-accounts", sa.AccessKey+".json")
+	return jsonutil.MarshalToFile(m.metadataFS, saPath, &toSave)
+}
+
+// DeleteServiceAccount removes a service account.
+func (m *Manager) DeleteServiceAccount(ctx context.Context, accessKey string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context cancelled: %w", err)
+	}
+
+	saPath := filepath.Join("iam", "service-accounts", accessKey+".json")
+	err := m.metadataFS.Remove(saPath)
+	if err != nil && !isNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+// ListServiceAccountKeys returns all service account access keys.
+func (m *Manager) ListServiceAccountKeys(ctx context.Context) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
+	saDir := filepath.Join("iam", "service-accounts")
+	entries, err := m.metadataFS.ReadDir(saDir)
+	if err != nil {
+		if isNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+
+	keys := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		keys = append(keys, entry.Name()[:len(entry.Name())-5])
+	}
+
+	return keys, nil
+}
+
+// GetServiceAccounts loads all service accounts.
+func (m *Manager) GetServiceAccounts(ctx context.Context) (map[string]*ServiceAccount, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
+	keys, err := m.ListServiceAccountKeys(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	accounts := make(map[string]*ServiceAccount, len(keys))
+	for _, key := range keys {
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("context cancelled during SA loading: %w", err)
+		}
+		sa, err := m.GetServiceAccount(ctx, key)
+		if err != nil {
+			fmt.Printf("Warning: failed to load service account %s: %v\n", key, err)
+			continue
+		}
+		accounts[key] = sa
+	}
+
+	return accounts, nil
 }
 
 // GetAllBucketPolicies retrieves all bucket policies for loading into the policy engine.

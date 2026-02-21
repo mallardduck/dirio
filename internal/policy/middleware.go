@@ -75,6 +75,13 @@ func AuthorizationMiddleware(config *AuthorizationConfig) func(http.Handler) htt
 				IsAdmin:     isAdmin(user, config.RootAccessKey, config.AltRootAccessKey),
 			}
 
+			// Populate SA fields from context (set by auth middleware for service account requests)
+			if saInfo := context.GetServiceAccountInfo(r.Context()); saInfo != nil {
+				principal.IsServiceAccount = true
+				principal.ParentUserUUID = saInfo.ParentUserUUID
+				principal.PolicyMode = saInfo.PolicyMode
+			}
+
 			// Admin bypass - skip all policy checks
 			if principal.IsAdmin {
 				authzLogger.With("action", routeAction, "user", user.AccessKey).

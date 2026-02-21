@@ -11,6 +11,7 @@ import (
 	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/jsonutil"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
+	"github.com/mallardduck/dirio/internal/service/group"
 	"github.com/mallardduck/dirio/internal/service/policy"
 	"github.com/mallardduck/dirio/internal/service/user"
 	"github.com/mallardduck/dirio/pkg/iam"
@@ -18,6 +19,7 @@ import (
 
 type policyHTTPService struct {
 	users    *user.Service
+	groups   *group.Service
 	policies *policy.Service
 	log      *slog.Logger
 }
@@ -225,16 +227,14 @@ func (s policyHTTPService) SetPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// For now, only support users (not groups)
+	var attachErr error
 	if isGroup {
-		s.log.Error("Group policies not yet supported")
-		w.WriteHeader(http.StatusNotImplemented)
-		return
+		attachErr = s.groups.AttachPolicy(r.Context(), userOrGroup, policyName)
+	} else {
+		attachErr = s.users.AttachPolicy(r.Context(), userOrGroup, policyName)
 	}
-
-	// Attach the policy to the user
-	if err := s.users.AttachPolicy(r.Context(), userOrGroup, policyName); err != nil {
-		s.log.Error("Failed to attach policy", "error", err, "user", userOrGroup, "policy", policyName)
+	if err := attachErr; err != nil {
+		s.log.Error("Failed to attach policy", "error", err, "userOrGroup", userOrGroup, "policy", policyName, "isGroup", isGroup)
 
 		if svcerrors.IsNotFound(err) {
 			w.WriteHeader(http.StatusNotFound)
@@ -248,7 +248,7 @@ func (s policyHTTPService) SetPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.log.Info("Policy attached successfully", "user", userOrGroup, "policy", policyName)
+	s.log.Info("Policy attached successfully", "userOrGroup", userOrGroup, "policy", policyName, "isGroup", isGroup)
 
 	// For encrypted requests, return encrypted response (MinIO format)
 	if r.Header.Get(headers.ContentType) == "application/octet-stream" {
@@ -336,14 +336,14 @@ func (s policyHTTPService) DetachPolicy(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	var detachErr error
 	if isGroup {
-		s.log.Error("Group policies not yet supported")
-		w.WriteHeader(http.StatusNotImplemented)
-		return
+		detachErr = s.groups.DetachPolicy(r.Context(), userOrGroup, policyName)
+	} else {
+		detachErr = s.users.DetachPolicy(r.Context(), userOrGroup, policyName)
 	}
-
-	if err := s.users.DetachPolicy(r.Context(), userOrGroup, policyName); err != nil {
-		s.log.Error("Failed to detach policy", "error", err, "user", userOrGroup, "policy", policyName)
+	if err := detachErr; err != nil {
+		s.log.Error("Failed to detach policy", "error", err, "userOrGroup", userOrGroup, "policy", policyName, "isGroup", isGroup)
 
 		if svcerrors.IsNotFound(err) {
 			w.WriteHeader(http.StatusNotFound)
@@ -357,7 +357,7 @@ func (s policyHTTPService) DetachPolicy(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	s.log.Info("Policy detached successfully", "user", userOrGroup, "policy", policyName)
+	s.log.Info("Policy detached successfully", "userOrGroup", userOrGroup, "policy", policyName, "isGroup", isGroup)
 
 	if r.Header.Get(headers.ContentType) == "application/octet-stream" {
 		adminUser := auth.GetRequestUser(r.Context())
@@ -400,23 +400,44 @@ func (s policyHTTPService) PolicyEntitiesList(w http.ResponseWriter, r *http.Req
 	}
 
 	// Get all users and filter by those with this policy attached
-	users, err := s.users.List(r.Context())
+	userKeys, err := s.users.List(r.Context())
 	if err != nil {
 		s.log.Error("Failed to list users", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	// Filter users that have this policy
 	var usersWithPolicy []string
-	for _, accessKey := range users {
+	for _, accessKey := range userKeys {
 		userEntity, err := s.users.Get(r.Context(), accessKey)
 		if err != nil {
 			continue
 		}
-		for _, policyEntity := range userEntity.AttachedPolicies {
-			if policyEntity == policyName {
+		for _, p := range userEntity.AttachedPolicies {
+			if p == policyName {
 				usersWithPolicy = append(usersWithPolicy, accessKey)
+				break
+			}
+		}
+	}
+
+	// Get all groups and filter by those with this policy attached
+	groupNames, err := s.groups.List(r.Context())
+	if err != nil {
+		s.log.Error("Failed to list groups", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	var groupsWithPolicy []string
+	for _, name := range groupNames {
+		grp, err := s.groups.Get(r.Context(), name)
+		if err != nil {
+			continue
+		}
+		for _, p := range grp.AttachedPolicies {
+			if p == policyName {
+				groupsWithPolicy = append(groupsWithPolicy, name)
 				break
 			}
 		}
@@ -424,7 +445,7 @@ func (s policyHTTPService) PolicyEntitiesList(w http.ResponseWriter, r *http.Req
 
 	response := map[string]interface{}{
 		"userMappings":  usersWithPolicy,
-		"groupMappings": []string{}, // Groups not yet supported
+		"groupMappings": groupsWithPolicy,
 	}
 
 	w.Header().Set(headers.ContentType, "application/json")

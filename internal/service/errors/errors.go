@@ -22,6 +22,19 @@ var (
 	ErrInvalidPolicyDoc    = errors.New("invalid policy document")
 )
 
+// Group errors
+var (
+	ErrGroupNotFound      = errors.New("group not found")
+	ErrGroupAlreadyExists = errors.New("group already exists")
+	ErrInvalidGroupName   = errors.New("invalid group name")
+)
+
+// Service account errors
+var (
+	ErrServiceAccountNotFound      = errors.New("service account not found")
+	ErrServiceAccountAlreadyExists = errors.New("service account already exists")
+)
+
 // S3 errors (buckets and objects)
 var (
 	ErrBucketNotFound      = errors.New("bucket not found")
@@ -55,14 +68,18 @@ func IsNotFound(err error) bool {
 	return errors.Is(err, ErrUserNotFound) ||
 		errors.Is(err, ErrPolicyNotFound) ||
 		errors.Is(err, ErrBucketNotFound) ||
-		errors.Is(err, ErrObjectNotFound)
+		errors.Is(err, ErrObjectNotFound) ||
+		errors.Is(err, ErrGroupNotFound) ||
+		errors.Is(err, ErrServiceAccountNotFound)
 }
 
 // IsAlreadyExists checks if an error is an "already exists" error
 func IsAlreadyExists(err error) bool {
 	return errors.Is(err, ErrUserAlreadyExists) ||
 		errors.Is(err, ErrPolicyAlreadyExists) ||
-		errors.Is(err, ErrBucketAlreadyExists)
+		errors.Is(err, ErrBucketAlreadyExists) ||
+		errors.Is(err, ErrGroupAlreadyExists) ||
+		errors.Is(err, ErrServiceAccountAlreadyExists)
 }
 
 // IsValidation checks if an error is a validation error

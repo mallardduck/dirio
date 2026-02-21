@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -70,7 +71,7 @@ func NewTestServer(t *testing.T) *TestServer {
 
 	// Start server in background
 	go func() {
-		srv.Start()
+		_ = srv.Start(context.Background())
 	}()
 
 	// Wait for server to be ready
@@ -281,7 +282,7 @@ func NewTestServerWithExplicitCredentials(t *testing.T, accessKey, secretKey str
 
 	// Start server in background
 	go func() {
-		srv.Start()
+		_ = srv.Start(context.Background())
 	}()
 
 	// Wait for server to be ready
@@ -343,7 +344,7 @@ func NewTestServerWithExplicitCredentialsAndDataConfig(t *testing.T, cliAccessKe
 
 	// Start server in background
 	go func() {
-		srv.Start()
+		_ = srv.Start(context.Background())
 	}()
 
 	// Wait for server to be ready
@@ -394,7 +395,7 @@ func NewTestServerWithDefaults(t *testing.T) *TestServer {
 
 	// Start server in background
 	go func() {
-		srv.Start()
+		_ = srv.Start(context.Background())
 	}()
 
 	// Wait for server to be ready
@@ -456,7 +457,7 @@ func NewTestServerWithDefaultsAndDataConfig(t *testing.T, dataAccessKey, dataSec
 
 	// Start server in background
 	go func() {
-		srv.Start()
+		_ = srv.Start(context.Background())
 	}()
 
 	// Wait for server to be ready

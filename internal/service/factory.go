@@ -4,8 +4,10 @@ import (
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/persistence/storage"
 	policyEngine "github.com/mallardduck/dirio/internal/policy"
+	"github.com/mallardduck/dirio/internal/service/group"
 	"github.com/mallardduck/dirio/internal/service/policy"
 	"github.com/mallardduck/dirio/internal/service/s3"
+	"github.com/mallardduck/dirio/internal/service/serviceaccount"
 	"github.com/mallardduck/dirio/internal/service/user"
 )
 
@@ -16,20 +18,24 @@ type ServicesFactory struct {
 	policyEngine *policyEngine.Engine
 
 	// The actual services
-	userService   *user.Service
-	policyService *policy.Service
-	s3Service     *s3.Service
+	userService           *user.Service
+	policyService         *policy.Service
+	s3Service             *s3.Service
+	groupService          *group.Service
+	serviceAccountService *serviceaccount.Service
 }
 
 // NewServiceFactory creates a new service factory with dependency injection
 func NewServiceFactory(storage *storage.Storage, metadata *metadata.Manager, engine *policyEngine.Engine) *ServicesFactory {
 	return &ServicesFactory{
-		storage:       storage,
-		metadata:      metadata,
-		policyEngine:  engine,
-		userService:   user.NewService(metadata),
-		policyService: policy.NewService(metadata),
-		s3Service:     s3.NewService(storage, metadata, engine),
+		storage:               storage,
+		metadata:              metadata,
+		policyEngine:          engine,
+		userService:           user.NewService(metadata),
+		policyService:         policy.NewService(metadata),
+		s3Service:             s3.NewService(storage, metadata, engine),
+		groupService:          group.NewService(metadata),
+		serviceAccountService: serviceaccount.NewService(metadata),
 	}
 }
 
@@ -56,4 +62,14 @@ func (f *ServicesFactory) Metadata() *metadata.Manager {
 // PolicyEngine returns the policy evaluation engine.
 func (f *ServicesFactory) PolicyEngine() *policyEngine.Engine {
 	return f.policyEngine
+}
+
+// Group returns the group service
+func (f *ServicesFactory) Group() *group.Service {
+	return f.groupService
+}
+
+// ServiceAccount returns the service account service
+func (f *ServicesFactory) ServiceAccount() *serviceaccount.Service {
+	return f.serviceAccountService
 }
