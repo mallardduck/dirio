@@ -12,7 +12,7 @@ import (
 // setupConsole wires the admin console into the server when the noconsole build
 // tag is NOT set (the default). It creates the adapter, builds the console
 // handler, and registers it with the server.
-func setupConsole(srv *server.Server, enabled bool, address string) {
+func setupConsole(srv *server.Server, enabled bool, port int) {
 	if !enabled {
 		return
 	}
@@ -21,5 +21,5 @@ func setupConsole(srv *server.Server, enabled bool, address string) {
 	adapter := consolewire.NewAdapter(factory)
 	handler := console.New(adapter)
 
-	srv.SetConsole(handler, address)
+	srv.SetConsole(handler, port)
 }

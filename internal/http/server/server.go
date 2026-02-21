@@ -72,7 +72,7 @@ type Server struct {
 	// console is the optional web admin console handler.
 	// Set via SetConsole before calling Start.
 	consoleHandler http.Handler
-	consoleAddress string // empty = same port at /dirio/ui/
+	consolePort    int // 0 = same port at /dirio/ui/
 }
 
 // Metadata returns the metadata manager (used by the console wire file).
@@ -84,13 +84,13 @@ func (s *Server) Storage() *storage.Storage { return s.storage }
 // PolicyEngine returns the policy engine (used by the console wire file).
 func (s *Server) PolicyEngine() *policy.Engine { return s.policyEngine }
 
-// SetConsole registers the console handler with the server. When address is
-// empty the console is mounted at /dirio/ui/ on the main port. When address
-// is non-empty (e.g. ":9001") a separate listener is started for the console.
+// SetConsole registers the console handler with the server. When port is
+// 0 the console is mounted at /dirio/ui/ on the main port. When port is
+// non-zero (e.g. 9001) a separate listener is started for the console.
 // Must be called before Start.
-func (s *Server) SetConsole(h http.Handler, address string) {
+func (s *Server) SetConsole(h http.Handler, port int) {
 	s.consoleHandler = h
-	s.consoleAddress = address
+	s.consolePort = port
 }
 
 // New creates a new server instance
@@ -228,13 +228,10 @@ func (s *Server) setupRoutes() {
 }
 
 // consoleSamePort reports whether the console should be mounted on the main
-// port. This is true when no separate address is configured, or when the
-// configured address resolves to the same port as the main server.
+// port. This is true when no separate port is configured, or when the
+// configured port matches the main server port.
 func (s *Server) consoleSamePort() bool {
-	if s.consoleAddress == "" {
-		return true
-	}
-	return s.consoleAddress == fmt.Sprintf(":%d", s.config.Port)
+	return s.consolePort == 0 || s.consolePort == s.config.Port
 }
 
 // buildHandler constructs the top-level http.Handler, mounting the console when
@@ -269,15 +266,16 @@ func (s *Server) Start() error {
 
 	// Start separate console listener if configured on a different port
 	if s.consoleHandler != nil && !s.consoleSamePort() {
+		consoleAddr := fmt.Sprintf(":%d", s.consolePort)
 		consoleServer := &http.Server{
-			Addr:         s.consoleAddress,
+			Addr:         consoleAddr,
 			Handler:      s.consoleHandler,
 			ReadTimeout:  30 * time.Second,
 			WriteTimeout: 30 * time.Second,
 			IdleTimeout:  60 * time.Second,
 		}
 		go func() {
-			s.log.Info("console listening on separate port", "addr", s.consoleAddress)
+			s.log.Info("console listening on separate port", "addr", consoleAddr)
 			if err := consoleServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				s.log.Error("console server error", "error", err)
 			}

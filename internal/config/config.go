@@ -50,7 +50,7 @@ type Settings struct {
 
 	// Console settings
 	ConsoleEnabled bool
-	ConsoleAddress string
+	ConsolePort    int
 }
 
 // Validate checks that the configured settings are valid
@@ -141,7 +141,7 @@ func LoadConfig(flags *pflag.FlagSet, v *viper.Viper) (*Settings, error) {
 
 		// Console settings
 		ConsoleEnabled: resolver.GetBool(ConsoleEnabled),
-		ConsoleAddress: resolver.Get(ConsoleAddress),
+		ConsolePort:    resolver.GetInt(ConsolePort),
 	}
 
 	// Debug flag overrides log level
