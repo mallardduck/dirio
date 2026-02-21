@@ -148,17 +148,29 @@ func (a *Adapter) DetachPolicy(ctx context.Context, policyName, accessKey string
 // --- Buckets -----------------------------------------------------------------
 
 func (a *Adapter) ListBuckets(ctx context.Context) ([]*consoleapi.Bucket, error) {
-	buckets, err := a.services.S3().ListBuckets(ctx)
+	metas, err := a.services.Metadata().ListBucketMetadatas(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	out := make([]*consoleapi.Bucket, 0, len(buckets))
-	for _, b := range buckets {
-		out = append(out, &consoleapi.Bucket{
-			Name:      b.Name,
-			CreatedAt: b.CreationDate,
-		})
+	out := make([]*consoleapi.Bucket, 0, len(metas))
+	for _, meta := range metas {
+		b := &consoleapi.Bucket{
+			Name:      meta.Name,
+			CreatedAt: meta.Created,
+		}
+		if meta.Owner != nil {
+			b.OwnerUUID = meta.Owner.String()
+			user, err := a.services.Metadata().GetUserByUUID(ctx, *meta.Owner)
+			if err == nil {
+				b.Owner = &consoleapi.Owner{
+					UUID:      meta.Owner.String(),
+					AccessKey: user.AccessKey,
+					Username:  user.Username,
+				}
+			}
+		}
+		out = append(out, b)
 	}
 
 	return out, nil
@@ -174,8 +186,21 @@ func (a *Adapter) SetBucketPolicy(_ context.Context, _, _ string) error {
 
 // --- Ownership ---------------------------------------------------------------
 
-func (a *Adapter) GetBucketOwner(_ context.Context, _ string) (*consoleapi.Owner, error) {
-	return nil, ErrNotImplemented
+func (a *Adapter) GetBucketOwner(ctx context.Context, bucket string) (*consoleapi.Owner, error) {
+	meta, err := a.services.Metadata().GetBucketMetadata(ctx, bucket)
+	if err != nil {
+		return nil, err
+	}
+	if meta.Owner == nil {
+		return &consoleapi.Owner{}, nil // admin-owned, no UUID
+	}
+	owner := &consoleapi.Owner{UUID: meta.Owner.String()}
+	user, err := a.services.Metadata().GetUserByUUID(ctx, *meta.Owner)
+	if err == nil {
+		owner.AccessKey = user.AccessKey
+		owner.Username = user.Username
+	}
+	return owner, nil
 }
 
 func (a *Adapter) TransferBucketOwnership(_ context.Context, _, _ string) error {

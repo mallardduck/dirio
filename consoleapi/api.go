@@ -65,6 +65,7 @@ type Policy struct {
 type Bucket struct {
 	Name      string    `json:"name"`
 	OwnerUUID string    `json:"ownerUUID"` // empty string means admin-only
+	Owner     *Owner    `json:"owner,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 

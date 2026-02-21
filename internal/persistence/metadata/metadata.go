@@ -645,6 +645,39 @@ func (m *Manager) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	return jsonutil.MarshalToFile(m.metadataFS, bucketPath, meta)
 }
 
+// ListBucketMetadatas returns the full metadata for every bucket.
+func (m *Manager) ListBucketMetadatas(ctx context.Context) ([]*BucketMetadata, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
+	entries, err := m.metadataFS.ReadDir("buckets")
+	if err != nil {
+		if isNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	out := make([]*BucketMetadata, 0, len(entries))
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("context cancelled during bucket listing: %w", err)
+		}
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		bucketName := entry.Name()[:len(entry.Name())-5]
+		meta, err := m.GetBucketMetadata(ctx, bucketName)
+		if err != nil {
+			continue
+		}
+		out = append(out, meta)
+	}
+
+	return out, nil
+}
+
 // GetAllBucketPolicies retrieves all bucket policies for loading into the policy engine.
 // Returns a map from bucket name to policy document (nil policies are excluded).
 func (m *Manager) GetAllBucketPolicies(ctx context.Context) (map[string]*PolicyDocument, error) {
