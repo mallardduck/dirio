@@ -1,0 +1,102 @@
+package ui
+
+import "github.com/mallardduck/dirio/consoleapi"
+
+// BucketDetailData holds all data for the bucket detail page.
+type BucketDetailData struct {
+	Bucket      *consoleapi.Bucket
+	PolicyJSON  string // empty string = no policy set
+	Flash       string // success message (e.g. "Policy saved.")
+	ErrorMsg    string // error message
+}
+
+// BucketDetailPage renders the bucket detail page.
+templ BucketDetailPage(d BucketDetailData) {
+	@Base(d.Bucket.Name, "/buckets") {
+		@bucketDetailContent(d)
+	}
+}
+
+templ bucketDetailContent(d BucketDetailData) {
+	<div class="space-y-6">
+		<!-- Breadcrumb -->
+		<nav class="flex items-center gap-2 text-xs text-dirio-muted">
+			<a href={ PageURL("/buckets") } class="hover:text-dirio-teal transition-colors">Buckets</a>
+			<span>/</span>
+			<span class="text-dirio-text font-medium">{ d.Bucket.Name }</span>
+		</nav>
+		if d.Flash != "" {
+			<div class="text-xs text-dirio-teal border border-dirio-teal rounded px-4 py-2">{ d.Flash }</div>
+		}
+		if d.ErrorMsg != "" {
+			<div class="text-xs text-dirio-coral border border-dirio-coral rounded px-4 py-2">{ d.ErrorMsg }</div>
+		}
+		<!-- Ownership card -->
+		<div class="bg-dirio-bg-card border border-dirio-border rounded-lg">
+			<div class="px-5 py-4 border-b border-dirio-border">
+				<h2 class="text-sm font-semibold text-dirio-text">Ownership</h2>
+			</div>
+			<div class="px-5 py-4 space-y-4">
+				<div class="flex items-center gap-6 text-sm">
+					<span class="text-dirio-muted w-28 shrink-0">Current owner</span>
+					if d.Bucket.Owner != nil && d.Bucket.Owner.AccessKey != "" {
+						<span class="font-mono text-dirio-text">{ d.Bucket.Owner.AccessKey }</span>
+						<span class="text-xs font-mono text-dirio-muted">{ d.Bucket.OwnerUUID }</span>
+					} else {
+						<span class="italic text-dirio-muted">admin (no explicit owner)</span>
+					}
+				</div>
+				<form
+					method="POST"
+					action={ PageURL("/buckets/" + d.Bucket.Name + "/ownership") }
+					class="flex items-end gap-3"
+				>
+					<div class="flex-1 max-w-xs">
+						<label class="block text-xs text-dirio-muted mb-1">Transfer to access key</label>
+						<input
+							type="text"
+							name="access_key"
+							placeholder="alice"
+							required
+							class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
+						/>
+					</div>
+					<button
+						type="submit"
+						class="px-4 py-1.5 text-sm rounded border border-dirio-border text-dirio-muted hover:border-dirio-teal hover:text-dirio-teal transition-colors"
+					>Transfer</button>
+				</form>
+			</div>
+		</div>
+		<!-- Bucket policy editor card -->
+		<div class="bg-dirio-bg-card border border-dirio-border rounded-lg">
+			<div class="px-5 py-4 border-b border-dirio-border">
+				<h2 class="text-sm font-semibold text-dirio-text">Bucket Policy</h2>
+				<p class="text-xs text-dirio-muted mt-0.5">
+					Raw S3 bucket policy JSON. Clear the field and save to remove the policy.
+				</p>
+			</div>
+			<div class="px-5 py-4">
+				<form method="POST" action={ PageURL("/buckets/" + d.Bucket.Name + "/policy") }>
+					<textarea
+						name="policy"
+						rows="18"
+						spellcheck="false"
+						class="w-full font-mono text-xs bg-dirio-bg border border-dirio-border rounded px-3 py-2 text-dirio-text focus:outline-none focus:border-dirio-teal resize-y"
+						placeholder={ `{"Version": "2012-10-17", "Statement": []}` }
+					>{ d.PolicyJSON }</textarea>
+					<div class="flex items-center gap-3 mt-3">
+						<button
+							type="submit"
+							class="px-4 py-1.5 text-sm rounded border border-dirio-teal text-dirio-teal hover:bg-dirio-teal hover:text-dirio-bg transition-colors"
+						>Save Policy</button>
+						<a
+							href={ PageURL("/buckets/" + d.Bucket.Name) }
+							class="px-4 py-1.5 text-sm rounded border border-dirio-border text-dirio-muted hover:border-dirio-coral hover:text-dirio-coral transition-colors"
+						>Cancel</a>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+}

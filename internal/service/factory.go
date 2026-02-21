@@ -52,3 +52,8 @@ func (f *ServicesFactory) S3() *s3.Service {
 func (f *ServicesFactory) Metadata() *metadata.Manager {
 	return f.metadata
 }
+
+// PolicyEngine returns the policy evaluation engine.
+func (f *ServicesFactory) PolicyEngine() *policyEngine.Engine {
+	return f.policyEngine
+}

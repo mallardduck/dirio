@@ -57,6 +57,11 @@ func New(api consoleapi.API, s3Router ui.S3Router, adminAuth consoleauth.AdminAu
 	protected.HandleFunc("GET /users", h.Users)
 	protected.HandleFunc("GET /policies", h.Policies)
 	protected.HandleFunc("GET /buckets", h.Buckets)
+	protected.HandleFunc("GET /buckets/{bucket}", h.BucketDetail)
+	protected.HandleFunc("POST /buckets/{bucket}/policy", h.BucketPolicySet)
+	protected.HandleFunc("POST /buckets/{bucket}/ownership", h.BucketTransferOwnership)
+	protected.HandleFunc("GET /simulate", h.Simulate)
+	protected.HandleFunc("POST /simulate", h.Simulate)
 
 	mux.Handle("/", requireSession(sessions, protected))
 

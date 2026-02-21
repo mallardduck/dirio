@@ -29,6 +29,7 @@ type API interface {
 
 	// Buckets
 	ListBuckets(ctx context.Context) ([]*Bucket, error)
+	GetBucket(ctx context.Context, bucket string) (*Bucket, error)
 	GetBucketPolicy(ctx context.Context, bucket string) (string, error) // raw JSON
 	SetBucketPolicy(ctx context.Context, bucket, policyJSON string) error
 

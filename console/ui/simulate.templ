@@ -1,0 +1,199 @@
+package ui
+
+import "github.com/mallardduck/dirio/consoleapi"
+
+// CommonS3Actions is the list of IAM permissions offered in the simulator dropdown.
+var CommonS3Actions = []string{
+	"s3:GetObject",
+	"s3:PutObject",
+	"s3:DeleteObject",
+	"s3:ListBucket",
+	"s3:GetBucketPolicy",
+	"s3:PutBucketPolicy",
+	"s3:DeleteBucketPolicy",
+	"s3:CreateBucket",
+	"s3:DeleteBucket",
+	"s3:GetObjectTagging",
+	"s3:PutObjectTagging",
+	"s3:DeleteObjectTagging",
+}
+
+// SimulateData holds the state for the policy simulator page.
+type SimulateData struct {
+	// Form state preserved after submit.
+	AccessKey string
+	Bucket    string
+	Action    string
+	Key       string
+
+	// Effective permissions result (non-nil after "Show all" submit).
+	Effective *consoleapi.EffectivePermissions
+
+	// Single-action result (non-nil after "Simulate" submit).
+	Result *consoleapi.SimulateResult
+
+	// Error is set when the simulation could not be run.
+	Error string
+}
+
+// SimulatePage renders the full policy simulator page.
+templ SimulatePage(d SimulateData) {
+	@Base("Policy Simulator", "/simulate") {
+		@simulateContent(d)
+	}
+}
+
+templ simulateContent(d SimulateData) {
+	<div class="space-y-6 max-w-2xl">
+		<p class="text-sm text-dirio-muted leading-relaxed">
+			Evaluate whether an IAM user would be allowed or denied access.
+			Evaluation covers bucket policies and resource ownership.
+			IAM user policies are not yet included (Phase 5).
+		</p>
+		<!-- Simulator form -->
+		<div class="bg-dirio-bg-card border border-dirio-border rounded-lg">
+			<div class="px-5 py-4 border-b border-dirio-border">
+				<h2 class="text-sm font-semibold text-dirio-text">Request</h2>
+			</div>
+			<form method="POST" action={ PageURL("/simulate") } class="px-5 py-4 space-y-4">
+				<div class="grid grid-cols-2 gap-4">
+					<div>
+						<label class="block text-xs text-dirio-muted mb-1">IAM User (access key)</label>
+						<input
+							type="text"
+							name="access_key"
+							value={ d.AccessKey }
+							placeholder="alice"
+							required
+							class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
+						/>
+					</div>
+					<div>
+						<label class="block text-xs text-dirio-muted mb-1">Bucket</label>
+						<input
+							type="text"
+							name="bucket"
+							value={ d.Bucket }
+							placeholder="my-bucket"
+							required
+							class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
+						/>
+					</div>
+				</div>
+				<div class="grid grid-cols-2 gap-4">
+					<div>
+						<label class="block text-xs text-dirio-muted mb-1">Action</label>
+						<select
+							name="action"
+							class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal"
+						>
+							for _, a := range CommonS3Actions {
+								if a == d.Action {
+									<option value={ a } selected>{ a }</option>
+								} else {
+									<option value={ a }>{ a }</option>
+								}
+							}
+						</select>
+					</div>
+					<div>
+						<label class="block text-xs text-dirio-muted mb-1">Object Key <span class="text-dirio-muted italic">(optional)</span></label>
+						<input
+							type="text"
+							name="key"
+							value={ d.Key }
+							placeholder="path/to/object.txt"
+							class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
+						/>
+					</div>
+				</div>
+				<div class="flex items-center gap-3">
+					<button
+						type="submit"
+						name="mode"
+						value="simulate"
+						class="px-5 py-1.5 text-sm rounded border border-dirio-teal text-dirio-teal hover:bg-dirio-teal hover:text-dirio-bg transition-colors"
+					>Simulate →</button>
+					<button
+						type="submit"
+						name="mode"
+						value="effective"
+						class="px-5 py-1.5 text-sm rounded border border-dirio-border text-dirio-muted hover:border-dirio-steel hover:text-dirio-steel transition-colors"
+					>Show all permissions</button>
+				</div>
+			</form>
+		</div>
+		if d.Error != "" {
+			<div class="border border-dirio-coral rounded-lg px-5 py-3 text-sm text-dirio-coral">{ d.Error }</div>
+		}
+		if d.Result != nil {
+			@simulateResultBlock(d.Result)
+		}
+		if d.Effective != nil {
+			@effectivePermissionsBlock(d.Effective)
+		}
+	</div>
+}
+
+templ simulateResultBlock(r *consoleapi.SimulateResult) {
+	if r.Allowed {
+		<div class="bg-dirio-bg-card border border-dirio-teal rounded-lg px-5 py-4">
+			<div class="flex items-center gap-3 mb-1.5">
+				<span class="w-2.5 h-2.5 rounded-full bg-dirio-teal shrink-0"></span>
+				<span class="text-sm font-semibold text-dirio-teal">Allowed</span>
+			</div>
+			<p class="text-xs text-dirio-muted ml-6">{ r.Reason }</p>
+		</div>
+	} else {
+		<div class="bg-dirio-bg-card border border-dirio-coral rounded-lg px-5 py-4">
+			<div class="flex items-center gap-3 mb-1.5">
+				<span class="w-2.5 h-2.5 rounded-full bg-dirio-coral shrink-0"></span>
+				<span class="text-sm font-semibold text-dirio-coral">Denied</span>
+			</div>
+			<p class="text-xs text-dirio-muted ml-6">{ r.Reason }</p>
+		</div>
+	}
+}
+
+templ effectivePermissionsBlock(ep *consoleapi.EffectivePermissions) {
+	<div class="bg-dirio-bg-card border border-dirio-border rounded-lg">
+		<div class="px-5 py-4 border-b border-dirio-border">
+			<h2 class="text-sm font-semibold text-dirio-text">
+				Effective permissions for <span class="font-mono text-dirio-teal">{ ep.AccessKey }</span>
+				on <span class="font-mono text-dirio-teal">{ ep.Bucket }</span>
+			</h2>
+		</div>
+		<div class="divide-y divide-dirio-border">
+			<div class="px-5 py-3">
+				<p class="text-xs font-semibold text-dirio-teal uppercase tracking-wider mb-2">Allowed ({ len(ep.AllowedActions) })</p>
+				if len(ep.AllowedActions) == 0 {
+					<p class="text-xs text-dirio-muted italic">None</p>
+				} else {
+					<ul class="space-y-0.5">
+						for _, action := range ep.AllowedActions {
+							<li class="flex items-center gap-2 text-xs font-mono text-dirio-text">
+								<span class="w-1.5 h-1.5 rounded-full bg-dirio-teal shrink-0"></span>
+								{ action }
+							</li>
+						}
+					</ul>
+				}
+			</div>
+			<div class="px-5 py-3">
+				<p class="text-xs font-semibold text-dirio-coral uppercase tracking-wider mb-2">Denied ({ len(ep.DeniedActions) })</p>
+				if len(ep.DeniedActions) == 0 {
+					<p class="text-xs text-dirio-muted italic">None</p>
+				} else {
+					<ul class="space-y-0.5">
+						for _, action := range ep.DeniedActions {
+							<li class="flex items-center gap-2 text-xs font-mono text-dirio-muted">
+								<span class="w-1.5 h-1.5 rounded-full bg-dirio-coral shrink-0"></span>
+								{ action }
+							</li>
+						}
+					</ul>
+				}
+			</div>
+		</div>
+	</div>
+}

@@ -7,17 +7,38 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/mallardduck/dirio/consoleapi"
+	"github.com/mallardduck/dirio/internal/policy"
+	"github.com/mallardduck/dirio/internal/policy/variables"
 	"github.com/mallardduck/dirio/internal/service"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
 	svcpolicy "github.com/mallardduck/dirio/internal/service/policy"
+	svcs3 "github.com/mallardduck/dirio/internal/service/s3"
 	svcuser "github.com/mallardduck/dirio/internal/service/user"
 	"github.com/mallardduck/dirio/pkg/iam"
+	s3types "github.com/mallardduck/dirio/pkg/s3types"
 )
 
 // ErrNotImplemented is returned for API methods not yet backed by the service layer.
 var ErrNotImplemented = errors.New("not implemented")
+
+// commonS3Actions is the set of S3 permissions evaluated by GetEffectivePermissions.
+var commonS3Actions = []string{
+	"s3:GetObject",
+	"s3:PutObject",
+	"s3:DeleteObject",
+	"s3:ListBucket",
+	"s3:GetBucketPolicy",
+	"s3:PutBucketPolicy",
+	"s3:DeleteBucketPolicy",
+	"s3:CreateBucket",
+	"s3:DeleteBucket",
+	"s3:GetObjectTagging",
+	"s3:PutObjectTagging",
+	"s3:DeleteObjectTagging",
+}
 
 // Adapter implements consoleapi.API via the service layer.
 type Adapter struct {
@@ -176,12 +197,56 @@ func (a *Adapter) ListBuckets(ctx context.Context) ([]*consoleapi.Bucket, error)
 	return out, nil
 }
 
-func (a *Adapter) GetBucketPolicy(_ context.Context, _ string) (string, error) {
-	return "", ErrNotImplemented
+func (a *Adapter) GetBucket(ctx context.Context, bucket string) (*consoleapi.Bucket, error) {
+	meta, err := a.services.Metadata().GetBucketMetadata(ctx, bucket)
+	if err != nil {
+		return nil, fmt.Errorf("bucket not found: %s", bucket)
+	}
+	b := &consoleapi.Bucket{
+		Name:      meta.Name,
+		CreatedAt: meta.Created,
+	}
+	if meta.Owner != nil {
+		b.OwnerUUID = meta.Owner.String()
+		user, err := a.services.Metadata().GetUserByUUID(ctx, *meta.Owner)
+		if err == nil {
+			b.Owner = &consoleapi.Owner{
+				UUID:      meta.Owner.String(),
+				AccessKey: user.AccessKey,
+				Username:  user.Username,
+			}
+		}
+	}
+	return b, nil
 }
 
-func (a *Adapter) SetBucketPolicy(_ context.Context, _, _ string) error {
-	return ErrNotImplemented
+func (a *Adapter) GetBucketPolicy(ctx context.Context, bucket string) (string, error) {
+	doc, err := a.services.S3().GetBucketPolicy(ctx, bucket)
+	if err != nil {
+		if errors.Is(err, s3types.ErrNoSuchBucketPolicy) {
+			return "", nil // no policy set — return empty string
+		}
+		return "", err
+	}
+	raw, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal bucket policy: %w", err)
+	}
+	return string(raw), nil
+}
+
+func (a *Adapter) SetBucketPolicy(ctx context.Context, bucket, policyJSON string) error {
+	if strings.TrimSpace(policyJSON) == "" {
+		return a.services.S3().DeleteBucketPolicy(ctx, bucket)
+	}
+	var doc iam.PolicyDocument
+	if err := json.Unmarshal([]byte(policyJSON), &doc); err != nil {
+		return fmt.Errorf("invalid policy JSON: %w", err)
+	}
+	return a.services.S3().PutBucketPolicy(ctx, &svcs3.PutBucketPolicyRequest{
+		Bucket:         bucket,
+		PolicyDocument: &doc,
+	})
 }
 
 // --- Ownership ---------------------------------------------------------------
@@ -203,22 +268,132 @@ func (a *Adapter) GetBucketOwner(ctx context.Context, bucket string) (*consoleap
 	return owner, nil
 }
 
-func (a *Adapter) TransferBucketOwnership(_ context.Context, _, _ string) error {
-	return ErrNotImplemented
+func (a *Adapter) TransferBucketOwnership(ctx context.Context, bucket, newOwnerAccessKey string) error {
+	user, err := a.services.User().Get(ctx, newOwnerAccessKey)
+	if err != nil {
+		if errors.Is(err, svcerrors.ErrUserNotFound) {
+			return fmt.Errorf("user not found: %s", newOwnerAccessKey)
+		}
+		return err
+	}
+	ownerUUID := user.UUID
+	return a.services.Metadata().SetBucketOwner(ctx, bucket, &ownerUUID)
 }
 
-func (a *Adapter) GetObjectOwner(_ context.Context, _, _ string) (*consoleapi.Owner, error) {
-	return nil, ErrNotImplemented
+func (a *Adapter) GetObjectOwner(ctx context.Context, bucket, key string) (*consoleapi.Owner, error) {
+	meta, err := a.services.Metadata().GetObjectMetadata(ctx, bucket, key)
+	if err != nil {
+		return nil, err
+	}
+	if meta.Owner == nil {
+		return &consoleapi.Owner{}, nil // admin-owned
+	}
+	owner := &consoleapi.Owner{UUID: meta.Owner.String()}
+	user, err := a.services.Metadata().GetUserByUUID(ctx, *meta.Owner)
+	if err == nil {
+		owner.AccessKey = user.AccessKey
+		owner.Username = user.Username
+	}
+	return owner, nil
 }
 
 // --- Policy Observability ----------------------------------------------------
 
-func (a *Adapter) GetEffectivePermissions(_ context.Context, _, _ string) (*consoleapi.EffectivePermissions, error) {
-	return nil, ErrNotImplemented
+func (a *Adapter) GetEffectivePermissions(ctx context.Context, accessKey, bucket string) (*consoleapi.EffectivePermissions, error) {
+	iamUser, err := a.services.User().Get(ctx, accessKey)
+	if err != nil {
+		if errors.Is(err, svcerrors.ErrUserNotFound) {
+			return nil, fmt.Errorf("user not found: %s", accessKey)
+		}
+		return nil, err
+	}
+
+	bucketMeta, err := a.services.Metadata().GetBucketMetadata(ctx, bucket)
+	if err != nil {
+		return nil, fmt.Errorf("bucket not found: %s", bucket)
+	}
+
+	engine := a.services.PolicyEngine()
+	principal := &policy.Principal{
+		User:        iamUser,
+		IsAnonymous: false,
+		IsAdmin:     false,
+	}
+	varCtx := variables.ForUser(iamUser)
+
+	allowed := make([]string, 0)
+	denied := make([]string, 0)
+
+	for _, action := range commonS3Actions {
+		req := &policy.RequestContext{
+			Principal:       principal,
+			Action:          action,
+			Resource:        &policy.Resource{Bucket: bucket},
+			VarContext:      varCtx,
+			BucketOwnerUUID: bucketMeta.Owner,
+		}
+		decision := engine.Evaluate(ctx, req)
+		if decision.IsAllowed() {
+			allowed = append(allowed, action)
+		} else {
+			denied = append(denied, action)
+		}
+	}
+
+	return &consoleapi.EffectivePermissions{
+		AccessKey:      accessKey,
+		Bucket:         bucket,
+		AllowedActions: allowed,
+		DeniedActions:  denied,
+	}, nil
 }
 
-func (a *Adapter) SimulateRequest(_ context.Context, _ consoleapi.SimulateRequest) (*consoleapi.SimulateResult, error) {
-	return nil, ErrNotImplemented
+func (a *Adapter) SimulateRequest(ctx context.Context, req consoleapi.SimulateRequest) (*consoleapi.SimulateResult, error) {
+	iamUser, err := a.services.User().Get(ctx, req.AccessKey)
+	if err != nil {
+		if errors.Is(err, svcerrors.ErrUserNotFound) {
+			return nil, fmt.Errorf("user not found: %s", req.AccessKey)
+		}
+		return nil, err
+	}
+
+	bucketMeta, err := a.services.Metadata().GetBucketMetadata(ctx, req.Bucket)
+	if err != nil {
+		return nil, fmt.Errorf("bucket not found: %s", req.Bucket)
+	}
+
+	pReq := &policy.RequestContext{
+		Principal: &policy.Principal{
+			User:        iamUser,
+			IsAnonymous: false,
+			IsAdmin:     false,
+		},
+		Action:          req.Action,
+		Resource:        &policy.Resource{Bucket: req.Bucket, Key: req.Key},
+		VarContext:      variables.ForUser(iamUser),
+		BucketOwnerUUID: bucketMeta.Owner,
+	}
+
+	if req.Key != "" {
+		objMeta, err := a.services.Metadata().GetObjectMetadata(ctx, req.Bucket, req.Key)
+		if err == nil && objMeta.Owner != nil {
+			pReq.ObjectOwnerUUID = objMeta.Owner
+		}
+	}
+
+	decision := a.services.PolicyEngine().Evaluate(ctx, pReq)
+
+	result := &consoleapi.SimulateResult{Allowed: decision.IsAllowed()}
+	switch decision {
+	case policy.DecisionAllow:
+		result.Reason = "Allowed by bucket policy or resource ownership"
+	case policy.DecisionExplicitDeny:
+		result.Reason = "Explicitly denied by bucket policy"
+	default:
+		result.Reason = "Default deny — no matching allow rule found"
+	}
+
+	return result, nil
 }
 
 // --- conversion helpers ------------------------------------------------------

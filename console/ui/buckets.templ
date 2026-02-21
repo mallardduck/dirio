@@ -36,7 +36,9 @@ templ BucketsTable(buckets []*consoleapi.Bucket) {
 					}
 					for _, b := range buckets {
 						<tr class="border-b border-dirio-border last:border-0 hover:bg-dirio-bg-card2 transition-colors">
-							<td class="px-4 py-3 font-medium text-dirio-text">{ b.Name }</td>
+							<td class="px-4 py-3 font-medium">
+							<a href={ PageURL("/buckets/" + b.Name) } class="text-dirio-text hover:text-dirio-teal transition-colors">{ b.Name }</a>
+						</td>
 							<td class="px-4 py-3 text-xs text-dirio-muted">
 								if b.Owner != nil {
 									{ b.Owner.Username }

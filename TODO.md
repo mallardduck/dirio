@@ -1,19 +1,20 @@
 # DirIO Development Roadmap
 
-Current status: **Phase 4.3 IN PROGRESS** — functional console UI live; foundation UI complete, stopgap features remain
+Current status: **Phase 4.3 COMPLETE** — console fully functional; ready for Phase 4.4
 
 ## Recent Updates
 
-**February 21, 2026 - Phase 4.3 Foundation UI Complete:**
-- ✅ `consoleapi/` package — `ConsoleAPI` interface + request/response types (the seam between console and server)
-- ✅ `console/auth/` — `AdminAuth` interface + `Session` (HMAC-SHA256 signed cookie sessions, 8-hour TTL)
-- ✅ `console/handlers/` — real page handlers: Login, Logout, Dashboard, Users, Policies, Buckets; HTMX partial-swap support
-- ✅ `console/ui/` — server-side HTML via templ: full layout (sidebar, topbar, footer), login page, dashboard, users table, policies table, buckets table with owner display
+**February 21, 2026 - Phase 4.3 Complete:**
+- ✅ `consoleapi/` — full interface seam: Users, Policies, Buckets, Ownership, Policy Observability + all request/response types
+- ✅ `console/auth/` — `AdminAuth` interface + HMAC-SHA256 signed cookie sessions (8-hour TTL)
+- ✅ `console/handlers/` — Login/Logout, Dashboard, Users, Policies, Buckets list, Bucket detail, Ownership transfer, Policy editor, Simulator; HTMX partial-swap support
+- ✅ `console/ui/` — templ components: layout, all list pages, bucket detail (policy + ownership), policy simulator
 - ✅ `console/static/` — Tailwind v4 CSS, htmx.min.js, DirIO logo; embedded via Go `embed`
-- ✅ `internal/console/adapter.go` — Users (List/Get/Create/Delete/SetStatus), Policies (List/Get/Create/Delete/Attach/Detach), Buckets (List + owner resolution), GetBucketOwner — all wired to service layer
+- ✅ `internal/console/adapter.go` — all methods wired: Users (5), Policies (6), Buckets (GetBucket/List/GetPolicy/SetPolicy), Ownership (GetBucketOwner/Transfer/GetObjectOwner), Observability (GetEffectivePermissions/SimulateRequest)
+- ✅ `internal/persistence/metadata` — added `SetBucketOwner` for ownership transfer
+- ✅ `internal/service/factory` — added `PolicyEngine()` accessor for simulator evaluation
 - ✅ `cmd/server/cmd/wire_console.go` + `wire_console_stub.go` — build tag wiring (`-tags noconsole` strips console entirely)
 - ✅ `--console` flag (default: true) and `--console-address` flag for optional separate port
-- ✅ Same-port mount logic: console address equal to main port treated the same as empty (bug fix)
 - ✅ Protected routes behind session middleware; public routes: `/login`, `/static/`
 
 **February 20, 2026 - Phase 4.2 Complete:**
@@ -362,7 +363,7 @@ Current status: **Phase 4.3 IN PROGRESS** — functional console UI live; founda
   - ✅ Idempotent re-import (state file prevents duplicate import on restart)
   - ✅ Post-import user management via admin API
 
-## Phase 4.3: Web Admin Console Foundation
+## Phase 4.3: Web Admin Console Foundation ✅ COMPLETE
 
 **Goal:** Build an embedded admin console into the DirIO server as the primary interface for DirIO-specific hybrid IAM features that `mc` and S3 clients cannot reach.
 
@@ -371,46 +372,41 @@ Current status: **Phase 4.3 IN PROGRESS** — functional console UI live; founda
 **Key decisions:**
 - `consoleapi/` package defines the interface seam — the only coupling point between console and server
 - `console/` package lives outside `internal/`, imports only `consoleapi/` — extractable later
-  - Should be where all Web assets for web console live at. 
 - `internal/console/adapter.go` implements the interface by calling the service layer directly (no HTTP round-trips)
 - Build tag `noconsole` strips it entirely: `go build -tags noconsole`
 - Served at `/dirio/ui/` on main port by default; `--console-address :9001` for separate port
-  - When on different port, the UI should be at `/`
-  - When on the same port, the UI will prevent access to a "dirio" named bucket
 - MinIO admin API stays on main port always — `mc` compatibility requires this
 
-### Package Structure
+### Package Structure ✅ COMPLETE
 - ✅ `consoleapi/` — `ConsoleAPI` interface + all request/response types
 - ✅ `console/auth/` — `AdminAuth` interface + `Session` (HMAC-SHA256 signed cookies, 8-hour TTL)
-- ✅ `console/handlers/` — real page handlers (Login, Logout, Dashboard, Users, Policies, Buckets) with HTMX partial-swap support
-- ✅ `console/ui/` — templ components: layout, sidebar, topbar, footer, login page, all list pages
+- ✅ `console/handlers/` — Login/Logout, Dashboard, Users, Policies, Buckets list, Bucket detail, Ownership transfer, Policy editor, Simulator; HTMX partial-swap support
+- ✅ `console/ui/` — templ components: layout, all list pages, bucket detail (policy editor + ownership), policy simulator
 - ✅ `console/static/` — Tailwind v4 CSS, htmx.min.js, DirIO logo; all embedded via Go `embed`
-- ✅ `internal/console/adapter.go` — Users + Policies fully wired; ListBuckets + GetBucketOwner wired
+- ✅ `internal/console/adapter.go` — all methods wired: Users (5), Policies (6), Buckets (GetBucket/List/GetPolicy/SetPolicy), Ownership (GetBucketOwner/Transfer/GetObjectOwner), Observability (GetEffectivePermissions/SimulateRequest)
 - ✅ `cmd/server/cmd/wire_console.go` + `wire_console_stub.go` build tag wiring in place
-- [ ] Implement adapter methods: GetBucketPolicy, SetBucketPolicy, TransferBucketOwnership, GetObjectOwner
-- [ ] Implement adapter methods: GetEffectivePermissions, SimulateRequest
 
-### Configuration
+### Configuration ✅ COMPLETE
 - ✅ `console.enabled` / `--console` flag (default: true)
 - ✅ `console.address` / `--console-address` for optional separate port
-
-### Stopgap Priorities (DirIO-specific features mc cannot access)
-- ✅ **Ownership view** — bucket list shows owner (access key + username resolved from UUID)
-- [ ] **Ownership management** — transfer bucket ownership (adapter: `TransferBucketOwnership`, UI action)
-- [ ] **Object owner view** — show object owners (adapter: `GetObjectOwner`)
-- [ ] **Policy observability** — effective permissions view + request simulator (adapter: `GetEffectivePermissions`, `SimulateRequest`)
-- [ ] **Full S3 bucket policy editor** — view/edit bucket policy JSON (adapter: `GetBucketPolicy`, `SetBucketPolicy`)
 
 ### Foundation UI ✅ COMPLETE
 - ✅ Basic auth — login page using admin credentials; HMAC-signed session cookies
 - ✅ Dashboard — bucket count, user count, policy count
-- ✅ Bucket list — with owner display (access key + username resolved from UUID)
+- ✅ Bucket list — with owner display; bucket names link to detail page
 - ✅ User list — with attached policies and status
 - ✅ Policy list — with name and timestamps
 
-### Later: Full MinIO-Style UI (expand in place)
-- [ ] User/policy CRUD, service account management, group management
-- [ ] IAM policy tester (simulate request → show evaluation trace)
+### Stopgap Priorities ✅ COMPLETE
+- ✅ **Ownership view** — bucket list shows owner (access key + username resolved from UUID)
+- ✅ **Ownership management** — bucket detail page: transfer ownership to any IAM user by access key
+- ✅ **Full S3 bucket policy editor** — bucket detail page: view/edit raw JSON, save or clear
+- ✅ **Policy observability** — Simulate page: single-action allow/deny evaluation with reason; "show all permissions" view across all common S3 actions
+- ✅ **Object owner** — `GetObjectOwner` adapter wired; no dedicated UI (Phase 8 file browser)
+
+### Not in scope for Phase 4.3 (→ Phase 4.4)
+- User/policy CRUD forms in the console UI
+- Group management, service account management, access key management
 
 ---
 

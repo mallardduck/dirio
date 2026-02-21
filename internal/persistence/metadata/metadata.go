@@ -678,6 +678,17 @@ func (m *Manager) ListBucketMetadatas(ctx context.Context) ([]*BucketMetadata, e
 	return out, nil
 }
 
+// SetBucketOwner updates the owner UUID of an existing bucket.
+// Pass nil to clear ownership (admin-only bucket).
+func (m *Manager) SetBucketOwner(ctx context.Context, bucket string, ownerUUID *uuid.UUID) error {
+	meta, err := m.GetBucketMetadata(ctx, bucket)
+	if err != nil {
+		return err
+	}
+	meta.Owner = ownerUUID
+	return m.saveBucketMetadata(ctx, bucket, meta)
+}
+
 // GetAllBucketPolicies retrieves all bucket policies for loading into the policy engine.
 // Returns a map from bucket name to policy document (nil policies are excluded).
 func (m *Manager) GetAllBucketPolicies(ctx context.Context) (map[string]*PolicyDocument, error) {

@@ -137,3 +137,100 @@ func (h *Handler) Buckets(w http.ResponseWriter, r *http.Request) {
 	}
 	render(w, r, ui.BucketsPage(buckets))
 }
+
+// BucketDetail handles GET /buckets/{bucket} — renders the bucket detail page.
+func (h *Handler) BucketDetail(w http.ResponseWriter, r *http.Request) {
+	bucket := r.PathValue("bucket")
+	b, err := h.api.GetBucket(r.Context(), bucket)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	policyJSON, _ := h.api.GetBucketPolicy(r.Context(), bucket)
+	flash := r.URL.Query().Get("flash")
+	render(w, r, ui.BucketDetailPage(ui.BucketDetailData{
+		Bucket:     b,
+		PolicyJSON: policyJSON,
+		Flash:      flash,
+	}))
+}
+
+// BucketPolicySet handles POST /buckets/{bucket}/policy — saves or clears the bucket policy.
+func (h *Handler) BucketPolicySet(w http.ResponseWriter, r *http.Request) {
+	bucket := r.PathValue("bucket")
+	policyJSON := r.FormValue("policy")
+	if err := h.api.SetBucketPolicy(r.Context(), bucket, policyJSON); err != nil {
+		b, _ := h.api.GetBucket(r.Context(), bucket)
+		if b == nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		render(w, r, ui.BucketDetailPage(ui.BucketDetailData{
+			Bucket:     b,
+			PolicyJSON: policyJSON,
+			ErrorMsg:   err.Error(),
+		}))
+		return
+	}
+	http.Redirect(w, r, string(ui.PageURL("/buckets/"+bucket))+"?flash=Policy+saved.", http.StatusSeeOther)
+}
+
+// BucketTransferOwnership handles POST /buckets/{bucket}/ownership — transfers bucket ownership.
+func (h *Handler) BucketTransferOwnership(w http.ResponseWriter, r *http.Request) {
+	bucket := r.PathValue("bucket")
+	accessKey := r.FormValue("access_key")
+	if err := h.api.TransferBucketOwnership(r.Context(), bucket, accessKey); err != nil {
+		b, _ := h.api.GetBucket(r.Context(), bucket)
+		policyJSON, _ := h.api.GetBucketPolicy(r.Context(), bucket)
+		if b == nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		render(w, r, ui.BucketDetailPage(ui.BucketDetailData{
+			Bucket:     b,
+			PolicyJSON: policyJSON,
+			ErrorMsg:   err.Error(),
+		}))
+		return
+	}
+	http.Redirect(w, r, string(ui.PageURL("/buckets/"+bucket))+"?flash=Ownership+transferred.", http.StatusSeeOther)
+}
+
+// Simulate handles GET and POST /simulate — the policy simulator.
+func (h *Handler) Simulate(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		render(w, r, ui.SimulatePage(ui.SimulateData{Action: "s3:GetObject"}))
+		return
+	}
+
+	d := ui.SimulateData{
+		AccessKey: r.FormValue("access_key"),
+		Bucket:    r.FormValue("bucket"),
+		Action:    r.FormValue("action"),
+		Key:       r.FormValue("key"),
+	}
+
+	switch r.FormValue("mode") {
+	case "effective":
+		ep, err := h.api.GetEffectivePermissions(r.Context(), d.AccessKey, d.Bucket)
+		if err != nil {
+			d.Error = err.Error()
+		} else {
+			d.Effective = ep
+		}
+	default:
+		result, err := h.api.SimulateRequest(r.Context(), consoleapi.SimulateRequest{
+			AccessKey: d.AccessKey,
+			Bucket:    d.Bucket,
+			Action:    d.Action,
+			Key:       d.Key,
+		})
+		if err != nil {
+			d.Error = err.Error()
+		} else {
+			d.Result = result
+		}
+	}
+
+	render(w, r, ui.SimulatePage(d))
+}
