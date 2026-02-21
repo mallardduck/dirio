@@ -14,6 +14,7 @@ import (
 	"github.com/mallardduck/dirio/internal/policy/variables"
 	"github.com/mallardduck/dirio/internal/service"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
+	svcgroup "github.com/mallardduck/dirio/internal/service/group"
 	svcpolicy "github.com/mallardduck/dirio/internal/service/policy"
 	svcs3 "github.com/mallardduck/dirio/internal/service/s3"
 	svcuser "github.com/mallardduck/dirio/internal/service/user"
@@ -297,6 +298,68 @@ func (a *Adapter) GetObjectOwner(ctx context.Context, bucket, key string) (*cons
 	return owner, nil
 }
 
+// --- Groups ------------------------------------------------------------------
+
+func (a *Adapter) ListGroups(ctx context.Context) ([]*consoleapi.Group, error) {
+	names, err := a.services.Group().List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	groups := make([]*consoleapi.Group, 0, len(names))
+	for _, name := range names {
+		g, err := a.services.Group().Get(ctx, name)
+		if err != nil {
+			continue
+		}
+		groups = append(groups, iamGroupToConsole(g))
+	}
+	return groups, nil
+}
+
+func (a *Adapter) GetGroup(ctx context.Context, name string) (*consoleapi.Group, error) {
+	g, err := a.services.Group().Get(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("group not found: %s", name)
+	}
+	return iamGroupToConsole(g), nil
+}
+
+func (a *Adapter) CreateGroup(ctx context.Context, req consoleapi.CreateGroupRequest) (*consoleapi.Group, error) {
+	g, err := a.services.Group().Create(ctx, &svcgroup.CreateGroupRequest{Name: req.Name})
+	if err != nil {
+		return nil, err
+	}
+	return iamGroupToConsole(g), nil
+}
+
+func (a *Adapter) DeleteGroup(ctx context.Context, name string) error {
+	return a.services.Group().Delete(ctx, name)
+}
+
+func (a *Adapter) AddGroupMember(ctx context.Context, groupName, accessKey string) error {
+	return a.services.Group().AddMember(ctx, groupName, accessKey)
+}
+
+func (a *Adapter) RemoveGroupMember(ctx context.Context, groupName, accessKey string) error {
+	return a.services.Group().RemoveMember(ctx, groupName, accessKey)
+}
+
+func (a *Adapter) AttachGroupPolicy(ctx context.Context, groupName, policyName string) error {
+	return a.services.Group().AttachPolicy(ctx, groupName, policyName)
+}
+
+func (a *Adapter) DetachGroupPolicy(ctx context.Context, groupName, policyName string) error {
+	return a.services.Group().DetachPolicy(ctx, groupName, policyName)
+}
+
+func (a *Adapter) SetGroupStatus(ctx context.Context, groupName string, enabled bool) error {
+	status := iam.GroupStatusActive
+	if !enabled {
+		status = iam.GroupStatusDisabled
+	}
+	return a.services.Group().SetStatus(ctx, groupName, status)
+}
+
 // --- Policy Observability ----------------------------------------------------
 
 func (a *Adapter) GetEffectivePermissions(ctx context.Context, accessKey, bucket string) (*consoleapi.EffectivePermissions, error) {
@@ -409,6 +472,25 @@ func iamUserToConsole(u *iam.User) *consoleapi.User {
 		Status:           string(u.Status),
 		AttachedPolicies: policies,
 		UpdatedAt:        u.UpdatedAt,
+	}
+}
+
+func iamGroupToConsole(g *iam.Group) *consoleapi.Group {
+	members := g.Members
+	if members == nil {
+		members = []string{}
+	}
+	policies := g.AttachedPolicies
+	if policies == nil {
+		policies = []string{}
+	}
+	return &consoleapi.Group{
+		Name:             g.Name,
+		Members:          members,
+		AttachedPolicies: policies,
+		Status:           string(g.Status),
+		CreatedAt:        g.CreatedAt,
+		UpdatedAt:        g.UpdatedAt,
 	}
 }
 

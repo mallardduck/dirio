@@ -1,0 +1,280 @@
+package ui
+
+import (
+	"fmt"
+
+	"github.com/mallardduck/dirio/consoleapi"
+)
+
+// GroupsPageData holds all data for the groups list page.
+type GroupsPageData struct {
+	Groups   []*consoleapi.Group
+	ErrorMsg string
+}
+
+// GroupsPage renders the full groups list page.
+templ GroupsPage(d GroupsPageData) {
+	@Base("IAM Groups", "/groups") {
+		<div class="space-y-6">
+			if d.ErrorMsg != "" {
+				<div class="text-xs text-dirio-coral border border-dirio-coral rounded px-4 py-2">{ d.ErrorMsg }</div>
+			}
+			<!-- Create group -->
+			<div class="bg-dirio-bg-card border border-dirio-border rounded-lg">
+				<div class="px-5 py-4 border-b border-dirio-border">
+					<h2 class="text-sm font-semibold text-dirio-text">Create Group</h2>
+				</div>
+				<div class="px-5 py-4">
+					<form method="POST" action={ PageURL("/groups") } class="flex items-end gap-3">
+						<div class="flex-1 max-w-xs">
+							<label class="block text-xs text-dirio-muted mb-1">Group name</label>
+							<input
+								type="text"
+								name="name"
+								placeholder="developers"
+								required
+								class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
+							/>
+						</div>
+						<button
+							type="submit"
+							class="px-4 py-1.5 text-sm rounded border border-dirio-teal text-dirio-teal hover:bg-dirio-teal hover:text-dirio-bg transition-colors"
+						>Create</button>
+					</form>
+				</div>
+			</div>
+			@GroupsTable(d.Groups)
+		</div>
+	}
+}
+
+// GroupsTable renders just the groups table — returned as an HTMX fragment on partial requests.
+templ GroupsTable(groups []*consoleapi.Group) {
+	<div id="groups-section">
+		<p class="text-sm text-dirio-muted mb-4">{ fmt.Sprint(len(groups)) } group(s)</p>
+		<div class="bg-dirio-bg-card border border-dirio-border rounded-lg overflow-hidden">
+			<table class="w-full text-sm">
+				<thead>
+					<tr class="border-b border-dirio-border text-left">
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Name</th>
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Members</th>
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Policies</th>
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Status</th>
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Created</th>
+					</tr>
+				</thead>
+				<tbody>
+					if len(groups) == 0 {
+						<tr>
+							<td colspan="5" class="px-4 py-8 text-center text-dirio-muted">No groups found.</td>
+						</tr>
+					}
+					for _, g := range groups {
+						@groupRow(g)
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ groupRow(g *consoleapi.Group) {
+	<tr
+		class="border-b border-dirio-border last:border-0 hover:bg-dirio-bg-card2 transition-colors"
+		id={ "group-" + g.Name }
+	>
+		<td class="px-4 py-3">
+			<a href={ PageURL("/groups/" + g.Name) } class="font-mono text-dirio-teal hover:underline">{ g.Name }</a>
+		</td>
+		<td class="px-4 py-3 text-dirio-muted text-xs">{ fmt.Sprint(len(g.Members)) }</td>
+		<td class="px-4 py-3 text-dirio-muted text-xs">{ fmt.Sprint(len(g.AttachedPolicies)) }</td>
+		<td class="px-4 py-3">
+			if g.Status == "on" {
+				<span class="inline-flex items-center gap-1.5 text-xs text-dirio-teal">
+					<span class="w-1.5 h-1.5 rounded-full bg-dirio-teal"></span>
+					Active
+				</span>
+			} else {
+				<span class="inline-flex items-center gap-1.5 text-xs text-dirio-muted">
+					<span class="w-1.5 h-1.5 rounded-full bg-dirio-muted"></span>
+					Disabled
+				</span>
+			}
+		</td>
+		<td class="px-4 py-3 text-dirio-muted text-xs">{ g.CreatedAt.Format("2006-01-02") }</td>
+	</tr>
+}
+
+// GroupDetailData holds all data for the group detail page.
+type GroupDetailData struct {
+	Group       *consoleapi.Group
+	AllPolicies []*consoleapi.Policy
+	Flash       string
+	ErrorMsg    string
+}
+
+// GroupDetailPage renders the group detail page.
+templ GroupDetailPage(d GroupDetailData) {
+	@Base(d.Group.Name, "/groups") {
+		<div class="space-y-6">
+			<!-- Breadcrumb -->
+			<nav class="flex items-center gap-2 text-xs text-dirio-muted">
+				<a href={ PageURL("/groups") } class="hover:text-dirio-teal transition-colors">Groups</a>
+				<span>/</span>
+				<span class="text-dirio-text font-medium">{ d.Group.Name }</span>
+			</nav>
+			if d.Flash != "" {
+				<div class="text-xs text-dirio-teal border border-dirio-teal rounded px-4 py-2">{ d.Flash }</div>
+			}
+			if d.ErrorMsg != "" {
+				<div class="text-xs text-dirio-coral border border-dirio-coral rounded px-4 py-2">{ d.ErrorMsg }</div>
+			}
+			<!-- Members card -->
+			<div class="bg-dirio-bg-card border border-dirio-border rounded-lg">
+				<div class="px-5 py-4 border-b border-dirio-border">
+					<h2 class="text-sm font-semibold text-dirio-text">Members</h2>
+					<p class="text-xs text-dirio-muted mt-0.5">{ fmt.Sprint(len(d.Group.Members)) } member(s)</p>
+				</div>
+				<div class="px-5 py-4 space-y-4">
+					if len(d.Group.Members) == 0 {
+						<p class="text-xs text-dirio-muted">No members yet.</p>
+					} else {
+						<div class="divide-y divide-dirio-border">
+							for _, member := range d.Group.Members {
+								<div class="flex items-center justify-between py-2">
+									<span class="font-mono text-sm text-dirio-text">{ member }</span>
+									<form method="POST" action={ PageURL("/groups/" + d.Group.Name + "/members/remove") }>
+										<input type="hidden" name="access_key" value={ member }/>
+										<button
+											type="submit"
+											class="text-xs text-dirio-muted hover:text-dirio-coral transition-colors px-2 py-0.5 rounded border border-transparent hover:border-dirio-coral"
+										>Remove</button>
+									</form>
+								</div>
+							}
+						</div>
+					}
+					<!-- Add member form -->
+					<form method="POST" action={ PageURL("/groups/" + d.Group.Name + "/members") } class="flex items-end gap-3 pt-2">
+						<div class="flex-1 max-w-xs">
+							<label class="block text-xs text-dirio-muted mb-1">Add member by access key</label>
+							<input
+								type="text"
+								name="access_key"
+								placeholder="alice"
+								required
+								class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
+							/>
+						</div>
+						<button
+							type="submit"
+							class="px-4 py-1.5 text-sm rounded border border-dirio-border text-dirio-muted hover:border-dirio-teal hover:text-dirio-teal transition-colors"
+						>Add</button>
+					</form>
+				</div>
+			</div>
+			<!-- Attached policies card -->
+			<div class="bg-dirio-bg-card border border-dirio-border rounded-lg">
+				<div class="px-5 py-4 border-b border-dirio-border">
+					<h2 class="text-sm font-semibold text-dirio-text">Attached Policies</h2>
+				</div>
+				<div class="px-5 py-4 space-y-4">
+					if len(d.Group.AttachedPolicies) == 0 {
+						<p class="text-xs text-dirio-muted">No policies attached.</p>
+					} else {
+						<div class="divide-y divide-dirio-border">
+							for _, pol := range d.Group.AttachedPolicies {
+								<div class="flex items-center justify-between py-2">
+									<span class="font-mono text-sm text-dirio-text">{ pol }</span>
+									<form method="POST" action={ PageURL("/groups/" + d.Group.Name + "/policies/detach") }>
+										<input type="hidden" name="policy" value={ pol }/>
+										<button
+											type="submit"
+											class="text-xs text-dirio-muted hover:text-dirio-coral transition-colors px-2 py-0.5 rounded border border-transparent hover:border-dirio-coral"
+										>Detach</button>
+									</form>
+								</div>
+							}
+						</div>
+					}
+					<!-- Attach policy form -->
+					<form method="POST" action={ PageURL("/groups/" + d.Group.Name + "/policies") } class="flex items-end gap-3 pt-2">
+						<div class="flex-1 max-w-xs">
+							<label class="block text-xs text-dirio-muted mb-1">Attach policy</label>
+							if len(d.AllPolicies) > 0 {
+								<select
+									name="policy"
+									required
+									class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal"
+								>
+									<option value="">— select a policy —</option>
+									for _, p := range d.AllPolicies {
+										<option value={ p.Name }>{ p.Name }</option>
+									}
+								</select>
+							} else {
+								<p class="text-xs text-dirio-muted italic">No policies defined yet.</p>
+							}
+						</div>
+						if len(d.AllPolicies) > 0 {
+							<button
+								type="submit"
+								class="px-4 py-1.5 text-sm rounded border border-dirio-border text-dirio-muted hover:border-dirio-teal hover:text-dirio-teal transition-colors"
+							>Attach</button>
+						}
+					</form>
+				</div>
+			</div>
+			<!-- Settings card -->
+			<div class="bg-dirio-bg-card border border-dirio-border rounded-lg">
+				<div class="px-5 py-4 border-b border-dirio-border">
+					<h2 class="text-sm font-semibold text-dirio-text">Settings</h2>
+				</div>
+				<div class="px-5 py-4 flex items-center gap-6">
+					<!-- Status toggle -->
+					<div class="flex items-center gap-4">
+						<span class="text-xs text-dirio-muted w-12">Status</span>
+						if d.Group.Status == "on" {
+							<span class="inline-flex items-center gap-1.5 text-xs text-dirio-teal">
+								<span class="w-1.5 h-1.5 rounded-full bg-dirio-teal"></span>
+								Active
+							</span>
+							<form method="POST" action={ PageURL("/groups/" + d.Group.Name + "/status") }>
+								<input type="hidden" name="enabled" value="false"/>
+								<button
+									type="submit"
+									class="text-xs px-3 py-1 rounded border border-dirio-border text-dirio-muted hover:border-dirio-coral hover:text-dirio-coral transition-colors"
+								>Disable</button>
+							</form>
+						} else {
+							<span class="inline-flex items-center gap-1.5 text-xs text-dirio-muted">
+								<span class="w-1.5 h-1.5 rounded-full bg-dirio-muted"></span>
+								Disabled
+							</span>
+							<form method="POST" action={ PageURL("/groups/" + d.Group.Name + "/status") }>
+								<input type="hidden" name="enabled" value="true"/>
+								<button
+									type="submit"
+									class="text-xs px-3 py-1 rounded border border-dirio-border text-dirio-muted hover:border-dirio-teal hover:text-dirio-teal transition-colors"
+								>Enable</button>
+							</form>
+						}
+					</div>
+					<!-- Delete -->
+					<div class="ml-auto">
+						<form
+							method="POST"
+							action={ PageURL("/groups/" + d.Group.Name + "/delete") }
+							onsubmit="return confirm('Delete this group? This cannot be undone.')"
+						>
+							<button
+								type="submit"
+								class="text-xs px-3 py-1 rounded border border-dirio-border text-dirio-muted hover:border-dirio-coral hover:text-dirio-coral transition-colors"
+							>Delete Group</button>
+						</form>
+					</div>
+				</div>
+			</div>
+		</div>
+	}
+}

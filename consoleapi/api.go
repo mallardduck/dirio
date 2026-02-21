@@ -27,6 +27,17 @@ type API interface {
 	AttachPolicy(ctx context.Context, policyName, accessKey string) error
 	DetachPolicy(ctx context.Context, policyName, accessKey string) error
 
+	// Groups
+	ListGroups(ctx context.Context) ([]*Group, error)
+	GetGroup(ctx context.Context, name string) (*Group, error)
+	CreateGroup(ctx context.Context, req CreateGroupRequest) (*Group, error)
+	DeleteGroup(ctx context.Context, name string) error
+	AddGroupMember(ctx context.Context, groupName, accessKey string) error
+	RemoveGroupMember(ctx context.Context, groupName, accessKey string) error
+	AttachGroupPolicy(ctx context.Context, groupName, policyName string) error
+	DetachGroupPolicy(ctx context.Context, groupName, policyName string) error
+	SetGroupStatus(ctx context.Context, groupName string, enabled bool) error
+
 	// Buckets
 	ListBuckets(ctx context.Context) ([]*Bucket, error)
 	GetBucket(ctx context.Context, bucket string) (*Bucket, error)
@@ -87,6 +98,21 @@ type CreateUserRequest struct {
 type CreatePolicyRequest struct {
 	Name           string `json:"name"`
 	PolicyDocument string `json:"policyDocument"` // raw JSON string
+}
+
+// Group represents an IAM group as seen by the console.
+type Group struct {
+	Name             string    `json:"name"`
+	Members          []string  `json:"members"`
+	AttachedPolicies []string  `json:"attachedPolicies"`
+	Status           string    `json:"status"` // "on" or "off"
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+}
+
+// CreateGroupRequest is the input for CreateGroup.
+type CreateGroupRequest struct {
+	Name string `json:"name"`
 }
 
 // EffectivePermissions shows the evaluated access for a user on a bucket.

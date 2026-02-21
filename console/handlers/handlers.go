@@ -87,11 +87,13 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	users, _ := h.api.ListUsers(r.Context())
 	buckets, _ := h.api.ListBuckets(r.Context())
 	policies, _ := h.api.ListPolicies(r.Context())
+	groups, _ := h.api.ListGroups(r.Context())
 
 	data := ui.DashboardData{
 		UserCount:   len(users),
 		BucketCount: len(buckets),
 		PolicyCount: len(policies),
+		GroupCount:  len(groups),
 	}
 	render(w, r, ui.DashboardPage(data))
 }
@@ -194,6 +196,120 @@ func (h *Handler) BucketTransferOwnership(w http.ResponseWriter, r *http.Request
 		return
 	}
 	http.Redirect(w, r, string(ui.PageURL("/buckets/"+bucket))+"?flash=Ownership+transferred.", http.StatusSeeOther)
+}
+
+// Groups handles GET /groups — renders the group list page.
+func (h *Handler) Groups(w http.ResponseWriter, r *http.Request) {
+	groups, err := h.api.ListGroups(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if isHTMX(r) {
+		render(w, r, ui.GroupsTable(groups))
+		return
+	}
+	render(w, r, ui.GroupsPage(ui.GroupsPageData{Groups: groups}))
+}
+
+// GroupCreate handles POST /groups — creates a new group.
+func (h *Handler) GroupCreate(w http.ResponseWriter, r *http.Request) {
+	name := r.FormValue("name")
+	g, err := h.api.CreateGroup(r.Context(), consoleapi.CreateGroupRequest{Name: name})
+	if err != nil {
+		groups, _ := h.api.ListGroups(r.Context())
+		render(w, r, ui.GroupsPage(ui.GroupsPageData{Groups: groups, ErrorMsg: err.Error()}))
+		return
+	}
+	http.Redirect(w, r, string(ui.PageURL("/groups/"+g.Name)), http.StatusSeeOther)
+}
+
+// GroupDetail handles GET /groups/{group} — renders the group detail page.
+func (h *Handler) GroupDetail(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("group")
+	g, err := h.api.GetGroup(r.Context(), name)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	allPolicies, _ := h.api.ListPolicies(r.Context())
+	flash := r.URL.Query().Get("flash")
+	errMsg := r.URL.Query().Get("error")
+	render(w, r, ui.GroupDetailPage(ui.GroupDetailData{
+		Group:       g,
+		AllPolicies: allPolicies,
+		Flash:       flash,
+		ErrorMsg:    errMsg,
+	}))
+}
+
+// GroupDelete handles POST /groups/{group}/delete — deletes a group.
+func (h *Handler) GroupDelete(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("group")
+	if err := h.api.DeleteGroup(r.Context(), name); err != nil {
+		http.Redirect(w, r, string(ui.PageURL("/groups/"+name))+"?error="+err.Error(), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, string(ui.PageURL("/groups")), http.StatusSeeOther)
+}
+
+// GroupAddMember handles POST /groups/{group}/members — adds a user to the group.
+func (h *Handler) GroupAddMember(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("group")
+	accessKey := r.FormValue("access_key")
+	if err := h.api.AddGroupMember(r.Context(), name, accessKey); err != nil {
+		http.Redirect(w, r, string(ui.PageURL("/groups/"+name))+"?error="+err.Error(), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, string(ui.PageURL("/groups/"+name))+"?flash=Member+added.", http.StatusSeeOther)
+}
+
+// GroupRemoveMember handles POST /groups/{group}/members/remove — removes a user from the group.
+func (h *Handler) GroupRemoveMember(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("group")
+	accessKey := r.FormValue("access_key")
+	if err := h.api.RemoveGroupMember(r.Context(), name, accessKey); err != nil {
+		http.Redirect(w, r, string(ui.PageURL("/groups/"+name))+"?error="+err.Error(), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, string(ui.PageURL("/groups/"+name))+"?flash=Member+removed.", http.StatusSeeOther)
+}
+
+// GroupAttachPolicy handles POST /groups/{group}/policies — attaches a policy to the group.
+func (h *Handler) GroupAttachPolicy(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("group")
+	policy := r.FormValue("policy")
+	if err := h.api.AttachGroupPolicy(r.Context(), name, policy); err != nil {
+		http.Redirect(w, r, string(ui.PageURL("/groups/"+name))+"?error="+err.Error(), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, string(ui.PageURL("/groups/"+name))+"?flash=Policy+attached.", http.StatusSeeOther)
+}
+
+// GroupDetachPolicy handles POST /groups/{group}/policies/detach — detaches a policy from the group.
+func (h *Handler) GroupDetachPolicy(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("group")
+	policy := r.FormValue("policy")
+	if err := h.api.DetachGroupPolicy(r.Context(), name, policy); err != nil {
+		http.Redirect(w, r, string(ui.PageURL("/groups/"+name))+"?error="+err.Error(), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, string(ui.PageURL("/groups/"+name))+"?flash=Policy+detached.", http.StatusSeeOther)
+}
+
+// GroupSetStatus handles POST /groups/{group}/status — enables or disables a group.
+func (h *Handler) GroupSetStatus(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("group")
+	enabled := r.FormValue("enabled") == "true"
+	if err := h.api.SetGroupStatus(r.Context(), name, enabled); err != nil {
+		http.Redirect(w, r, string(ui.PageURL("/groups/"+name))+"?error="+err.Error(), http.StatusSeeOther)
+		return
+	}
+	flash := "Group+disabled."
+	if enabled {
+		flash = "Group+enabled."
+	}
+	http.Redirect(w, r, string(ui.PageURL("/groups/"+name))+"?flash="+flash, http.StatusSeeOther)
 }
 
 // Simulate handles GET and POST /simulate — the policy simulator.
