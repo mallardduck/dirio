@@ -1,17 +1,20 @@
 # DirIO Development Roadmap
 
-Current status: **Phase 4.3 IN PROGRESS** — console package skeleton in place, serving placeholder UI
+Current status: **Phase 4.3 IN PROGRESS** — functional console UI live; foundation UI complete, stopgap features remain
 
 ## Recent Updates
 
-**February 20, 2026 - Phase 4.3 Started (skeleton only):**
+**February 21, 2026 - Phase 4.3 Foundation UI Complete:**
 - ✅ `consoleapi/` package — `ConsoleAPI` interface + request/response types (the seam between console and server)
-- ✅ `console/` package skeleton — `http.Handler` wired via `ConsoleAPI`; stub handlers for `/users`, `/policies`, `/buckets`
-- ✅ `internal/console/adapter.go` — implements `ConsoleAPI` via service layer; read operations wired, ownership/observability return `ErrNotImplemented`
+- ✅ `console/auth/` — `AdminAuth` interface + `Session` (HMAC-SHA256 signed cookie sessions, 8-hour TTL)
+- ✅ `console/handlers/` — real page handlers: Login, Logout, Dashboard, Users, Policies, Buckets; HTMX partial-swap support
+- ✅ `console/ui/` — server-side HTML via templ: full layout (sidebar, topbar, footer), login page, dashboard, users table, policies table, buckets table with owner display
+- ✅ `console/static/` — Tailwind v4 CSS, htmx.min.js, DirIO logo; embedded via Go `embed`
+- ✅ `internal/console/adapter.go` — Users (List/Get/Create/Delete/SetStatus), Policies (List/Get/Create/Delete/Attach/Detach), Buckets (List + owner resolution), GetBucketOwner — all wired to service layer
 - ✅ `cmd/server/cmd/wire_console.go` + `wire_console_stub.go` — build tag wiring (`-tags noconsole` strips console entirely)
-- ✅ Static assets embedded via Go `embed` — placeholder `index.html` served at `/dirio/ui/`
 - ✅ `--console` flag (default: true) and `--console-address` flag for optional separate port
 - ✅ Same-port mount logic: console address equal to main port treated the same as empty (bug fix)
+- ✅ Protected routes behind session middleware; public routes: `/login`, `/static/`
 
 **February 20, 2026 - Phase 4.2 Complete:**
 - ✅ **Admin Integration Test Suite** (`tests/admin/`, 37 tests) — New test area separate from S3 integration tests
@@ -376,29 +379,34 @@ Current status: **Phase 4.3 IN PROGRESS** — console package skeleton in place,
   - When on the same port, the UI will prevent access to a "dirio" named bucket
 - MinIO admin API stays on main port always — `mc` compatibility requires this
 
-### Package Structure (skeleton only — implementations still needed)
-- ✅ `consoleapi/` package exists with `ConsoleAPI` interface + request/response types
-- ✅ `console/` package exists — serves placeholder `index.html`; stub handlers return 501
-- ✅ `internal/console/adapter.go` exists — skeleton only, most methods return `ErrNotImplemented`
+### Package Structure
+- ✅ `consoleapi/` — `ConsoleAPI` interface + all request/response types
+- ✅ `console/auth/` — `AdminAuth` interface + `Session` (HMAC-SHA256 signed cookies, 8-hour TTL)
+- ✅ `console/handlers/` — real page handlers (Login, Logout, Dashboard, Users, Policies, Buckets) with HTMX partial-swap support
+- ✅ `console/ui/` — templ components: layout, sidebar, topbar, footer, login page, all list pages
+- ✅ `console/static/` — Tailwind v4 CSS, htmx.min.js, DirIO logo; all embedded via Go `embed`
+- ✅ `internal/console/adapter.go` — Users + Policies fully wired; ListBuckets + GetBucketOwner wired
 - ✅ `cmd/server/cmd/wire_console.go` + `wire_console_stub.go` build tag wiring in place
-- ✅ Static assets embedded via Go `embed`; placeholder `index.html` served at `/dirio/ui/`
-- [ ] Implement console handlers as server-side rendered HTML pages (not JSON APIs)
-- [ ] Implement adapter methods: bucket policy get/set, ownership, effective permissions, simulate
+- [ ] Implement adapter methods: GetBucketPolicy, SetBucketPolicy, TransferBucketOwnership, GetObjectOwner
+- [ ] Implement adapter methods: GetEffectivePermissions, SimulateRequest
 
 ### Configuration
 - ✅ `console.enabled` / `--console` flag (default: true)
 - ✅ `console.address` / `--console-address` for optional separate port
 
 ### Stopgap Priorities (DirIO-specific features mc cannot access)
-- [ ] **Ownership management** — view bucket/object owners, transfer ownership
-- [ ] **Policy observability** — effective permissions view + request simulator (show why allow/deny)
-- [ ] **Full S3 bucket policy editor** — JSON editor with conditions/variables (beyond `mc policy set` canned policies)
+- ✅ **Ownership view** — bucket list shows owner (access key + username resolved from UUID)
+- [ ] **Ownership management** — transfer bucket ownership (adapter: `TransferBucketOwnership`, UI action)
+- [ ] **Object owner view** — show object owners (adapter: `GetObjectOwner`)
+- [ ] **Policy observability** — effective permissions view + request simulator (adapter: `GetEffectivePermissions`, `SimulateRequest`)
+- [ ] **Full S3 bucket policy editor** — view/edit bucket policy JSON (adapter: `GetBucketPolicy`, `SetBucketPolicy`)
 
-### Foundation UI
-- [ ] Basic auth (reuse admin credentials from data config)
-- [ ] Dashboard: server status, bucket count, user count
-- [ ] Bucket list with owner display and policy summary
-- [ ] User list with attached policies
+### Foundation UI ✅ COMPLETE
+- ✅ Basic auth — login page using admin credentials; HMAC-signed session cookies
+- ✅ Dashboard — bucket count, user count, policy count
+- ✅ Bucket list — with owner display (access key + username resolved from UUID)
+- ✅ User list — with attached policies and status
+- ✅ Policy list — with name and timestamps
 
 ### Later: Full MinIO-Style UI (expand in place)
 - [ ] User/policy CRUD, service account management, group management
