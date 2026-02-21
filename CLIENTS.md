@@ -2,7 +2,7 @@
 
 DirIO's compatibility status with major S3 clients.
 
-**Last Updated:** February 16, 2026 (19:46 EST)
+**Last Updated:** February 21, 2026 (03:26 EST)
 **Test Framework:** Structured JSON output with automated feature matrix
 **Test Location:** `tests/clients/`
 
@@ -81,7 +81,7 @@ All clients test the same 23 canonical S3 operations defined in `tests/clients/f
 ### Active Bugs
 
 **MinIO mc PreSignedURL_Upload - Content Mismatch**
-- **Status:** ❌ FAILING (Confirmed Feb 16, 2026 19:46)
+- **Status:** ❌ FAILING (Confirmed Feb 21, 2026 03:26)
 - **Clients Affected:** MinIO mc only
 - **Error:** Content integrity check failed (hash mismatch: expected `ec9eadb8b71af4c664405284ac9323de`, got `de2e3f58dd76cb4f71bc2a76e60ed24c`)
 - **Impact:** Pre-signed PUT URLs return different content than what was uploaded
@@ -169,7 +169,7 @@ cat tests/clients/results/mc.json
 
 ## Recent Changes
 
-### February 16, 2026 (19:46) - Test Results Confirmed
+### February 21, 2026 (03:26) - Test Results Confirmed
 
 **Test Run Results:**
 - ✅ AWS CLI: 21/23 passed (91%) - 2 skipped (ListObjectsV1, PreSignedURL_Upload)
@@ -177,6 +177,8 @@ cat tests/clients/results/mc.json
 - ⚠️ MinIO mc: 20/23 passed (87%) - 1 failed (PreSignedURL_Upload), 2 skipped (ListObjectsV1, MaxKeys)
 
 **Status:** All core functionality working. Single known issue with MinIO mc PreSignedURL_Upload persists.
+
+**Infrastructure fix:** Added `.gitattributes` to enforce LF line endings on shell/Python scripts, and converted existing scripts with `dos2unix`. This resolves CRLF-related bash failures when scripts are embedded and run inside Linux Docker containers on Windows.
 
 ### February 16, 2026 - Test Framework Refactoring
 
