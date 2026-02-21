@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --color-dirio-bg: #0a1628;
+  --color-dirio-bg-card: #111e35;
+  --color-dirio-bg-card2: #162440;
+  --color-dirio-border: #1e3355;
+  --color-dirio-text: #e2e8f0;
+  --color-dirio-muted: #64748b;
+  --color-dirio-teal: #00A292;
+  --color-dirio-teal-dark: #007a6e;
+  --color-dirio-cyan: #00CED1;
+  --color-dirio-yellow: #FFFF9A;
+  --color-dirio-steel: #B0C4DE;
+  --color-dirio-coral: #FF6B6B;
+}

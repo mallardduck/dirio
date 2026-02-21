@@ -1,0 +1,82 @@
+package ui
+
+// Base is the root layout: sidebar + topbar + content slot + footer.
+// activePath is matched against nav link hrefs to highlight the current page.
+templ Base(title string, activePath string) {
+	<!DOCTYPE html>
+	<html lang="en" class="h-full">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ title } — DirIO Console</title>
+			<link rel="stylesheet" href={ StaticURL("style.css") }/>
+			<script src={ StaticURL("htmx.min.js") }></script>
+		</head>
+		<body class="h-full bg-dirio-bg text-dirio-text flex overflow-hidden">
+			@Sidebar(activePath)
+			<div class="flex-1 flex flex-col min-h-0 overflow-auto">
+				@Topbar(title)
+				<main class="flex-1 p-6">
+					{ children... }
+				</main>
+				@PageFooter()
+			</div>
+		</body>
+	</html>
+}
+
+// Sidebar renders the left-hand navigation panel.
+templ Sidebar(activePath string) {
+	<aside class="w-56 bg-dirio-bg-card border-r border-dirio-border flex flex-col shrink-0">
+		<div class="px-4 py-5 border-b border-dirio-border flex items-center gap-3">
+			<img src={ StaticURL("dirio_logo.svg") } alt="DirIO" class="w-9 h-9 shrink-0"/>
+			<div>
+				<p class="font-bold text-dirio-yellow tracking-wide leading-none">DirIO</p>
+				<p class="text-[10px] text-dirio-teal uppercase tracking-widest mt-0.5">Admin Console</p>
+			</div>
+		</div>
+		<nav class="flex-1 p-3 flex flex-col gap-0.5">
+			@navLink(PageURL("/"), "Dashboard", activePath == "/")
+			@navLink(PageURL("/buckets"), "Buckets", activePath == "/buckets")
+			@navLink(PageURL("/users"), "Users", activePath == "/users")
+			@navLink(PageURL("/policies"), "Policies", activePath == "/policies")
+		</nav>
+		<div class="px-4 py-3 border-t border-dirio-border">
+			<div class="flex items-center gap-2 text-xs text-dirio-muted">
+				<span class="w-2 h-2 rounded-full bg-dirio-teal shrink-0"></span>
+				Server Online
+			</div>
+		</div>
+	</aside>
+}
+
+templ navLink(href templ.SafeURL, label string, active bool) {
+	if active {
+		<a href={ href } class="flex items-center px-3 py-2 rounded text-sm font-medium text-dirio-teal bg-dirio-bg-card2 border border-dirio-border">
+			{ label }
+		</a>
+	} else {
+		<a href={ href } class="flex items-center px-3 py-2 rounded text-sm text-dirio-text hover:bg-dirio-bg-card2 hover:text-dirio-teal transition-colors">
+			{ label }
+		</a>
+	}
+}
+
+// Topbar renders the page title bar at the top of the content area.
+templ Topbar(title string) {
+	<header class="shrink-0 border-b border-dirio-border bg-dirio-bg-card px-6 py-3 flex items-center justify-between">
+		<h1 class="text-base font-semibold text-dirio-text">{ title }</h1>
+		<form method="POST" action={ LogoutURL() }>
+			<button type="submit" class="text-xs text-dirio-muted hover:text-dirio-coral transition-colors px-3 py-1 rounded border border-dirio-border hover:border-dirio-coral">
+				Sign Out
+			</button>
+		</form>
+	</header>
+}
+
+// PageFooter renders the slim footer at the bottom of the content area.
+templ PageFooter() {
+	<footer class="shrink-0 border-t border-dirio-border px-6 py-2 text-xs text-dirio-muted">
+		DirIO — Filesystem-first S3
+	</footer>
+}

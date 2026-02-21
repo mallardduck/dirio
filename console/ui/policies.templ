@@ -1,0 +1,47 @@
+package ui
+
+import (
+	"fmt"
+
+	"github.com/mallardduck/dirio/consoleapi"
+)
+
+// PoliciesPage renders the full policies list page.
+templ PoliciesPage(policies []*consoleapi.Policy) {
+	@Base("IAM Policies", "/policies") {
+		@PoliciesTable(policies)
+	}
+}
+
+// PoliciesTable renders just the policies table — returned as an HTMX fragment
+// on partial requests.
+templ PoliciesTable(policies []*consoleapi.Policy) {
+	<div id="policies-section">
+		<p class="text-sm text-dirio-muted mb-4">{ fmt.Sprint(len(policies)) } policy(s)</p>
+		<div class="bg-dirio-bg-card border border-dirio-border rounded-lg overflow-hidden">
+			<table class="w-full text-sm">
+				<thead>
+					<tr class="border-b border-dirio-border text-left">
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Name</th>
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Created</th>
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Updated</th>
+					</tr>
+				</thead>
+				<tbody>
+					if len(policies) == 0 {
+						<tr>
+							<td colspan="3" class="px-4 py-8 text-center text-dirio-muted">No policies found.</td>
+						</tr>
+					}
+					for _, p := range policies {
+						<tr class="border-b border-dirio-border last:border-0 hover:bg-dirio-bg-card2 transition-colors">
+							<td class="px-4 py-3 font-medium text-dirio-text">{ p.Name }</td>
+							<td class="px-4 py-3 text-dirio-muted text-xs">{ p.CreateDate.Format("2006-01-02") }</td>
+							<td class="px-4 py-3 text-dirio-muted text-xs">{ p.UpdateDate.Format("2006-01-02") }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}

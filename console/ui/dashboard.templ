@@ -1,0 +1,43 @@
+package ui
+
+import "fmt"
+
+// DashboardData holds the counts shown on the dashboard overview cards.
+type DashboardData struct {
+	UserCount   int
+	BucketCount int
+	PolicyCount int
+}
+
+// DashboardPage renders the admin dashboard with summary stat cards.
+templ DashboardPage(d DashboardData) {
+	@Base("Dashboard", "/") {
+		<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+			<div class="relative overflow-hidden bg-dirio-bg-card border border-dirio-border rounded-lg p-5">
+				<div class="absolute inset-x-0 top-0 h-0.5 bg-dirio-teal"></div>
+				<p class="text-xs text-dirio-muted uppercase tracking-widest mb-2">Buckets</p>
+				<p class="text-3xl font-bold text-dirio-text">{ fmt.Sprint(d.BucketCount) }</p>
+				<a href={ PageURL("/buckets") } class="text-xs text-dirio-teal hover:underline mt-2 inline-block">View all →</a>
+			</div>
+			<div class="relative overflow-hidden bg-dirio-bg-card border border-dirio-border rounded-lg p-5">
+				<div class="absolute inset-x-0 top-0 h-0.5 bg-dirio-cyan"></div>
+				<p class="text-xs text-dirio-muted uppercase tracking-widest mb-2">IAM Users</p>
+				<p class="text-3xl font-bold text-dirio-text">{ fmt.Sprint(d.UserCount) }</p>
+				<a href={ PageURL("/users") } class="text-xs text-dirio-cyan hover:underline mt-2 inline-block">View all →</a>
+			</div>
+			<div class="relative overflow-hidden bg-dirio-bg-card border border-dirio-border rounded-lg p-5">
+				<div class="absolute inset-x-0 top-0 h-0.5 bg-dirio-steel"></div>
+				<p class="text-xs text-dirio-muted uppercase tracking-widest mb-2">Policies</p>
+				<p class="text-3xl font-bold text-dirio-text">{ fmt.Sprint(d.PolicyCount) }</p>
+				<a href={ PageURL("/policies") } class="text-xs text-dirio-steel hover:underline mt-2 inline-block">View all →</a>
+			</div>
+		</div>
+		<div class="bg-dirio-bg-card border border-dirio-border rounded-lg p-6">
+			<h2 class="text-sm font-semibold text-dirio-muted uppercase tracking-wider mb-2">Quick navigation</h2>
+			<p class="text-sm text-dirio-muted leading-relaxed">
+				Use the sidebar to navigate between Buckets, Users, and Policies.
+				Inline actions (delete, status toggle) use HTMX partial swaps — no full page reloads.
+			</p>
+		</div>
+	}
+}

@@ -1,0 +1,70 @@
+package ui
+
+import (
+	"fmt"
+
+	"github.com/mallardduck/dirio/consoleapi"
+)
+
+// UsersPage renders the full users list page.
+templ UsersPage(users []*consoleapi.User) {
+	@Base("IAM Users", "/users") {
+		@UsersTable(users)
+	}
+}
+
+// UsersTable renders just the users table — returned as an HTMX fragment on
+// partial requests (e.g. after a status toggle or delete).
+templ UsersTable(users []*consoleapi.User) {
+	<div id="users-section">
+		<p class="text-sm text-dirio-muted mb-4">{ fmt.Sprint(len(users)) } user(s)</p>
+		<div class="bg-dirio-bg-card border border-dirio-border rounded-lg overflow-hidden">
+			<table class="w-full text-sm">
+				<thead>
+					<tr class="border-b border-dirio-border text-left">
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Access Key</th>
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Username</th>
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Status</th>
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Policies</th>
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Updated</th>
+					</tr>
+				</thead>
+				<tbody>
+					if len(users) == 0 {
+						<tr>
+							<td colspan="5" class="px-4 py-8 text-center text-dirio-muted">No users found.</td>
+						</tr>
+					}
+					for _, u := range users {
+						@userRow(u)
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ userRow(u *consoleapi.User) {
+	<tr
+		class="border-b border-dirio-border last:border-0 hover:bg-dirio-bg-card2 transition-colors"
+		id={ "user-" + u.AccessKey }
+	>
+		<td class="px-4 py-3 font-mono text-dirio-text">{ u.AccessKey }</td>
+		<td class="px-4 py-3 text-dirio-text">{ u.Username }</td>
+		<td class="px-4 py-3">
+			if u.Status == "on" {
+				<span class="inline-flex items-center gap-1.5 text-xs text-dirio-teal">
+					<span class="w-1.5 h-1.5 rounded-full bg-dirio-teal"></span>
+					Active
+				</span>
+			} else {
+				<span class="inline-flex items-center gap-1.5 text-xs text-dirio-muted">
+					<span class="w-1.5 h-1.5 rounded-full bg-dirio-muted"></span>
+					Disabled
+				</span>
+			}
+		</td>
+		<td class="px-4 py-3 text-dirio-muted text-xs">{ fmt.Sprint(len(u.AttachedPolicies)) } attached</td>
+		<td class="px-4 py-3 text-dirio-muted text-xs">{ u.UpdatedAt.Format("2006-01-02") }</td>
+	</tr>
+}

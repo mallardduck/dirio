@@ -93,6 +93,12 @@ func (s *Server) Storage() *storage.Storage { return s.storage }
 // PolicyEngine returns the policy engine (used by the console wire file).
 func (s *Server) PolicyEngine() *policy.Engine { return s.policyEngine }
 
+// Router returns the S3 router (used by the console wire file for URL generation).
+func (s *Server) Router() *teapot.Router { return s.router }
+
+// Auth returns the authenticator (used by the console wire file for admin credential validation).
+func (s *Server) Auth() *auth.Authenticator { return s.auth }
+
 // SetConsole registers the console handler with the server. When port is
 // 0 the console is mounted at /dirio/ui/ on the main port. When port is
 // non-zero (e.g. 9001) a separate listener is started for the console.
