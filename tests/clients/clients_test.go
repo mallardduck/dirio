@@ -34,6 +34,9 @@ var boto3Script string
 //go:embed scripts/mc.sh
 var mcScript string
 
+//go:embed scripts/mc_admin.sh
+var mcAdminScript string
+
 //go:embed lib/test_framework.sh
 var testFrameworkSh string
 
@@ -585,6 +588,69 @@ func TestMinIOMC(t *testing.T) {
 	}
 }
 
+// TestMCAdmin runs MinIO mc admin command compatibility tests.
+// It exercises the DirIO admin API via the real mc binary: user add/list/info,
+// policy create/list/info/attach, group add/list/info, and user disable/enable/remove.
+func TestMCAdmin(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	server := getSharedClientServer(t)
+
+	envMap := map[string]string{
+		"DIRIO_ENDPOINT":   server.Endpoint(),
+		"DIRIO_ACCESS_KEY": testAccessKey,
+		"DIRIO_SECRET_KEY": testSecretKey,
+	}
+
+	req := clients.MinioClientContainer(envMap, minioMCAdminTestScript())
+
+	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: req,
+		Started:          true,
+	})
+	require.NoError(t, err)
+	defer container.Terminate(ctx)
+
+	logs, err := container.Logs(ctx)
+	require.NoError(t, err)
+	defer logs.Close()
+
+	logBytes, err := io.ReadAll(logs)
+	require.NoError(t, err)
+	logOutput := string(logBytes)
+
+	t.Logf("mc admin test output:\n%s", logOutput)
+
+	state, err := container.State(ctx)
+	require.NoError(t, err)
+
+	testOutput, err := parseTestOutput(logOutput)
+	if err != nil {
+		t.Errorf("Failed to parse test output: %v", err)
+		passCount := strings.Count(logOutput, "PASS:")
+		failCount := strings.Count(logOutput, "FAIL:")
+		t.Logf("mc admin: %d passed, %d failed (fallback parsing)", passCount, failCount)
+	} else {
+		t.Logf("mc admin Results: %d total, %d passed, %d failed, %d skipped",
+			testOutput.Summary.Total,
+			testOutput.Summary.Passed,
+			testOutput.Summary.Failed,
+			testOutput.Summary.Skipped)
+
+		for _, result := range testOutput.Results {
+			if result.Status == "fail" {
+				t.Errorf("  FAILED: %s - %s", result.Feature, result.Message)
+			}
+		}
+	}
+
+	if state.ExitCode != 0 {
+		t.Errorf("mc admin tests failed with exit code %d", state.ExitCode)
+	}
+}
+
 // awsCLITestScript returns the test script for AWS CLI
 func awsCLITestScript() string {
 	// Write lib files to /tmp first
@@ -640,4 +706,17 @@ EOF_VALIDATORS
 # Run the test script
 %s
 `, testFrameworkSh, validatorsSh, mcScript)
+}
+
+// minioMCAdminTestScript returns the test script for mc admin commands
+func minioMCAdminTestScript() string {
+	return fmt.Sprintf(`
+# Write test framework library to /tmp
+cat > /tmp/test_framework.sh << 'EOF_FRAMEWORK'
+%s
+EOF_FRAMEWORK
+
+# Run the admin test script
+%s
+`, testFrameworkSh, mcAdminScript)
 }

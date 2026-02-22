@@ -4,6 +4,12 @@ Current status: **Phase 4.4 IN PROGRESS** — Group & Service Account admin API 
 
 ## Recent Updates
 
+**February 22, 2026 - Phase 4.4 Testing Complete (except console):**
+- ✅ `tests/integration/serviceaccount_policy_test.go` — SA delegation (inherit/override mode) and expiration integration tests
+- ✅ `tests/clients/scripts/mc_admin.sh` + `TestMCAdmin` — mc admin CLI testcontainer tests (user add/list/info, policy CRUD, group add, user disable/enable/remove)
+- ✅ `internal/persistence/metadata/import.go` — MinIO import now rebuilds bolt indexes after import so users are immediately visible
+- ✅ `tests/admin/helpers_test.go` — Added `Stop()` method and cancelable context to `NewTestServerWithDataDir` for clean BoltDB lock release
+
 **February 21, 2026 - SA Policy Inheritance (Eval-Time Resolution):**
 - ✅ `pkg/iam/serviceaccount.go` — Added `PolicyMode` type (`"inherit"` / `"override"`); replaced `ParentUser *string` with `ParentUserUUID *uuid.UUID` (stable across key rotation)
 - ✅ `internal/context/context.go` — Added `ServiceAccountInfo` struct + `WithServiceAccountInfo`/`GetServiceAccountInfo` context helpers
@@ -454,9 +460,9 @@ Current status: **Phase 4.4 IN PROGRESS** — Group & Service Account admin API 
 ### Testing
 - ✅ Unit tests for group/service account CRUD (13 group + 12 SA tests in `tests/admin/`)
 - ✅ Integration tests for group policy inheritance
-- [ ] Service account delegation and expiration testing
+- ✅ Service account delegation and expiration testing (`tests/integration/serviceaccount_policy_test.go`)
 - [ ] Console stopgap feature testing
-- [ ] Integration tests with live `mc admin` CLI (manual, requires `mc` binary + running server)
+- ✅ Integration tests with live `mc admin` CLI (`tests/clients/scripts/mc_admin.sh` + `TestMCAdmin` in `clients_test.go`)
 - ✅ Multi-user S3 access scenarios (alice/bob test users)
 - ✅ **Activate client filtering tests** — create alice/bob users to run existing filtering tests
 - ✅ **Create integration tests** — `tests/integration/list_filtering_test.go` for result filtering
