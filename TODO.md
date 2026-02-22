@@ -465,6 +465,14 @@ Current status: **Phase 4.4 IN PROGRESS** — Group & Service Account admin API 
 
 ## Phase 4.5: Stability & Performance
 
+### Browser Upload Support
+- [ ] **POST Policy Uploads** - Browser-based form uploads
+  - [ ] Parse POST policy documents
+  - [ ] Validate policy signature and expiration
+  - [ ] Support multipart/form-data uploads
+  - [ ] HTML form upload examples
+  - [ ] MinIO `mc share upload` compatibility
+
 ### Performance Optimization
 - [ ] Metadata caching strategy (based on profiling)
 - [ ] Optimize ListObjects for large buckets
@@ -476,14 +484,6 @@ Current status: **Phase 4.4 IN PROGRESS** — Group & Service Account admin API 
 - [ ] Load testing with large files and many small files
 - [ ] Test migration from actual MinIO instance
 - [ ] Test behind reverse proxy (nginx) with canonical domain
-
-### Browser Upload Support
-- [ ] **POST Policy Uploads** - Browser-based form uploads
-  - [ ] Parse POST policy documents
-  - [ ] Validate policy signature and expiration
-  - [ ] Support multipart/form-data uploads
-  - [ ] HTML form upload examples
-  - [ ] MinIO `mc share upload` compatibility
 
 ## Phase 5: Production Readiness & Operations
 
