@@ -33,7 +33,7 @@ var filterLogger = logging.Component("filter")
 //  4. Return filtered list
 func (h *HTTPHandler) filterBuckets(ctx stdcontext.Context, buckets []s3types.Bucket, r *http.Request) []s3types.Bucket {
 	// Extract principal from context
-	principal := getRequestPrincipal(ctx, h.rootAccessKey, h.altRootAccessKey)
+	principal := getRequestPrincipal(ctx, h.adminKeys.PrimaryRootAccessKey(), h.adminKeys.AltRootAccessKey())
 
 	// Admin fast path - return all buckets
 	if principal.IsAdmin {
@@ -118,7 +118,7 @@ func (h *HTTPHandler) filterBuckets(ctx stdcontext.Context, buckets []s3types.Bu
 //  5. Return filtered list
 func (h *HTTPHandler) filterObjects(ctx stdcontext.Context, bucket string, objects []s3types.Object, r *http.Request) []s3types.Object {
 	// Extract principal from context
-	principal := getRequestPrincipal(ctx, h.rootAccessKey, h.altRootAccessKey)
+	principal := getRequestPrincipal(ctx, h.adminKeys.PrimaryRootAccessKey(), h.adminKeys.AltRootAccessKey())
 
 	// Admin fast path - return all objects
 	if principal.IsAdmin {

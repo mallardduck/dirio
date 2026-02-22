@@ -22,13 +22,12 @@ import (
 
 // RouteDependencies contains all dependencies needed for route handlers
 type RouteDependencies struct {
-	Auth             *auth.Authenticator
-	PolicyEngine     *policy.Engine
-	Metadata         *metadata.Manager // For ownership-based authorization
-	RootAccessKey    string            // Primary admin access key
-	AltRootAccessKey string            // Alternative admin access key (from data config)
-	APIHandler       *api.Handler
-	Debug            bool
+	Auth         *auth.Authenticator
+	PolicyEngine *policy.Engine
+	Metadata     *metadata.Manager      // For ownership-based authorization
+	AdminKeys    policy.AdminKeyChecker // Live admin key source (auth.Authenticator)
+	APIHandler   *api.Handler
+	Debug        bool
 }
 
 // SetupRoutes configures all application routes on the provided router.
@@ -127,10 +126,9 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 
 		// Build authorization middleware config
 		authzConfig := &policy.AuthorizationConfig{
-			Engine:           deps.PolicyEngine,
-			Metadata:         deps.Metadata,
-			RootAccessKey:    deps.RootAccessKey,
-			AltRootAccessKey: deps.AltRootAccessKey,
+			Engine:    deps.PolicyEngine,
+			Metadata:  deps.Metadata,
+			AdminKeys: deps.AdminKeys,
 		}
 
 		s3MW = []func(http.Handler) http.Handler{

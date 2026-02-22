@@ -8,11 +8,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 	"github.com/mallardduck/teapot-router/pkg/urlbuilder"
 
@@ -210,34 +213,25 @@ func (s *Server) setupRoutes() {
 	s.router.Use(teapot.RouteContextMiddleware(s.router))
 	s.router.Use(loggingHttp.PrepareAccessLogMiddleware(s.log))
 
-	// Get root access keys for authorization middleware and filtering.
-	// altRootAccessKey is only set when data config credentials are explicitly configured.
-	rootAccessKey := s.config.AccessKey
-	altRootAccessKey := ""
-	if s.config.DataConfig != nil && s.config.DataConfig.Credentials.IsConfigured() {
-		altRootAccessKey = s.config.DataConfig.Credentials.AccessKey
-	}
-
-	// Create API handler
+	// Create API handler — pass the authenticator directly as the AdminKeyChecker
+	// so that live credential reloads are reflected without rebuilding routes.
 	apiHandler := api.New(
 		s.storage,
 		s.metadata,
 		s.auth,
 		urlbuilder.New(s.config.CanonicalDomain),
 		s.policyEngine,
-		rootAccessKey,
-		altRootAccessKey,
+		s.auth,
 	)
 
 	// Setup routes using shared function
 	deps := &RouteDependencies{
-		Auth:             s.auth,
-		PolicyEngine:     s.policyEngine,
-		Metadata:         s.metadata,
-		RootAccessKey:    rootAccessKey,
-		AltRootAccessKey: altRootAccessKey,
-		APIHandler:       apiHandler,
-		Debug:            s.config.Debug,
+		Auth:         s.auth,
+		PolicyEngine: s.policyEngine,
+		Metadata:     s.metadata,
+		AdminKeys:    s.auth,
+		APIHandler:   apiHandler,
+		Debug:        s.config.Debug,
 	}
 
 	SetupRoutes(s.router, deps)
@@ -311,6 +305,10 @@ func (s *Server) Start(ctx context.Context) error {
 		s.log.Info("mdns service started", "host", mdnsSvc.GetAdvertisedHost())
 	}
 
+	// Watch .dirio/config.json for credential changes made by external commands
+	// (e.g. "dirio credentials set"). The watcher stops when ctx is cancelled.
+	go s.watchDataConfig(ctx)
+
 	serverErr := make(chan error, 1)
 	go func() {
 		s.log.Info("server listening", "addr", addr)
@@ -380,4 +378,104 @@ func (s *Server) gracefulShutdown() {
 	if err := s.metadata.Close(); err != nil {
 		s.log.Error("metadata close error", "error", err)
 	}
+}
+
+// watchDataConfig watches .dirio/config.json for changes and reloads admin
+// credentials into the running authenticator when the file is written.
+// This allows "dirio credentials set" to take effect without a server restart.
+// The goroutine exits when ctx is cancelled (i.e. on graceful shutdown).
+func (s *Server) watchDataConfig(ctx context.Context) {
+	log := logging.Component("config-watcher")
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Error("failed to create config file watcher", "error", err)
+		return
+	}
+	defer watcher.Close()
+
+	// Watch the directory so we catch rename/replace patterns used by some
+	// editors and atomic-write helpers, not just in-place writes.
+	watchDir := filepath.Join(s.config.DataDir, ".dirio")
+	if err := watcher.Add(watchDir); err != nil {
+		log.Warn("config watcher: failed to watch directory — live credential reload unavailable",
+			"dir", watchDir, "error", err)
+		return
+	}
+
+	log.Info("watching for credential changes", "dir", watchDir)
+
+	configFile := filepath.Join(watchDir, "config.json")
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+
+			// Only act on the config file itself.
+			if filepath.Clean(event.Name) != filepath.Clean(configFile) {
+				continue
+			}
+
+			if !event.Has(fsnotify.Write) && !event.Has(fsnotify.Create) {
+				continue
+			}
+
+			// Debounce: drain any follow-up events for 100 ms then reload once.
+			debounce := time.After(100 * time.Millisecond)
+		drain:
+			for {
+				select {
+				case <-debounce:
+					break drain
+				case _, ok := <-watcher.Events:
+					if !ok {
+						return
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+
+			s.reloadDataCredentials(log)
+
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Warn("config watcher error", "error", err)
+		}
+	}
+}
+
+// reloadDataCredentials reads the current data config and updates the
+// authenticator's credentials in the appropriate slot (primary or alt).
+func (s *Server) reloadDataCredentials(log *slog.Logger) {
+	fs := osfs.New(s.config.DataDir)
+	dc, err := data.LoadDataConfig(fs)
+	if err != nil {
+		log.Warn("credential reload: failed to read data config", "error", err)
+		return
+	}
+
+	if !dc.Credentials.IsConfigured() {
+		log.Debug("credential reload: data config has no credentials configured — skipping")
+		return
+	}
+
+	// In dual-admin mode (CLI creds + data config creds) the data config
+	// credentials live in the authenticator's alt slot; otherwise primary.
+	if s.config.CLICredentialsExplicitlySet {
+		s.auth.UpdateAltCredentials(dc.Credentials.AccessKey, dc.Credentials.SecretKey)
+	} else {
+		s.auth.UpdatePrimaryCredentials(dc.Credentials.AccessKey, dc.Credentials.SecretKey)
+	}
+
+	log.Info("admin credentials reloaded from data config",
+		"access_key", dc.Credentials.AccessKey)
 }

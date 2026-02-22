@@ -38,12 +38,11 @@ import (
 
 // HTTPHandler handles S3 API requests
 type HTTPHandler struct {
-	s3Service        *svcs3.Service
-	urlBuilder       URLBuilder
-	metadata         *metadata.Manager // For ownership lookups during filtering
-	policyEngine     *policy.Engine    // For permission checks during filtering
-	rootAccessKey    string            // Primary admin access key
-	altRootAccessKey string            // Alternative admin access key
+	s3Service    *svcs3.Service
+	urlBuilder   URLBuilder
+	metadata     *metadata.Manager      // For ownership lookups during filtering
+	policyEngine *policy.Engine         // For permission checks during filtering
+	adminKeys    policy.AdminKeyChecker // Live admin key source for filtering bypass
 }
 
 // URLBuilder defines the interface for generating URLs in S3 API responses
@@ -58,16 +57,14 @@ func New(
 	urlBuilder URLBuilder,
 	metadata *metadata.Manager,
 	policyEngine *policy.Engine,
-	rootAccessKey string,
-	altRootAccessKey string,
+	adminKeys policy.AdminKeyChecker,
 ) *HTTPHandler {
 	return &HTTPHandler{
-		s3Service:        serviceFactory.S3(),
-		urlBuilder:       urlBuilder,
-		metadata:         metadata,
-		policyEngine:     policyEngine,
-		rootAccessKey:    rootAccessKey,
-		altRootAccessKey: altRootAccessKey,
+		s3Service:    serviceFactory.S3(),
+		urlBuilder:   urlBuilder,
+		metadata:     metadata,
+		policyEngine: policyEngine,
+		adminKeys:    adminKeys,
 	}
 }
 

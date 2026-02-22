@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/mallardduck/dirio/internal/logging"
@@ -25,7 +26,9 @@ var (
 
 // Authenticator handles authentication and authorization
 type Authenticator struct {
-	metadata      *metadata.Manager
+	metadata *metadata.Manager
+
+	mu            sync.RWMutex
 	rootAccessKey string
 	rootSecretKey string
 
@@ -52,15 +55,64 @@ func (a *Authenticator) WithAlternativeRoot(accessKey, secretKey string) *Authen
 	return a
 }
 
+// PrimaryRootAccessKey returns the current primary root access key.
+// Implements policy.AdminKeyChecker.
+func (a *Authenticator) PrimaryRootAccessKey() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.rootAccessKey
+}
+
+// AltRootAccessKey returns the current alternative root access key.
+// Implements policy.AdminKeyChecker.
+func (a *Authenticator) AltRootAccessKey() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.altRootAccessKey
+}
+
+// isRootAdminKey reports whether accessKey matches either root credential slot.
+func (a *Authenticator) isRootAdminKey(accessKey string) bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return accessKey == a.rootAccessKey ||
+		(a.altRootAccessKey != "" && accessKey == a.altRootAccessKey)
+}
+
+// UpdatePrimaryCredentials atomically replaces the primary root credentials.
+// Call this when the data-config admin is the primary (no explicit CLI creds).
+func (a *Authenticator) UpdatePrimaryCredentials(accessKey, secretKey string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.rootAccessKey = accessKey
+	a.rootSecretKey = secretKey
+}
+
+// UpdateAltCredentials atomically replaces the alternative root credentials.
+// Call this in dual-admin mode where CLI creds are primary and data-config
+// creds are the alternative.
+func (a *Authenticator) UpdateAltCredentials(accessKey, secretKey string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.altRootAccessKey = accessKey
+	a.altRootSecretKey = secretKey
+}
+
 // ValidateCredentials checks if access key and secret key are valid
 func (a *Authenticator) ValidateCredentials(ctx context.Context, accessKey, secretKey string) bool {
+	// Snapshot root credentials to minimise lock contention.
+	a.mu.RLock()
+	rootAK, rootSK := a.rootAccessKey, a.rootSecretKey
+	altAK, altSK := a.altRootAccessKey, a.altRootSecretKey
+	a.mu.RUnlock()
+
 	// Check primary root credentials (CLI admin)
-	if accessKey == a.rootAccessKey && secretKey == a.rootSecretKey {
+	if accessKey == rootAK && secretKey == rootSK {
 		return true
 	}
 
 	// Check alternative root credentials (data config admin)
-	if a.altRootAccessKey != "" && accessKey == a.altRootAccessKey && secretKey == a.altRootSecretKey {
+	if altAK != "" && accessKey == altAK && secretKey == altSK {
 		return true
 	}
 
@@ -75,24 +127,30 @@ func (a *Authenticator) ValidateCredentials(ctx context.Context, accessKey, secr
 
 // GetUserForAccessKey retrieves user information for an access key
 func (a *Authenticator) GetUserForAccessKey(ctx context.Context, accessKey string) (*metadata.User, error) {
+	// Snapshot root credentials to minimise lock contention.
+	a.mu.RLock()
+	rootAK, rootSK := a.rootAccessKey, a.rootSecretKey
+	altAK, altSK := a.altRootAccessKey, a.altRootSecretKey
+	a.mu.RUnlock()
+
 	// Check primary root (CLI admin)
-	if accessKey == a.rootAccessKey {
+	if accessKey == rootAK {
 		return &metadata.User{
 			UUID:      iam.AdminUserUUID, // AdminUserUUID - stable across key rotation
 			Username:  "admin",
-			AccessKey: a.rootAccessKey,
-			SecretKey: a.rootSecretKey,
+			AccessKey: rootAK,
+			SecretKey: rootSK,
 			Status:    iam.UserStatusActive,
 		}, nil
 	}
 
 	// Check alternative root (data config admin)
-	if a.altRootAccessKey != "" && accessKey == a.altRootAccessKey {
+	if altAK != "" && accessKey == altAK {
 		return &metadata.User{
 			UUID:      iam.AdminUserUUID, // AdminUserUUID - same UUID for both admins
 			Username:  "admin",
-			AccessKey: a.altRootAccessKey,
-			SecretKey: a.altRootSecretKey,
+			AccessKey: altAK,
+			SecretKey: altSK,
 			Status:    iam.UserStatusActive,
 		}, nil
 	}

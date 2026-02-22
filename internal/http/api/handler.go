@@ -33,8 +33,7 @@ func New(
 	auth *auth.Authenticator,
 	urlBuilder URLBuilder,
 	policyEngine *policy.Engine,
-	rootAccessKey string,
-	altRootAccessKey string,
+	adminKeys policy.AdminKeyChecker,
 ) *Handler {
 	serviceFactory := service.NewServiceFactory(storage, metadata, policyEngine)
 	return &Handler{
@@ -45,8 +44,7 @@ func New(
 			urlBuilder,
 			metadata,
 			policyEngine,
-			rootAccessKey,
-			altRootAccessKey,
+			adminKeys,
 		),
 		IAMHandler: iam.New(
 			serviceFactory,

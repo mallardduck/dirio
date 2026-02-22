@@ -22,6 +22,14 @@ import (
 
 var authzLogger = logging.Component("authz")
 
+// AdminKeyChecker provides the current admin access keys for authorization
+// bypass decisions. auth.Authenticator implements this interface, allowing
+// live credential reloads to propagate without restarting the server.
+type AdminKeyChecker interface {
+	PrimaryRootAccessKey() string
+	AltRootAccessKey() string
+}
+
 // AuthorizationConfig holds configuration for the authorization middleware
 type AuthorizationConfig struct {
 	// Engine is the policy evaluation engine
@@ -30,11 +38,10 @@ type AuthorizationConfig struct {
 	// Metadata is the metadata manager for fetching ownership information
 	Metadata *metadata.Manager
 
-	// RootAccessKey is the admin access key that bypasses all policy checks
-	RootAccessKey string
-
-	// AltRootAccessKey is an alternative admin access key (from data config)
-	AltRootAccessKey string
+	// AdminKeys provides the current admin access keys for bypass checks.
+	// Using an interface (rather than captured strings) lets the authenticator
+	// rotate credentials at runtime and have them reflected immediately.
+	AdminKeys AdminKeyChecker
 }
 
 // AuthorizationMiddleware creates middleware that enforces policy-based authorization.
@@ -72,7 +79,7 @@ func AuthorizationMiddleware(config *AuthorizationConfig) func(http.Handler) htt
 			principal := &Principal{
 				User:        user,
 				IsAnonymous: isAnonymous,
-				IsAdmin:     isAdmin(user, config.RootAccessKey, config.AltRootAccessKey),
+				IsAdmin:     isAdmin(user, config.AdminKeys.PrimaryRootAccessKey(), config.AdminKeys.AltRootAccessKey()),
 			}
 
 			// Populate SA fields from context (set by auth middleware for service account requests)
