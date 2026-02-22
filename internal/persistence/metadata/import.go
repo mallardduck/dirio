@@ -202,6 +202,13 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 			result.DataConfig.WORMEnabled)
 	}
 
+	// Rebuild in-memory UUID index and bolt indexes so that users imported above
+	// are immediately visible via GetUserByAccessKey / GetUserByUsername.
+	// The indexes were built in New() before CheckAndImportMinIO was called, so
+	// any users written by SaveUser() above are not yet indexed.
+	m.buildUsersIndex(ctx)
+	m.reconcileIndexes(ctx)
+
 	// Save import state
 	state = &ImportState{
 		Imported:      true,

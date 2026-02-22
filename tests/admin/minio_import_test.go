@@ -198,6 +198,9 @@ func TestMinIOImport_IdempotentRestart(t *testing.T) {
 	DecodeJSON(t, resp, &users)
 	require.Contains(t, users, "alice")
 
+	// Stop ts1 so it releases the bolt DB lock before ts2 opens the same dataDir.
+	ts1.Stop()
+
 	// Second server start on the same dataDir: import should be skipped (state file exists)
 	ts2 := NewTestServerWithDataDir(t, dataDir)
 

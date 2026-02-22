@@ -32,6 +32,8 @@ type TestServer struct {
 	AdminURL  string
 	AccessKey string
 	SecretKey string
+	cancel    context.CancelFunc
+	done      chan struct{}
 }
 
 // NewTestServer creates and starts a new test server with a fresh data directory
@@ -80,6 +82,7 @@ func NewTestServer(t *testing.T) *TestServer {
 
 // NewTestServerWithDataDir creates a test server using an existing data directory.
 // Used for MinIO import tests where the data dir is pre-populated.
+// Call Stop() to shut the server down without removing the data directory.
 func NewTestServerWithDataDir(t *testing.T, dataDir string) *TestServer {
 	t.Helper()
 
@@ -96,6 +99,9 @@ func NewTestServerWithDataDir(t *testing.T, dataDir string) *TestServer {
 		t.Fatalf("Failed to create server: %v", err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+
 	ts := &TestServer{
 		Server:    srv,
 		DataDir:   dataDir,
@@ -104,16 +110,32 @@ func NewTestServerWithDataDir(t *testing.T, dataDir string) *TestServer {
 		AdminURL:  fmt.Sprintf("http://localhost:%d/minio/admin/v3", port),
 		AccessKey: config.AccessKey,
 		SecretKey: config.SecretKey,
+		cancel:    cancel,
+		done:      done,
 	}
 
-	go func() { _ = srv.Start(context.Background()) }()
+	go func() {
+		defer close(done)
+		_ = srv.Start(ctx)
+	}()
 
 	if !ts.waitForReady(5 * time.Second) {
-		ts.Cleanup()
+		ts.Stop()
 		t.Fatalf("Server failed to start within timeout")
 	}
 
 	return ts
+}
+
+// Stop shuts down the server gracefully without removing the data directory.
+// Blocks until the server has fully stopped (and the bolt DB is closed).
+func (ts *TestServer) Stop() {
+	if ts.cancel != nil {
+		ts.cancel()
+	}
+	if ts.done != nil {
+		<-ts.done
+	}
 }
 
 // Cleanup removes the test data directory
