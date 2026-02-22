@@ -31,6 +31,7 @@ func TestMinIOImport_CreatesMetadataFiles(t *testing.T) {
 	rootFS := osfs.New(tmpDir)
 	mgr, err := New(rootFS)
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = mgr.Close() })
 
 	// Import object metadata
 	objectCount := 0

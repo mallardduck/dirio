@@ -375,4 +375,9 @@ func (s *Server) gracefulShutdown() {
 		}
 		s.mdns = nil
 	}
+
+	// Close the metadata bolt index.
+	if err := s.metadata.Close(); err != nil {
+		s.log.Error("metadata close error", "error", err)
+	}
 }

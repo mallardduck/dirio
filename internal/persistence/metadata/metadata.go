@@ -12,6 +12,7 @@ import (
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/util"
 	"github.com/google/uuid"
+	bbolt "go.etcd.io/bbolt"
 
 	contextInt "github.com/mallardduck/dirio/internal/context"
 
@@ -35,27 +36,19 @@ var (
 	ErrGroupNotFound          = errors.New("group not found")
 	ErrGroupAlreadyExists     = errors.New("group already exists")
 	ErrServiceAccountNotFound = errors.New("service account not found")
+	ErrUsernameAlreadyTaken   = errors.New("username already taken")
+	ErrAccessKeyAlreadyTaken  = errors.New("access key already taken")
 )
 
 // Manager handles metadata storage and retrieval
 type Manager struct {
 	rootFS     billy.Filesystem
 	metadataFS billy.Filesystem
+	db         *bbolt.DB
 
-	// Metadata indexes are in memory caches for critical information
-	// Populated at startup and kept in sync via CreateOrUpdateUser / DeleteUser.
-
-	// usersIdx provides O(1) lookup of existing users by user UID.
+	// usersIdx is the in-memory UUID presence set (populated from filenames at startup).
 	usersMu  sync.RWMutex
 	usersIdx map[uuid.UUID]interface{}
-
-	// usernamesIdx provides O(1) lookup of user UUID key by username.
-	usernamesMu  sync.RWMutex
-	usernamesIdx map[string]uuid.UUID // username -> UUID
-
-	// accessKeysIdx provides O(1) lookup of user UUID key by access key.
-	accessKeysMu  sync.RWMutex
-	accessKeysIdx map[string]uuid.UUID // access key -> UUID
 }
 
 // Type aliases for backward compatibility
@@ -138,19 +131,22 @@ func New(rootFS billy.Filesystem) (*Manager, error) {
 		return nil, fmt.Errorf("failed to create IAM service-accounts directory: %w", err)
 	}
 
-	mgr := &Manager{
-		rootFS:        rootFS,
-		metadataFS:    metadataFS,
-		usersIdx:      make(map[uuid.UUID]interface{}),
-		usernamesIdx:  make(map[string]uuid.UUID),
-		accessKeysIdx: make(map[string]uuid.UUID),
+	dbPath := filepath.Join(rootFS.Root(), path.MetadataDir, "dirio.db")
+	db, err := openDB(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open metadata index: %w", err)
 	}
 
-	// Build in-memory indexes from existing user files.
-	// Fail-soft: log and skip users that cannot be loaded.
-	mgr.buildUsersIndex(context.Background())
-	mgr.buildUsernamesIndex(context.Background())
-	mgr.buildAccessKeysIndex(context.Background())
+	mgr := &Manager{
+		rootFS:     rootFS,
+		metadataFS: metadataFS,
+		db:         db,
+		usersIdx:   make(map[uuid.UUID]interface{}),
+	}
+
+	ctx := context.Background()
+	mgr.buildUsersIndex(ctx)
+	mgr.reconcileIndexes(ctx)
 
 	return mgr, nil
 }
@@ -170,31 +166,6 @@ func (m *Manager) buildUsersIndex(ctx context.Context) {
 	for _, UID := range UIDs {
 		// Index all user UIDs to track user existence w/o disk access.
 		m.usersIdx[UID] = nil
-	}
-}
-
-// buildUsernamesIndex populates the in-memory UUID index from disk.
-// Called once at startup; individual errors are logged and skipped.
-func (m *Manager) buildUsernamesIndex(ctx context.Context) {
-	UIDs, err := m.ListUsers(ctx)
-	if err != nil {
-		fmt.Printf("Warning: failed to list users while building UUID index: %v\n", err)
-		return
-	}
-
-	m.usernamesMu.Lock()
-	defer m.usernamesMu.Unlock()
-
-	for _, UID := range UIDs {
-		user, err := m.GetUser(ctx, UID)
-		if err != nil {
-			fmt.Printf("Warning: failed to load user %s while building username index: %v\n", UID, err)
-			continue
-		}
-		if user != nil && user.Username != "" {
-			// Index maps UUID → username (the file key used by GetUser).
-			m.usernamesIdx[user.Username] = user.UUID
-		}
 	}
 }
 
@@ -372,7 +343,9 @@ func (m *Manager) GetUser(ctx context.Context, userUID uuid.UUID) (*User, error)
 	return &user, nil
 }
 
-// CreateOrUpdateUser creates a new user or updates an existing one
+// CreateOrUpdateUser creates a new user or updates an existing one.
+// Returns ErrUsernameAlreadyTaken or ErrAccessKeyAlreadyTaken if a different
+// user already holds the requested username or access key.
 func (m *Manager) CreateOrUpdateUser(ctx context.Context, user *User) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("context cancelled: %w", err)
@@ -386,20 +359,40 @@ func (m *Manager) CreateOrUpdateUser(ctx context.Context, user *User) error {
 		return fmt.Errorf("username is required")
 	}
 
-	// Generate UUID for new users or preserve existing UUID
+	// Ensure the user has a UUID before we check uniqueness.
 	if user.UUID == uuid.Nil {
-		// Check if user already exists
-		existing, err := m.GetUser(ctx, user.UUID)
-		if err == nil && existing != nil && existing.UUID != uuid.Nil {
-			// Preserve existing UUID on update
-			user.UUID = existing.UUID
-		} else {
-			// Generate a new UUID for a new user
-			user.UUID = uuid.New()
-		}
+		user.UUID = uuid.New()
 	}
 
-	// Set metadata fields
+	// Enforce uniqueness and update bolt indexes in a single transaction.
+	err := m.db.Update(func(tx *bbolt.Tx) error {
+		byUsername := tx.Bucket([]byte(boltBucketUsersByUsername))
+		byAccessKey := tx.Bucket([]byte(boltBucketUsersByAccessKey))
+
+		if v := byUsername.Get([]byte(user.Username)); v != nil {
+			uid, err := uuid.FromBytes(v)
+			if err == nil && uid != user.UUID {
+				return ErrUsernameAlreadyTaken
+			}
+		}
+		if v := byAccessKey.Get([]byte(user.AccessKey)); v != nil {
+			uid, err := uuid.FromBytes(v)
+			if err == nil && uid != user.UUID {
+				return ErrAccessKeyAlreadyTaken
+			}
+		}
+
+		uidBytes := user.UUID[:]
+		if err := byUsername.Put([]byte(user.Username), uidBytes); err != nil {
+			return err
+		}
+		return byAccessKey.Put([]byte(user.AccessKey), uidBytes)
+	})
+	if err != nil {
+		return err
+	}
+
+	// Set metadata fields.
 	user.Version = iam.UserMetadataVersion
 	user.UpdatedAt = time.Now()
 
@@ -407,27 +400,19 @@ func (m *Manager) CreateOrUpdateUser(ctx context.Context, user *User) error {
 		return err
 	}
 
-	// Keep all indexes in sync.
 	m.usersMu.Lock()
 	m.usersIdx[user.UUID] = nil
 	m.usersMu.Unlock()
-	m.usernamesMu.Lock()
-	m.usernamesIdx[user.Username] = user.UUID
-	m.usernamesMu.Unlock()
-	m.accessKeysMu.Lock()
-	m.accessKeysIdx[user.AccessKey] = user.UUID
-	m.accessKeysMu.Unlock()
 
 	return nil
 }
 
-// UpdateUser updates an existing user's mutable fields
+// UpdateUser updates an existing user's mutable fields and keeps the bolt indexes in sync.
 func (m *Manager) UpdateUser(ctx context.Context, userUID uuid.UUID, updates *User) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("context cancelled: %w", err)
 	}
 
-	// Get existing user
 	existing, err := m.GetUser(ctx, userUID)
 	if err != nil {
 		return fmt.Errorf("failed to get existing user: %w", err)
@@ -436,9 +421,14 @@ func (m *Manager) UpdateUser(ctx context.Context, userUID uuid.UUID, updates *Us
 		return fmt.Errorf("user not found: %s", userUID)
 	}
 
-	// Update mutable fields
+	usernameChanged := updates.Username != "" && updates.Username != existing.Username
+	accessKeyChanged := updates.AccessKey != "" && updates.AccessKey != existing.AccessKey
+
+	oldUsername := existing.Username
+	oldAccessKey := existing.AccessKey
+
+	// Apply mutable field changes.
 	if updates.Username != "" {
-		// TODO when this happens we need to update the username index
 		existing.Username = updates.Username
 	}
 	if updates.AccessKey != "" {
@@ -454,7 +444,46 @@ func (m *Manager) UpdateUser(ctx context.Context, userUID uuid.UUID, updates *Us
 		existing.AttachedPolicies = updates.AttachedPolicies
 	}
 
-	// Update timestamp and version
+	// Sync bolt indexes when username or accessKey changed.
+	if usernameChanged || accessKeyChanged {
+		err = m.db.Update(func(tx *bbolt.Tx) error {
+			byUsername := tx.Bucket([]byte(boltBucketUsersByUsername))
+			byAccessKey := tx.Bucket([]byte(boltBucketUsersByAccessKey))
+			uidBytes := userUID[:]
+
+			if usernameChanged {
+				if v := byUsername.Get([]byte(existing.Username)); v != nil {
+					uid, err := uuid.FromBytes(v)
+					if err == nil && uid != userUID {
+						return ErrUsernameAlreadyTaken
+					}
+				}
+				_ = byUsername.Delete([]byte(oldUsername))
+				if err := byUsername.Put([]byte(existing.Username), uidBytes); err != nil {
+					return err
+				}
+			}
+
+			if accessKeyChanged {
+				if v := byAccessKey.Get([]byte(existing.AccessKey)); v != nil {
+					uid, err := uuid.FromBytes(v)
+					if err == nil && uid != userUID {
+						return ErrAccessKeyAlreadyTaken
+					}
+				}
+				_ = byAccessKey.Delete([]byte(oldAccessKey))
+				if err := byAccessKey.Put([]byte(existing.AccessKey), uidBytes); err != nil {
+					return err
+				}
+			}
+
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
 	existing.UpdatedAt = time.Now()
 	existing.Version = iam.UserMetadataVersion
 
@@ -483,13 +512,13 @@ func (m *Manager) SaveUser(ctx context.Context, userUID uuid.UUID, user *User) e
 	return jsonutil.MarshalToFile(m.metadataFS, userPath, &toSave)
 }
 
-// DeleteUser removes a user
+// DeleteUser removes a user and cleans up all indexes.
 func (m *Manager) DeleteUser(ctx context.Context, userUID uuid.UUID) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("context cancelled: %w", err)
 	}
 
-	// Load the user first to get their username for index cleanup.
+	// Load the user first so we know which index keys to remove.
 	user, _ := m.GetUser(ctx, userUID)
 
 	userPath := filepath.Join("iam", "users", userUID.String()+".json")
@@ -498,17 +527,18 @@ func (m *Manager) DeleteUser(ctx context.Context, userUID uuid.UUID) error {
 		return err
 	}
 
-	// Remove all indexes for the user
-	if user != nil && user.UUID != uuid.Nil {
-		m.usernamesMu.Lock()
-		delete(m.usernamesIdx, user.Username)
-		m.usernamesMu.Unlock()
+	if user != nil {
+		_ = m.db.Update(func(tx *bbolt.Tx) error {
+			byUsername := tx.Bucket([]byte(boltBucketUsersByUsername))
+			byAccessKey := tx.Bucket([]byte(boltBucketUsersByAccessKey))
+			_ = byUsername.Delete([]byte(user.Username))
+			_ = byAccessKey.Delete([]byte(user.AccessKey))
+			return nil
+		})
+
 		m.usersMu.Lock()
-		delete(m.usersIdx, user.UUID)
+		delete(m.usersIdx, userUID)
 		m.usersMu.Unlock()
-		m.accessKeysMu.Lock()
-		delete(m.accessKeysIdx, user.AccessKey)
-		m.accessKeysMu.Unlock()
 	}
 
 	return nil
@@ -573,64 +603,8 @@ func (m *Manager) GetUsers(ctx context.Context) (map[uuid.UUID]*User, error) {
 	return users, nil
 }
 
-// buildAccessKeysIndex populates the in-memory access key index from disk.
-// Called once at startup; individual errors are logged and skipped.
-func (m *Manager) buildAccessKeysIndex(ctx context.Context) {
-	UIDs, err := m.ListUsers(ctx)
-	if err != nil {
-		fmt.Printf("Warning: failed to list users while building access key index: %v\n", err)
-		return
-	}
-
-	m.accessKeysMu.Lock()
-	defer m.accessKeysMu.Unlock()
-
-	for _, UID := range UIDs {
-		user, err := m.GetUser(ctx, UID)
-		if err != nil {
-			fmt.Printf("Warning: failed to load user %s while building access key index: %v\n", UID, err)
-			continue
-		}
-		if user != nil && user.AccessKey != "" {
-			m.accessKeysIdx[user.AccessKey] = user.UUID
-		}
-	}
-}
-
 // GetUserByUUID retrieves a user by their UUID.
 func (m *Manager) GetUserByUUID(ctx context.Context, userUID uuid.UUID) (*User, error) {
-	return m.GetUser(ctx, userUID)
-}
-
-// GetUserByAccessKey retrieves a user by their access key using the in-memory index (O(1)).
-func (m *Manager) GetUserByAccessKey(ctx context.Context, accessKey string) (*User, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
-	}
-
-	m.accessKeysMu.RLock()
-	userUID, ok := m.accessKeysIdx[accessKey]
-	m.accessKeysMu.RUnlock()
-	if !ok {
-		return nil, ErrUserNotFound
-	}
-
-	return m.GetUser(ctx, userUID)
-}
-
-// GetUserByUsername retrieves a user by their username using the in-memory index (O(1)).
-func (m *Manager) GetUserByUsername(ctx context.Context, username string) (*User, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
-	}
-
-	m.usernamesMu.RLock()
-	userUID, ok := m.usernamesIdx[username]
-	m.usernamesMu.RUnlock()
-	if !ok {
-		return nil, ErrUserNotFound
-	}
-
 	return m.GetUser(ctx, userUID)
 }
 
