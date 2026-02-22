@@ -93,6 +93,18 @@ func (s *Service) AddMember(ctx context.Context, groupName string, userUID uuid.
 	return s.metadata.AddUserToGroup(ctx, groupName, userUID)
 }
 
+// AddMemberByAccessKey resolves an access key to a UUID and adds the user to the group.
+func (s *Service) AddMemberByAccessKey(ctx context.Context, groupName, accessKey string) error {
+	user, err := s.metadata.GetUserByAccessKey(ctx, accessKey)
+	if err != nil {
+		if errors.Is(err, metadata.ErrUserNotFound) {
+			return svcerrors.ErrUserNotFound
+		}
+		return err
+	}
+	return s.AddMember(ctx, groupName, user.UUID)
+}
+
 // RemoveMember removes a user from a group.
 func (s *Service) RemoveMember(ctx context.Context, groupName string, userUID uuid.UUID) error {
 	if groupName == "" {
@@ -104,6 +116,37 @@ func (s *Service) RemoveMember(ctx context.Context, groupName string, userUID uu
 	}
 
 	return s.metadata.RemoveUserFromGroup(ctx, groupName, userUID)
+}
+
+// RemoveMemberByAccessKey resolves an access key to a UUID and removes the user from the group.
+func (s *Service) RemoveMemberByAccessKey(ctx context.Context, groupName, accessKey string) error {
+	user, err := s.metadata.GetUserByAccessKey(ctx, accessKey)
+	if err != nil {
+		if errors.Is(err, metadata.ErrUserNotFound) {
+			return svcerrors.ErrUserNotFound
+		}
+		return err
+	}
+	return s.RemoveMember(ctx, groupName, user.UUID)
+}
+
+// GetMemberAccessKeys returns the access keys for all members of the group,
+// resolving the stored UUIDs via the metadata manager.
+func (s *Service) GetMemberAccessKeys(ctx context.Context, groupName string) ([]string, error) {
+	g, err := s.Get(ctx, groupName)
+	if err != nil {
+		return nil, err
+	}
+
+	keys := make([]string, 0, len(g.Members))
+	for _, uid := range g.Members {
+		user, err := s.metadata.GetUser(ctx, uid)
+		if err != nil {
+			continue // skip deleted users
+		}
+		keys = append(keys, user.AccessKey)
+	}
+	return keys, nil
 }
 
 // AttachPolicy attaches a policy to a group (idempotent)

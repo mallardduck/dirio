@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/google/uuid"
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 	"github.com/mallardduck/go-http-helpers/pkg/query"
 
@@ -40,7 +39,7 @@ func (s *groupHTTPService) ListGroups(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetGroupInfo handles GET /minio/admin/v3/group?name=...
-// Returns group info including members and attached policies.
+// Returns group info including members (as access keys) and attached policies.
 func (s *groupHTTPService) GetGroupInfo(w http.ResponseWriter, r *http.Request) {
 	name := query.String(r, "group", "")
 	if name == "" {
@@ -64,9 +63,17 @@ func (s *groupHTTPService) GetGroupInfo(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Resolve stored UUIDs to access keys for the MinIO-compatible response.
+	memberKeys, err := s.groups.GetMemberAccessKeys(r.Context(), name)
+	if err != nil {
+		s.log.Error("Failed to resolve group member access keys", "error", err, "group", name)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	response := map[string]interface{}{
 		"name":      g.Name,
-		"members":   g.Members,
+		"members":   memberKeys,
 		"policies":  g.AttachedPolicies,
 		"status":    g.Status,
 		"updatedAt": g.UpdatedAt,
@@ -80,13 +87,14 @@ func (s *groupHTTPService) GetGroupInfo(w http.ResponseWriter, r *http.Request) 
 
 // UpdateGroupMembers handles POST /minio/admin/v3/update-group-members
 // Body JSON: {"group":"...", "members":["alice","bob"], "isRemove":false}
+// Members are access key strings; they are resolved to UUIDs internally.
 // When isRemove=false: creates group if not exists, adds members.
 // When isRemove=true: removes members from group.
 func (s *groupHTTPService) UpdateGroupMembers(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Group    string      `json:"group"`
-		Members  []uuid.UUID `json:"members"`
-		IsRemove bool        `json:"isRemove"`
+		Group    string   `json:"group"`
+		Members  []string `json:"members"`
+		IsRemove bool     `json:"isRemove"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -104,10 +112,10 @@ func (s *groupHTTPService) UpdateGroupMembers(w http.ResponseWriter, r *http.Req
 	ctx := r.Context()
 
 	if body.IsRemove {
-		// Remove members from the group
-		for _, memberUUID := range body.Members {
-			if err := s.groups.RemoveMember(ctx, body.Group, memberUUID); err != nil {
-				s.log.Error("Failed to remove member from group", "error", err, "group", body.Group, "memberUUID", memberUUID)
+		// Remove members from the group (resolve access key → UUID)
+		for _, accessKey := range body.Members {
+			if err := s.groups.RemoveMemberByAccessKey(ctx, body.Group, accessKey); err != nil {
+				s.log.Error("Failed to remove member from group", "error", err, "group", body.Group, "accessKey", accessKey)
 				if svcerrors.IsNotFound(err) {
 					w.WriteHeader(http.StatusNotFound)
 					return
@@ -133,12 +141,11 @@ func (s *groupHTTPService) UpdateGroupMembers(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		// Add members
-		for _, member := range body.Members {
-			if err := s.groups.AddMember(ctx, body.Group, member); err != nil {
-				s.log.Error("Failed to add member to group", "error", err, "group", body.Group, "member", member)
+		// Add members (resolve access key → UUID)
+		for _, accessKey := range body.Members {
+			if err := s.groups.AddMemberByAccessKey(ctx, body.Group, accessKey); err != nil {
+				s.log.Error("Failed to add member to group", "error", err, "group", body.Group, "accessKey", accessKey)
 				if svcerrors.IsNotFound(err) {
-					// Could be group or user not found
 					w.WriteHeader(http.StatusNotFound)
 					return
 				}
