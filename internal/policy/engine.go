@@ -178,16 +178,21 @@ func (e *Engine) HasBucketPolicy(bucket string) bool {
 // resolveEffectivePolicyNames returns the list of IAM policy names that should
 // be evaluated for the given principal.
 //
-// For regular users: their own AttachedPolicies.
-// For SAs in inherit mode (default): the parent user's AttachedPolicies (fetched via UUID).
+// For regular users: their own AttachedPolicies plus policies from all active groups they belong to.
+// For SAs in inherited mode (default): the parent user's AttachedPolicies and group policies.
 // For SAs in override mode, or SAs with no parent: the SA's own AttachedPolicies.
 func (e *Engine) resolveEffectivePolicyNames(ctx context.Context, principal *Principal) []string {
 	if !principal.IsServiceAccount {
-		// Regular user: evaluate their own attached policies.
-		if principal.User != nil {
-			return principal.User.AttachedPolicies
+		// Regular user: evaluate their own attached policies plus group policies.
+		if principal.User == nil {
+			return nil
 		}
-		return nil
+		names := make([]string, len(principal.User.AttachedPolicies))
+		copy(names, principal.User.AttachedPolicies)
+		if groupPolicies, err := e.resolver.GetGroupPoliciesForUser(ctx, principal.User.UUID); err == nil {
+			names = append(names, groupPolicies...)
+		}
+		return names
 	}
 
 	// Service account: resolve based on PolicyMode.
@@ -199,11 +204,15 @@ func (e *Engine) resolveEffectivePolicyNames(ctx context.Context, principal *Pri
 		return nil
 	}
 
-	// Inherit mode with parent UUID: fetch parent user's policy names.
-	names, err := e.resolver.GetUserPolicyNamesByUUID(ctx, *principal.ParentUserUUID)
+	// Inherit mode with parent UUID: fetch parent user's policy names and group policies.
+	parentUUID := *principal.ParentUserUUID
+	names, err := e.resolver.GetUserPolicyNamesByUUID(ctx, parentUUID)
 	if err != nil {
 		// Parent not found (deleted?) or other error — fail closed (no policies).
 		return nil
+	}
+	if groupPolicies, err := e.resolver.GetGroupPoliciesForUser(ctx, parentUUID); err == nil {
+		names = append(names, groupPolicies...)
 	}
 	return names
 }

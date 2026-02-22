@@ -905,11 +905,25 @@ func (m *Manager) DeleteGroup(ctx context.Context, groupName string) error {
 		return fmt.Errorf("context cancelled: %w", err)
 	}
 
+	// Load the group before deletion so we can clean up member index entries.
+	g, _ := m.GetGroup(ctx, groupName)
+
 	groupPath := filepath.Join("iam", "groups", groupName+".json")
 	err := m.metadataFS.Remove(groupPath)
 	if err != nil && !isNotExist(err) {
 		return err
 	}
+
+	if g != nil && len(g.Members) > 0 {
+		_ = m.db.Update(func(tx *bbolt.Tx) error {
+			b := tx.Bucket([]byte(boltBucketGroupsByUserUUID))
+			for _, memberUID := range g.Members {
+				_ = groupIndexRemove(b, groupName, memberUID)
+			}
+			return nil
+		})
+	}
+
 	return nil
 }
 
@@ -982,7 +996,14 @@ func (m *Manager) AddUserToGroup(ctx context.Context, groupName string, userUid 
 	g.Members = append(g.Members, userUid)
 	g.UpdatedAt = time.Now()
 
-	return m.SaveGroup(ctx, g)
+	if err := m.SaveGroup(ctx, g); err != nil {
+		return err
+	}
+
+	_ = m.db.Update(func(tx *bbolt.Tx) error {
+		return groupIndexAdd(tx.Bucket([]byte(boltBucketGroupsByUserUUID)), groupName, userUid)
+	})
+	return nil
 }
 
 // RemoveUserFromGroup removes an access key from a group's member list.
@@ -1001,7 +1022,14 @@ func (m *Manager) RemoveUserFromGroup(ctx context.Context, groupName string, use
 	g.Members = filtered
 	g.UpdatedAt = time.Now()
 
-	return m.SaveGroup(ctx, g)
+	if err := m.SaveGroup(ctx, g); err != nil {
+		return err
+	}
+
+	_ = m.db.Update(func(tx *bbolt.Tx) error {
+		return groupIndexRemove(tx.Bucket([]byte(boltBucketGroupsByUserUUID)), groupName, userUid)
+	})
+	return nil
 }
 
 // AttachPolicyToGroup adds a policy name to a group's attached policies (idempotent).

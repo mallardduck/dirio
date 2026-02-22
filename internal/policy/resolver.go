@@ -17,6 +17,10 @@ type PolicyResolver interface {
 
 	// GetUserPolicyNamesByUUID returns the list of policy names attached to the user with the given UUID.
 	GetUserPolicyNamesByUUID(ctx context.Context, userUUID uuid.UUID) ([]string, error)
+
+	// GetGroupPoliciesForUser returns the union of all policy names attached to every active group
+	// the user with the given UUID belongs to.
+	GetGroupPoliciesForUser(ctx context.Context, userUUID uuid.UUID) ([]string, error)
 }
 
 // MetadataResolver implements PolicyResolver using the metadata.Manager.
@@ -45,4 +49,22 @@ func (r *MetadataResolver) GetUserPolicyNamesByUUID(ctx context.Context, userUUI
 		return nil, err
 	}
 	return user.AttachedPolicies, nil
+}
+
+// GetGroupPoliciesForUser returns all policy names from every active group the user belongs to.
+func (r *MetadataResolver) GetGroupPoliciesForUser(ctx context.Context, userUUID uuid.UUID) ([]string, error) {
+	groupNames, err := r.manager.GetGroupNamesForUser(ctx, userUUID)
+	if err != nil {
+		return nil, err
+	}
+
+	var policyNames []string
+	for _, groupName := range groupNames {
+		g, err := r.manager.GetGroup(ctx, groupName)
+		if err != nil || !g.Status.IsActive() {
+			continue // skip missing or disabled groups
+		}
+		policyNames = append(policyNames, g.AttachedPolicies...)
+	}
+	return policyNames, nil
 }

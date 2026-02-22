@@ -3,6 +3,7 @@ package metadata
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 const (
 	boltBucketUsersByUsername  = "idx:users:by-username"
 	boltBucketUsersByAccessKey = "idx:users:by-access-key"
+	boltBucketGroupsByUserUUID = "idx:groups:by-user-uuid"
 )
 
 // openDB opens the bbolt database at dbPath and ensures the two index buckets exist.
@@ -29,6 +31,9 @@ func openDB(dbPath string) (*bbolt.DB, error) {
 			return err
 		}
 		if _, err := tx.CreateBucketIfNotExists([]byte(boltBucketUsersByAccessKey)); err != nil {
+			return err
+		}
+		if _, err := tx.CreateBucketIfNotExists([]byte(boltBucketGroupsByUserUUID)); err != nil {
 			return err
 		}
 		return nil
@@ -129,6 +134,118 @@ func (m *Manager) reconcileIndexes(ctx context.Context) {
 	if err != nil {
 		fmt.Printf("Warning: failed to reconcile bolt indexes: %v\n", err)
 	}
+
+	// Rebuild the group membership index from disk.
+	groups, groupsErr := m.GetGroups(ctx)
+	if groupsErr != nil {
+		fmt.Printf("Warning: failed to load groups during index reconciliation: %v\n", groupsErr)
+		return
+	}
+
+	// Build user UUID → []groupName map from all groups on disk.
+	userGroups := make(map[uuid.UUID][]string)
+	for groupName, g := range groups {
+		for _, memberUID := range g.Members {
+			userGroups[memberUID] = append(userGroups[memberUID], groupName)
+		}
+	}
+
+	groupIndexErr := m.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(boltBucketGroupsByUserUUID))
+
+		// Remove all existing entries first.
+		stale := make([][]byte, 0)
+		_ = b.ForEach(func(k, _ []byte) error {
+			stale = append(stale, append([]byte(nil), k...))
+			return nil
+		})
+		for _, k := range stale {
+			_ = b.Delete(k)
+		}
+
+		// Write fresh data.
+		for userUID, groupNames := range userGroups {
+			data, err := json.Marshal(groupNames)
+			if err != nil {
+				continue
+			}
+			if err := b.Put(userUID[:], data); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if groupIndexErr != nil {
+		fmt.Printf("Warning: failed to reconcile group membership index: %v\n", groupIndexErr)
+	}
+}
+
+// groupIndexAdd adds groupName to the set of groups recorded for userUUID in the bolt bucket b.
+// Must be called within a bolt Update transaction.
+func groupIndexAdd(b *bbolt.Bucket, groupName string, userUUID uuid.UUID) error {
+	key := userUUID[:]
+	var names []string
+	if v := b.Get(key); v != nil {
+		_ = json.Unmarshal(v, &names)
+	}
+	for _, n := range names {
+		if n == groupName {
+			return nil // already recorded
+		}
+	}
+	names = append(names, groupName)
+	data, err := json.Marshal(names)
+	if err != nil {
+		return err
+	}
+	return b.Put(key, data)
+}
+
+// groupIndexRemove removes groupName from the set of groups recorded for userUUID.
+// Must be called within a bolt Update transaction.
+func groupIndexRemove(b *bbolt.Bucket, groupName string, userUUID uuid.UUID) error {
+	key := userUUID[:]
+	v := b.Get(key)
+	if v == nil {
+		return nil
+	}
+	var names []string
+	if err := json.Unmarshal(v, &names); err != nil {
+		return b.Delete(key)
+	}
+	filtered := names[:0]
+	for _, n := range names {
+		if n != groupName {
+			filtered = append(filtered, n)
+		}
+	}
+	if len(filtered) == 0 {
+		return b.Delete(key)
+	}
+	data, err := json.Marshal(filtered)
+	if err != nil {
+		return err
+	}
+	return b.Put(key, data)
+}
+
+// GetGroupNamesForUser returns the names of all groups the user with userUUID belongs to,
+// using the bolt index (O(1) on disk for the lookup).
+func (m *Manager) GetGroupNamesForUser(ctx context.Context, userUUID uuid.UUID) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
+	var names []string
+	err := m.db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(boltBucketGroupsByUserUUID))
+		v := b.Get(userUUID[:])
+		if v == nil {
+			return nil
+		}
+		return json.Unmarshal(v, &names)
+	})
+	return names, err
 }
 
 // GetUserByUsername retrieves a user by their username using the bolt index (O(1) on disk).
