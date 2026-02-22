@@ -1,6 +1,8 @@
 package version
 
 import (
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,6 +14,6 @@ func TestVersionInfo(t *testing.T) {
 	assert.Equal(t, "none", Commit)
 	assert.Equal(t, "unknown", BuildTime)
 	assert.Equal(t, "local", BuiltBy)
-	assert.Equal(t, "unknown", GoVersion)
+	assert.True(t, strings.HasPrefix(runtime.Version(), "go1."))
 	assert.Equal(t, "unknown", GitTreeState)
 }
