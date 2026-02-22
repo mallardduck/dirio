@@ -453,13 +453,13 @@ Current status: **Phase 4.4 IN PROGRESS** — Group & Service Account admin API 
 
 ### Testing
 - ✅ Unit tests for group/service account CRUD (13 group + 12 SA tests in `tests/admin/`)
-- [ ] Integration tests for group policy inheritance
+- ✅ Integration tests for group policy inheritance
 - [ ] Service account delegation and expiration testing
 - [ ] Console stopgap feature testing
 - [ ] Integration tests with live `mc admin` CLI (manual, requires `mc` binary + running server)
-- [ ] Multi-user S3 access scenarios (alice/bob test users)
-- [ ] **Activate client filtering tests** — create alice/bob users to run existing filtering tests
-- [ ] **Create integration tests** — `tests/integration/list_filtering_test.go` for result filtering
+- ✅ Multi-user S3 access scenarios (alice/bob test users)
+- ✅ **Activate client filtering tests** — create alice/bob users to run existing filtering tests
+- ✅ **Create integration tests** — `tests/integration/list_filtering_test.go` for result filtering
 
 ---
 
