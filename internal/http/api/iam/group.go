@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 	"github.com/mallardduck/go-http-helpers/pkg/query"
 
@@ -83,9 +84,9 @@ func (s *groupHTTPService) GetGroupInfo(w http.ResponseWriter, r *http.Request) 
 // When isRemove=true: removes members from group.
 func (s *groupHTTPService) UpdateGroupMembers(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Group    string   `json:"group"`
-		Members  []string `json:"members"`
-		IsRemove bool     `json:"isRemove"`
+		Group    string      `json:"group"`
+		Members  []uuid.UUID `json:"members"`
+		IsRemove bool        `json:"isRemove"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -104,9 +105,9 @@ func (s *groupHTTPService) UpdateGroupMembers(w http.ResponseWriter, r *http.Req
 
 	if body.IsRemove {
 		// Remove members from the group
-		for _, member := range body.Members {
-			if err := s.groups.RemoveMember(ctx, body.Group, member); err != nil {
-				s.log.Error("Failed to remove member from group", "error", err, "group", body.Group, "member", member)
+		for _, memberUUID := range body.Members {
+			if err := s.groups.RemoveMember(ctx, body.Group, memberUUID.String()); err != nil {
+				s.log.Error("Failed to remove member from group", "error", err, "group", body.Group, "memberUUID", memberUUID)
 				if svcerrors.IsNotFound(err) {
 					w.WriteHeader(http.StatusNotFound)
 					return
@@ -134,7 +135,7 @@ func (s *groupHTTPService) UpdateGroupMembers(w http.ResponseWriter, r *http.Req
 
 		// Add members
 		for _, member := range body.Members {
-			if err := s.groups.AddMember(ctx, body.Group, member); err != nil {
+			if err := s.groups.AddMember(ctx, body.Group, member.String()); err != nil {
 				s.log.Error("Failed to add member to group", "error", err, "group", body.Group, "member", member)
 				if svcerrors.IsNotFound(err) {
 					// Could be group or user not found

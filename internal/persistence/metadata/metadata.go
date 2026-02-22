@@ -42,10 +42,20 @@ type Manager struct {
 	rootFS     billy.Filesystem
 	metadataFS billy.Filesystem
 
-	// userUUIDIdx provides O(1) lookup of user access key by UUID.
+	// Metadata indexes are in memory caches for critical information
 	// Populated at startup and kept in sync via CreateOrUpdateUser / DeleteUser.
-	userUUIDMu  sync.RWMutex
-	userUUIDIdx map[uuid.UUID]string // UUID → access key (username)
+
+	// usersIdx provides O(1) lookup of existing users by user UID.
+	usersMu  sync.RWMutex
+	usersIdx map[uuid.UUID]interface{}
+
+	// usernamesIdx provides O(1) lookup of user UUID key by username.
+	usernamesMu  sync.RWMutex
+	usernamesIdx map[string]uuid.UUID // username -> UUID
+
+	// accessKeysIdx provides O(1) lookup of user UUID key by access key.
+	accessKeysMu  sync.RWMutex
+	accessKeysIdx map[string]uuid.UUID // access key -> UUID
 }
 
 // Type aliases for backward compatibility
@@ -129,39 +139,61 @@ func New(rootFS billy.Filesystem) (*Manager, error) {
 	}
 
 	mgr := &Manager{
-		rootFS:      rootFS,
-		metadataFS:  metadataFS,
-		userUUIDIdx: make(map[uuid.UUID]string),
+		rootFS:        rootFS,
+		metadataFS:    metadataFS,
+		usersIdx:      make(map[uuid.UUID]interface{}),
+		usernamesIdx:  make(map[string]uuid.UUID),
+		accessKeysIdx: make(map[string]uuid.UUID),
 	}
 
-	// Build UUID → access key index from existing user files.
+	// Build in-memory indexes from existing user files.
 	// Fail-soft: log and skip users that cannot be loaded.
-	mgr.buildUserUUIDIndex(context.Background())
+	mgr.buildUsersIndex(context.Background())
+	mgr.buildUsernamesIndex(context.Background())
+	mgr.buildAccessKeysIndex(context.Background())
 
 	return mgr, nil
 }
 
-// buildUserUUIDIndex populates the in-memory UUID index from disk.
+// buildUsersIndex populates the in-memory UUID index from disk.
 // Called once at startup; individual errors are logged and skipped.
-func (m *Manager) buildUserUUIDIndex(ctx context.Context) {
-	usernames, err := m.ListUsers(ctx)
+func (m *Manager) buildUsersIndex(ctx context.Context) {
+	UIDs, err := m.ListUsers(ctx)
 	if err != nil {
 		fmt.Printf("Warning: failed to list users while building UUID index: %v\n", err)
 		return
 	}
 
-	m.userUUIDMu.Lock()
-	defer m.userUUIDMu.Unlock()
+	m.usersMu.Lock()
+	defer m.usersMu.Unlock()
 
-	for _, username := range usernames {
-		user, err := m.GetUser(ctx, username)
+	for _, UID := range UIDs {
+		// Index all user UIDs to track user existence w/o disk access.
+		m.usersIdx[UID] = nil
+	}
+}
+
+// buildUsernamesIndex populates the in-memory UUID index from disk.
+// Called once at startup; individual errors are logged and skipped.
+func (m *Manager) buildUsernamesIndex(ctx context.Context) {
+	UIDs, err := m.ListUsers(ctx)
+	if err != nil {
+		fmt.Printf("Warning: failed to list users while building UUID index: %v\n", err)
+		return
+	}
+
+	m.usernamesMu.Lock()
+	defer m.usernamesMu.Unlock()
+
+	for _, UID := range UIDs {
+		user, err := m.GetUser(ctx, UID)
 		if err != nil {
-			fmt.Printf("Warning: failed to load user %s while building UUID index: %v\n", username, err)
+			fmt.Printf("Warning: failed to load user %s while building username index: %v\n", UID, err)
 			continue
 		}
-		if user != nil && user.UUID != uuid.Nil {
+		if user != nil && user.Username != "" {
 			// Index maps UUID → username (the file key used by GetUser).
-			m.userUUIDIdx[user.UUID] = username
+			m.usernamesIdx[user.Username] = user.UUID
 		}
 	}
 }
@@ -311,12 +343,12 @@ func (m *Manager) DeleteObjectMetadata(ctx context.Context, bucket, key string) 
 }
 
 // GetUser retrieves a single user by username
-func (m *Manager) GetUser(ctx context.Context, username string) (*User, error) {
+func (m *Manager) GetUser(ctx context.Context, userUID uuid.UUID) (*User, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	userPath := filepath.Join("iam", "users", username+".json")
+	userPath := filepath.Join("iam", "users", userUID.String()+".json")
 	data, err := util.ReadFile(m.metadataFS, userPath)
 	if err != nil {
 		if isNotExist(err) {
@@ -333,14 +365,9 @@ func (m *Manager) GetUser(ctx context.Context, username string) (*User, error) {
 	// Decrypt secret key if stored encrypted.
 	decrypted, err := crypto.Decrypt(user.SecretKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt secret key for user %s: %w", username, err)
+		return nil, fmt.Errorf("failed to decrypt secret key for user %s: %w", user.Username, err)
 	}
 	user.SecretKey = decrypted
-
-	// Backwards compatibility: populate Username from filename if not set
-	if user.Username == "" {
-		user.Username = username
-	}
 
 	return &user, nil
 }
@@ -362,12 +389,12 @@ func (m *Manager) CreateOrUpdateUser(ctx context.Context, user *User) error {
 	// Generate UUID for new users or preserve existing UUID
 	if user.UUID == uuid.Nil {
 		// Check if user already exists
-		existing, err := m.GetUser(ctx, user.Username)
+		existing, err := m.GetUser(ctx, user.UUID)
 		if err == nil && existing != nil && existing.UUID != uuid.Nil {
 			// Preserve existing UUID on update
 			user.UUID = existing.UUID
 		} else {
-			// Generate new UUID for new user
+			// Generate a new UUID for a new user
 			user.UUID = uuid.New()
 		}
 	}
@@ -376,34 +403,47 @@ func (m *Manager) CreateOrUpdateUser(ctx context.Context, user *User) error {
 	user.Version = iam.UserMetadataVersion
 	user.UpdatedAt = time.Now()
 
-	if err := m.SaveUser(ctx, user.Username, user); err != nil {
+	if err := m.SaveUser(ctx, user.UUID, user); err != nil {
 		return err
 	}
 
-	// Keep UUID index in sync. Store Username (the file key) not AccessKey.
-	m.userUUIDMu.Lock()
-	m.userUUIDIdx[user.UUID] = user.Username
-	m.userUUIDMu.Unlock()
+	// Keep all indexes in sync.
+	m.usersMu.Lock()
+	m.usersIdx[user.UUID] = nil
+	m.usersMu.Unlock()
+	m.usernamesMu.Lock()
+	m.usernamesIdx[user.Username] = user.UUID
+	m.usernamesMu.Unlock()
+	m.accessKeysMu.Lock()
+	m.accessKeysIdx[user.AccessKey] = user.UUID
+	m.accessKeysMu.Unlock()
 
 	return nil
 }
 
 // UpdateUser updates an existing user's mutable fields
-func (m *Manager) UpdateUser(ctx context.Context, username string, updates *User) error {
+func (m *Manager) UpdateUser(ctx context.Context, userUID uuid.UUID, updates *User) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("context cancelled: %w", err)
 	}
 
 	// Get existing user
-	existing, err := m.GetUser(ctx, username)
+	existing, err := m.GetUser(ctx, userUID)
 	if err != nil {
 		return fmt.Errorf("failed to get existing user: %w", err)
 	}
 	if existing == nil {
-		return fmt.Errorf("user not found: %s", username)
+		return fmt.Errorf("user not found: %s", userUID)
 	}
 
 	// Update mutable fields
+	if updates.Username != "" {
+		// TODO when this happens we need to update the username index
+		existing.Username = updates.Username
+	}
+	if updates.AccessKey != "" {
+		existing.AccessKey = updates.AccessKey
+	}
 	if updates.SecretKey != "" {
 		existing.SecretKey = updates.SecretKey
 	}
@@ -418,12 +458,12 @@ func (m *Manager) UpdateUser(ctx context.Context, username string, updates *User
 	existing.UpdatedAt = time.Now()
 	existing.Version = iam.UserMetadataVersion
 
-	return m.SaveUser(ctx, username, existing)
+	return m.SaveUser(ctx, userUID, existing)
 }
 
 // SaveUser saves a single user (atomic operation).
 // The SecretKey is encrypted before writing; the in-memory user is unchanged.
-func (m *Manager) SaveUser(ctx context.Context, username string, user *User) error {
+func (m *Manager) SaveUser(ctx context.Context, userUID uuid.UUID, user *User) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("context cancelled: %w", err)
 	}
@@ -431,45 +471,51 @@ func (m *Manager) SaveUser(ctx context.Context, username string, user *User) err
 	// Encrypt secret key before persisting.
 	encryptedSecret, err := crypto.Encrypt(user.SecretKey)
 	if err != nil {
-		return fmt.Errorf("failed to encrypt secret key for user %s: %w", username, err)
+		return fmt.Errorf("failed to encrypt secret key for user %s(%s): %w", user.Username, userUID.String(), err)
 	}
 
 	// Work on a shallow copy so the in-memory user keeps the plaintext value.
 	toSave := *user
 	toSave.SecretKey = encryptedSecret
 
-	userPath := filepath.Join("iam", "users", username+".json")
+	userPath := filepath.Join("iam", "users", userUID.String()+".json")
 
 	return jsonutil.MarshalToFile(m.metadataFS, userPath, &toSave)
 }
 
 // DeleteUser removes a user
-func (m *Manager) DeleteUser(ctx context.Context, username string) error {
+func (m *Manager) DeleteUser(ctx context.Context, userUID uuid.UUID) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("context cancelled: %w", err)
 	}
 
-	// Load user first to get their UUID for index cleanup.
-	user, _ := m.GetUser(ctx, username)
+	// Load the user first to get their username for index cleanup.
+	user, _ := m.GetUser(ctx, userUID)
 
-	userPath := filepath.Join("iam", "users", username+".json")
+	userPath := filepath.Join("iam", "users", userUID.String()+".json")
 	err := m.metadataFS.Remove(userPath)
 	if err != nil && !isNotExist(err) {
 		return err
 	}
 
-	// Remove from UUID index if we had the user's UUID.
+	// Remove all indexes for the user
 	if user != nil && user.UUID != uuid.Nil {
-		m.userUUIDMu.Lock()
-		delete(m.userUUIDIdx, user.UUID)
-		m.userUUIDMu.Unlock()
+		m.usernamesMu.Lock()
+		delete(m.usernamesIdx, user.Username)
+		m.usernamesMu.Unlock()
+		m.usersMu.Lock()
+		delete(m.usersIdx, user.UUID)
+		m.usersMu.Unlock()
+		m.accessKeysMu.Lock()
+		delete(m.accessKeysIdx, user.AccessKey)
+		m.accessKeysMu.Unlock()
 	}
 
 	return nil
 }
 
-// ListUsers returns a list of all usernames
-func (m *Manager) ListUsers(ctx context.Context) ([]string, error) {
+// ListUsers returns a list of all user UIDs
+func (m *Manager) ListUsers(ctx context.Context) ([]uuid.UUID, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled: %w", err)
 	}
@@ -478,64 +524,114 @@ func (m *Manager) ListUsers(ctx context.Context) ([]string, error) {
 	entries, err := m.metadataFS.ReadDir(usersDir)
 	if err != nil {
 		if isNotExist(err) {
-			return []string{}, nil
+			return []uuid.UUID{}, nil
 		}
 		return nil, err
 	}
 
-	usernames := make([]string, 0, len(entries))
+	userUIDs := make([]uuid.UUID, 0, len(entries))
+	errs := make([]error, 0)
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
 		}
-		username := entry.Name()[:len(entry.Name())-5] // Remove .json
-		usernames = append(usernames, username)
+		rawUID := entry.Name()[:len(entry.Name())-5] // Remove .json
+		userUID, err := uuid.Parse(rawUID)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to parse UUID %s: %w", rawUID, err))
+		} else {
+			userUIDs = append(userUIDs, userUID)
+		}
 	}
 
-	return usernames, nil
+	return userUIDs, errors.Join(errs...)
 }
 
 // GetUsers retrieves all users (convenience method, loads all user files)
-func (m *Manager) GetUsers(ctx context.Context) (map[string]*User, error) {
+func (m *Manager) GetUsers(ctx context.Context) (map[uuid.UUID]*User, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	usernames, err := m.ListUsers(ctx)
+	userUIDs, err := m.ListUsers(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	users := make(map[string]*User)
-	for _, username := range usernames {
-		user, err := m.GetUser(ctx, username)
+	users := make(map[uuid.UUID]*User)
+	for _, userUID := range userUIDs {
+		user, err := m.GetUser(ctx, userUID)
 		if err != nil {
-			fmt.Printf("Warning: failed to load user %s: %v\n", username, err)
+			fmt.Printf("Warning: failed to load user %s: %v\n", userUID, err)
 			continue
 		}
 		if user != nil {
-			users[username] = user
+			users[userUID] = user
 		}
 	}
 
 	return users, nil
 }
 
-// GetUserByUUID retrieves a user by their UUID using the in-memory index (O(1)).
-func (m *Manager) GetUserByUUID(ctx context.Context, userUUID uuid.UUID) (*User, error) {
+// buildAccessKeysIndex populates the in-memory access key index from disk.
+// Called once at startup; individual errors are logged and skipped.
+func (m *Manager) buildAccessKeysIndex(ctx context.Context) {
+	UIDs, err := m.ListUsers(ctx)
+	if err != nil {
+		fmt.Printf("Warning: failed to list users while building access key index: %v\n", err)
+		return
+	}
+
+	m.accessKeysMu.Lock()
+	defer m.accessKeysMu.Unlock()
+
+	for _, UID := range UIDs {
+		user, err := m.GetUser(ctx, UID)
+		if err != nil {
+			fmt.Printf("Warning: failed to load user %s while building access key index: %v\n", UID, err)
+			continue
+		}
+		if user != nil && user.AccessKey != "" {
+			m.accessKeysIdx[user.AccessKey] = user.UUID
+		}
+	}
+}
+
+// GetUserByUUID retrieves a user by their UUID.
+func (m *Manager) GetUserByUUID(ctx context.Context, userUID uuid.UUID) (*User, error) {
+	return m.GetUser(ctx, userUID)
+}
+
+// GetUserByAccessKey retrieves a user by their access key using the in-memory index (O(1)).
+func (m *Manager) GetUserByAccessKey(ctx context.Context, accessKey string) (*User, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	m.userUUIDMu.RLock()
-	accessKey, ok := m.userUUIDIdx[userUUID]
-	m.userUUIDMu.RUnlock()
-
+	m.accessKeysMu.RLock()
+	userUID, ok := m.accessKeysIdx[accessKey]
+	m.accessKeysMu.RUnlock()
 	if !ok {
 		return nil, ErrUserNotFound
 	}
 
-	return m.GetUser(ctx, accessKey)
+	return m.GetUser(ctx, userUID)
+}
+
+// GetUserByUsername retrieves a user by their username using the in-memory index (O(1)).
+func (m *Manager) GetUserByUsername(ctx context.Context, username string) (*User, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled: %w", err)
+	}
+
+	m.usernamesMu.RLock()
+	userUID, ok := m.usernamesIdx[username]
+	m.usernamesMu.RUnlock()
+	if !ok {
+		return nil, ErrUserNotFound
+	}
+
+	return m.GetUser(ctx, userUID)
 }
 
 // GetServiceAccountByUUID retrieves a service account by their UUID.
@@ -897,26 +993,26 @@ func (m *Manager) GetGroups(ctx context.Context) (map[string]*Group, error) {
 }
 
 // AddUserToGroup adds an access key to a group's member list (idempotent).
-func (m *Manager) AddUserToGroup(ctx context.Context, groupName, accessKey string) error {
+func (m *Manager) AddUserToGroup(ctx context.Context, groupName string, userUid uuid.UUID) error {
 	g, err := m.GetGroup(ctx, groupName)
 	if err != nil {
 		return err
 	}
 
 	for _, member := range g.Members {
-		if member == accessKey {
+		if member == userUid {
 			return nil // already a member
 		}
 	}
 
-	g.Members = append(g.Members, accessKey)
+	g.Members = append(g.Members, userUid)
 	g.UpdatedAt = time.Now()
 
 	return m.SaveGroup(ctx, g)
 }
 
 // RemoveUserFromGroup removes an access key from a group's member list.
-func (m *Manager) RemoveUserFromGroup(ctx context.Context, groupName, accessKey string) error {
+func (m *Manager) RemoveUserFromGroup(ctx context.Context, groupName string, userUid uuid.UUID) error {
 	g, err := m.GetGroup(ctx, groupName)
 	if err != nil {
 		return err
@@ -924,7 +1020,7 @@ func (m *Manager) RemoveUserFromGroup(ctx context.Context, groupName, accessKey 
 
 	filtered := g.Members[:0]
 	for _, member := range g.Members {
-		if member != accessKey {
+		if member != userUid {
 			filtered = append(filtered, member)
 		}
 	}

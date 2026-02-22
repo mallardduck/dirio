@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
+
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
 	"github.com/mallardduck/dirio/pkg/iam"
@@ -72,12 +74,17 @@ func (s *Service) List(ctx context.Context) ([]string, error) {
 }
 
 // AddMember adds a user to a group (idempotent)
-func (s *Service) AddMember(ctx context.Context, groupName, accessKey string) error {
+func (s *Service) AddMember(ctx context.Context, groupName, userRawUID string) error {
 	if groupName == "" {
 		return svcerrors.NewValidationError("GroupName", "group name is required")
 	}
-	if accessKey == "" {
-		return svcerrors.NewValidationError("AccessKey", "access key is required")
+	if userRawUID == "" {
+		return svcerrors.NewValidationError("UserUID", "user UID is required")
+	}
+
+	userUID, err := uuid.Parse(userRawUID)
+	if err != nil {
+		return svcerrors.NewValidationError("UserUID", "user UID must be valid UUID value")
 	}
 
 	// Verify the group exists
@@ -86,31 +93,35 @@ func (s *Service) AddMember(ctx context.Context, groupName, accessKey string) er
 	}
 
 	// Verify the user exists
-	if _, err := s.metadata.GetUser(ctx, accessKey); err != nil {
+	if _, err := s.metadata.GetUser(ctx, userUID); err != nil {
 		if errors.Is(err, metadata.ErrUserNotFound) {
 			return svcerrors.ErrUserNotFound
 		}
 		return err
 	}
 
-	return s.metadata.AddUserToGroup(ctx, groupName, accessKey)
+	return s.metadata.AddUserToGroup(ctx, groupName, userUID)
 }
 
 // RemoveMember removes a user from a group
-func (s *Service) RemoveMember(ctx context.Context, groupName, accessKey string) error {
+func (s *Service) RemoveMember(ctx context.Context, groupName, userRawUID string) error {
 	if groupName == "" {
 		return svcerrors.NewValidationError("GroupName", "group name is required")
 	}
-	if accessKey == "" {
-		return svcerrors.NewValidationError("AccessKey", "access key is required")
+	if userRawUID == "" {
+		return svcerrors.NewValidationError("UserUID", "user UID is required")
 	}
 
+	userUID, err := uuid.Parse(userRawUID)
+	if err != nil {
+		return svcerrors.NewValidationError("UserUID", "user UID must be valid UUID value")
+	}
 	// Verify the group exists
 	if _, err := s.Get(ctx, groupName); err != nil {
 		return err
 	}
 
-	return s.metadata.RemoveUserFromGroup(ctx, groupName, accessKey)
+	return s.metadata.RemoveUserFromGroup(ctx, groupName, userUID)
 }
 
 // AttachPolicy attaches a policy to a group (idempotent)

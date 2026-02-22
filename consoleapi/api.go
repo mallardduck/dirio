@@ -6,6 +6,8 @@ package consoleapi
 import (
 	"context"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // API defines the surface the console can call into the server.
@@ -34,8 +36,8 @@ type API interface {
 	GetGroup(ctx context.Context, name string) (*Group, error)
 	CreateGroup(ctx context.Context, req CreateGroupRequest) (*Group, error)
 	DeleteGroup(ctx context.Context, name string) error
-	AddGroupMember(ctx context.Context, groupName, accessKey string) error
-	RemoveGroupMember(ctx context.Context, groupName, accessKey string) error
+	AddGroupMember(ctx context.Context, groupName, userUID string) error
+	RemoveGroupMember(ctx context.Context, groupName, userUID string) error
 	AttachGroupPolicy(ctx context.Context, groupName, policyName string) error
 	DetachGroupPolicy(ctx context.Context, groupName, policyName string) error
 	SetGroupStatus(ctx context.Context, groupName string, enabled bool) error
@@ -119,12 +121,12 @@ type CreatePolicyRequest struct {
 
 // Group represents an IAM group as seen by the console.
 type Group struct {
-	Name             string    `json:"name"`
-	Members          []string  `json:"members"`
-	AttachedPolicies []string  `json:"attachedPolicies"`
-	Status           string    `json:"status"` // "on" or "off"
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	Name             string      `json:"name"`
+	Members          []uuid.UUID `json:"members"`
+	AttachedPolicies []string    `json:"attachedPolicies"`
+	Status           string      `json:"status"` // "on" or "off"
+	CreatedAt        time.Time   `json:"createdAt"`
+	UpdatedAt        time.Time   `json:"updatedAt"`
 }
 
 // CreateGroupRequest is the input for CreateGroup.

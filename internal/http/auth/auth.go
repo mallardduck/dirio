@@ -65,7 +65,7 @@ func (a *Authenticator) ValidateCredentials(ctx context.Context, accessKey, secr
 	}
 
 	// Check user credentials (efficient single-user lookup)
-	user, err := a.metadata.GetUser(ctx, accessKey)
+	user, err := a.metadata.GetUserByAccessKey(ctx, accessKey)
 	if err != nil || user == nil {
 		return false
 	}
@@ -98,7 +98,7 @@ func (a *Authenticator) GetUserForAccessKey(ctx context.Context, accessKey strin
 	}
 
 	// Efficient single-user lookup
-	user, err := a.metadata.GetUser(ctx, accessKey)
+	user, err := a.metadata.GetUserByAccessKey(ctx, accessKey)
 	if err == nil {
 		return user, nil
 	}

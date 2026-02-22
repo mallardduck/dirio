@@ -33,7 +33,7 @@ func (s *Service) Create(ctx context.Context, req *CreateServiceAccountRequest) 
 	}
 
 	// Check uniqueness across users and service accounts
-	if _, err := s.metadata.GetUser(ctx, req.AccessKey); err == nil {
+	if _, err := s.metadata.GetUserByAccessKey(ctx, req.AccessKey); err == nil {
 		return nil, svcerrors.ErrServiceAccountAlreadyExists
 	}
 	if _, err := s.metadata.GetServiceAccount(ctx, req.AccessKey); err == nil {
@@ -43,7 +43,7 @@ func (s *Service) Create(ctx context.Context, req *CreateServiceAccountRequest) 
 	// Resolve parent user access key → UUID for stable cross-key-rotation identity.
 	var parentUserUUID *uuid.UUID
 	if req.ParentUser != nil && *req.ParentUser != "" {
-		parentUser, err := s.metadata.GetUser(ctx, *req.ParentUser)
+		parentUser, err := s.metadata.GetUserByAccessKey(ctx, *req.ParentUser)
 		if err != nil {
 			return nil, fmt.Errorf("parent user %q not found: %w", *req.ParentUser, err)
 		}

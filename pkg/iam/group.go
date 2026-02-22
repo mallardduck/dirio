@@ -3,6 +3,8 @@ package iam
 import (
 	"fmt"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Metadata format version for groups
@@ -44,7 +46,7 @@ func (s GroupStatus) String() string {
 type Group struct {
 	Version          string      `json:"version"`                    // DirIO metadata version
 	Name             string      `json:"name"`                       // Group name (immutable after creation)
-	Members          []string    `json:"members,omitempty"`          // Access keys of member users
+	Members          []uuid.UUID `json:"members,omitempty"`          // UUIDs of member users
 	AttachedPolicies []string    `json:"attachedPolicies,omitempty"` // Names of attached IAM policies
 	Status           GroupStatus `json:"status"`                     // Group status (on/off)
 	CreatedAt        time.Time   `json:"createdAt"`

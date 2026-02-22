@@ -139,9 +139,9 @@ templ GroupDetailPage(d GroupDetailData) {
 						<div class="divide-y divide-dirio-border">
 							for _, member := range d.Group.Members {
 								<div class="flex items-center justify-between py-2">
-									<span class="font-mono text-sm text-dirio-text">{ member }</span>
+									<span class="font-mono text-sm text-dirio-text">{ member.String() }</span>
 									<form method="POST" action={ PageURL("/groups/" + d.Group.Name + "/members/remove") }>
-										<input type="hidden" name="access_key" value={ member }/>
+										<input type="hidden" name="access_key" value={ member.String() }/>
 										<button
 											type="submit"
 											class="text-xs text-dirio-muted hover:text-dirio-coral transition-colors px-2 py-0.5 rounded border border-transparent hover:border-dirio-coral"

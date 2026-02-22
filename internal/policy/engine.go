@@ -40,10 +40,12 @@ func New(resolver PolicyResolver) *Engine {
 // Evaluation order (AWS-like model):
 // 1. Admin bypass - authenticated admin can do everything
 // 2. Explicit deny in bucket policy - immediately denies (irrevocable)
-// 3. Allow in bucket policy - allows if found
-// 4. IAM user policies (Phase 5) - not implemented yet
-// 5. Ownership check - resource owner has implicit access
-// 6. Default deny - if no explicit allow found
+// 3. IAM Policy Evalutions
+// 3.1. Allow in bucket policy - allows if found
+// 3.2. IAM user policies (Phase 5) - not implemented yet
+// 3.2. IAM group policies (Phase 5) - not implemented yet
+// 4. Ownership check - resource owner has implicit access
+// 5. Default deny - if no explicit allow found
 //
 // The action in req.Action should be the MAPPED permission (from ActionMapper),
 // not the route action. The authorization middleware handles this translation.

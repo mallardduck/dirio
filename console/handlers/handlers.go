@@ -360,8 +360,8 @@ func (h *Handler) GroupDelete(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GroupAddMember(w http.ResponseWriter, r *http.Request) {
 	name := teapot.URLParam(r, "group")
-	accessKey := r.FormValue("access_key")
-	if err := h.api.AddGroupMember(r.Context(), name, accessKey); err != nil {
+	userRawUID := r.FormValue("user_uid")
+	if err := h.api.AddGroupMember(r.Context(), name, userRawUID); err != nil {
 		http.Redirect(w, r, string(ui.PageURL("/groups/"+name))+"?error="+err.Error(), http.StatusSeeOther)
 		return
 	}

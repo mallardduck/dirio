@@ -397,12 +397,12 @@ func (a *Adapter) DeleteGroup(ctx context.Context, name string) error {
 	return a.services.Group().Delete(ctx, name)
 }
 
-func (a *Adapter) AddGroupMember(ctx context.Context, groupName, accessKey string) error {
-	return a.services.Group().AddMember(ctx, groupName, accessKey)
+func (a *Adapter) AddGroupMember(ctx context.Context, groupName, userUID string) error {
+	return a.services.Group().AddMember(ctx, groupName, userUID)
 }
 
-func (a *Adapter) RemoveGroupMember(ctx context.Context, groupName, accessKey string) error {
-	return a.services.Group().RemoveMember(ctx, groupName, accessKey)
+func (a *Adapter) RemoveGroupMember(ctx context.Context, groupName, userUID string) error {
+	return a.services.Group().RemoveMember(ctx, groupName, userUID)
 }
 
 func (a *Adapter) AttachGroupPolicy(ctx context.Context, groupName, policyName string) error {
@@ -653,7 +653,7 @@ func iamUserToConsole(u *iam.User) *consoleapi.User {
 func iamGroupToConsole(g *iam.Group) *consoleapi.Group {
 	members := g.Members
 	if members == nil {
-		members = []string{}
+		members = []uuid.UUID{}
 	}
 	policies := g.AttachedPolicies
 	if policies == nil {

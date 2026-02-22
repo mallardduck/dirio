@@ -37,7 +37,7 @@ func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*iam.User
 	}
 
 	// Check if user already exists
-	existing, err := s.metadata.GetUser(ctx, req.AccessKey)
+	existing, err := s.metadata.GetUserByAccessKey(ctx, req.AccessKey)
 	if err == nil && existing != nil {
 		return nil, svcerrors.ErrUserAlreadyExists
 	}
@@ -73,7 +73,7 @@ func (s *Service) Get(ctx context.Context, accessKey string) (*iam.User, error) 
 		return nil, err
 	}
 
-	user, err := s.metadata.GetUser(ctx, accessKey)
+	user, err := s.metadata.GetUserByAccessKey(ctx, accessKey)
 	if err != nil {
 		if errors.Is(err, metadata.ErrUserNotFound) {
 			return nil, svcerrors.ErrUserNotFound
@@ -133,17 +133,26 @@ func (s *Service) Delete(ctx context.Context, accessKey string) error {
 		return err
 	}
 
-	// Check if user exists
-	if _, err := s.Get(ctx, accessKey); err != nil {
+	// Check if user exists and get UUID for deletion
+	user, err := s.Get(ctx, accessKey)
+	if err != nil {
 		return err
 	}
 
-	return s.metadata.DeleteUser(ctx, accessKey)
+	return s.metadata.DeleteUser(ctx, user.UUID)
 }
 
 // List returns all user access keys
 func (s *Service) List(ctx context.Context) ([]string, error) {
-	return s.metadata.ListUsers(ctx)
+	users, err := s.metadata.GetUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(users))
+	for _, u := range users {
+		keys = append(keys, u.AccessKey)
+	}
+	return keys, nil
 }
 
 // AttachPolicy attaches a policy to a user (idempotent)

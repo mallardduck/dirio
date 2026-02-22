@@ -240,7 +240,7 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 			displayName := ownerStr // Default to UUID string
 
 			// Look up the user's username for a more friendly display name
-			user, err := s.metadata.GetUserByUUID(ctx, *bucketMeta.Owner)
+			user, err := s.metadata.GetUser(ctx, *bucketMeta.Owner)
 			if err == nil && user != nil && user.Username != "" {
 				displayName = user.Username
 			}

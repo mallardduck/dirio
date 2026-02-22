@@ -104,7 +104,7 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 				UpdatedAt:        minioUser.UpdatedAt,
 				AttachedPolicies: minioUser.AttachedPolicy,
 			}
-			if err := m.SaveUser(ctx, username, dirioUser); err != nil {
+			if err := m.SaveUser(ctx, dirioUser.UUID, dirioUser); err != nil {
 				fmt.Printf("Warning: failed to save user %s: %v\n", username, err)
 				continue
 			}
