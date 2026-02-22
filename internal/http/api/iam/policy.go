@@ -231,7 +231,18 @@ func (s policyHTTPService) SetPolicy(w http.ResponseWriter, r *http.Request) {
 	if isGroup {
 		attachErr = s.groups.AttachPolicy(r.Context(), userOrGroup, policyName)
 	} else {
-		attachErr = s.users.AttachPolicy(r.Context(), userOrGroup, policyName)
+		// Translate access key → UUID at the HTTP boundary.
+		u, err := s.users.GetByAccessKey(r.Context(), userOrGroup)
+		if err != nil {
+			s.log.Error("Failed to find user", "error", err, "accessKey", userOrGroup)
+			if svcerrors.IsNotFound(err) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		attachErr = s.users.AttachPolicy(r.Context(), u.UUID, policyName)
 	}
 	if err := attachErr; err != nil {
 		s.log.Error("Failed to attach policy", "error", err, "userOrGroup", userOrGroup, "policy", policyName, "isGroup", isGroup)
@@ -340,7 +351,18 @@ func (s policyHTTPService) DetachPolicy(w http.ResponseWriter, r *http.Request) 
 	if isGroup {
 		detachErr = s.groups.DetachPolicy(r.Context(), userOrGroup, policyName)
 	} else {
-		detachErr = s.users.DetachPolicy(r.Context(), userOrGroup, policyName)
+		// Translate access key → UUID at the HTTP boundary.
+		u, err := s.users.GetByAccessKey(r.Context(), userOrGroup)
+		if err != nil {
+			s.log.Error("Failed to find user", "error", err, "accessKey", userOrGroup)
+			if svcerrors.IsNotFound(err) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		detachErr = s.users.DetachPolicy(r.Context(), u.UUID, policyName)
 	}
 	if err := detachErr; err != nil {
 		s.log.Error("Failed to detach policy", "error", err, "userOrGroup", userOrGroup, "policy", policyName, "isGroup", isGroup)
@@ -399,8 +421,9 @@ func (s policyHTTPService) PolicyEntitiesList(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Get all users and filter by those with this policy attached
-	userKeys, err := s.users.List(r.Context())
+	// Get all users and filter by those with this policy attached.
+	// Translate back to access keys for the MinIO wire format.
+	uids, err := s.users.List(r.Context())
 	if err != nil {
 		s.log.Error("Failed to list users", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -408,14 +431,14 @@ func (s policyHTTPService) PolicyEntitiesList(w http.ResponseWriter, r *http.Req
 	}
 
 	var usersWithPolicy []string
-	for _, accessKey := range userKeys {
-		userEntity, err := s.users.Get(r.Context(), accessKey)
+	for _, uid := range uids {
+		userEntity, err := s.users.Get(r.Context(), uid)
 		if err != nil {
 			continue
 		}
 		for _, p := range userEntity.AttachedPolicies {
 			if p == policyName {
-				usersWithPolicy = append(usersWithPolicy, accessKey)
+				usersWithPolicy = append(usersWithPolicy, userEntity.AccessKey)
 				break
 			}
 		}

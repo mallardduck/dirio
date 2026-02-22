@@ -5,6 +5,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
 	validation2 "github.com/mallardduck/dirio/internal/service/validation"
@@ -25,7 +27,6 @@ func NewService(metadata *metadata.Manager) *Service {
 
 // Create creates a new user with validation
 func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*iam.User, error) {
-	// Validate inputs
 	if err := validation2.ValidateAccessKey(req.AccessKey); err != nil {
 		return nil, err
 	}
@@ -36,19 +37,17 @@ func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*iam.User
 		return nil, err
 	}
 
-	// Check if user already exists
+	// Check if access key is already taken
 	existing, err := s.metadata.GetUserByAccessKey(ctx, req.AccessKey)
 	if err == nil && existing != nil {
 		return nil, svcerrors.ErrUserAlreadyExists
 	}
 
-	// Set default status if not provided
 	status := req.Status
 	if status == "" {
 		status = iam.UserStatusActive
 	}
 
-	// Create user with automatic field management
 	user := &iam.User{
 		Version:          iam.UserMetadataVersion,
 		AccessKey:        req.AccessKey,
@@ -59,7 +58,6 @@ func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*iam.User
 		AttachedPolicies: []string{},
 	}
 
-	// Persist user
 	if err := s.metadata.CreateOrUpdateUser(ctx, user); err != nil {
 		return nil, err
 	}
@@ -67,12 +65,25 @@ func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*iam.User
 	return user, nil
 }
 
-// Get retrieves a user by access key
-func (s *Service) Get(ctx context.Context, accessKey string) (*iam.User, error) {
+// Get retrieves a user by UUID.
+func (s *Service) Get(ctx context.Context, userUID uuid.UUID) (*iam.User, error) {
+	user, err := s.metadata.GetUser(ctx, userUID)
+	if err != nil {
+		if errors.Is(err, metadata.ErrUserNotFound) {
+			return nil, svcerrors.ErrUserNotFound
+		}
+		return nil, err
+	}
+	return user, nil
+}
+
+// GetByAccessKey retrieves a user by access key. This method exists for external
+// API boundaries (e.g. the MinIO-compatible HTTP API) where access keys are the
+// wire-format identifier. Internal code should prefer Get(uuid).
+func (s *Service) GetByAccessKey(ctx context.Context, accessKey string) (*iam.User, error) {
 	if err := validation2.ValidateAccessKey(accessKey); err != nil {
 		return nil, err
 	}
-
 	user, err := s.metadata.GetUserByAccessKey(ctx, accessKey)
 	if err != nil {
 		if errors.Is(err, metadata.ErrUserNotFound) {
@@ -80,24 +91,16 @@ func (s *Service) Get(ctx context.Context, accessKey string) (*iam.User, error) 
 		}
 		return nil, err
 	}
-
 	return user, nil
 }
 
-// Update updates mutable fields of an existing user
-func (s *Service) Update(ctx context.Context, accessKey string, req *UpdateUserRequest) (*iam.User, error) {
-	// Validate access key
-	if err := validation2.ValidateAccessKey(accessKey); err != nil {
-		return nil, err
-	}
-
-	// Get existing user
-	user, err := s.Get(ctx, accessKey)
+// Update updates mutable fields of an existing user.
+func (s *Service) Update(ctx context.Context, userUID uuid.UUID, req *UpdateUserRequest) (*iam.User, error) {
+	user, err := s.Get(ctx, userUID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Update mutable fields
 	if req.SecretKey != nil {
 		if err := validation2.ValidateSecretKey(*req.SecretKey); err != nil {
 			return nil, err
@@ -116,10 +119,8 @@ func (s *Service) Update(ctx context.Context, accessKey string, req *UpdateUserR
 		user.AttachedPolicies = *req.AttachedPolicies
 	}
 
-	// Update timestamp
 	user.UpdatedAt = time.Now()
 
-	// Persist changes
 	if err := s.metadata.CreateOrUpdateUser(ctx, user); err != nil {
 		return nil, err
 	}
@@ -127,44 +128,25 @@ func (s *Service) Update(ctx context.Context, accessKey string, req *UpdateUserR
 	return user, nil
 }
 
-// Delete deletes a user by access key
-func (s *Service) Delete(ctx context.Context, accessKey string) error {
-	if err := validation2.ValidateAccessKey(accessKey); err != nil {
+// Delete deletes a user by UUID.
+func (s *Service) Delete(ctx context.Context, userUID uuid.UUID) error {
+	if _, err := s.Get(ctx, userUID); err != nil {
 		return err
 	}
-
-	// Check if user exists and get UUID for deletion
-	user, err := s.Get(ctx, accessKey)
-	if err != nil {
-		return err
-	}
-
-	return s.metadata.DeleteUser(ctx, user.UUID)
+	return s.metadata.DeleteUser(ctx, userUID)
 }
 
-// List returns all user access keys
-func (s *Service) List(ctx context.Context) ([]string, error) {
-	users, err := s.metadata.GetUsers(ctx)
-	if err != nil {
-		return nil, err
-	}
-	keys := make([]string, 0, len(users))
-	for _, u := range users {
-		keys = append(keys, u.AccessKey)
-	}
-	return keys, nil
+// List returns all user UUIDs.
+func (s *Service) List(ctx context.Context) ([]uuid.UUID, error) {
+	return s.metadata.ListUsers(ctx)
 }
 
-// AttachPolicy attaches a policy to a user (idempotent)
-func (s *Service) AttachPolicy(ctx context.Context, accessKey, policyName string) error {
-	if err := validation2.ValidateAccessKey(accessKey); err != nil {
-		return err
-	}
+// AttachPolicy attaches a policy to a user (idempotent).
+func (s *Service) AttachPolicy(ctx context.Context, userUID uuid.UUID, policyName string) error {
 	if err := validation2.ValidatePolicyName(policyName); err != nil {
 		return err
 	}
 
-	// Verify the policy exists before attaching
 	if _, err := s.metadata.GetPolicy(ctx, policyName); err != nil {
 		if errors.Is(err, metadata.ErrPolicyNotFound) {
 			return svcerrors.ErrPolicyNotFound
@@ -172,42 +154,34 @@ func (s *Service) AttachPolicy(ctx context.Context, accessKey, policyName string
 		return err
 	}
 
-	// Get existing user
-	user, err := s.Get(ctx, accessKey)
+	user, err := s.Get(ctx, userUID)
 	if err != nil {
 		return err
 	}
 
-	// Check if policy is already attached
 	for _, p := range user.AttachedPolicies {
 		if p == policyName {
-			return nil // Already attached, idempotent
+			return nil // idempotent
 		}
 	}
 
-	// Attach policy
 	user.AttachedPolicies = append(user.AttachedPolicies, policyName)
 	user.UpdatedAt = time.Now()
 
 	return s.metadata.CreateOrUpdateUser(ctx, user)
 }
 
-// DetachPolicy detaches a policy from a user
-func (s *Service) DetachPolicy(ctx context.Context, accessKey, policyName string) error {
-	if err := validation2.ValidateAccessKey(accessKey); err != nil {
-		return err
-	}
+// DetachPolicy detaches a policy from a user.
+func (s *Service) DetachPolicy(ctx context.Context, userUID uuid.UUID, policyName string) error {
 	if err := validation2.ValidatePolicyName(policyName); err != nil {
 		return err
 	}
 
-	// Get existing user
-	user, err := s.Get(ctx, accessKey)
+	user, err := s.Get(ctx, userUID)
 	if err != nil {
 		return err
 	}
 
-	// Remove policy from attached policies
 	newPolicies := make([]string, 0, len(user.AttachedPolicies))
 	for _, p := range user.AttachedPolicies {
 		if p != policyName {

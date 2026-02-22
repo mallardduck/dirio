@@ -146,7 +146,7 @@ func (s *Storage) PutObject(ctx context.Context, bucket, key string, content io.
 		}
 	}
 
-	// Create temporary file in the same directory for atomic rename
+	// Create a temporary file in the same directory for atomic rename
 	// Use a generated name instead of TempFile to avoid path issues with scoped filesystems
 	tmpName := fmt.Sprintf(".tmp-%d", time.Now().UnixNano())
 	tmpPath := filepath.Join(dir, tmpName)
@@ -158,12 +158,6 @@ func (s *Storage) PutObject(ctx context.Context, bucket, key string, content io.
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
-	defer func(bucketFS billy.Filesystem, filename string) {
-		err := bucketFS.Remove(filename)
-		if err != nil {
-			s.log.Warn("failed to remove temp file", "filename", filename, "error", err)
-		}
-	}(bucketFS, tmpPath) // Cleanup on failure
 
 	// Calculate MD5 hash while writing
 	hash := md5.New()
@@ -204,7 +198,7 @@ func (s *Storage) PutObject(ctx context.Context, bucket, key string, content io.
 		return "", fmt.Errorf("context cancelled before finalizing: %w", err)
 	}
 
-	// Atomically rename temp file to final location
+	// Atomically rename the temp file to the final location
 	if err := bucketFS.Rename(tmpPath, objectPath); err != nil {
 		return "", fmt.Errorf("failed to rename object: %w", err)
 	}

@@ -73,26 +73,16 @@ func (s *Service) List(ctx context.Context) ([]string, error) {
 	return s.metadata.ListGroupNames(ctx)
 }
 
-// AddMember adds a user to a group (idempotent)
-func (s *Service) AddMember(ctx context.Context, groupName, userRawUID string) error {
+// AddMember adds a user to a group (idempotent).
+func (s *Service) AddMember(ctx context.Context, groupName string, userUID uuid.UUID) error {
 	if groupName == "" {
 		return svcerrors.NewValidationError("GroupName", "group name is required")
 	}
-	if userRawUID == "" {
-		return svcerrors.NewValidationError("UserUID", "user UID is required")
-	}
 
-	userUID, err := uuid.Parse(userRawUID)
-	if err != nil {
-		return svcerrors.NewValidationError("UserUID", "user UID must be valid UUID value")
-	}
-
-	// Verify the group exists
 	if _, err := s.Get(ctx, groupName); err != nil {
 		return err
 	}
 
-	// Verify the user exists
 	if _, err := s.metadata.GetUser(ctx, userUID); err != nil {
 		if errors.Is(err, metadata.ErrUserNotFound) {
 			return svcerrors.ErrUserNotFound
@@ -103,20 +93,12 @@ func (s *Service) AddMember(ctx context.Context, groupName, userRawUID string) e
 	return s.metadata.AddUserToGroup(ctx, groupName, userUID)
 }
 
-// RemoveMember removes a user from a group
-func (s *Service) RemoveMember(ctx context.Context, groupName, userRawUID string) error {
+// RemoveMember removes a user from a group.
+func (s *Service) RemoveMember(ctx context.Context, groupName string, userUID uuid.UUID) error {
 	if groupName == "" {
 		return svcerrors.NewValidationError("GroupName", "group name is required")
 	}
-	if userRawUID == "" {
-		return svcerrors.NewValidationError("UserUID", "user UID is required")
-	}
 
-	userUID, err := uuid.Parse(userRawUID)
-	if err != nil {
-		return svcerrors.NewValidationError("UserUID", "user UID must be valid UUID value")
-	}
-	// Verify the group exists
 	if _, err := s.Get(ctx, groupName); err != nil {
 		return err
 	}

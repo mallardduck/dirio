@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/mallardduck/dirio/consoleapi"
-	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/policy/variables"
 	"github.com/mallardduck/dirio/internal/service"
@@ -58,14 +57,14 @@ func NewAdapter(services *service.ServicesFactory) *Adapter {
 // --- Users -------------------------------------------------------------------
 
 func (a *Adapter) ListUsers(ctx context.Context) ([]*consoleapi.User, error) {
-	keys, err := a.services.User().List(ctx)
+	uids, err := a.services.User().List(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	users := make([]*consoleapi.User, 0, len(keys))
-	for _, key := range keys {
-		u, err := a.services.User().Get(ctx, key)
+	users := make([]*consoleapi.User, 0, len(uids))
+	for _, uid := range uids {
+		u, err := a.services.User().Get(ctx, uid)
 		if err != nil {
 			continue // skip users that can't be fetched
 		}
@@ -80,10 +79,9 @@ func (a *Adapter) GetUser(ctx context.Context, uuidStr string) (*consoleapi.User
 	if err != nil {
 		return nil, fmt.Errorf("invalid UUID: %w", err)
 	}
-
-	u, err := a.services.Metadata().GetUserByUUID(ctx, uUUID)
+	u, err := a.services.User().Get(ctx, uUUID)
 	if err != nil {
-		if errors.Is(err, metadata.ErrUserNotFound) {
+		if errors.Is(err, svcerrors.ErrUserNotFound) {
 			return nil, fmt.Errorf("user not found: %s", uuidStr)
 		}
 		return nil, err
@@ -96,10 +94,9 @@ func (a *Adapter) GetUserSecret(ctx context.Context, uuidStr string) (string, er
 	if err != nil {
 		return "", fmt.Errorf("invalid UUID: %w", err)
 	}
-
-	u, err := a.services.Metadata().GetUserByUUID(ctx, uUUID)
+	u, err := a.services.User().Get(ctx, uUUID)
 	if err != nil {
-		if errors.Is(err, metadata.ErrUserNotFound) {
+		if errors.Is(err, svcerrors.ErrUserNotFound) {
 			return "", fmt.Errorf("user not found: %s", uuidStr)
 		}
 		return "", err
@@ -123,12 +120,7 @@ func (a *Adapter) UpdateUser(ctx context.Context, uuidStr string, req consoleapi
 	if err != nil {
 		return nil, fmt.Errorf("invalid UUID: %w", err)
 	}
-	u, err := a.services.Metadata().GetUserByUUID(ctx, uUUID)
-	if err != nil {
-		return nil, err
-	}
-
-	updated, err := a.services.User().Update(ctx, u.AccessKey, &svcuser.UpdateUserRequest{
+	updated, err := a.services.User().Update(ctx, uUUID, &svcuser.UpdateUserRequest{
 		SecretKey: req.SecretKey,
 	})
 	if err != nil {
@@ -142,11 +134,7 @@ func (a *Adapter) DeleteUser(ctx context.Context, uuidStr string) error {
 	if err != nil {
 		return fmt.Errorf("invalid UUID: %w", err)
 	}
-	u, err := a.services.Metadata().GetUserByUUID(ctx, uUUID)
-	if err != nil {
-		return err
-	}
-	return a.services.User().Delete(ctx, u.AccessKey)
+	return a.services.User().Delete(ctx, uUUID)
 }
 
 func (a *Adapter) SetUserStatus(ctx context.Context, uuidStr string, enabled bool) error {
@@ -154,16 +142,11 @@ func (a *Adapter) SetUserStatus(ctx context.Context, uuidStr string, enabled boo
 	if err != nil {
 		return fmt.Errorf("invalid UUID: %w", err)
 	}
-	u, err := a.services.Metadata().GetUserByUUID(ctx, uUUID)
-	if err != nil {
-		return err
-	}
-
 	status := iam.UserStatusActive
 	if !enabled {
 		status = iam.UserStatusDisabled
 	}
-	_, err = a.services.User().Update(ctx, u.AccessKey, &svcuser.UpdateUserRequest{
+	_, err = a.services.User().Update(ctx, uUUID, &svcuser.UpdateUserRequest{
 		Status: &status,
 	})
 	return err
@@ -221,11 +204,19 @@ func (a *Adapter) DeletePolicy(ctx context.Context, name string) error {
 }
 
 func (a *Adapter) AttachPolicy(ctx context.Context, policyName, accessKey string) error {
-	return a.services.User().AttachPolicy(ctx, accessKey, policyName)
+	u, err := a.services.User().GetByAccessKey(ctx, accessKey)
+	if err != nil {
+		return err
+	}
+	return a.services.User().AttachPolicy(ctx, u.UUID, policyName)
 }
 
 func (a *Adapter) DetachPolicy(ctx context.Context, policyName, accessKey string) error {
-	return a.services.User().DetachPolicy(ctx, accessKey, policyName)
+	u, err := a.services.User().GetByAccessKey(ctx, accessKey)
+	if err != nil {
+		return err
+	}
+	return a.services.User().DetachPolicy(ctx, u.UUID, policyName)
 }
 
 // --- Buckets -----------------------------------------------------------------
@@ -331,7 +322,7 @@ func (a *Adapter) GetBucketOwner(ctx context.Context, bucket string) (*consoleap
 }
 
 func (a *Adapter) TransferBucketOwnership(ctx context.Context, bucket, newOwnerAccessKey string) error {
-	user, err := a.services.User().Get(ctx, newOwnerAccessKey)
+	user, err := a.services.User().GetByAccessKey(ctx, newOwnerAccessKey)
 	if err != nil {
 		if errors.Is(err, svcerrors.ErrUserNotFound) {
 			return fmt.Errorf("user not found: %s", newOwnerAccessKey)
@@ -398,11 +389,19 @@ func (a *Adapter) DeleteGroup(ctx context.Context, name string) error {
 }
 
 func (a *Adapter) AddGroupMember(ctx context.Context, groupName, userUID string) error {
-	return a.services.Group().AddMember(ctx, groupName, userUID)
+	uid, err := uuid.Parse(userUID)
+	if err != nil {
+		return fmt.Errorf("invalid user UUID: %w", err)
+	}
+	return a.services.Group().AddMember(ctx, groupName, uid)
 }
 
 func (a *Adapter) RemoveGroupMember(ctx context.Context, groupName, userUID string) error {
-	return a.services.Group().RemoveMember(ctx, groupName, userUID)
+	uid, err := uuid.Parse(userUID)
+	if err != nil {
+		return fmt.Errorf("invalid user UUID: %w", err)
+	}
+	return a.services.Group().RemoveMember(ctx, groupName, uid)
 }
 
 func (a *Adapter) AttachGroupPolicy(ctx context.Context, groupName, policyName string) error {
@@ -537,7 +536,7 @@ func (a *Adapter) SetServiceAccountStatus(ctx context.Context, uuidStr string, e
 // --- Policy Observability ----------------------------------------------------
 
 func (a *Adapter) GetEffectivePermissions(ctx context.Context, accessKey, bucket string) (*consoleapi.EffectivePermissions, error) {
-	iamUser, err := a.services.User().Get(ctx, accessKey)
+	iamUser, err := a.services.User().GetByAccessKey(ctx, accessKey)
 	if err != nil {
 		if errors.Is(err, svcerrors.ErrUserNotFound) {
 			return nil, fmt.Errorf("user not found: %s", accessKey)
@@ -586,7 +585,7 @@ func (a *Adapter) GetEffectivePermissions(ctx context.Context, accessKey, bucket
 }
 
 func (a *Adapter) SimulateRequest(ctx context.Context, req consoleapi.SimulateRequest) (*consoleapi.SimulateResult, error) {
-	iamUser, err := a.services.User().Get(ctx, req.AccessKey)
+	iamUser, err := a.services.User().GetByAccessKey(ctx, req.AccessKey)
 	if err != nil {
 		if errors.Is(err, svcerrors.ErrUserNotFound) {
 			return nil, fmt.Errorf("user not found: %s", req.AccessKey)

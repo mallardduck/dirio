@@ -106,7 +106,7 @@ func (s *groupHTTPService) UpdateGroupMembers(w http.ResponseWriter, r *http.Req
 	if body.IsRemove {
 		// Remove members from the group
 		for _, memberUUID := range body.Members {
-			if err := s.groups.RemoveMember(ctx, body.Group, memberUUID.String()); err != nil {
+			if err := s.groups.RemoveMember(ctx, body.Group, memberUUID); err != nil {
 				s.log.Error("Failed to remove member from group", "error", err, "group", body.Group, "memberUUID", memberUUID)
 				if svcerrors.IsNotFound(err) {
 					w.WriteHeader(http.StatusNotFound)
@@ -135,7 +135,7 @@ func (s *groupHTTPService) UpdateGroupMembers(w http.ResponseWriter, r *http.Req
 
 		// Add members
 		for _, member := range body.Members {
-			if err := s.groups.AddMember(ctx, body.Group, member.String()); err != nil {
+			if err := s.groups.AddMember(ctx, body.Group, member); err != nil {
 				s.log.Error("Failed to add member to group", "error", err, "group", body.Group, "member", member)
 				if svcerrors.IsNotFound(err) {
 					// Could be group or user not found

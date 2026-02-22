@@ -26,18 +26,26 @@ type userHTTPService struct {
 }
 
 func (s *userHTTPService) ListUsers(w http.ResponseWriter, r *http.Request) {
-	usernames, err := s.users.List(r.Context())
+	uids, err := s.users.List(r.Context())
 	if err != nil {
 		s.log.Error("Failed to list users", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
+	// MinIO API expects access keys; translate UUID list to access key list.
+	accessKeys := make([]string, 0, len(uids))
+	for _, uid := range uids {
+		u, err := s.users.Get(r.Context(), uid)
+		if err != nil {
+			continue
+		}
+		accessKeys = append(accessKeys, u.AccessKey)
+	}
+
 	w.Header().Set(headers.ContentType, "application/json")
-	err = json.NewEncoder(w).Encode(usernames)
-	if err != nil {
+	if err := json.NewEncoder(w).Encode(accessKeys); err != nil {
 		s.log.Error("Failed to marshal response", "error", err)
-		return
 	}
 }
 
@@ -49,7 +57,6 @@ func (s *userHTTPService) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The accessKey comes from query parameter
 	accessKey := query.String(r, "accessKey", "")
 	if accessKey == "" {
 		s.log.Error("Missing accessKey parameter")
@@ -57,7 +64,6 @@ func (s *userHTTPService) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the authenticated admin user from context
 	adminUser := auth.GetRequestUser(r.Context())
 	if adminUser == nil {
 		s.log.Error("No authenticated user in context")
@@ -65,7 +71,6 @@ func (s *userHTTPService) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Decrypt the body using the admin's secret key
 	decryptedData, err := madmin.DecryptData(adminUser.SecretKey, bytes.NewReader(bodyBytes))
 	if err != nil {
 		s.log.Error("Failed to decrypt request body", "error", err)
@@ -73,7 +78,6 @@ func (s *userHTTPService) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Log request details for debugging
 	s.log.With(
 		"request_host", r.URL.Host,
 		"request_query", r.URL.Query(),
@@ -93,27 +97,20 @@ func (s *userHTTPService) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	secretKey := body["secretKey"]
 	enabled := body["status"] == "enabled"
-	s.log.With(
-		"accessKey", accessKey,
-		"adminUser", adminUser.AccessKey,
-	).Info("Creating user")
+	s.log.With("accessKey", accessKey, "adminUser", adminUser.AccessKey).Info("Creating user")
 
 	status := iamPkg.UserStatusDisabled
 	if enabled {
 		status = iamPkg.UserStatusActive
 	}
 
-	// Use the user service to create the user
 	_, err = s.users.Create(r.Context(), &user.CreateUserRequest{
 		AccessKey: accessKey,
 		SecretKey: secretKey,
 		Status:    status,
 	})
-
 	if err != nil {
 		s.log.Error("Failed to create user", "error", err)
-
-		// Map service errors to HTTP status codes
 		if svcerrors.IsAlreadyExists(err) {
 			w.WriteHeader(http.StatusConflict)
 			return
@@ -131,13 +128,12 @@ func (s *userHTTPService) CreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *userHTTPService) RemoveUser(w http.ResponseWriter, r *http.Request) {
-	username := query.String(r, "accessKey", "")
+	accessKey := query.String(r, "accessKey", "")
 
-	err := s.users.Delete(r.Context(), username)
+	// Translate access key → UUID at the HTTP boundary.
+	u, err := s.users.GetByAccessKey(r.Context(), accessKey)
 	if err != nil {
-		s.log.Error("Failed to delete user", "error", err, "username", username)
-
-		// Map service errors to HTTP status codes
+		s.log.Error("Failed to find user", "error", err, "accessKey", accessKey)
 		if svcerrors.IsNotFound(err) {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -150,7 +146,13 @@ func (s *userHTTPService) RemoveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.log.With("username", username).Info("User deleted successfully")
+	if err := s.users.Delete(r.Context(), u.UUID); err != nil {
+		s.log.Error("Failed to delete user", "error", err, "accessKey", accessKey)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	s.log.With("accessKey", accessKey).Info("User deleted successfully")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -162,10 +164,9 @@ func (s *userHTTPService) InfoUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userEntity, err := s.users.Get(r.Context(), accessKey)
+	userEntity, err := s.users.GetByAccessKey(r.Context(), accessKey)
 	if err != nil {
-		s.log.Error("Failed to get userEntity", "error", err, "accessKey", accessKey)
-
+		s.log.Error("Failed to get user", "error", err, "accessKey", accessKey)
 		if svcerrors.IsNotFound(err) {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -178,7 +179,6 @@ func (s *userHTTPService) InfoUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert to MinIO format
 	response := map[string]interface{}{
 		"accessKey":        userEntity.AccessKey,
 		"status":           userEntity.Status,
@@ -203,14 +203,12 @@ func (s *userHTTPService) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
 	if status == "" {
 		s.log.Error("Missing status parameter")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	// Convert MinIO status format (enabled/disabled) to our format (on/off)
 	var userStatus iamPkg.UserStatus
 	switch status {
 	case "enabled":
@@ -223,14 +221,24 @@ func (s *userHTTPService) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Update the user status
-	_, err := s.users.Update(r.Context(), accessKey, &user.UpdateUserRequest{
-		Status: &userStatus,
-	})
-
+	// Translate access key → UUID at the HTTP boundary.
+	u, err := s.users.GetByAccessKey(r.Context(), accessKey)
 	if err != nil {
-		s.log.Error("Failed to update user status", "error", err, "accessKey", accessKey)
+		s.log.Error("Failed to find user", "error", err, "accessKey", accessKey)
+		if svcerrors.IsNotFound(err) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if svcerrors.IsValidation(err) {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
+	if _, err := s.users.Update(r.Context(), u.UUID, &user.UpdateUserRequest{Status: &userStatus}); err != nil {
+		s.log.Error("Failed to update user status", "error", err, "accessKey", accessKey)
 		if svcerrors.IsNotFound(err) {
 			w.WriteHeader(http.StatusNotFound)
 			return
