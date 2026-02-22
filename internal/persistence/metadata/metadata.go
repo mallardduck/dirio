@@ -538,6 +538,24 @@ func (m *Manager) GetUserByUUID(ctx context.Context, userUUID uuid.UUID) (*User,
 	return m.GetUser(ctx, accessKey)
 }
 
+// GetServiceAccountByUUID retrieves a service account by their UUID.
+func (m *Manager) GetServiceAccountByUUID(ctx context.Context, saUUID uuid.UUID) (*ServiceAccount, error) {
+	keys, err := m.ListServiceAccountKeys(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, key := range keys {
+		sa, err := m.GetServiceAccount(ctx, key)
+		if err != nil {
+			continue
+		}
+		if sa.UUID == saUUID {
+			return sa, nil
+		}
+	}
+	return nil, ErrServiceAccountNotFound
+}
+
 // SavePolicy saves a single policy
 func (m *Manager) SavePolicy(ctx context.Context, policy *Policy) error {
 	if err := ctx.Err(); err != nil {

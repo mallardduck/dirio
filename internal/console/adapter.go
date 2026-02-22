@@ -9,7 +9,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/mallardduck/dirio/consoleapi"
+	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/policy/variables"
 	"github.com/mallardduck/dirio/internal/service"
@@ -17,6 +20,7 @@ import (
 	svcgroup "github.com/mallardduck/dirio/internal/service/group"
 	svcpolicy "github.com/mallardduck/dirio/internal/service/policy"
 	svcs3 "github.com/mallardduck/dirio/internal/service/s3"
+	svcsacct "github.com/mallardduck/dirio/internal/service/serviceaccount"
 	svcuser "github.com/mallardduck/dirio/internal/service/user"
 	"github.com/mallardduck/dirio/pkg/iam"
 	s3types "github.com/mallardduck/dirio/pkg/s3types"
@@ -71,15 +75,36 @@ func (a *Adapter) ListUsers(ctx context.Context) ([]*consoleapi.User, error) {
 	return users, nil
 }
 
-func (a *Adapter) GetUser(ctx context.Context, accessKey string) (*consoleapi.User, error) {
-	u, err := a.services.User().Get(ctx, accessKey)
+func (a *Adapter) GetUser(ctx context.Context, uuidStr string) (*consoleapi.User, error) {
+	uUUID, err := uuid.Parse(uuidStr)
 	if err != nil {
-		if errors.Is(err, svcerrors.ErrUserNotFound) {
-			return nil, fmt.Errorf("user not found: %s", accessKey)
+		return nil, fmt.Errorf("invalid UUID: %w", err)
+	}
+
+	u, err := a.services.Metadata().GetUserByUUID(ctx, uUUID)
+	if err != nil {
+		if errors.Is(err, metadata.ErrUserNotFound) {
+			return nil, fmt.Errorf("user not found: %s", uuidStr)
 		}
 		return nil, err
 	}
 	return iamUserToConsole(u), nil
+}
+
+func (a *Adapter) GetUserSecret(ctx context.Context, uuidStr string) (string, error) {
+	uUUID, err := uuid.Parse(uuidStr)
+	if err != nil {
+		return "", fmt.Errorf("invalid UUID: %w", err)
+	}
+
+	u, err := a.services.Metadata().GetUserByUUID(ctx, uUUID)
+	if err != nil {
+		if errors.Is(err, metadata.ErrUserNotFound) {
+			return "", fmt.Errorf("user not found: %s", uuidStr)
+		}
+		return "", err
+	}
+	return u.SecretKey, nil
 }
 
 func (a *Adapter) CreateUser(ctx context.Context, req consoleapi.CreateUserRequest) (*consoleapi.User, error) {
@@ -93,16 +118,52 @@ func (a *Adapter) CreateUser(ctx context.Context, req consoleapi.CreateUserReque
 	return iamUserToConsole(u), nil
 }
 
-func (a *Adapter) DeleteUser(ctx context.Context, accessKey string) error {
-	return a.services.User().Delete(ctx, accessKey)
+func (a *Adapter) UpdateUser(ctx context.Context, uuidStr string, req consoleapi.UpdateUserRequest) (*consoleapi.User, error) {
+	uUUID, err := uuid.Parse(uuidStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid UUID: %w", err)
+	}
+	u, err := a.services.Metadata().GetUserByUUID(ctx, uUUID)
+	if err != nil {
+		return nil, err
+	}
+
+	updated, err := a.services.User().Update(ctx, u.AccessKey, &svcuser.UpdateUserRequest{
+		SecretKey: req.SecretKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return iamUserToConsole(updated), nil
 }
 
-func (a *Adapter) SetUserStatus(ctx context.Context, accessKey string, enabled bool) error {
+func (a *Adapter) DeleteUser(ctx context.Context, uuidStr string) error {
+	uUUID, err := uuid.Parse(uuidStr)
+	if err != nil {
+		return fmt.Errorf("invalid UUID: %w", err)
+	}
+	u, err := a.services.Metadata().GetUserByUUID(ctx, uUUID)
+	if err != nil {
+		return err
+	}
+	return a.services.User().Delete(ctx, u.AccessKey)
+}
+
+func (a *Adapter) SetUserStatus(ctx context.Context, uuidStr string, enabled bool) error {
+	uUUID, err := uuid.Parse(uuidStr)
+	if err != nil {
+		return fmt.Errorf("invalid UUID: %w", err)
+	}
+	u, err := a.services.Metadata().GetUserByUUID(ctx, uUUID)
+	if err != nil {
+		return err
+	}
+
 	status := iam.UserStatusActive
 	if !enabled {
 		status = iam.UserStatusDisabled
 	}
-	_, err := a.services.User().Update(ctx, accessKey, &svcuser.UpdateUserRequest{
+	_, err = a.services.User().Update(ctx, u.AccessKey, &svcuser.UpdateUserRequest{
 		Status: &status,
 	})
 	return err
@@ -360,6 +421,119 @@ func (a *Adapter) SetGroupStatus(ctx context.Context, groupName string, enabled 
 	return a.services.Group().SetStatus(ctx, groupName, status)
 }
 
+// --- Service Accounts --------------------------------------------------------
+
+func (a *Adapter) ListServiceAccounts(ctx context.Context) ([]*consoleapi.ServiceAccount, error) {
+	keys, err := a.services.ServiceAccount().List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	sas := make([]*consoleapi.ServiceAccount, 0, len(keys))
+	for _, key := range keys {
+		sa, err := a.services.ServiceAccount().Get(ctx, key)
+		if err != nil {
+			continue
+		}
+		sas = append(sas, iamServiceAccountToConsole(ctx, a.services, sa))
+	}
+
+	return sas, nil
+}
+
+func (a *Adapter) GetServiceAccount(ctx context.Context, uuidStr string) (*consoleapi.ServiceAccount, error) {
+	saUUID, err := uuid.Parse(uuidStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid UUID: %w", err)
+	}
+	sa, err := a.services.Metadata().GetServiceAccountByUUID(ctx, saUUID)
+	if err != nil {
+		return nil, err
+	}
+	return iamServiceAccountToConsole(ctx, a.services, sa), nil
+}
+
+func (a *Adapter) GetServiceAccountSecret(ctx context.Context, uuidStr string) (string, error) {
+	saUUID, err := uuid.Parse(uuidStr)
+	if err != nil {
+		return "", fmt.Errorf("invalid UUID: %w", err)
+	}
+
+	sa, err := a.services.Metadata().GetServiceAccountByUUID(ctx, saUUID)
+	if err != nil {
+		return "", err
+	}
+	return sa.SecretKey, nil
+}
+
+func (a *Adapter) CreateServiceAccount(ctx context.Context, req consoleapi.CreateServiceAccountRequest) (*consoleapi.ServiceAccount, error) {
+	var parentUser *string
+	if req.ParentUser != "" {
+		parentUser = &req.ParentUser
+	}
+
+	sa, err := a.services.ServiceAccount().Create(ctx, &svcsacct.CreateServiceAccountRequest{
+		AccessKey:  req.AccessKey,
+		SecretKey:  req.SecretKey,
+		ParentUser: parentUser,
+		PolicyMode: iam.PolicyMode(req.PolicyMode),
+		ExpiresAt:  req.ExpiresAt,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return iamServiceAccountToConsole(ctx, a.services, sa), nil
+}
+
+func (a *Adapter) DeleteServiceAccount(ctx context.Context, uuidStr string) error {
+	saUUID, err := uuid.Parse(uuidStr)
+	if err != nil {
+		return fmt.Errorf("invalid UUID: %w", err)
+	}
+	sa, err := a.services.Metadata().GetServiceAccountByUUID(ctx, saUUID)
+	if err != nil {
+		return err
+	}
+	return a.services.ServiceAccount().Delete(ctx, sa.AccessKey)
+}
+
+func (a *Adapter) UpdateServiceAccount(ctx context.Context, uuidStr string, req consoleapi.UpdateServiceAccountRequest) (*consoleapi.ServiceAccount, error) {
+	saUUID, err := uuid.Parse(uuidStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid UUID: %w", err)
+	}
+	sa, err := a.services.Metadata().GetServiceAccountByUUID(ctx, saUUID)
+	if err != nil {
+		return nil, err
+	}
+
+	updated, err := a.services.ServiceAccount().Update(ctx, sa.AccessKey, &svcsacct.UpdateServiceAccountRequest{
+		SecretKey: req.SecretKey,
+		ExpiresAt: req.ExpiresAt,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return iamServiceAccountToConsole(ctx, a.services, updated), nil
+}
+
+func (a *Adapter) SetServiceAccountStatus(ctx context.Context, uuidStr string, enabled bool) error {
+	saUUID, err := uuid.Parse(uuidStr)
+	if err != nil {
+		return fmt.Errorf("invalid UUID: %w", err)
+	}
+	sa, err := a.services.Metadata().GetServiceAccountByUUID(ctx, saUUID)
+	if err != nil {
+		return err
+	}
+
+	status := iam.ServiceAcctStatusActive
+	if !enabled {
+		status = iam.ServiceAcctStatusDisabled
+	}
+	return a.services.ServiceAccount().SetStatus(ctx, sa.AccessKey, status)
+}
+
 // --- Policy Observability ----------------------------------------------------
 
 func (a *Adapter) GetEffectivePermissions(ctx context.Context, accessKey, bucket string) (*consoleapi.EffectivePermissions, error) {
@@ -467,6 +641,7 @@ func iamUserToConsole(u *iam.User) *consoleapi.User {
 		policies = []string{}
 	}
 	return &consoleapi.User{
+		UUID:             u.UUID.String(),
 		AccessKey:        u.AccessKey,
 		Username:         u.Username,
 		Status:           string(u.Status),
@@ -505,4 +680,29 @@ func iamPolicyToConsole(p *iam.Policy) (*consoleapi.Policy, error) {
 		CreateDate:     p.CreateDate,
 		UpdateDate:     p.UpdateDate,
 	}, nil
+}
+
+func iamServiceAccountToConsole(ctx context.Context, svcs *service.ServicesFactory, sa *iam.ServiceAccount) *consoleapi.ServiceAccount {
+	parentAccessKey := ""
+	parentUUID := ""
+	if sa.ParentUserUUID != nil {
+		parentUUID = sa.ParentUserUUID.String()
+		if u, err := svcs.Metadata().GetUserByUUID(ctx, *sa.ParentUserUUID); err == nil {
+			parentAccessKey = u.AccessKey
+		}
+	}
+
+	return &consoleapi.ServiceAccount{
+		UUID:             sa.UUID.String(),
+		AccessKey:        sa.AccessKey,
+		Username:         sa.Username,
+		ParentUserUUID:   parentUUID,
+		ParentAccessKey:  parentAccessKey,
+		PolicyMode:       string(sa.PolicyMode),
+		Status:           string(sa.Status),
+		AttachedPolicies: sa.AttachedPolicies,
+		CreatedAt:        sa.CreatedAt,
+		UpdatedAt:        sa.UpdatedAt,
+		ExpiresAt:        sa.ExpiresAt,
+	}
 }

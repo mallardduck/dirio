@@ -433,17 +433,17 @@ Current status: **Phase 4.4 IN PROGRESS** — Group & Service Account admin API 
 - ✅ AddGroup, RemoveGroup, ListGroups, GetGroupInfo
 - ✅ GroupAdd / GroupRemove — add/remove users from groups
 - ✅ Attach/detach policies to groups (`/idp/builtin/policy/attach|detach` and `/set-policy` — shared with users via `isGroup` flag)
-- [ ] Console UI: group list, membership management
+- ✅ Console UI: group list, membership management
 
 ### Service Account Management (mc-compatible + DirIO extensions)
 - ✅ AddServiceAccount — long-lived credentials, optional expiration, conflict detection across users + SAs
 - ✅ RemoveServiceAccount, ListServiceAccounts, GetServiceAccountInfo, UpdateServiceAccount
 - ✅ Policy inheritance from parent user with optional override — eval-time resolution via `PolicyMode` (`inherit`/`override`)
-- [ ] Console UI: service account list, expiration management
+- ✅ Console UI: service account list, expiration management
 
 ### Access Key Management
 - Service accounts cover the multi-key / per-user scoped credential use case
-- [ ] User secret key rotation (update secret key without changing access key) — simple `update-user` call, no separate endpoint needed
+- ✅ User secret key rotation (update secret key without changing access key) — simple `update-user` call, no separate endpoint needed
 
 ### Console Stopgaps (DirIO-specific — no mc equivalent)
 - ✅ **Ownership management UI** — view bucket/object owners, transfer ownership

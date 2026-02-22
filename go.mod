@@ -3,6 +3,7 @@ module github.com/mallardduck/dirio
 go 1.25
 
 require (
+	github.com/Oudwins/tailwind-merge-go v0.2.1
 	github.com/a-h/templ v0.3.977
 	github.com/brutella/dnssd v1.2.14
 	github.com/charmbracelet/lipgloss v1.1.0
@@ -10,7 +11,7 @@ require (
 	github.com/go-git/go-billy/v5 v5.7.0
 	github.com/google/uuid v1.6.0
 	github.com/mallardduck/go-http-helpers v0.1.0
-	github.com/mallardduck/teapot-router v0.10.0
+	github.com/mallardduck/teapot-router v0.11.0
 	github.com/minio/madmin-go/v3 v3.0.110
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10

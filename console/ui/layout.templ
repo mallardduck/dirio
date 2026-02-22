@@ -1,5 +1,7 @@
 package ui
 
+import "github.com/mallardduck/dirio/console/components/toast"
+
 // Base is the root layout: sidebar + topbar + content slot + footer.
 // activePath is matched against nav link hrefs to highlight the current page.
 templ Base(title string, activePath string) {
@@ -10,7 +12,9 @@ templ Base(title string, activePath string) {
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<title>{ title } — DirIO Console</title>
 			<link rel="stylesheet" href={ StaticURL("style.css") }/>
-			<script src={ StaticURL("htmx.min.js") }></script>
+			<script src={ StaticURL("js/htmx.min.js") }></script>
+			<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+			@toast.Script()
 		</head>
 		<body class="h-full bg-dirio-bg text-dirio-text flex overflow-hidden">
 			@Sidebar(activePath)
@@ -21,6 +25,13 @@ templ Base(title string, activePath string) {
 				</main>
 				@PageFooter()
 			</div>
+			<div
+				id="toast-container"
+				hx-get={ PageURL("/toasts") }
+				hx-trigger="toast from:body"
+				hx-target="this"
+				hx-swap="beforeend"
+			></div>
 		</body>
 	</html>
 }
@@ -40,6 +51,7 @@ templ Sidebar(activePath string) {
 			@navLink(PageURL("/buckets"), "Buckets", activePath == "/buckets")
 			@navLink(PageURL("/users"), "Users", activePath == "/users")
 			@navLink(PageURL("/groups"), "Groups", activePath == "/groups")
+			@navLink(PageURL("/service-accounts"), "Service Accounts", activePath == "/service-accounts")
 			@navLink(PageURL("/policies"), "Policies", activePath == "/policies")
 			@navLink(PageURL("/simulate"), "Simulate", activePath == "/simulate")
 		</nav>

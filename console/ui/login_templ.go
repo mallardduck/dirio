@@ -62,7 +62,7 @@ func LoginPage(errorMsg string) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if errorMsg != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"mb-4 px-3 py-2 rounded border border-red-500/40 bg-red-500/10 text-red-400 text-sm\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"mb-4 px-3 py-2 rounded border border-dirio-coral/40 bg-dirio-coral/10 text-dirio-coral text-sm\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

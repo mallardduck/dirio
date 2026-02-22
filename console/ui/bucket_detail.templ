@@ -4,10 +4,9 @@ import "github.com/mallardduck/dirio/consoleapi"
 
 // BucketDetailData holds all data for the bucket detail page.
 type BucketDetailData struct {
-	Bucket      *consoleapi.Bucket
-	PolicyJSON  string // empty string = no policy set
-	Flash       string // success message (e.g. "Policy saved.")
-	ErrorMsg    string // error message
+	Bucket     *consoleapi.Bucket
+	PolicyJSON string            // empty string = no policy set
+	Owner      *consoleapi.Owner // current owner
 }
 
 // BucketDetailPage renders the bucket detail page.
@@ -25,12 +24,6 @@ templ bucketDetailContent(d BucketDetailData) {
 			<span>/</span>
 			<span class="text-dirio-text font-medium">{ d.Bucket.Name }</span>
 		</nav>
-		if d.Flash != "" {
-			<div class="text-xs text-dirio-teal border border-dirio-teal rounded px-4 py-2">{ d.Flash }</div>
-		}
-		if d.ErrorMsg != "" {
-			<div class="text-xs text-dirio-coral border border-dirio-coral rounded px-4 py-2">{ d.ErrorMsg }</div>
-		}
 		<!-- Ownership card -->
 		<div class="bg-dirio-bg-card border border-dirio-border rounded-lg">
 			<div class="px-5 py-4 border-b border-dirio-border">
@@ -39,9 +32,9 @@ templ bucketDetailContent(d BucketDetailData) {
 			<div class="px-5 py-4 space-y-4">
 				<div class="flex items-center gap-6 text-sm">
 					<span class="text-dirio-muted w-28 shrink-0">Current owner</span>
-					if d.Bucket.Owner != nil && d.Bucket.Owner.AccessKey != "" {
-						<span class="font-mono text-dirio-text">{ d.Bucket.Owner.AccessKey }</span>
-						<span class="text-xs font-mono text-dirio-muted">{ d.Bucket.OwnerUUID }</span>
+					if d.Owner != nil && d.Owner.AccessKey != "" {
+						<span class="font-mono text-dirio-text">{ d.Owner.AccessKey }</span>
+						<span class="text-xs font-mono text-dirio-muted">{ d.Owner.UUID }</span>
 					} else {
 						<span class="italic text-dirio-muted">admin (no explicit owner)</span>
 					}

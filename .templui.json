@@ -1,0 +1,7 @@
+{
+  "componentsDir": "console/components",
+  "utilsDir": "console/utils",
+  "moduleName": "github.com/mallardduck/dirio",
+  "jsDir": "console/static/js",
+  "jsPublicPath": "/dirio/ui/static/js"
+}

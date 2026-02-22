@@ -140,7 +140,7 @@ templ-gen:
 # Download and vendor HTMX 2.0.4 into the embedded static directory.
 vendor-htmx:
 	curl -sSL https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js \
-		-o console/static/htmx.min.js
+		-o console/static/js/htmx.min.js
 
 # Download the Tailwind v4 standalone binary for the current OS/arch into ./bin/.
 # The binary is gitignored; re-run this after a fresh clone or to upgrade.

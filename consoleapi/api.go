@@ -14,10 +14,12 @@ import (
 type API interface {
 	// Users
 	ListUsers(ctx context.Context) ([]*User, error)
-	GetUser(ctx context.Context, accessKey string) (*User, error)
+	GetUser(ctx context.Context, uuid string) (*User, error)
+	GetUserSecret(ctx context.Context, uuid string) (string, error)
 	CreateUser(ctx context.Context, req CreateUserRequest) (*User, error)
-	DeleteUser(ctx context.Context, accessKey string) error
-	SetUserStatus(ctx context.Context, accessKey string, enabled bool) error
+	UpdateUser(ctx context.Context, uuid string, req UpdateUserRequest) (*User, error)
+	DeleteUser(ctx context.Context, uuid string) error
+	SetUserStatus(ctx context.Context, uuid string, enabled bool) error
 
 	// Policies
 	ListPolicies(ctx context.Context) ([]*Policy, error)
@@ -37,6 +39,15 @@ type API interface {
 	AttachGroupPolicy(ctx context.Context, groupName, policyName string) error
 	DetachGroupPolicy(ctx context.Context, groupName, policyName string) error
 	SetGroupStatus(ctx context.Context, groupName string, enabled bool) error
+
+	// Service Accounts
+	ListServiceAccounts(ctx context.Context) ([]*ServiceAccount, error)
+	GetServiceAccount(ctx context.Context, uuid string) (*ServiceAccount, error)
+	GetServiceAccountSecret(ctx context.Context, uuid string) (string, error)
+	CreateServiceAccount(ctx context.Context, req CreateServiceAccountRequest) (*ServiceAccount, error)
+	DeleteServiceAccount(ctx context.Context, uuid string) error
+	UpdateServiceAccount(ctx context.Context, uuid string, req UpdateServiceAccountRequest) (*ServiceAccount, error)
+	SetServiceAccountStatus(ctx context.Context, uuid string, enabled bool) error
 
 	// Buckets
 	ListBuckets(ctx context.Context) ([]*Bucket, error)
@@ -58,6 +69,7 @@ type API interface {
 
 // User represents a user as seen by the console.
 type User struct {
+	UUID             string    `json:"uuid"`
 	AccessKey        string    `json:"accessKey"`
 	Username         string    `json:"username"`
 	Status           string    `json:"status"` // "on" or "off"
@@ -94,6 +106,11 @@ type CreateUserRequest struct {
 	SecretKey string `json:"secretKey"`
 }
 
+// UpdateUserRequest is the input for updating a user.
+type UpdateUserRequest struct {
+	SecretKey *string `json:"secretKey,omitempty"`
+}
+
 // CreatePolicyRequest is the input for CreatePolicy.
 type CreatePolicyRequest struct {
 	Name           string `json:"name"`
@@ -113,6 +130,37 @@ type Group struct {
 // CreateGroupRequest is the input for CreateGroup.
 type CreateGroupRequest struct {
 	Name string `json:"name"`
+}
+
+// ServiceAccount represents a service account as seen by the console.
+type ServiceAccount struct {
+	UUID             string     `json:"uuid"`
+	AccessKey        string     `json:"accessKey"`
+	SecretKey        string     `json:"secretKey,omitempty"`
+	Username         string     `json:"username"`
+	ParentUserUUID   string     `json:"parentUserUUID,omitempty"`
+	ParentAccessKey  string     `json:"parentAccessKey,omitempty"`
+	PolicyMode       string     `json:"policyMode"` // "inherit" or "override"
+	Status           string     `json:"status"`     // "on" or "off"
+	AttachedPolicies []string   `json:"attachedPolicies,omitempty"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	UpdatedAt        time.Time  `json:"updatedAt"`
+	ExpiresAt        *time.Time `json:"expiresAt,omitempty"`
+}
+
+// CreateServiceAccountRequest is the input for CreateServiceAccount.
+type CreateServiceAccountRequest struct {
+	AccessKey  string     `json:"accessKey,omitempty"`
+	SecretKey  string     `json:"secretKey,omitempty"`
+	ParentUser string     `json:"parentUser,omitempty"` // Parent access key
+	PolicyMode string     `json:"policyMode,omitempty"` // "inherit" or "override"
+	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
+}
+
+// UpdateServiceAccountRequest is the input for UpdateServiceAccount.
+type UpdateServiceAccountRequest struct {
+	SecretKey *string     `json:"secretKey,omitempty"`
+	ExpiresAt **time.Time `json:"expiresAt,omitempty"`
 }
 
 // EffectivePermissions shows the evaluated access for a user on a bucket.

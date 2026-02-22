@@ -48,7 +48,7 @@ func New(api consoleapi.API, s3Router ui.S3Router, adminAuth consoleauth.AdminAu
 
 	h := handlers.New(api, s3Router, adminAuth, sessions)
 
-	// UI Console specific router
+	// UI Console-specific router
 	consoleTeapot := teapot.New()
 
 	// TODO: make this conditional and only included when on dedicated port
@@ -59,7 +59,7 @@ func New(api consoleapi.API, s3Router ui.S3Router, adminAuth consoleauth.AdminAu
 	consoleTeapot.Func().POST("/login", h.LoginSubmit).Name("login")
 	consoleTeapot.Func().POST("/logout", h.Logout).Name("logout")
 	consoleTeapot.Func().GET(
-		"/static/{AssetUrl}",
+		"/static/{AssetUrl:.*}",
 		func(rw http.ResponseWriter, r *http.Request) {
 			prefix := strings.SplitAfter(r.URL.Path, "/static/")[0]
 			http.StripPrefix(prefix, http.FileServer(http.FS(staticFS))).ServeHTTP(rw, r)
@@ -70,8 +70,13 @@ func New(api consoleapi.API, s3Router ui.S3Router, adminAuth consoleauth.AdminAu
 	consoleTeapot.MiddlewareGroup(func(r *teapot.Router) {
 		r.Func().GET("/", h.Dashboard).Name("dashboard")
 		r.Func().GET("/users", h.Users).Name("users")
+		r.Func().POST("/users", h.UserCreate).Name("users.create")
+		r.Func().POST("/users/{uuid}/delete", h.UserDelete).Name("users.delete")
+		r.Func().POST("/users/{uuid}/status", h.UserSetStatus).Name("users.status")
+		r.Func().POST("/users/{uuid}/secret", h.UserUpdateSecret).Name("users.secret.update")
+		r.Func().GET("/users/{uuid}/secret", h.UserRevealSecret).Name("users.secret.reveal")
 		r.Func().GET("/groups", h.Groups).Name("groups")
-		r.Func().POST("/groups", h.GroupCreate).Name("groups")
+		r.Func().POST("/groups", h.GroupCreate).Name("groups.create")
 		r.Func().GET("/groups/{group}", h.GroupDetail).Name("groups.detail")
 		r.Func().POST("/groups/{group}/delete", h.GroupDelete).Name("groups.delete")
 		r.Func().POST("/groups/{group}/members", h.GroupAddMember).Name("groups.members.add")
@@ -79,6 +84,12 @@ func New(api consoleapi.API, s3Router ui.S3Router, adminAuth consoleauth.AdminAu
 		r.Func().POST("/groups/{group}/policies", h.GroupAttachPolicy).Name("groups.policies.attach")
 		r.Func().POST("/groups/{group}/policies/detach", h.GroupDetachPolicy).Name("groups.policies.detach")
 		r.Func().POST("/groups/{group}/status", h.GroupSetStatus).Name("groups.status")
+		r.Func().GET("/service-accounts", h.ServiceAccounts).Name("service-accounts")
+		r.Func().POST("/service-accounts", h.ServiceAccountCreate).Name("service-accounts.create")
+		r.Func().POST("/service-accounts/{uuid}/delete", h.ServiceAccountDelete).Name("service-accounts.delete")
+		r.Func().POST("/service-accounts/{uuid}/status", h.ServiceAccountSetStatus).Name("service-accounts.status")
+		r.Func().POST("/service-accounts/{uuid}/secret", h.ServiceAccountUpdateSecret).Name("service-accounts.secret.update")
+		r.Func().GET("/service-accounts/{uuid}/secret", h.ServiceAccountRevealSecret).Name("service-accounts.secret.reveal")
 		r.Func().GET("/policies", h.Policies).Name("policies")
 		r.Func().GET("/buckets", h.Buckets).Name("buckets")
 		r.Func().GET("/buckets/{bucket}", h.BucketDetail).Name("buckets.detail")
@@ -86,6 +97,7 @@ func New(api consoleapi.API, s3Router ui.S3Router, adminAuth consoleauth.AdminAu
 		r.Func().POST("/buckets/{bucket}/ownership", h.BucketTransferOwnership).Name("buckets.ownership.transfer")
 		r.Func().GET("/simulate", h.Simulate).Name("simulate")
 		r.Func().POST("/simulate", h.Simulate).Name("simulate")
+		r.Func().GET("/toasts", h.Toasts).Name("toasts")
 	}, middleware.RequireAdminSession(sessions))
 
 	return consoleTeapot
