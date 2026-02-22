@@ -16,9 +16,13 @@ import (
 	"embed"
 	"io/fs"
 	"net/http"
+	"strings"
+
+	"github.com/mallardduck/teapot-router/pkg/teapot"
 
 	consoleauth "github.com/mallardduck/dirio/console/auth"
 	"github.com/mallardduck/dirio/console/handlers"
+	"github.com/mallardduck/dirio/console/middleware"
 	"github.com/mallardduck/dirio/console/ui"
 	"github.com/mallardduck/dirio/consoleapi"
 )
@@ -31,7 +35,7 @@ var staticFiles embed.FS
 // adminAuth validates admin credentials at login time.
 // When mounted at a path prefix, callers must strip that prefix before passing
 // requests here (e.g. http.StripPrefix("/dirio/ui", New(api, s3Router, adminAuth))).
-func New(api consoleapi.API, s3Router ui.S3Router, adminAuth consoleauth.AdminAuth) http.Handler {
+func New(api consoleapi.API, s3Router ui.S3Router, adminAuth consoleauth.AdminAuth) *teapot.Router {
 	sessions, err := consoleauth.NewSession()
 	if err != nil {
 		panic("console: failed to create session manager: " + err.Error())
@@ -44,48 +48,45 @@ func New(api consoleapi.API, s3Router ui.S3Router, adminAuth consoleauth.AdminAu
 
 	h := handlers.New(api, s3Router, adminAuth, sessions)
 
+	// UI Console specific router
+	consoleTeapot := teapot.New()
+
+	// TODO: make this conditional and only included when on dedicated port
+	consoleTeapot.GET("/.internal/routes", teapot.NewListRoutesHandler(consoleTeapot, nil)).Name("routes")
+
 	// Public routes — accessible without a session (login page + static assets).
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /login", h.LoginPage)
-	mux.HandleFunc("POST /login", h.LoginSubmit)
-	mux.HandleFunc("POST /logout", h.Logout)
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	consoleTeapot.Func().GET("/login", h.LoginPage).Name("login")
+	consoleTeapot.Func().POST("/login", h.LoginSubmit).Name("login")
+	consoleTeapot.Func().POST("/logout", h.Logout).Name("logout")
+	consoleTeapot.Func().GET(
+		"/static/{AssetUrl}",
+		func(rw http.ResponseWriter, r *http.Request) {
+			prefix := strings.SplitAfter(r.URL.Path, "/static/")[0]
+			http.StripPrefix(prefix, http.FileServer(http.FS(staticFS))).ServeHTTP(rw, r)
+		},
+	).Name("asset")
 
 	// Protected routes — all require a valid session.
-	protected := http.NewServeMux()
-	protected.HandleFunc("GET /{$}", h.Dashboard)
-	protected.HandleFunc("GET /users", h.Users)
-	protected.HandleFunc("GET /groups", h.Groups)
-	protected.HandleFunc("POST /groups", h.GroupCreate)
-	protected.HandleFunc("GET /groups/{group}", h.GroupDetail)
-	protected.HandleFunc("POST /groups/{group}/delete", h.GroupDelete)
-	protected.HandleFunc("POST /groups/{group}/members", h.GroupAddMember)
-	protected.HandleFunc("POST /groups/{group}/members/remove", h.GroupRemoveMember)
-	protected.HandleFunc("POST /groups/{group}/policies", h.GroupAttachPolicy)
-	protected.HandleFunc("POST /groups/{group}/policies/detach", h.GroupDetachPolicy)
-	protected.HandleFunc("POST /groups/{group}/status", h.GroupSetStatus)
-	protected.HandleFunc("GET /policies", h.Policies)
-	protected.HandleFunc("GET /buckets", h.Buckets)
-	protected.HandleFunc("GET /buckets/{bucket}", h.BucketDetail)
-	protected.HandleFunc("POST /buckets/{bucket}/policy", h.BucketPolicySet)
-	protected.HandleFunc("POST /buckets/{bucket}/ownership", h.BucketTransferOwnership)
-	protected.HandleFunc("GET /simulate", h.Simulate)
-	protected.HandleFunc("POST /simulate", h.Simulate)
+	consoleTeapot.MiddlewareGroup(func(r *teapot.Router) {
+		r.Func().GET("/", h.Dashboard).Name("dashboard")
+		r.Func().GET("/users", h.Users).Name("users")
+		r.Func().GET("/groups", h.Groups).Name("groups")
+		r.Func().POST("/groups", h.GroupCreate).Name("groups")
+		r.Func().GET("/groups/{group}", h.GroupDetail).Name("groups.detail")
+		r.Func().POST("/groups/{group}/delete", h.GroupDelete).Name("groups.delete")
+		r.Func().POST("/groups/{group}/members", h.GroupAddMember).Name("groups.members.add")
+		r.Func().POST("/groups/{group}/members/remove", h.GroupRemoveMember).Name("groups.members.remove")
+		r.Func().POST("/groups/{group}/policies", h.GroupAttachPolicy).Name("groups.policies.attach")
+		r.Func().POST("/groups/{group}/policies/detach", h.GroupDetachPolicy).Name("groups.policies.detach")
+		r.Func().POST("/groups/{group}/status", h.GroupSetStatus).Name("groups.status")
+		r.Func().GET("/policies", h.Policies).Name("policies")
+		r.Func().GET("/buckets", h.Buckets).Name("buckets")
+		r.Func().GET("/buckets/{bucket}", h.BucketDetail).Name("buckets.detail")
+		r.Func().POST("/buckets/{bucket}/policy", h.BucketPolicySet).Name("buckets.policy.set")
+		r.Func().POST("/buckets/{bucket}/ownership", h.BucketTransferOwnership).Name("buckets.ownership.transfer")
+		r.Func().GET("/simulate", h.Simulate).Name("simulate")
+		r.Func().POST("/simulate", h.Simulate).Name("simulate")
+	}, middleware.RequireAdminSession(sessions))
 
-	mux.Handle("/", requireSession(sessions, protected))
-
-	return mux
-}
-
-// requireSession is middleware that redirects unauthenticated requests to the
-// login page. It wraps a handler so only requests with a valid session cookie
-// are forwarded.
-func requireSession(sessions *consoleauth.Session, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := sessions.Validate(r); !ok {
-			http.Redirect(w, r, string(ui.LoginURL()), http.StatusSeeOther)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+	return consoleTeapot
 }

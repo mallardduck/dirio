@@ -35,10 +35,10 @@ type RouteDependencies struct {
 // When deps is nil, routes are registered with nil handlers (for CLI route listing).
 func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 	// Public routes (no auth required)
-	r.GET("/favicon.ico", favicon.HandleFavicon).Name("favicon")
+	r.Func().GET("/favicon.ico", favicon.HandleFavicon).Name("favicon")
 	r.GET("/.internal/routes", teapot.NewListRoutesHandler(r, nil)).Name("debug.routes").Action("dirio:ListRoutes")
 
-	r.GET("/healthz", health.HandleHealth).Name("health").Action("dirio:Health")
+	r.Func().GET("/healthz", health.HandleHealth).Name("health").Action("dirio:Health")
 
 	// MinIO Admin API routes (authenticated)
 	var adminDeps *adminRouteDeps
@@ -362,15 +362,15 @@ func setupS3Routes(r *teapot.Router, deps *s3RouteDeps) {
 	// Bucket lifecycle configuration
 	// Note: Legacy GetBucketLifecycle/PutBucketLifecycle share the same path and query param
 	//       as the modern *Configuration variants; one route per method covers both.
-	r.QueryGET("/{bucket}", RouteNotImplemented).Query("lifecycle").Name("bucket.get-lifecycle-configuration").Action("s3:GetBucketLifecycleConfiguration")
-	r.QueryPUT("/{bucket}", RouteNotImplemented).Query("lifecycle").Name("bucket.put-lifecycle-configuration").Action("s3:PutBucketLifecycleConfiguration")
+	r.Func().QueryGET("/{bucket}", RouteNotImplemented).Query("lifecycle").Name("bucket.get-lifecycle-configuration").Action("s3:GetBucketLifecycleConfiguration")
+	r.Func().QueryPUT("/{bucket}", RouteNotImplemented).Query("lifecycle").Name("bucket.put-lifecycle-configuration").Action("s3:PutBucketLifecycleConfiguration")
 
 	// Public access block
-	r.QueryGET("/{bucket}", RouteNotImplemented).Query("publicAccessBlock").Name("bucket.get-public-access-block").Action("s3:GetPublicAccessBlock")
-	r.QueryPUT("/{bucket}", RouteNotImplemented).Query("publicAccessBlock").Name("bucket.put-public-access-block").Action("s3:PutPublicAccessBlock")
+	r.Func().QueryGET("/{bucket}", RouteNotImplemented).Query("publicAccessBlock").Name("bucket.get-public-access-block").Action("s3:GetPublicAccessBlock")
+	r.Func().QueryPUT("/{bucket}", RouteNotImplemented).Query("publicAccessBlock").Name("bucket.put-public-access-block").Action("s3:PutPublicAccessBlock")
 
 	// Object lock configuration
-	r.QueryPUT("/{bucket}", RouteNotImplemented).Query("object-lock").Name("bucket.put-object-lock-configuration").Action("s3:PutObjectLockConfiguration")
+	r.Func().QueryPUT("/{bucket}", RouteNotImplemented).Query("object-lock").Name("bucket.put-object-lock-configuration").Action("s3:PutObjectLockConfiguration")
 
 	// List object versions (for versioned buckets)
 	r.QueryGET("/{bucket}", deps.listObjectVersions).Query("versions").Name("buckets.versions").Action("s3:ListObjectVersions")

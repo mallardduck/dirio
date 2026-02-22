@@ -74,10 +74,10 @@ type Server struct {
 	mdns         *mdns.Service
 	log          *slog.Logger
 
-	// console is the optional web admin console handler.
+	// consoleRouter is the optional web admin console router.
 	// Set via SetConsole before calling Start.
-	consoleHandler http.Handler
-	consolePort    int // 0 = same port at /dirio/ui/
+	consoleRouter *teapot.Router
+	consolePort   int // 0 = same port at /dirio/ui/
 
 	// HTTP servers, set during Start.
 	httpServer    *http.Server
@@ -103,8 +103,8 @@ func (s *Server) Auth() *auth.Authenticator { return s.auth }
 // 0 the console is mounted at /dirio/ui/ on the main port. When port is
 // non-zero (e.g. 9001) a separate listener is started for the console.
 // Must be called before Start.
-func (s *Server) SetConsole(h http.Handler, port int) {
-	s.consoleHandler = h
+func (s *Server) SetConsole(h *teapot.Router, port int) {
+	s.consoleRouter = h
 	s.consolePort = port
 }
 
@@ -253,16 +253,14 @@ func (s *Server) consoleSamePort() bool {
 // buildHandler constructs the top-level http.Handler, mounting the console when
 // it is configured for same-port operation.
 func (s *Server) buildHandler() http.Handler {
-	if s.consoleHandler == nil || !s.consoleSamePort() {
+	if s.consoleRouter == nil || !s.consoleSamePort() {
 		return s.router
 	}
 
 	// Same-port console: mount at /dirio/ui/, everything else goes to the S3 router.
-	mux := http.NewServeMux()
-	mux.Handle("/dirio/ui/", http.StripPrefix("/dirio/ui", s.consoleHandler))
-	mux.Handle("/", s.router)
+	s.router.MountNamed("/dirio/ui", "dirio", s.consoleRouter)
 	s.log.Info("console mounted on main port", "path", "/dirio/ui/")
-	return mux
+	return s.router
 }
 
 // Start begins serving HTTP requests with graceful shutdown support.
@@ -280,11 +278,11 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	// Start separate console listener if configured on a different port.
-	if s.consoleHandler != nil && !s.consoleSamePort() {
+	if s.consoleRouter != nil && !s.consoleSamePort() {
 		consoleAddr := fmt.Sprintf(":%d", s.consolePort)
 		s.consoleServer = &http.Server{
 			Addr:         consoleAddr,
-			Handler:      s.consoleHandler,
+			Handler:      s.consoleRouter,
 			ReadTimeout:  30 * time.Second,
 			WriteTimeout: 30 * time.Second,
 			IdleTimeout:  60 * time.Second,

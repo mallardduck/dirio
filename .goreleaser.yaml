@@ -24,9 +24,11 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X main.version={{.Version}}
-      - -X main.commit={{.Commit}}
-      - -X main.date={{.Date}}
+      - -X github.com/mallardduck/dirio/internal/version.Version={{.Version}}
+      - -X github.com/mallardduck/dirio/internal/version.Commit={{.Commit}}
+      - -X github.com/mallardduck/dirio/internal/version.BuildTime={{.Date}}
+      - -X github.com/mallardduck/dirio/internal/version.BuiltBy=goreleaser
+      - -X github.com/mallardduck/dirio/internal/version.GitTreeState={{.GitTreeState}}
 
   - id: client
     main: ./cmd/client
@@ -42,9 +44,11 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X main.version={{.Version}}
-      - -X main.commit={{.Commit}}
-      - -X main.date={{.Date}}
+      - -X github.com/mallardduck/dirio/internal/version.Version={{.Version}}
+      - -X github.com/mallardduck/dirio/internal/version.Commit={{.Commit}}
+      - -X github.com/mallardduck/dirio/internal/version.BuildTime={{.Date}}
+      - -X github.com/mallardduck/dirio/internal/version.BuiltBy=goreleaser
+      - -X github.com/mallardduck/dirio/internal/version.GitTreeState={{.GitTreeState}}
 
 archives:
   - id: server-archive
