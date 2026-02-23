@@ -1,8 +1,11 @@
 # DirIO Development Roadmap
 
-Current status: **Phase 4.4 IN PROGRESS** — Group & Service Account admin API complete; SA policy inheritance done; Console UI forms next
+Current status: **Phase 4.4 COMPLETE** — All testing done including console stopgap features; Phase 4.5 next
 
 ## Recent Updates
+
+**February 22, 2026 - Phase 4.4 Complete:**
+- ✅ `tests/console/` — 27 console stopgap tests: session auth (login/logout/protected routes), full S3 bucket policy editor, bucket ownership management, request simulator (single-action + effective permissions)
 
 **February 22, 2026 - Phase 4.4 Testing Complete (except console):**
 - ✅ `tests/integration/serviceaccount_policy_test.go` — SA delegation (inherit/override mode) and expiration integration tests
@@ -461,7 +464,7 @@ Current status: **Phase 4.4 IN PROGRESS** — Group & Service Account admin API 
 - ✅ Unit tests for group/service account CRUD (13 group + 12 SA tests in `tests/admin/`)
 - ✅ Integration tests for group policy inheritance
 - ✅ Service account delegation and expiration testing (`tests/integration/serviceaccount_policy_test.go`)
-- [ ] Console stopgap feature testing
+- ✅ Console stopgap feature testing (`tests/console/` — 27 tests: session auth, policy editor, ownership management, request simulator)
 - ✅ Integration tests with live `mc admin` CLI (`tests/clients/scripts/mc_admin.sh` + `TestMCAdmin` in `clients_test.go`)
 - ✅ Multi-user S3 access scenarios (alice/bob test users)
 - ✅ **Activate client filtering tests** — create alice/bob users to run existing filtering tests
