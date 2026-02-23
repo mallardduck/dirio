@@ -30,7 +30,7 @@ templ UsersPage(d UsersPageData) {
 								name="accessKey"
 								placeholder="jane.doe"
 								required
-								class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
+								class="w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
 							/>
 						</div>
 						<div class="flex-1 max-w-xs">
@@ -40,7 +40,7 @@ templ UsersPage(d UsersPageData) {
 								name="secretKey"
 								placeholder="••••••••"
 								required
-								class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
+								class="w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
 							/>
 						</div>
 						<button
@@ -128,12 +128,10 @@ templ userRow(u *consoleapi.User) {
 						}
 					</button>
 				</form>
-				<button
-					class="text-xs text-dirio-teal hover:underline"
-					onclick={ UserRevealSecretClick(u) }
-				>
-					Reveal Secret
-				</button>
+				@RevealSecret(RevealSecretProps{
+					AccessKey: u.AccessKey,
+					FetchURL:  string(PageURL("/users/" + u.UUID + "/secret")),
+				})
 				<button
 					class="text-xs text-dirio-teal hover:underline"
 					onclick={ UserUpdateSecretClick(u) }

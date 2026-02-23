@@ -62,27 +62,27 @@ func ServiceAccountsPage(d ServiceAccountsPageData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if d.NewSA != nil {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"bg-dirio-bg-card border border-dirio-teal rounded-lg p-5 mb-6\"><h3 class=\"text-sm font-semibold text-dirio-teal mb-2\">Service Account Created Successfully</h3><p class=\"text-xs text-dirio-text mb-4\">Make sure to copy your secret access key now. You won't be able to see it again.</p><div class=\"grid grid-cols-2 gap-4\"><div><label class=\"block text-xs text-dirio-muted mb-1\">Access Key</label><div class=\"bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 font-mono text-sm text-dirio-text\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"bg-dirio-bg-card border border-dirio-teal rounded-lg p-5 mb-6\"><h3 class=\"text-sm font-semibold text-dirio-teal mb-2\">Service Account Created Successfully</h3><p class=\"text-xs text-dirio-text mb-4\">Make sure to copy your secret access key now. You won't be able to see it again.</p><div class=\"grid grid-cols-2 gap-4\"><div><label class=\"block text-xs text-dirio-muted mb-1\">Access Key</label><div class=\"bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 font-mono text-sm text-dirio-text\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var3 string
 				templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(d.NewSA.AccessKey)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `console/ui/service_accounts.templ`, Line: 29, Col: 132}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `console/ui/service_accounts.templ`, Line: 29, Col: 138}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div></div><div><label class=\"block text-xs text-dirio-muted mb-1\">Secret Key</label><div class=\"bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 font-mono text-sm text-dirio-text\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div></div><div><label class=\"block text-xs text-dirio-muted mb-1\">Secret Key</label><div class=\"bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 font-mono text-sm text-dirio-text\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(d.NewSA.SecretKey)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `console/ui/service_accounts.templ`, Line: 33, Col: 132}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `console/ui/service_accounts.templ`, Line: 33, Col: 138}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -106,7 +106,7 @@ func ServiceAccountsPage(d ServiceAccountsPageData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" class=\"grid grid-cols-4 gap-4 items-end\"><div><label class=\"block text-xs text-dirio-muted mb-1\">Parent User</label> <select name=\"parentUser\" required class=\"w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal\"><option value=\"\">Select a user...</option> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" class=\"grid grid-cols-4 gap-4 items-end\"><div><label class=\"block text-xs text-dirio-muted mb-1\">Parent User</label> <select name=\"parentUser\" required class=\"w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal\"><option value=\"\">Select a user...</option> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -155,7 +155,7 @@ func ServiceAccountsPage(d ServiceAccountsPageData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</select></div><div><label class=\"block text-xs text-dirio-muted mb-1\">Policy Mode</label> <select name=\"policyMode\" required class=\"w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal\"><option value=\"inherit\">Inherit (Default)</option> <option value=\"override\">Override</option></select></div><div><label class=\"block text-xs text-dirio-muted mb-1\">Expiry (Optional)</label> <input type=\"date\" name=\"expiry\" class=\"w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal\"></div><button type=\"submit\" class=\"px-4 py-1.5 text-sm rounded border border-dirio-teal text-dirio-teal hover:bg-dirio-teal hover:text-dirio-bg transition-colors\">Create</button></form></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</select></div><div><label class=\"block text-xs text-dirio-muted mb-1\">Policy Mode</label> <select name=\"policyMode\" required class=\"w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal\"><option value=\"inherit\">Inherit (Default)</option> <option value=\"override\">Override</option></select></div><div><label class=\"block text-xs text-dirio-muted mb-1\">Expiry (Optional)</label> <input type=\"date\" name=\"expiry\" class=\"w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal\"></div><button type=\"submit\" class=\"px-4 py-1.5 text-sm rounded border border-dirio-teal text-dirio-teal hover:bg-dirio-teal hover:text-dirio-bg transition-colors\">Create</button></form></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -314,7 +314,7 @@ func serviceAccountRow(sa *consoleapi.ServiceAccount) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if sa.PolicyMode == "inherit" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<span class=\"text-xs bg-dirio-bg border border-dirio-border rounded px-1.5 py-0.5 text-dirio-muted\">Inherit</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<span class=\"text-xs bg-dirio-bg-input border border-dirio-border rounded px-1.5 py-0.5 text-dirio-muted\">Inherit</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -398,20 +398,10 @@ func serviceAccountRow(sa *consoleapi.ServiceAccount) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templ.RenderScriptItems(ctx, templ_7745c5c3_Buffer, ServiceAccountRevealSecretClick(sa))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<button class=\"text-xs text-dirio-teal hover:underline\" onclick=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var18 templ.ComponentScript = ServiceAccountRevealSecretClick(sa)
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18.Call)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\">Reveal Secret</button> ")
+		templ_7745c5c3_Err = RevealSecret(RevealSecretProps{
+			AccessKey: sa.AccessKey,
+			FetchURL:  string(PageURL("/service-accounts/" + sa.UUID + "/secret")),
+		}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -419,42 +409,42 @@ func serviceAccountRow(sa *consoleapi.ServiceAccount) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<button class=\"text-xs text-dirio-teal hover:underline\" onclick=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<button class=\"text-xs text-dirio-teal hover:underline\" onclick=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var19 templ.ComponentScript = ServiceAccountUpdateSecretClick(sa)
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19.Call)
+		var templ_7745c5c3_Var18 templ.ComponentScript = ServiceAccountUpdateSecretClick(sa)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18.Call)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\">Rotate Secret</button><form hx-post=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\">Rotate Secret</button><form hx-post=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var19 string
+		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(PageURL("/service-accounts/" + sa.UUID + "/delete"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `console/ui/service_accounts.templ`, Line: 192, Col: 66}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "\" hx-target=\"#sa-section\" hx-swap=\"outerHTML\" hx-confirm=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var20 string
-		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(PageURL("/service-accounts/" + sa.UUID + "/delete"))
+		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs("Are you sure you want to delete service account " + sa.AccessKey + "?")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `console/ui/service_accounts.templ`, Line: 194, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `console/ui/service_accounts.templ`, Line: 195, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\" hx-target=\"#sa-section\" hx-swap=\"outerHTML\" hx-confirm=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var21 string
-		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs("Are you sure you want to delete service account " + sa.AccessKey + "?")
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `console/ui/service_accounts.templ`, Line: 197, Col: 89}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\"><button type=\"submit\" class=\"text-xs text-dirio-coral hover:underline\">Delete</button></form></div></td></tr>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\"><button type=\"submit\" class=\"text-xs text-dirio-coral hover:underline\">Delete</button></form></div></td></tr>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -139,7 +139,7 @@ func simulateContent(d SimulateData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" placeholder=\"alice\" required class=\"w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal\"></div><div><label class=\"block text-xs text-dirio-muted mb-1\">Bucket</label> <input type=\"text\" name=\"bucket\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" placeholder=\"alice\" required class=\"w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal\"></div><div><label class=\"block text-xs text-dirio-muted mb-1\">Bucket</label> <input type=\"text\" name=\"bucket\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -152,7 +152,7 @@ func simulateContent(d SimulateData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" placeholder=\"my-bucket\" required class=\"w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal\"></div></div><div class=\"grid grid-cols-2 gap-4\"><div><label class=\"block text-xs text-dirio-muted mb-1\">Action</label> <select name=\"action\" class=\"w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" placeholder=\"my-bucket\" required class=\"w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal\"></div></div><div class=\"grid grid-cols-2 gap-4\"><div><label class=\"block text-xs text-dirio-muted mb-1\">Action</label> <select name=\"action\" class=\"w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -234,7 +234,7 @@ func simulateContent(d SimulateData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\" placeholder=\"path/to/object.txt\" class=\"w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal\"></div></div><div class=\"flex items-center gap-3\"><button type=\"submit\" name=\"mode\" value=\"simulate\" class=\"px-5 py-1.5 text-sm rounded border border-dirio-teal text-dirio-teal hover:bg-dirio-teal hover:text-dirio-bg transition-colors\">Simulate →</button> <button type=\"submit\" name=\"mode\" value=\"effective\" class=\"px-5 py-1.5 text-sm rounded border border-dirio-border text-dirio-muted hover:border-dirio-steel hover:text-dirio-muted transition-colors\">Show all permissions</button></div></form></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\" placeholder=\"path/to/object.txt\" class=\"w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal\"></div></div><div class=\"flex items-center gap-3\"><button type=\"submit\" name=\"mode\" value=\"simulate\" class=\"px-5 py-1.5 text-sm rounded border border-dirio-teal text-dirio-teal hover:bg-dirio-teal hover:text-dirio-bg transition-colors\">Simulate →</button> <button type=\"submit\" name=\"mode\" value=\"effective\" class=\"px-5 py-1.5 text-sm rounded border border-dirio-border text-dirio-muted hover:border-dirio-steel hover:text-dirio-muted transition-colors\">Show all permissions</button></div></form></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

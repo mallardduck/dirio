@@ -1,6 +1,9 @@
 package ui
 
-import "github.com/mallardduck/dirio/console/components/toast"
+import (
+	"github.com/mallardduck/dirio/console/components/dialog"
+	"github.com/mallardduck/dirio/console/components/toast"
+)
 
 // Base is the root layout: sidebar + topbar + content slot + footer.
 // activePath is matched against nav link hrefs to highlight the current page.
@@ -18,6 +21,7 @@ templ Base(title string, activePath string) {
 			<script src={ StaticURL("js/theme.js") }></script>
 			<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 			@toast.Script()
+			@dialog.Script()
 		</head>
 		<body class="h-full bg-dirio-bg text-dirio-text flex overflow-hidden">
 			@Sidebar(activePath)

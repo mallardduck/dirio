@@ -30,7 +30,7 @@ templ GroupsPage(d GroupsPageData) {
 								name="name"
 								placeholder="developers"
 								required
-								class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
+								class="w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
 							/>
 						</div>
 						<button
@@ -160,7 +160,7 @@ templ GroupDetailPage(d GroupDetailData) {
 								name="access_key"
 								placeholder="alice"
 								required
-								class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
+								class="w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
 							/>
 						</div>
 						<button
@@ -202,7 +202,7 @@ templ GroupDetailPage(d GroupDetailData) {
 								<select
 									name="policy"
 									required
-									class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal"
+									class="w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal"
 								>
 									<option value="">— select a policy —</option>
 									for _, p := range d.AllPolicies {

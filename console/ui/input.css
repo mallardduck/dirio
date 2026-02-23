@@ -1,25 +1,37 @@
 @import "tailwindcss";
 
-/* ─── Light-mode defaults (Tailwind @theme generates utility classes) ─────── */
+/* ─── DirIO color palette ───────────────────────────────────────────────────── */
+/* Tailwind generates bg-*, text-*, border-* utilities for every --color-* var. */
 @theme {
-  --color-dirio-bg:        #F4F5EF;
-  --color-dirio-bg-card:   #FFFFFF;
-  --color-dirio-bg-card2:  #EAECE6;
-  --color-dirio-border:    #C5CFCA;
-  --color-dirio-text:      #182622;
-  --color-dirio-muted:     #4B6259;
+  /* Background layers — light-mode hierarchy (parchment → solar → mist)       */
+  --color-dirio-bg:        #E8E5D0;  /* Level 0: body / outermost surface      */
+  --color-dirio-bg-card:   #FFFDF0;  /* Level 1: cards, panels, dialogs        */
+  --color-dirio-bg-card2:  #F2F6F7;  /* Level 2: sidebar, nav, subtle sections */
+  --color-dirio-bg-input:  #F0EDE0;  /* Level 1.5: inputs, inset display fields */
+
+  /* Text & borders                                                              */
+  --color-dirio-border:    #E0E4D2;
+  --color-dirio-text:      #1A1A1A;
+  --color-dirio-muted:     #5A6B69;
+
+  /* Brand — teal stays dark in light mode for text contrast, bright in dark    */
   --color-dirio-teal:      #006355;
   --color-dirio-teal-dark: #004840;
   --color-dirio-cyan:      #006E80;
-  --color-dirio-yellow:    #785E00;
+  --color-dirio-yellow:    #785E00;  /* Dark gold readable on light bg          */
   --color-dirio-steel:     #3A5068;
-  --color-dirio-coral:     #AA1F1F;
+  --color-dirio-coral:     #AA1F1F;  /* Destructive / error — high contrast     */
+
+  /* ROYGBIV accent palette (logo-derived complementary set)                    */
+  --color-dirio-red:       #FF6B6B;
+  --color-dirio-orange:    #FF9F6B;
+  --color-dirio-green:     #88D498;
+  --color-dirio-blue:      #B0C4DE;
+  --color-dirio-indigo:    #6C7AAB;
+  --color-dirio-violet:    #A682AB;
 }
 
-/* ─── System / auto dark-mode ─────────────────────────────────────────────── */
-/* Applies when: no explicit theme set (first load) OR data-theme="system".    */
-/* The :not() guards prevent this from firing when the user has picked light   */
-/* or dark explicitly via the toggle.                                          */
+/* ─── Dark mode — system preference ────────────────────────────────────────── */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="dark"]) {
     --color-dirio-bg:        #0A1628;
@@ -34,10 +46,12 @@
     --color-dirio-yellow:    #FFFF9A;
     --color-dirio-steel:     #B0C4DE;
     --color-dirio-coral:     #FF6B6B;
+    --color-dirio-bg-input:  #0A1628;  /* Inset/sunken — same as body for clear depth */
+    /* Accents stay the same — designed to pop on both bg tones */
   }
 }
 
-/* ─── Explicit dark mode (set by theme toggle JS) ─────────────────────────── */
+/* ─── Dark mode — explicit toggle ───────────────────────────────────────────── */
 :root[data-theme="dark"] {
   --color-dirio-bg:        #0A1628;
   --color-dirio-bg-card:   #111E35;
@@ -51,6 +65,78 @@
   --color-dirio-yellow:    #FFFF9A;
   --color-dirio-steel:     #B0C4DE;
   --color-dirio-coral:     #FF6B6B;
+  --color-dirio-bg-input:  #0A1628;  /* Inset/sunken — same as body for clear depth */
+  /* Accents stay the same */
+}
+
+/* ─── TemplUI semantic tokens ───────────────────────────────────────────────── */
+/* All values reference dirio vars so that dark-mode cascades automatically.    */
+/* No separate dark-mode block needed here — updating a dirio var is enough.    */
+:root {
+  --background:            var(--color-dirio-bg-card);
+  --foreground:            var(--color-dirio-text);
+  --card:                  var(--color-dirio-bg-card);
+  --card-foreground:       var(--color-dirio-text);
+  --popover:               var(--color-dirio-bg-card);
+  --popover-foreground:    var(--color-dirio-text);
+  --primary:               var(--color-dirio-teal);
+  --primary-foreground:    oklch(1 0 0);
+  --secondary:             var(--color-dirio-bg-card2);
+  --secondary-foreground:  var(--color-dirio-text);
+  --muted:                 var(--color-dirio-bg-card2);
+  --muted-foreground:      var(--color-dirio-muted);
+  --accent:                var(--color-dirio-bg-card2);
+  --accent-foreground:     var(--color-dirio-text);
+  --destructive:           var(--color-dirio-coral);
+  --border:                var(--color-dirio-border);
+  --input:                 var(--color-dirio-border);
+  --ring:                  var(--color-dirio-teal);
+  --radius:                0.65rem;
+  --sidebar:               var(--color-dirio-bg-card2);
+  --sidebar-foreground:    var(--color-dirio-text);
+  --sidebar-primary:       var(--color-dirio-teal);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent:        var(--color-dirio-bg-card);
+  --sidebar-accent-foreground: var(--color-dirio-text);
+  --sidebar-border:        var(--color-dirio-border);
+  --sidebar-ring:          var(--color-dirio-teal);
+  --selection:             var(--color-dirio-text);
+  --selection-foreground:  var(--color-dirio-bg-card);
+}
+
+/* ─── Map TemplUI tokens → Tailwind utility classes ────────────────────────── */
+/* @theme inline tells Tailwind to generate bg-background, text-foreground,     */
+/* etc. utilities that resolve through the CSS variable chain above.            */
+@theme inline {
+  --color-background:           var(--background);
+  --color-foreground:           var(--foreground);
+  --color-card:                 var(--card);
+  --color-card-foreground:      var(--card-foreground);
+  --color-popover:              var(--popover);
+  --color-popover-foreground:   var(--popover-foreground);
+  --color-primary:              var(--primary);
+  --color-primary-foreground:   var(--primary-foreground);
+  --color-secondary:            var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted:                var(--muted);
+  --color-muted-foreground:     var(--muted-foreground);
+  --color-accent:               var(--accent);
+  --color-accent-foreground:    var(--accent-foreground);
+  --color-destructive:          var(--destructive);
+  --color-border:               var(--border);
+  --color-input:                var(--input);
+  --color-ring:                 var(--ring);
+  --color-sidebar:              var(--sidebar);
+  --color-sidebar-foreground:   var(--sidebar-foreground);
+  --color-sidebar-primary:      var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent:       var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border:       var(--sidebar-border);
+  --color-sidebar-ring:         var(--sidebar-ring);
+  --color-selection:            var(--selection);
+  --color-selection-foreground: var(--selection-foreground);
+  --radius:                     var(--radius);
 }
 
 /* ─── Theme toggle: highlight the active segment ─────────────────────────── */

@@ -166,7 +166,7 @@ func bucketDetailContent(d BucketDetailData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" class=\"flex items-end gap-3\"><div class=\"flex-1 max-w-xs\"><label class=\"block text-xs text-dirio-muted mb-1\">Transfer to access key</label> <input type=\"text\" name=\"access_key\" placeholder=\"alice\" required class=\"w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal\"></div><button type=\"submit\" class=\"px-4 py-1.5 text-sm rounded border border-dirio-border text-dirio-muted hover:border-dirio-teal hover:text-dirio-teal transition-colors\">Transfer</button></form></div></div><!-- Bucket policy editor card --><div class=\"bg-dirio-bg-card border border-dirio-border rounded-lg\"><div class=\"px-5 py-4 border-b border-dirio-border\"><h2 class=\"text-sm font-semibold text-dirio-text\">Bucket Policy</h2><p class=\"text-xs text-dirio-muted mt-0.5\">Raw S3 bucket policy JSON. Clear the field and save to remove the policy.</p></div><div class=\"px-5 py-4\"><form method=\"POST\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" class=\"flex items-end gap-3\"><div class=\"flex-1 max-w-xs\"><label class=\"block text-xs text-dirio-muted mb-1\">Transfer to access key</label> <input type=\"text\" name=\"access_key\" placeholder=\"alice\" required class=\"w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal\"></div><button type=\"submit\" class=\"px-4 py-1.5 text-sm rounded border border-dirio-border text-dirio-muted hover:border-dirio-teal hover:text-dirio-teal transition-colors\">Transfer</button></form></div></div><!-- Bucket policy editor card --><div class=\"bg-dirio-bg-card border border-dirio-border rounded-lg\"><div class=\"px-5 py-4 border-b border-dirio-border\"><h2 class=\"text-sm font-semibold text-dirio-text\">Bucket Policy</h2><p class=\"text-xs text-dirio-muted mt-0.5\">Raw S3 bucket policy JSON. Clear the field and save to remove the policy.</p></div><div class=\"px-5 py-4\"><form method=\"POST\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -179,7 +179,7 @@ func bucketDetailContent(d BucketDetailData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\"><textarea name=\"policy\" rows=\"18\" spellcheck=\"false\" class=\"w-full font-mono text-xs bg-dirio-bg border border-dirio-border rounded px-3 py-2 text-dirio-text focus:outline-none focus:border-dirio-teal resize-y\" placeholder=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\"><textarea name=\"policy\" rows=\"18\" spellcheck=\"false\" class=\"w-full font-mono text-xs bg-dirio-bg-input border border-dirio-border rounded px-3 py-2 text-dirio-text focus:outline-none focus:border-dirio-teal resize-y\" placeholder=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

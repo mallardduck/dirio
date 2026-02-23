@@ -65,7 +65,7 @@ templ simulateContent(d SimulateData) {
 							value={ d.AccessKey }
 							placeholder="alice"
 							required
-							class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
+							class="w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
 						/>
 					</div>
 					<div>
@@ -76,7 +76,7 @@ templ simulateContent(d SimulateData) {
 							value={ d.Bucket }
 							placeholder="my-bucket"
 							required
-							class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
+							class="w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
 						/>
 					</div>
 				</div>
@@ -85,7 +85,7 @@ templ simulateContent(d SimulateData) {
 						<label class="block text-xs text-dirio-muted mb-1">Action</label>
 						<select
 							name="action"
-							class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal"
+							class="w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal"
 						>
 							for _, a := range CommonS3Actions {
 								if a == d.Action {
@@ -103,7 +103,7 @@ templ simulateContent(d SimulateData) {
 							name="key"
 							value={ d.Key }
 							placeholder="path/to/object.txt"
-							class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
+							class="w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
 						/>
 					</div>
 				</div>

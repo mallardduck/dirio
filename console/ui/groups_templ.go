@@ -67,7 +67,7 @@ func GroupsPage(d GroupsPageData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" class=\"flex items-end gap-3\"><div class=\"flex-1 max-w-xs\"><label class=\"block text-xs text-dirio-muted mb-1\">Group name</label> <input type=\"text\" name=\"name\" placeholder=\"developers\" required class=\"w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal\"></div><button type=\"submit\" class=\"px-4 py-1.5 text-sm rounded border border-dirio-teal text-dirio-teal hover:bg-dirio-teal hover:text-dirio-bg transition-colors\">Create</button></form></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" class=\"flex items-end gap-3\"><div class=\"flex-1 max-w-xs\"><label class=\"block text-xs text-dirio-muted mb-1\">Group name</label> <input type=\"text\" name=\"name\" placeholder=\"developers\" required class=\"w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal\"></div><button type=\"submit\" class=\"px-4 py-1.5 text-sm rounded border border-dirio-teal text-dirio-teal hover:bg-dirio-teal hover:text-dirio-bg transition-colors\">Create</button></form></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -470,7 +470,7 @@ func GroupDetailPage(d GroupDetailData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" class=\"flex items-end gap-3 pt-2\"><div class=\"flex-1 max-w-xs\"><label class=\"block text-xs text-dirio-muted mb-1\">Add member by access key</label> <input type=\"text\" name=\"access_key\" placeholder=\"alice\" required class=\"w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal\"></div><button type=\"submit\" class=\"px-4 py-1.5 text-sm rounded border border-dirio-border text-dirio-muted hover:border-dirio-teal hover:text-dirio-teal transition-colors\">Add</button></form></div></div><!-- Attached policies card --><div class=\"bg-dirio-bg-card border border-dirio-border rounded-lg\"><div class=\"px-5 py-4 border-b border-dirio-border\"><h2 class=\"text-sm font-semibold text-dirio-text\">Attached Policies</h2></div><div class=\"px-5 py-4 space-y-4\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" class=\"flex items-end gap-3 pt-2\"><div class=\"flex-1 max-w-xs\"><label class=\"block text-xs text-dirio-muted mb-1\">Add member by access key</label> <input type=\"text\" name=\"access_key\" placeholder=\"alice\" required class=\"w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal\"></div><button type=\"submit\" class=\"px-4 py-1.5 text-sm rounded border border-dirio-border text-dirio-muted hover:border-dirio-teal hover:text-dirio-teal transition-colors\">Add</button></form></div></div><!-- Attached policies card --><div class=\"bg-dirio-bg-card border border-dirio-border rounded-lg\"><div class=\"px-5 py-4 border-b border-dirio-border\"><h2 class=\"text-sm font-semibold text-dirio-text\">Attached Policies</h2></div><div class=\"px-5 py-4 space-y-4\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -552,7 +552,7 @@ func GroupDetailPage(d GroupDetailData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if len(d.AllPolicies) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<select name=\"policy\" required class=\"w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal\"><option value=\"\">— select a policy —</option> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<select name=\"policy\" required class=\"w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal\"><option value=\"\">— select a policy —</option> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

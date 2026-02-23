@@ -51,7 +51,7 @@ templ bucketDetailContent(d BucketDetailData) {
 							name="access_key"
 							placeholder="alice"
 							required
-							class="w-full bg-dirio-bg border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
+							class="w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
 						/>
 					</div>
 					<button
@@ -75,7 +75,7 @@ templ bucketDetailContent(d BucketDetailData) {
 						name="policy"
 						rows="18"
 						spellcheck="false"
-						class="w-full font-mono text-xs bg-dirio-bg border border-dirio-border rounded px-3 py-2 text-dirio-text focus:outline-none focus:border-dirio-teal resize-y"
+						class="w-full font-mono text-xs bg-dirio-bg-input border border-dirio-border rounded px-3 py-2 text-dirio-text focus:outline-none focus:border-dirio-teal resize-y"
 						placeholder={ `{"Version": "2012-10-17", "Statement": []}` }
 					>{ d.PolicyJSON }</textarea>
 					<div class="flex items-center gap-3 mt-3">
