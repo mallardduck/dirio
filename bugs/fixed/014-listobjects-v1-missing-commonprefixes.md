@@ -1,11 +1,11 @@
 # Bug #014: ListObjects V1 Returns Empty CommonPrefixes
 
-**Status:** ✅ RESOLVED  
+**Status:** ✅ RESOLVED
 **Priority:** High
 **Discovered:** 2026-02-23
 **Resolved:** 2026-02-23
 **Affects:** Any client using ListObjectsV1 with a delimiter (aws CLI `s3api list-objects`, boto3 `list_objects`)
-**Resolution:** Modify v1 list objects to output `storage.InternalResult` like v2 version does among other small refactors
+**Resolution:** Changed V1 listing path to return `storage.InternalResult` (same as V2), wiring `CommonPrefixes`, `IsTruncated`, `NextMarker`, and `Marker` through all three layers
 
 ## Summary
 
@@ -38,29 +38,21 @@ storage layer.
 
 Three layers all fail to propagate CommonPrefixes in the V1 path:
 
-1. **Service layer** — `service/s3/s3.go:ListObjects` (line 217) returns `[]s3types.Object`
-   instead of a structured result. CommonPrefixes computed by the storage layer are
-   discarded silently:
+1. **Storage layer** — `storage/storage.go:ListObjects` returned only `[]s3types.Object`,
+   discarding the `CommonPrefixes` already computed by `listInternal`:
    ```go
-   func (s *Service) ListObjects(...) ([]s3types.Object, error) {
-       objects, err := s.storage.ListObjects(ctx, req.Bucket, req.Prefix, req.Delimiter, req.MaxKeys)
-       ...
-       return objects, nil  // CommonPrefixes thrown away here
+   func (s *Storage) ListObjects(...) ([]s3types.Object, error) {
+       result, _ := s.listInternal(...)
+       return result.Objects, nil  // CommonPrefixes silently dropped
    }
    ```
 
-2. **HTTP handler** — `internal/http/api/s3/bucket.go:ListObjects` (line 198) builds
-   the response without a `CommonPrefixes` field:
-   ```go
-   response := s3types.ListBucketResult{
-       ...
-       Contents: filteredObjects,
-       // CommonPrefixes: never set
-   }
-   ```
+2. **Service layer** — `service/s3/s3.go:ListObjects` returned `[]s3types.Object`
+   instead of a structured result. CommonPrefixes were never forwarded.
 
-3. **Type** — `s3types.ListBucketResult` has `CommonPrefixes []CommonPrefix` (line 23 of
-   `pkg/s3types/responses.go`) but it is never populated.
+3. **HTTP handler** — `internal/http/api/s3/bucket.go:ListObjects` built the response
+   without `CommonPrefixes`, `IsTruncated`, or `NextMarker`, and never passed the `marker`
+   query parameter down to the service.
 
 The V2 path doesn't have this problem: `service/s3/s3.go:ListObjectsV2` returns
 `storage.InternalResult` (which carries `CommonPrefixes`) and the V2 handler passes it
@@ -81,37 +73,79 @@ through correctly.
 **Workarounds:**
 - Use ListObjectsV2 (`list-type=2`) instead of V1
 
-## Proposed Fix
+## Resolution
 
-1. Change `storage.ListObjects` to return a structured result (like `storage.InternalResult`)
-   that includes both `Objects` and `CommonPrefixes`, OR add a separate storage method.
+Fixed all three layers to mirror the working V2 path:
 
-2. Update `service/s3/s3.go:ListObjects` to return that structured result instead of
-   `[]s3types.Object`.
+### 1. `internal/persistence/storage/storage.go`
 
-3. Update `internal/http/api/s3/bucket.go:ListObjects` to populate `CommonPrefixes` in
-   the `ListBucketResult` response from the service result.
+`ListObjects` now returns `InternalResult` instead of `[]s3types.Object`, and accepts
+a `marker` parameter passed through as `startAt` to `listInternal`:
+
+```go
+func (s *Storage) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (InternalResult, error) {
+    return s.listInternal(ctx, bucket, prefix, marker, delimiter, maxKeys, false)
+}
+```
+
+### 2. `internal/service/s3/types.go`
+
+Added `Marker` field to `ListObjectsRequest` (was a TODO):
+
+```go
+type ListObjectsRequest struct {
+    Bucket    string
+    Prefix    string
+    Marker    string
+    Delimiter string
+    MaxKeys   int
+}
+```
+
+### 3. `internal/service/s3/s3.go`
+
+`ListObjects` now returns `storage.InternalResult`:
+
+```go
+func (s *Service) ListObjects(ctx context.Context, req *ListObjectsRequest) (storage.InternalResult, error) {
+    return s.storage.ListObjects(ctx, req.Bucket, req.Prefix, req.Marker, req.Delimiter, req.MaxKeys)
+}
+```
+
+### 4. `internal/http/api/s3/bucket.go`
+
+Handler now passes `marker` into the request and populates `CommonPrefixes`, `IsTruncated`,
+and `NextMarker` in the response:
+
+```go
+response := s3types.ListBucketResult{
+    ...
+    Marker:         marker,
+    NextMarker:     result.NextMarker,
+    IsTruncated:    result.IsTruncated,
+    Contents:       filteredObjects,
+    CommonPrefixes: result.CommonPrefixes,
+}
+```
 
 ## Testing
 
 Confirmed in: `scripts/validate-setup.sh` (section 8, first two assertions)
 
 ```bash
-S3_ENDPOINT=http://localhost:9000 \
-  aws --endpoint-url http://localhost:9000 --output json \
+aws --endpoint-url http://localhost:9000 --output json \
   s3api list-objects --bucket alpha --delimiter "/"
-# CommonPrefixes should be present but is absent
+# CommonPrefixes now present in response
 ```
 
 ## Related Issues
 
 - Bug #007: ListObjects MaxKeys ignored (same code path, V1 listing)
-- ListObjectsV2 (`api/s3/bucket.go:ListObjectsV2`) handles CommonPrefixes correctly —
-  can serve as a reference implementation for the fix
+- ListObjectsV2 (`api/s3/bucket.go:ListObjectsV2`) served as the reference implementation
 
-## Files to Investigate
+## Files Changed
 
-- `internal/persistence/storage/storage.go` — `ListObjects` return type
-- `internal/service/s3/s3.go:217` — `ListObjects` discards CommonPrefixes
-- `internal/http/api/s3/bucket.go:163` — handler builds response without CommonPrefixes
-- `pkg/s3types/responses.go:13` — `ListBucketResult.CommonPrefixes` field exists but unused
+- `internal/persistence/storage/storage.go` — `ListObjects` returns `InternalResult`, accepts `marker`
+- `internal/service/s3/types.go` — added `Marker` field to `ListObjectsRequest`
+- `internal/service/s3/s3.go` — `ListObjects` returns `storage.InternalResult`
+- `internal/http/api/s3/bucket.go` — handler populates `CommonPrefixes`, `IsTruncated`, `NextMarker`; passes `marker`
