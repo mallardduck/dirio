@@ -31,26 +31,35 @@ func TestImport_MinIO2019_RealData(t *testing.T) {
 
 	// Verify users
 	t.Run("Users", func(t *testing.T) {
-		assert.Len(t, result.Users, 2, "Should have 2 users")
+		assert.Len(t, result.Users, 3, "Should have 3 users")
 
 		alice, ok := result.Users["alice"]
 		require.True(t, ok, "Should have alice user")
 		assert.Equal(t, "alice", alice.AccessKey, "Alice accessKey should be 'alice'")
 		assert.Equal(t, "alicepass1234", alice.SecretKey, "Alice should have correct password")
 		assert.Equal(t, "enabled", alice.Status, "Alice should be enabled")
+		assert.Equal(t, []string{"alpha-rw"}, alice.AttachedPolicy, "Alice should have alpha-rw policy")
 
 		bob, ok := result.Users["bob"]
 		require.True(t, ok, "Should have bob user")
 		assert.Equal(t, "bob", bob.AccessKey, "Bob accessKey should be 'bob'")
 		assert.Equal(t, "bobpass1234", bob.SecretKey, "Bob should have correct password")
 		assert.Equal(t, "enabled", bob.Status, "Bob should be enabled")
+		assert.Equal(t, []string{"beta-rw"}, bob.AttachedPolicy, "Bob should have beta-rw policy")
+
+		charlie, ok := result.Users["charlie"]
+		require.True(t, ok, "Should have charlie user")
+		assert.Equal(t, "charlie", charlie.AccessKey, "Charlie accessKey should be 'charlie'")
+		assert.Equal(t, "charliepass1234", charlie.SecretKey, "Charlie should have correct password")
+		assert.Equal(t, "enabled", charlie.Status, "Charlie should be enabled")
+		assert.Equal(t, []string{"alpha-rw", "delta-rw"}, charlie.AttachedPolicy, "Charlie should have both alpha-rw and delta-rw policies")
 
 		t.Logf("Users imported: %+v", result.Users)
 	})
 
 	// Verify IAM policies
 	t.Run("Policies", func(t *testing.T) {
-		assert.Len(t, result.Policies, 2, "Should have 2 IAM policies")
+		assert.Len(t, result.Policies, 3, "Should have 3 IAM policies")
 
 		alphaRW, ok := result.Policies["alpha-rw"]
 		require.True(t, ok, "Should have alpha-rw policy")
@@ -60,12 +69,16 @@ func TestImport_MinIO2019_RealData(t *testing.T) {
 		require.True(t, ok, "Should have beta-rw policy")
 		assert.Contains(t, betaRW.PolicyJSON, "beta", "Policy should mention beta bucket")
 
+		deltaRW, ok := result.Policies["delta-rw"]
+		require.True(t, ok, "Should have delta-rw policy")
+		assert.Contains(t, deltaRW.PolicyJSON, "delta", "Policy should mention delta bucket")
+
 		t.Logf("Policies imported: %+v", result.Policies)
 	})
 
 	// Verify buckets
 	t.Run("Buckets", func(t *testing.T) {
-		assert.Len(t, result.Buckets, 3, "Should have 3 buckets")
+		assert.Len(t, result.Buckets, 4, "Should have 4 buckets")
 
 		alpha, ok := result.Buckets["alpha"]
 		require.True(t, ok, "Should have alpha bucket")
@@ -84,6 +97,10 @@ func TestImport_MinIO2019_RealData(t *testing.T) {
 		// Gamma should also have a bucket policy (public-read)
 		assert.NotEmpty(t, gamma.PolicyConfigJSON, "Gamma should have bucket policy")
 		t.Logf("Gamma bucket policy: %s", string(gamma.PolicyConfigJSON))
+
+		delta, ok := result.Buckets["delta"]
+		require.True(t, ok, "Should have delta bucket")
+		assert.Equal(t, "delta", delta.Name)
 	})
 
 	// Verify object metadata

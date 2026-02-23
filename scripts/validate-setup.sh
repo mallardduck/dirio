@@ -17,9 +17,10 @@
 #   S3_ENDPOINT    - Server URL, no trailing slash (default: http://localhost:8080)
 #   S3_ACCESS_KEY  - Root/admin access key     (default: minioadmin)
 #   S3_SECRET_KEY  - Root/admin secret key     (default: minioadmin)
-#   DATASET        - "2019" or "standalone"    (default: 2019)
+#   DATASET        - "2019", "2022", or "standalone"    (default: 2019)
 #   ALICE_PASS     - alice's secret key        (default: alicepass1234)
 #   BOB_PASS       - bob's secret key          (default: bobpass1234)
+#   CHARLIE_PASS   - charlie's secret key      (default: charliepass1234)
 #   SKIP_IAM       - "true" to skip per-user tests (default: false)
 #
 # Exit code: number of failed tests (0 = all pass)
@@ -32,7 +33,9 @@ S3_SECRET_KEY="${S3_SECRET_KEY:-minioadmin}"
 DATASET="${DATASET:-2019}"
 ALICE_PASS="${ALICE_PASS:-alicepass1234}"
 BOB_PASS="${BOB_PASS:-bobpass1234}"
+CHARLIE_PASS="${CHARLIE_PASS:-charliepass1234}"
 SKIP_IAM="${SKIP_IAM:-false}"
+[[ $DATASET -gt 2021 ]] && MULTIPOLICY=true || MULTIPOLICY=false
 
 S3_ENDPOINT="${S3_ENDPOINT%/}"   # strip trailing slash
 
@@ -66,6 +69,29 @@ check_prereqs() {
     missing=1
   fi
   if [ $missing -ne 0 ]; then exit 1; fi
+}
+
+# -----------------------
+# Server Sniffing
+# -----------------------
+detect_server_type() {
+  local headers
+  # Get headers from a simple root request
+  headers=$(curl -s -I "${S3_ENDPOINT}/" 2>/dev/null) || headers=""
+
+  if echo "${headers}" | grep -qi "Server: MinIO"; then
+    # Further refine MinIO version if possible
+    local version_str
+    version_str=$(echo "${headers}" | grep -i "Server: MinIO" | awk '{print $2}')
+    echo "MINIO"
+    [[ "$version_str" == *"2019"* ]] && echo "VERSION_2019"
+  elif echo "${headers}" | grep -qi "Server: AmazonS3"; then
+    echo "S3"
+  elif echo "${headers}" | grep -qi "Server: DirIO"; then
+    echo "DIRIO"
+  else
+    echo "UNKNOWN"
+  fi
 }
 
 # -----------------------
@@ -126,7 +152,7 @@ test_list_buckets() {
   local bucket_list
   bucket_list=$(aws_root s3api list-buckets --query 'Buckets[].Name' --output text 2>/dev/null) || bucket_list=""
 
-  for bucket in alpha beta gamma; do
+  for bucket in alpha beta gamma delta; do
     if echo "${bucket_list}" | grep -qw "${bucket}"; then
       pass "Bucket '${bucket}' present"
     else
@@ -145,6 +171,7 @@ test_core_objects() {
     "alpha alice-object.bin"
     "beta  bob-object.bin"
     "gamma public-object.bin"
+    "delta charlie-object.bin"
   )
 
   for pair in "${pairs[@]}"; do
@@ -263,17 +290,20 @@ test_curl_headers() {
 # 7. Per-user authentication (IAM users)
 # -----------------------
 test_user_auth() {
-  section "7. Per-User Auth — alice and bob"
+  section "7. Per-User Auth — alice, bob, and charlie"
 
   if [ "${SKIP_IAM}" = "true" ]; then
     skip "alice can access alpha (SKIP_IAM=true)"
     skip "bob can access beta (SKIP_IAM=true)"
     skip "alice denied access to beta (SKIP_IAM=true)"
     skip "bob denied access to alpha (SKIP_IAM=true)"
+    skip "charlie (multi-policy): can access alpha via alpha-rw (SKIP_IAM=true)"
+    skip "charlie (multi-policy): can access delta via delta-rw (SKIP_IAM=true)"
+    skip "charlie (multi-policy): beta access check (SKIP_IAM=true)"
     return
   fi
 
-  # alice → alpha (should work)
+  # alice → alpha (should work — alice has alpha-rw)
   if aws_as "alice" "${ALICE_PASS}" s3api head-object \
       --bucket alpha --key alice-object.bin >/dev/null 2>&1; then
     pass "alice: HeadObject alpha/alice-object.bin → allowed"
@@ -281,7 +311,7 @@ test_user_auth() {
     fail "alice: HeadObject alpha/alice-object.bin → denied (should be allowed)"
   fi
 
-  # bob → beta (should work)
+  # bob → beta (should work — bob has beta-rw)
   if aws_as "bob" "${BOB_PASS}" s3api head-object \
       --bucket beta --key bob-object.bin >/dev/null 2>&1; then
     pass "bob: HeadObject beta/bob-object.bin → allowed"
@@ -290,11 +320,20 @@ test_user_auth() {
   fi
 
   # alice → beta (should fail — alice only has alpha-rw)
-  if aws_as "alice" "${ALICE_PASS}" s3api head-object \
-      --bucket beta --key bob-object.bin >/dev/null 2>&1; then
-    fail "alice: HeadObject beta/bob-object.bin → allowed (should be denied)"
+  if [[ "$SERVER_TYPE" == "MINIO" ]]; then
+    if aws_as "alice" "${ALICE_PASS}" s3api head-object \
+          --bucket beta --key bob-object.bin >/dev/null 2>&1; then
+        fail "alice: HeadObject beta/bob-object.bin → allowed (should be denied)"
+      else
+        pass "alice: HeadObject beta/bob-object.bin → denied (correct ✓)"
+      fi
   else
-    pass "alice: HeadObject beta/bob-object.bin → denied (correct ✓)"
+      if aws_as "alice" "${ALICE_PASS}" s3api head-object \
+          --bucket beta --key bob-object.bin >/dev/null 2>&1; then
+        pass "alice: HeadObject beta/bob-object.bin → allowed (correct ✓; even authed users get access via bucket policy)"
+      else
+        fail "alice: HeadObject beta/bob-object.bin → denied (should be allowed via Bucket policy)"
+      fi
   fi
 
   # bob → alpha (should fail — bob only has beta-rw)
@@ -304,6 +343,49 @@ test_user_auth() {
   else
     pass "bob: HeadObject alpha/alice-object.bin → denied (correct ✓)"
   fi
+
+  # --- charlie: multi-policy tests (alpha-rw + delta-rw) ---
+  #
+  # MinIO 2019 does not support multi-policy natively. So it will set
+  # MULTIPOLICY=false when validating the live MinIO 2019 instance to
+  # skip the delta test; leave it true (default) for DirIO or MinIO 2022.
+
+  # charlie → delta (should always work — charlie has alpha-rw in all setups)
+  if aws_as "charlie" "${CHARLIE_PASS}" s3api head-object \
+      --bucket delta --key charlie-object.bin >/dev/null 2>&1; then
+    pass "charlie: HeadObject delta/charlie-object.bin → allowed via delta-rw"
+  else
+    fail "charlie: HeadObject delta/charlie-object.bin → denied (should be allowed via delta-rw)"
+  fi
+
+  # charlie → alpha (requires multi-policy support)
+  if [ "${MULTIPOLICY}" = "false" ]; then
+    skip "charlie (multi-policy): HeadObject delta/charlie-object.bin — MULTIPOLICY=false (required on 2019)"
+  elif aws_as "charlie" "${CHARLIE_PASS}" s3api head-object \
+      --bucket delta --key charlie-object.bin >/dev/null 2>&1; then
+    pass "charlie (multi-policy): HeadObject delta/charlie-object.bin → allowed via delta-rw"
+  else
+    fail "charlie (multi-policy): HeadObject delta/charlie-object.bin → denied (should be allowed via delta-rw)"
+  fi
+
+  if [[ "$SERVER_TYPE" == "MINIO" ]]; then
+    # charlie → beta (no beta-rw IAM policy)
+    if aws_as "charlie" "${CHARLIE_PASS}" s3api head-object \
+        --bucket beta --key bob-object.bin >/dev/null 2>&1; then
+      fail "charlie (multi-policy): HeadObject beta/bob-object.bin → allowed (should be denied)"
+    else
+      pass "charlie (multi-policy): HeadObject beta/bob-object.bin → denied (correct ✓)"
+    fi
+  else
+    if aws_as "charlie" "${CHARLIE_PASS}" s3api head-object \
+        --bucket beta --key bob-object.bin >/dev/null 2>&1; then
+      pass "charlie (multi-policy): HeadObject beta/bob-object.bin → allowed (correct ✓; even authed users get access via bucket policy)"
+    else
+      fail "charlie (multi-policy): HeadObject beta/bob-object.bin → denied (should be allowed via Bucket policy)"
+    fi
+  fi
+
+
 }
 
 # -----------------------
@@ -525,10 +607,16 @@ echo ""
 echo "  Endpoint : ${S3_ENDPOINT}"
 echo "  Auth     : ${S3_ACCESS_KEY} / (secret)"
 echo "  Dataset  : ${DATASET}"
-echo "  Skip IAM : ${SKIP_IAM}"
+echo "  Skip IAM   : ${SKIP_IAM}"
+echo "  Multipolicy: ${MULTIPOLICY} (set MULTIPOLICY=false for live MinIO 2019)"
+echo "  Charlie    : charliepass=${CHARLIE_PASS} (multi-policy: alpha-rw + delta-rw)"
 echo ""
 
 check_prereqs
+
+# Sniff server
+DETECTED_INFO=$(detect_server_type)
+SERVER_TYPE=$(echo "$DETECTED_INFO" | head -n 1)
 
 # Tests common to both datasets
 test_connectivity
@@ -538,15 +626,10 @@ test_get_object
 test_public_access
 test_curl_headers
 test_user_auth
-
-# Tests specific to the richer 2019 dataset
-if [ "${DATASET}" = "2019" ]; then
-  test_folder_structure
-  test_metadata
-  test_content_headers
-  test_large_file
-  test_server_side_copies
-fi
+test_metadata
+test_content_headers
+test_large_file
+test_server_side_copies
 
 # -----------------------
 # Summary

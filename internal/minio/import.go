@@ -139,6 +139,19 @@ func importUsers(minioFS billy.Filesystem, users map[string]*User) error {
 			fmt.Printf("Found MinIO 2019 user: %s (legacy format)\n", username)
 		}
 
+		// Also try reading policy.json from the user directory (MinIO 2019 format).
+		// In 2019, per-user policy assignments were stored at
+		// config/iam/users/<username>/policy.json as a bare JSON string
+		// (e.g. "alpha-rw") rather than in policydb/users/.
+		policyPath := filepath.Join(usersDir, username, "policy.json")
+		if policyData, err := util.ReadFile(minioFS, policyPath); err == nil {
+			var userPolicy string
+			if err := json.Unmarshal(policyData, &userPolicy); err == nil && userPolicy != "" {
+				user.AttachedPolicy = []string{userPolicy}
+				fmt.Printf("Attached policy to user %s from user dir: %s\n", username, userPolicy)
+			}
+		}
+
 		users[username] = user
 	}
 

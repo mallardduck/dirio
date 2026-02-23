@@ -145,6 +145,22 @@ cat > /tmp/beta-rw.json <<'EOF'
 }
 EOF
 
+cat > /tmp/delta-rw.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:*"],
+      "Resource": [
+        "arn:aws:s3:::delta",
+        "arn:aws:s3:::delta/*"
+      ]
+    }
+  ]
+}
+EOF
+
 docker run --rm --network host -e MC_HOST_minio2022 \
   -v /tmp/alpha-rw.json:/policy.json \
   "${MC_IMAGE}" admin policy add minio2022 alpha-rw /policy.json
@@ -152,6 +168,10 @@ docker run --rm --network host -e MC_HOST_minio2022 \
 docker run --rm --network host -e MC_HOST_minio2022 \
   -v /tmp/beta-rw.json:/policy.json \
   "${MC_IMAGE}" admin policy add minio2022 beta-rw /policy.json
+
+docker run --rm --network host -e MC_HOST_minio2022 \
+  -v /tmp/delta-rw.json:/policy.json \
+  "${MC_IMAGE}" admin policy add minio2022 delta-rw /policy.json
 
 # -----------------------
 # Recreate users (2022 syntax: no policy in add command)
@@ -179,9 +199,10 @@ docker run --rm --network host -e MC_HOST_minio2022 \
 
 # Attach MULTIPLE policies to charlie (testing multi-policy support)
 # NOTE: Multiple policies must be comma-separated in a single call
+# charlie gets alpha-rw + delta-rw (matching the 2019 data — NOT beta-rw)
 echo "🧪 Testing multi-policy attachment for user '${CHARLIE_USER}'..."
 docker run --rm --network host -e MC_HOST_minio2022 \
-  "${MC_IMAGE}" admin policy set minio2022 alpha-rw,beta-rw user="${CHARLIE_USER}"
+  "${MC_IMAGE}" admin policy set minio2022 delta-rw,alpha-rw user="${CHARLIE_USER}"
 
 # -----------------------
 # Recreate public-read bucket policies
@@ -210,6 +231,10 @@ echo
 echo "Gamma bucket:"
 docker run --rm --network host -e MC_HOST_minio2022 \
   "${MC_IMAGE}" ls --recursive minio2022/gamma | head -20
+echo
+echo "Delta bucket:"
+docker run --rm --network host -e MC_HOST_minio2022 \
+  "${MC_IMAGE}" ls --recursive minio2022/delta | head -20
 
 # -----------------------
 # Check metadata migration
@@ -239,12 +264,13 @@ echo
 echo "Users (recreated for 2022 IAM):"
 echo "  alice   / alicepass1234   → alpha-rw policy"
 echo "  bob     / bobpass1234     → beta-rw policy"
-echo "  charlie / charliepass1234 → alpha-rw + beta-rw (multi-policy test)"
+echo "  charlie / charliepass1234 → delta-rw + alpha-rw (multi-policy test)"
 echo
 echo "Buckets (migrated from 2019):"
 echo "  alpha → folder structure, metadata objects, simulated tagged objects"
 echo "  beta  → public-read, copied objects"
 echo "  gamma → public-read, large files"
+echo "  delta → charlie's private bucket (multi-policy test)"
 echo
 echo "Migrated objects include:"
 echo "  - Basic objects (alice-object.bin, bob-object.bin, public-object.bin)"

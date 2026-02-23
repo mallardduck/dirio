@@ -15,7 +15,7 @@ set -euo pipefail
 #
 # Optional environment variables:
 #   OBJECT_SIZE          - Size of test objects in bytes (default: 65536)
-#   SETUP_POLICY_TESTS   - Set to "true" to create advanced policy test scenarios (default: false)
+#   SETUP_POLICY_TESTS   - Set to "true" to create advanced policy test scenarios (default: true)
 
 # -----------------------
 # Config
@@ -31,7 +31,7 @@ MINIO_PORT="9001"  # Different port to avoid conflicts
 DATA_DIR="$(pwd)/minio-data-2019"
 
 OBJECT_SIZE="${OBJECT_SIZE:-65536}"
-SETUP_POLICY_TESTS="${SETUP_POLICY_TESTS:-false}"
+SETUP_POLICY_TESTS="${SETUP_POLICY_TESTS:-true}"
 
 # Users
 ALICE_USER="alice"
@@ -39,6 +39,9 @@ ALICE_PASS="alicepass1234"
 
 BOB_USER="bob"
 BOB_PASS="bobpass1234"
+
+CHARLIE_USER="charlie"
+CHARLIE_PASS="charliepass1234"
 
 # -----------------------
 # Validation
@@ -69,6 +72,7 @@ validate_secret () {
 
 validate_secret "${ALICE_USER}" "${ALICE_PASS}"
 validate_secret "${BOB_USER}" "${BOB_PASS}"
+validate_secret "${CHARLIE_USER}" "${CHARLIE_PASS}"
 
 # -----------------------
 # Cleanup
@@ -124,7 +128,7 @@ done
 # Create buckets
 # -----------------------
 echo "📦 Creating test buckets..."
-for bucket in alpha beta gamma; do
+for bucket in alpha beta gamma delta; do
   if docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" ls "minio2019/${bucket}" >/dev/null 2>&1; then
     echo "  ⚠️  Bucket '${bucket}' already exists, skipping"
   else
@@ -169,6 +173,22 @@ cat > /tmp/beta-rw.json <<'EOF'
 }
 EOF
 
+cat > /tmp/delta-rw.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:*"],
+      "Resource": [
+        "arn:aws:s3:::delta",
+        "arn:aws:s3:::delta/*"
+      ]
+    }
+  ]
+}
+EOF
+
 # Check if alpha-rw policy exists, create if not
 if docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" admin policy info minio2019 alpha-rw >/dev/null 2>&1; then
   echo "  ⚠️  Policy 'alpha-rw' already exists, skipping"
@@ -189,6 +209,17 @@ elif docker run --rm --network host -e MC_HOST_minio2019 \
   echo "  ✓ Created policy 'beta-rw'"
 else
   echo "  ⚠️  Failed to create policy 'beta-rw'"
+fi
+
+# Check if delta-rw policy exists, create if not
+if docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" admin policy info minio2019 delta-rw >/dev/null 2>&1; then
+  echo "  ⚠️  Policy 'delta-rw' already exists, skipping"
+elif docker run --rm --network host -e MC_HOST_minio2019 \
+  -v /tmp/delta-rw.json:/policy.json \
+  "${MC_IMAGE}" admin policy add minio2019 delta-rw /policy.json 2>/dev/null; then
+  echo "  ✓ Created policy 'delta-rw'"
+else
+  echo "  ⚠️  Failed to create policy 'delta-rw'"
 fi
 
 # -----------------------
@@ -215,6 +246,17 @@ elif docker run --rm --network host -e MC_HOST_minio2019 \
   echo "  ✓ Created user '${BOB_USER}' with policy 'beta-rw'"
 else
   echo "  ⚠️  Failed to create user '${BOB_USER}'"
+fi
+
+# Check if charlie user exists, create if not
+# Charlie gets delta-rw initially; because MinIO 2019 MC only supports one policy per user.
+if docker run --rm --network host -e MC_HOST_minio2019 "${MC_IMAGE}" admin user info minio2019 "${CHARLIE_USER}" >/dev/null 2>&1; then
+  echo "  ⚠️  User '${CHARLIE_USER}' already exists, skipping"
+elif docker run --rm --network host -e MC_HOST_minio2019 \
+  "${MC_IMAGE}" admin user add minio2019 "${CHARLIE_USER}" "${CHARLIE_PASS}" delta-rw 2>/dev/null; then
+  echo "  ✓ Created user '${CHARLIE_USER}' with initial policy 'alpha-rw'"
+else
+  echo "  ⚠️  Failed to create user '${CHARLIE_USER}'"
 fi
 
 # -----------------------
@@ -256,6 +298,7 @@ upload_object () {
 upload_object alpha alice-object.bin
 upload_object beta bob-object.bin
 upload_object gamma public-object.bin
+upload_object delta charlie-object.bin
 
 # -----------------------
 # Folder Structure Objects (for delimiter/prefix testing)
@@ -938,13 +981,15 @@ echo "Port: ${MINIO_PORT}"
 echo "Data: ${DATA_DIR}"
 echo
 echo "Users:"
-echo "  alice / alicepass1234 → (attempted) RW on bucket alpha"
-echo "  bob   / bobpass1234   → (attempted) RW on bucket beta"
+echo "  alice   / alicepass1234   → alpha-rw (single policy)"
+echo "  bob     / bobpass1234     → beta-rw  (single policy)"
+echo "  charlie / charliepass1234 → delta-rw (single policy in 2019; setup for multi-policy in 2022 update)"
 echo
 echo "Buckets:"
 echo "  alpha → folder structure, metadata objects, simulated tagged objects"
 echo "  beta  → public-read, copied objects"
 echo "  gamma → public-read, large files"
+echo "  delta → charlie's private bucket (multi-policy test)"
 echo
 echo "Created objects include:"
 echo "  - Basic objects (alice-object.bin, bob-object.bin, public-object.bin)"
