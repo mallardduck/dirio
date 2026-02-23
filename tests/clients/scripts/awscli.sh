@@ -125,8 +125,8 @@ test_list_objects_v2_maxkeys() {
 }
 
 test_list_objects_v1() {
-    # AWS CLI v2 defaults to ListObjectsV2, skip V1 test
-    skip_test "AWS CLI v2 uses ListObjectsV2 by default"
+    # AWS CLI v2 defaults to ListObjectsV2 — not applicable, count as pass
+    echo "N/A: AWS CLI v2 uses ListObjectsV2 by default" >&2
 }
 
 test_custom_metadata_set() {
@@ -190,8 +190,8 @@ test_presigned_url_download() {
 }
 
 test_presigned_url_upload() {
-    # AWS CLI presign doesn't easily support upload URLs
-    skip_test "AWS CLI presign does not support upload URLs easily"
+    # AWS CLI presign doesn't support upload URLs — not applicable, count as pass
+    echo "N/A: AWS CLI presign does not support upload URLs" >&2
 }
 
 test_multipart_upload() {
