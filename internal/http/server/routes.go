@@ -3,6 +3,7 @@ package server
 import (
 	"io"
 	"net/http"
+	"net/http/pprof"
 
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 	"github.com/mallardduck/teapot-router/pkg/teapot"
@@ -38,6 +39,23 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 	r.GET("/.internal/routes", teapot.NewListRoutesHandler(r, nil)).Name("debug.routes").Action("dirio:ListRoutes")
 
 	r.Func().GET("/healthz", health.HandleHealth).Name("health").Action("dirio:Health")
+
+	// pprof profiling endpoints — only registered when --debug is set.
+	// Unauthenticated: debug mode is not intended for production use.
+	if deps != nil && deps.Debug {
+		r.Func().GET("/debug/pprof/", pprof.Index)
+		r.Func().GET("/debug/pprof/cmdline", pprof.Cmdline)
+		r.Func().GET("/debug/pprof/profile", pprof.Profile)
+		r.Func().GET("/debug/pprof/symbol", pprof.Symbol)
+		r.Func().POST("/debug/pprof/symbol", pprof.Symbol)
+		r.Func().GET("/debug/pprof/trace", pprof.Trace)
+		r.Func().GET("/debug/pprof/goroutine", pprof.Handler("goroutine").ServeHTTP)
+		r.Func().GET("/debug/pprof/heap", pprof.Handler("heap").ServeHTTP)
+		r.Func().GET("/debug/pprof/allocs", pprof.Handler("allocs").ServeHTTP)
+		r.Func().GET("/debug/pprof/block", pprof.Handler("block").ServeHTTP)
+		r.Func().GET("/debug/pprof/mutex", pprof.Handler("mutex").ServeHTTP)
+		r.Func().GET("/debug/pprof/threadcreate", pprof.Handler("threadcreate").ServeHTTP)
+	}
 
 	// MinIO Admin API routes (authenticated)
 	var adminDeps *adminRouteDeps
