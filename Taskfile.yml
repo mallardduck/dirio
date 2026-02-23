@@ -101,6 +101,20 @@ tasks:
     cmds:
       - go run ./cmd/server serve --log-level=debug --verbosity=verbose --mdns-enabled --data-dir ./data --port 9000
 
+  run-profile:
+    desc: Run the server with pprof endpoints enabled at /debug/pprof/
+    cmds:
+      - go run ./cmd/server serve --debug --data-dir ./data --port 9000
+
+  seed-bench:
+    desc: Seed bench-large bucket with 10k objects for performance profiling (requires mc and a running server)
+    cmds:
+      - scripts/seed-large-bucket.sh
+    env:
+      S3_ENDPOINT: "http://localhost:9000"
+      S3_ACCESS_KEY: "dirio-admin"
+      S3_SECRET_KEY: "dirio-admin-secret"
+
   # ── Docker ────────────────────────────────────────────────────────────────
 
   docker-build:
