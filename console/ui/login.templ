@@ -9,9 +9,15 @@ templ LoginPage(errorMsg string) {
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<title>Sign In — DirIO Console</title>
+			// Anti-flash: apply stored theme before first paint to prevent light→dark flicker.
+			<script>(function(){var t=localStorage.getItem('dirio-theme')||'system';document.documentElement.setAttribute('data-theme',t);}());</script>
 			<link rel="stylesheet" href={ StaticURL("style.css") }/>
+			<script src={ StaticURL("js/theme.js") }></script>
 		</head>
 		<body class="h-full bg-dirio-bg text-dirio-text flex items-center justify-center">
+			<div class="fixed top-3 right-3 z-50">
+				@ThemeToggle()
+			</div>
 			<div class="w-full max-w-sm px-4">
 				<div class="text-center mb-8">
 					<img src={ StaticURL("dirio_logo.svg") } alt="DirIO" class="w-12 h-12 mx-auto mb-3"/>

@@ -11,8 +11,11 @@ templ Base(title string, activePath string) {
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<title>{ title } — DirIO Console</title>
+			// Anti-flash: apply stored theme before first paint to prevent light→dark flicker.
+			<script>(function(){var t=localStorage.getItem('dirio-theme')||'system';document.documentElement.setAttribute('data-theme',t);}());</script>
 			<link rel="stylesheet" href={ StaticURL("style.css") }/>
 			<script src={ StaticURL("js/htmx.min.js") }></script>
+			<script src={ StaticURL("js/theme.js") }></script>
 			<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 			@toast.Script()
 		</head>
@@ -80,11 +83,14 @@ templ navLink(href templ.SafeURL, label string, active bool) {
 templ Topbar(title string) {
 	<header class="shrink-0 border-b border-dirio-border bg-dirio-bg-card px-6 py-3 flex items-center justify-between">
 		<h1 class="text-base font-semibold text-dirio-text">{ title }</h1>
-		<form method="POST" action={ LogoutURL() }>
-			<button type="submit" class="text-xs text-dirio-muted hover:text-dirio-coral transition-colors px-3 py-1 rounded border border-dirio-border hover:border-dirio-coral">
-				Sign Out
-			</button>
-		</form>
+		<div class="flex items-center gap-3">
+			@ThemeToggle()
+			<form method="POST" action={ LogoutURL() }>
+				<button type="submit" class="text-xs text-dirio-muted hover:text-dirio-coral transition-colors px-3 py-1 rounded border border-dirio-border hover:border-dirio-coral">
+					Sign Out
+				</button>
+			</form>
+		</div>
 	</header>
 }
 

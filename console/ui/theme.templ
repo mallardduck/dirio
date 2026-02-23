@@ -1,0 +1,38 @@
+package ui
+
+import "github.com/mallardduck/dirio/console/components/icon"
+
+// ThemeToggle renders a 3-way light / system / dark mode picker.
+// State is persisted to localStorage under "dirio-theme" and applied as
+// data-theme on <html> by theme.js. aria-pressed marks the active segment.
+templ ThemeToggle() {
+	<div class="inline-flex rounded border border-dirio-border overflow-hidden" role="group" aria-label="Color theme">
+		<button
+			type="button"
+			data-theme-btn="light"
+			aria-pressed="false"
+			title="Light mode"
+			class="px-2 py-1 text-dirio-muted hover:text-dirio-text hover:bg-dirio-bg-card2 transition-colors cursor-pointer"
+		>
+			@icon.Sun(icon.Props{Size: 14})
+		</button>
+		<button
+			type="button"
+			data-theme-btn="system"
+			aria-pressed="false"
+			title="System preference"
+			class="px-2 py-1 text-dirio-muted hover:text-dirio-text hover:bg-dirio-bg-card2 border-x border-dirio-border transition-colors cursor-pointer"
+		>
+			@icon.Monitor(icon.Props{Size: 14})
+		</button>
+		<button
+			type="button"
+			data-theme-btn="dark"
+			aria-pressed="false"
+			title="Dark mode"
+			class="px-2 py-1 text-dirio-muted hover:text-dirio-text hover:bg-dirio-bg-card2 transition-colors cursor-pointer"
+		>
+			@icon.Moon(icon.Props{Size: 14})
+		</button>
+	</div>
+}

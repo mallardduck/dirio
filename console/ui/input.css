@@ -1,16 +1,60 @@
 @import "tailwindcss";
 
+/* ─── Light-mode defaults (Tailwind @theme generates utility classes) ─────── */
 @theme {
-  --color-dirio-bg: #0a1628;
-  --color-dirio-bg-card: #111e35;
-  --color-dirio-bg-card2: #162440;
-  --color-dirio-border: #1e3355;
-  --color-dirio-text: #e2e8f0;
-  --color-dirio-muted: #64748b;
-  --color-dirio-teal: #00A292;
-  --color-dirio-teal-dark: #007a6e;
-  --color-dirio-cyan: #00CED1;
-  --color-dirio-yellow: #FFFF9A;
-  --color-dirio-steel: #B0C4DE;
-  --color-dirio-coral: #FF6B6B;
+  --color-dirio-bg:        #F4F5EF;
+  --color-dirio-bg-card:   #FFFFFF;
+  --color-dirio-bg-card2:  #EAECE6;
+  --color-dirio-border:    #C5CFCA;
+  --color-dirio-text:      #182622;
+  --color-dirio-muted:     #4B6259;
+  --color-dirio-teal:      #006355;
+  --color-dirio-teal-dark: #004840;
+  --color-dirio-cyan:      #006E80;
+  --color-dirio-yellow:    #785E00;
+  --color-dirio-steel:     #3A5068;
+  --color-dirio-coral:     #AA1F1F;
+}
+
+/* ─── System / auto dark-mode ─────────────────────────────────────────────── */
+/* Applies when: no explicit theme set (first load) OR data-theme="system".    */
+/* The :not() guards prevent this from firing when the user has picked light   */
+/* or dark explicitly via the toggle.                                          */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
+    --color-dirio-bg:        #0A1628;
+    --color-dirio-bg-card:   #111E35;
+    --color-dirio-bg-card2:  #162440;
+    --color-dirio-border:    #1E3355;
+    --color-dirio-text:      #E2E8F0;
+    --color-dirio-muted:     #7E98AA;
+    --color-dirio-teal:      #00A292;
+    --color-dirio-teal-dark: #007A6E;
+    --color-dirio-cyan:      #00CED1;
+    --color-dirio-yellow:    #FFFF9A;
+    --color-dirio-steel:     #B0C4DE;
+    --color-dirio-coral:     #FF6B6B;
+  }
+}
+
+/* ─── Explicit dark mode (set by theme toggle JS) ─────────────────────────── */
+:root[data-theme="dark"] {
+  --color-dirio-bg:        #0A1628;
+  --color-dirio-bg-card:   #111E35;
+  --color-dirio-bg-card2:  #162440;
+  --color-dirio-border:    #1E3355;
+  --color-dirio-text:      #E2E8F0;
+  --color-dirio-muted:     #7E98AA;
+  --color-dirio-teal:      #00A292;
+  --color-dirio-teal-dark: #007A6E;
+  --color-dirio-cyan:      #00CED1;
+  --color-dirio-yellow:    #FFFF9A;
+  --color-dirio-steel:     #B0C4DE;
+  --color-dirio-coral:     #FF6B6B;
+}
+
+/* ─── Theme toggle: highlight the active segment ─────────────────────────── */
+[data-theme-btn][aria-pressed="true"] {
+  background-color: var(--color-dirio-bg-card2);
+  color: var(--color-dirio-teal);
 }
