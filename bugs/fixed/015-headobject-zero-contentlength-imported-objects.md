@@ -1,9 +1,11 @@
 # Bug #015: HeadObject Returns ContentLength=0 for MinIO-Imported Objects
 
-**Status:** Open
+**Status:** ✅ RESOLVED
 **Priority:** High
 **Discovered:** 2026-02-23
+**Resolved:** 2026-02-23
 **Affects:** HeadObject on any object whose metadata was imported from MinIO (all imported objects)
+**Resolution:** Fixed at the source in the MinIO import path — stat the object file to populate `Size` and `LastModified` during import
 
 ## Summary
 
@@ -59,6 +61,7 @@ dirioMeta := &ObjectMetadata{
     ETag:           minioMeta.Meta["etag"],
     CustomMetadata: make(map[string]string),
     // Size is never set → defaults to 0
+    // LastModified is never set → defaults to zero time
 }
 ```
 
@@ -93,32 +96,27 @@ return meta, nil  // if metadata exists (even with Size=0), no fallback
 **Workarounds:**
 - None for HeadObject callers
 
-## Proposed Fix
+## Resolution
 
-Two options — both may be needed in combination:
+Fixed at the source in `internal/persistence/metadata/import.go`. After building `dirioMeta`
+from the MinIO `fs.json` fields, the import now stats the actual object file and sets `Size`
+and `LastModified` from the filesystem:
 
-### Option A: Fallback in storage layer (defensive fix, handles existing imported data)
-
-In `internal/persistence/storage/object.go:GetObjectMetadata`, fall back to `info.Size()`
-when stored size is 0:
 ```go
-meta, err := s.metadata.GetObjectMetadata(ctx, bucket, key)
-if err != nil || meta.Size == 0 {
-    // No metadata or size missing — derive from file stat
-    if meta == nil { meta = &metadata.ObjectMetadata{...} }
-    meta.Size = info.Size()
+objPath := filepath.Join(bucketName, filepath.FromSlash(objectKey))
+if objInfo, statErr := m.rootFS.Stat(objPath); statErr == nil {
+    dirioMeta.Size = objInfo.Size()
+    dirioMeta.LastModified = objInfo.ModTime()
 }
-return meta, nil
 ```
 
-### Option B: Set size during import (fix at the source)
+A defensive fallback in the storage layer (Option A from the proposed fix) was considered
+but rejected — since this is unreleased software, the correct approach is to fix the root
+cause rather than mask it. A storage-layer fallback would also require a metadata version
+bump and an idempotent migration for any existing data.
 
-In `internal/persistence/metadata/import.go`, stat the actual object file to get size,
-or skip setting Size so that option A's fallback takes over naturally.
-
-Option A alone is sufficient for already-imported data and handles future imports where
-MinIO metadata genuinely has no size. Option B prevents silent 0-size metadata records
-from accumulating.
+The `LastModified` field was also zero for all imported objects (same root cause); this fix
+resolves that silently too.
 
 ## Testing
 
@@ -128,16 +126,14 @@ Confirmed in: `scripts/validate-setup.sh` (section 11)
 aws --endpoint-url http://localhost:9000 s3api head-object \
   --bucket alpha --key large-file.dat \
   --query 'ContentLength' --output text
-# Returns 0 — should return 10485760
+# Was: 0 — Now: 10485760 (after fresh import)
 ```
 
 ## Related Issues
 
 - Bug #005: Multipart content corruption — same multipart objects are affected
-- The fix touches `internal/persistence/storage/object.go` — same file as GetObject range logic
+- The fix touches `internal/persistence/metadata/import.go`
 
-## Files to Investigate
+## Files Changed
 
-- `internal/persistence/storage/object.go:299` — `GetObjectMetadata` missing fallback
-- `internal/persistence/metadata/import.go:170` — import never sets `Size`
-- `internal/minio/types.go:163` — `ObjectMetadata` has no size field
+- `internal/persistence/metadata/import.go` — stat object file during import to set `Size` and `LastModified`

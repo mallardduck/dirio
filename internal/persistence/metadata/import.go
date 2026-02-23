@@ -3,6 +3,7 @@ package metadata
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/go-git/go-billy/v5/util"
@@ -179,6 +180,14 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (bool, error) {
 				if key != "content-type" && key != "etag" {
 					dirioMeta.CustomMetadata[key] = value
 				}
+			}
+
+			// MinIO's fs.json has no size field — stat the actual object file to
+			// populate Size and LastModified so HeadObject returns correct values.
+			objPath := filepath.Join(bucketName, filepath.FromSlash(objectKey))
+			if objInfo, statErr := m.rootFS.Stat(objPath); statErr == nil {
+				dirioMeta.Size = objInfo.Size()
+				dirioMeta.LastModified = objInfo.ModTime()
 			}
 
 			// Save the object metadata
