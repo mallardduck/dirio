@@ -4,20 +4,30 @@ Thanks for considering contributing!
 
 ## Setup
 
+This project uses [go-task](https://taskfile.dev) for build automation. Install it once:
+
+```bash
+go install github.com/go-task/task/v3/cmd/task@latest
+```
+
+Then clone and build:
+
 ```bash
 git clone https://github.com/mallardduck/dirio.git
 cd dirio
 go mod tidy
-make build
+task build
 ```
+
+Run `task --list` to see all available tasks.
 
 ## Making Changes
 
 1. **Pick a task** from [TODO.md](TODO.md) or fix a bug
 2. **Create a branch**: `git checkout -b fix-thing`
 3. **Make your changes**
-4. **Test**: `make test`
-5. **Format**: `make fmt`  
+4. **Test**: `task test`
+5. **Format**: `task fmt`
 6. **Commit**: `git commit -m "Fix thing"`
 7. **Push**: `git push origin fix-thing`
 8. **Open PR**

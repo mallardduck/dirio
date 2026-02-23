@@ -1,0 +1,226 @@
+version: "3"
+
+vars:
+  TAILWIND_BASE_URL: https://github.com/tailwindlabs/tailwindcss/releases/latest/download
+
+tasks:
+  # ── Build ──────────────────────────────────────────────────────────────────
+
+  build:
+    desc: Build the server binary using GoReleaser (local snapshot)
+    cmds:
+      - goreleaser build --id=server --snapshot --clean --single-target
+
+  build-client:
+    desc: Build the client binary using GoReleaser (local snapshot)
+    cmds:
+      - goreleaser build --id=client --snapshot --clean --single-target
+
+  build-all:
+    desc: Build both binaries using GoReleaser (local snapshot)
+    cmds:
+      - goreleaser build --snapshot --clean --single-target
+
+  # ── Release ────────────────────────────────────────────────────────────────
+
+  release-server:
+    desc: Build for all platforms (server only)
+    cmds:
+      - goreleaser build --id=server --snapshot --clean
+
+  release-client:
+    desc: Build for all platforms (client only)
+    cmds:
+      - goreleaser build --id=client --snapshot --clean
+
+  release-all:
+    desc: Build for all platforms (both)
+    cmds:
+      - goreleaser build --snapshot --clean
+
+  # ── Clean ──────────────────────────────────────────────────────────────────
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -f dirio dirio-client
+      - rm -rf data/ dist/
+
+  # ── Tests ──────────────────────────────────────────────────────────────────
+
+  test:
+    desc: Run all tests (except client tests which are designed to fail)
+    cmds:
+      - go test -v ./... -skip "TestAWSCLI|TestBoto3|TestMinIOMC"
+
+  test-unit:
+    desc: Run unit tests only (excludes integration tests)
+    cmds:
+      - go test -v ./internal/... ./pkg/...
+
+  test-integration:
+    desc: Run integration tests only
+    cmds:
+      - go test -v ./tests/integration/...
+
+  test-coverage:
+    desc: Run tests with coverage and generate HTML report
+    cmds:
+      - go test -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
+
+  test-clients:
+    desc: Run client tests
+    cmds:
+      - go test -v ./tests/clients/...
+
+  # ── Run ───────────────────────────────────────────────────────────────────
+
+  run:
+    desc: Run the server locally
+    cmds:
+      - go run ./cmd/server serve --data-dir ./data --port 9000
+
+  run-mdns:
+    desc: Run the server locally with mDNS
+    cmds:
+      - go run ./cmd/server serve --mdns-enabled --data-dir ./data --port 9000
+
+  run-import:
+    desc: Run the server with minio-data-2019 import
+    cmds:
+      - go run ./cmd/server serve --log-level=debug --verbosity=verbose --mdns-enabled --data-dir ./minio-data-2019 --port 9000
+
+  run-import-2022:
+    desc: Run the server with minio-data-2022 import
+    cmds:
+      - go run ./cmd/server serve --log-level=debug --verbosity=verbose --mdns-enabled --data-dir ./minio-data-2022-import --port 9000
+
+  run-mdns-debug:
+    desc: Run the server with mDNS and debug logging
+    cmds:
+      - go run ./cmd/server serve --log-level=debug --verbosity=verbose --mdns-enabled --data-dir ./data --port 9000
+
+  # ── Docker ────────────────────────────────────────────────────────────────
+
+  docker-build:
+    desc: Build Docker image
+    cmds:
+      - docker build -t dirio:latest .
+
+  docker-run:
+    desc: Build and run with Docker
+    deps: [docker-build]
+    cmds:
+      - docker run -p 9000:9000 -v {{.PWD}}/data:/data dirio:latest
+    vars:
+      PWD:
+        sh: pwd
+
+  compose-up:
+    desc: Run with docker-compose
+    cmds:
+      - docker-compose up -d
+
+  compose-down:
+    desc: Stop docker-compose
+    cmds:
+      - docker-compose down
+
+  # ── Code quality ──────────────────────────────────────────────────────────
+
+  fmt:
+    desc: Format code
+    cmds:
+      - go fmt ./...
+
+  lint:
+    desc: Run linter
+    cmds:
+      - golangci-lint run
+
+  deps:
+    desc: Download and tidy dependencies
+    cmds:
+      - go mod download
+      - go mod tidy
+
+  # ── UI tooling ────────────────────────────────────────────────────────────
+
+  install-templ:
+    desc: Install the templ CLI
+    cmds:
+      - go install github.com/a-h/templ/cmd/templ@latest
+
+  templ-gen:
+    desc: Recompile all .templ files to _templ.go
+    cmds:
+      - templ generate ./console/...
+
+  vendor-htmx:
+    desc: Download and vendor HTMX 2.0.4 into the embedded static directory
+    cmds:
+      - curl -sSL https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js -o console/static/js/htmx.min.js
+
+  download-tailwind:
+    desc: Download the Tailwind v4 standalone binary for the current OS/arch into ./bin/
+    vars:
+      TAILWIND_BIN:
+        sh: |
+          case "{{OS}}" in
+            windows) echo "./bin/tailwindcss.exe" ;;
+            darwin)  echo "./bin/tailwindcss" ;;
+            *)       echo "./bin/tailwindcss" ;;
+          esac
+      TAILWIND_ARTIFACT:
+        sh: |
+          case "{{OS}}" in
+            windows) echo "tailwindcss-windows-x64.exe" ;;
+            darwin)
+              arch=$(uname -m)
+              if [ "$arch" = "arm64" ]; then echo "tailwindcss-macos-arm64"; else echo "tailwindcss-macos-x64"; fi ;;
+            *)
+              arch=$(uname -m)
+              if [ "$arch" = "aarch64" ]; then echo "tailwindcss-linux-arm64"; else echo "tailwindcss-linux-x64"; fi ;;
+          esac
+    cmds:
+      - echo "Downloading Tailwind standalone CLI ({{.TAILWIND_ARTIFACT}})..."
+      - mkdir -p bin
+      - curl -sSL {{.TAILWIND_BASE_URL}}/{{.TAILWIND_ARTIFACT}} -o {{.TAILWIND_BIN}}
+      - |
+        if [ "{{OS}}" != "windows" ]; then
+          chmod +x {{.TAILWIND_BIN}}
+        fi
+      - echo "Tailwind binary ready at {{.TAILWIND_BIN}}"
+
+  tailwind-build:
+    desc: Generate minified Tailwind CSS from templ source files
+    vars:
+      TAILWIND_BIN:
+        sh: |
+          if [ "{{OS}}" = "windows" ]; then echo "./bin/tailwindcss.exe"; else echo "./bin/tailwindcss"; fi
+    cmds:
+      - "{{.TAILWIND_BIN}} -i ./console/ui/input.css -o ./console/static/style.css --minify"
+
+  tailwind-watch:
+    desc: Watch templ files and regenerate CSS on change (development mode)
+    vars:
+      TAILWIND_BIN:
+        sh: |
+          if [ "{{OS}}" = "windows" ]; then echo "./bin/tailwindcss.exe"; else echo "./bin/tailwindcss"; fi
+    cmds:
+      - "{{.TAILWIND_BIN}} -i ./console/ui/input.css -o ./console/static/style.css --watch"
+
+  build-ui:
+    desc: Rebuild all generated UI artifacts (templ → Go, then Tailwind → CSS)
+    cmds:
+      - task: templ-gen
+      - task: tailwind-build
+
+  setup-ui:
+    desc: First-time setup — install all UI tooling and vendor JS/CSS dependencies
+    cmds:
+      - task: install-templ
+      - task: download-tailwind
+      - task: vendor-htmx
+      - task: build-ui

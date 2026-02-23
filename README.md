@@ -135,17 +135,25 @@ You can switch back to MinIO anytime. The `buckets/` directory is shared.
 
 ## Development
 
+This project uses [go-task](https://taskfile.dev) instead of Make.
+
 ```bash
+# Install go-task (once)
+go install github.com/go-task/task/v3/cmd/task@latest
+
 # Clone and build
 git clone https://github.com/mallardduck/dirio.git
 cd dirio
-make build
+task build
 
 # Run tests
-make test
+task test
 
-# Format code  
-make fmt
+# Format code
+task fmt
+
+# List all available tasks
+task --list
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
