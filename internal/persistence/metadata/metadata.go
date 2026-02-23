@@ -12,6 +12,7 @@ import (
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/util"
 	"github.com/google/uuid"
+	"github.com/phuslu/lru"
 	bbolt "go.etcd.io/bbolt"
 
 	contextInt "github.com/mallardduck/dirio/internal/context"
@@ -49,6 +50,11 @@ type Manager struct {
 	// usersIdx is the in-memory UUID presence set (populated from filenames at startup).
 	usersMu  sync.RWMutex
 	usersIdx map[uuid.UUID]interface{}
+
+	// objMetaCache is a bounded in-memory cache for object metadata.
+	// Key: bucket + "\x00" + key. Capacity: 100k entries (~20 MB).
+	// Internally thread-safe (sharded mutexes); no external lock needed.
+	objMetaCache *lru.LRUCache[string, *ObjectMetadata]
 }
 
 // Type aliases for backward compatibility
@@ -138,10 +144,11 @@ func New(rootFS billy.Filesystem) (*Manager, error) {
 	}
 
 	mgr := &Manager{
-		rootFS:     rootFS,
-		metadataFS: metadataFS,
-		db:         db,
-		usersIdx:   make(map[uuid.UUID]interface{}),
+		rootFS:       rootFS,
+		metadataFS:   metadataFS,
+		db:           db,
+		usersIdx:     make(map[uuid.UUID]interface{}),
+		objMetaCache: lru.NewLRUCache[string, *ObjectMetadata](100_000),
 	}
 
 	ctx := context.Background()
@@ -244,6 +251,11 @@ func (m *Manager) GetObjectMetadata(ctx context.Context, bucket, key string) (*O
 		return nil, fmt.Errorf("context cancelled: %w", err)
 	}
 
+	cacheKey := bucket + "\x00" + key
+	if cached, ok := m.objMetaCache.Get(cacheKey); ok {
+		return cached, nil
+	}
+
 	metaPath := filepath.Join("objects", bucket, key+".json")
 
 	data, err := util.ReadFile(m.metadataFS, metaPath)
@@ -259,6 +271,7 @@ func (m *Manager) GetObjectMetadata(ctx context.Context, bucket, key string) (*O
 		return nil, err
 	}
 
+	m.objMetaCache.Set(cacheKey, &meta)
 	return &meta, nil
 }
 
@@ -276,7 +289,12 @@ func (m *Manager) PutObjectMetadata(ctx context.Context, bucket, key string, met
 		return fmt.Errorf("failed to create metadata directory: %w", err)
 	}
 
-	return jsonutil.MarshalToFile(m.metadataFS, metaPath, meta)
+	if err := jsonutil.MarshalToFile(m.metadataFS, metaPath, meta); err != nil {
+		return err
+	}
+
+	m.objMetaCache.Set(bucket+"\x00"+key, meta)
+	return nil
 }
 
 // DeleteObjectMetadata removes object metadata
@@ -291,6 +309,8 @@ func (m *Manager) DeleteObjectMetadata(ctx context.Context, bucket, key string) 
 	if err != nil && !isNotExist(err) {
 		return err
 	}
+
+	m.objMetaCache.Delete(bucket + "\x00" + key)
 
 	// Clean up empty parent directories
 	dir := filepath.Dir(metaPath)

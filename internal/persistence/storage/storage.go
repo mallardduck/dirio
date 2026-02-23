@@ -26,6 +26,10 @@ var (
 	ErrNoSuchKey      = s3types.ErrObjectNotFound
 )
 
+// errStopWalk is a sentinel returned by the walk callback to signal early termination.
+// It is not a real error; listInternal treats it as a normal (non-error) completion.
+var errStopWalk = errors.New("stop walk")
+
 // Storage handles filesystem operations for buckets and objects
 type Storage struct {
 	rootFS   billy.Filesystem
@@ -256,6 +260,10 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 	// Collect all matching objects
 	var allEntries []objectEntry
 
+	// walked counts entries that have passed the prefix filter and are past startAt.
+	// Used for early walk termination when delimiter is not set.
+	var walked int
+
 	// Walk the bucket directory recursively
 	err := s.walkDir(ctx, bucket, "", func(key string, info fs.FileInfo) error {
 		// Check for context cancellation during walk
@@ -266,6 +274,19 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 		// Apply prefix filter
 		if prefix != "" && !hasPrefix(key, prefix) {
 			return nil
+		}
+
+		// Early termination: when there is no delimiter (keys are not collapsed into
+		// common prefixes) and a maxKeys limit is set, stop as soon as we have
+		// collected maxKeys+1 entries past startAt. The extra entry lets listInternal
+		// detect truncation without walking the rest of the bucket.
+		if delimiter == "" && maxKeys > 0 {
+			if startAt == "" || key > startAt {
+				walked++
+				if walked > maxKeys+1 {
+					return errStopWalk
+				}
+			}
 		}
 
 		// Get object metadata
@@ -288,7 +309,7 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 		return nil
 	})
 
-	if err != nil {
+	if err != nil && !errors.Is(err, errStopWalk) {
 		return InternalResult{}, err
 	}
 

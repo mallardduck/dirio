@@ -74,6 +74,11 @@ tasks:
     cmds:
       - go test -v ./tests/clients/...
 
+  test-perf:
+    desc: Run opt-in profiling tests (seeds 10k objects, writes pprof files to tests/perf/profiles/)
+    cmds:
+      - go test -tags perf -v -timeout 30m -run TestPerf ./tests/perf/
+
   # ── Run ───────────────────────────────────────────────────────────────────
 
   run:

@@ -2,6 +2,7 @@ package clients_test
 
 import (
 	"context"
+	"embed"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -25,29 +26,13 @@ import (
 	"github.com/mallardduck/dirio/tests/clients"
 )
 
-//go:embed scripts/awscli.sh
-var awsCLIScript string
+//go:embed scripts lib
+var assets embed.FS
 
-//go:embed scripts/boto3.py
-var boto3Script string
-
-//go:embed scripts/mc.sh
-var mcScript string
-
-//go:embed scripts/mc_admin.sh
-var mcAdminScript string
-
-//go:embed lib/test_framework.sh
-var testFrameworkSh string
-
-//go:embed lib/validators.sh
-var validatorsSh string
-
-//go:embed lib/test_framework.py
-var testFrameworkPy string
-
-//go:embed lib/validators.py
-var validatorsPy string
+func GetAsset(path string) string {
+	data, _ := assets.ReadFile(path)
+	return string(data)
+}
 
 const (
 	testAccessKey = "testaccess"
@@ -666,7 +651,7 @@ EOF_VALIDATORS
 
 # Run the test script
 %s
-`, testFrameworkSh, validatorsSh, awsCLIScript)
+`, GetAsset("lib/test_framework.sh"), GetAsset("lib/validators.sh"), GetAsset("scripts/awscli.sh"))
 }
 
 // boto3TestScript returns the Python test script for boto3
@@ -688,7 +673,7 @@ cd /tmp
 python3 << 'PYTHON_SCRIPT'
 %s
 PYTHON_SCRIPT
-`, testFrameworkPy, validatorsPy, boto3Script)
+`, GetAsset("lib/test_framework.py"), GetAsset("lib/validators.py"), GetAsset("scripts/boto3.py"))
 }
 
 // minioMCTestScript returns the test script for MinIO mc
@@ -705,7 +690,7 @@ EOF_VALIDATORS
 
 # Run the test script
 %s
-`, testFrameworkSh, validatorsSh, mcScript)
+`, GetAsset("lib/test_framework.sh"), GetAsset("lib/validators.sh"), GetAsset("scripts/mc.sh"))
 }
 
 // minioMCAdminTestScript returns the test script for mc admin commands
@@ -718,5 +703,5 @@ EOF_FRAMEWORK
 
 # Run the admin test script
 %s
-`, testFrameworkSh, mcAdminScript)
+`, GetAsset("lib/test_framework.sh"), GetAsset("scripts/mc_admin.sh"))
 }
