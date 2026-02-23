@@ -1,4 +1,4 @@
-// HX-Request header; handlers return only the relevant fragment in that case.
+// Package handlers HX-Request header; handlers return only the relevant fragment in that case.
 // This package imports only consoleapi/, console/ui/, and the standard library
 // — never internal/.
 package handlers
@@ -9,8 +9,6 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/mallardduck/teapot-router/pkg/teapot"
-
-	"github.com/mallardduck/dirio/internal/crypto"
 
 	"github.com/mallardduck/dirio/console/components/toast"
 
@@ -212,7 +210,7 @@ func (h *Handler) UserRevealSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(secret))
+	_, _ = w.Write([]byte(secret))
 }
 
 // --- Policies ----------------------------------------------------------------
@@ -443,15 +441,7 @@ func (h *Handler) ServiceAccountCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	accessKey, secretKey, err := crypto.GenerateDirIOKey(crypto.PrefixService)
-	if err != nil {
-		// TODO proper error handling
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
 	sa, err := h.api.CreateServiceAccount(r.Context(), consoleapi.CreateServiceAccountRequest{
-		AccessKey:  accessKey,
-		SecretKey:  secretKey,
 		ParentUser: parentUser,
 		PolicyMode: policyMode,
 		ExpiresAt:  expiry,
@@ -511,7 +501,7 @@ func (h *Handler) ServiceAccountRevealSecret(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(secret))
+	_, _ = w.Write([]byte(secret))
 }
 
 // --- Policy Simulator --------------------------------------------------------

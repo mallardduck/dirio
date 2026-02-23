@@ -7,7 +7,7 @@ import (
 )
 
 // Ensure MetadataResolver satisfies PolicyResolver at compile time.
-var _ PolicyResolver = (*MetadataResolver)(nil)
+var _ Resolver = (*MetadataResolver)(nil)
 
 // Engine is the core policy evaluation engine.
 // It maintains an in-memory cache of policies for fast evaluation
@@ -20,13 +20,13 @@ var _ PolicyResolver = (*MetadataResolver)(nil)
 type Engine struct {
 	cache    *Cache
 	mapper   *ActionMapper
-	resolver PolicyResolver // may be nil (IAM policy step is skipped when nil)
+	resolver Resolver // may be nil (IAM policy step is skipped when nil)
 }
 
 // New creates a new policy engine with the given resolver.
 // Pass a MetadataResolver for production use; pass nil to skip IAM policy evaluation
 // (useful in tests that only exercise bucket policies or ownership).
-func New(resolver PolicyResolver) *Engine {
+func New(resolver Resolver) *Engine {
 	return &Engine{
 		cache:    NewCache(),
 		mapper:   NewActionMapper(),

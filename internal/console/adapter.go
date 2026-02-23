@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/mallardduck/dirio/consoleapi"
+	"github.com/mallardduck/dirio/internal/crypto"
 	"github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/policy/variables"
 	"github.com/mallardduck/dirio/internal/service"
@@ -469,6 +470,15 @@ func (a *Adapter) CreateServiceAccount(ctx context.Context, req consoleapi.Creat
 	var parentUser *string
 	if req.ParentUser != "" {
 		parentUser = &req.ParentUser
+	}
+
+	if req.AccessKey == "" {
+		accessKey, secretKey, err := crypto.GenerateDirIOKey(crypto.PrefixService)
+		if err != nil {
+			return nil, fmt.Errorf("generating service account key: %w", err)
+		}
+		req.AccessKey = accessKey
+		req.SecretKey = secretKey
 	}
 
 	sa, err := a.services.ServiceAccount().Create(ctx, &svcsacct.CreateServiceAccountRequest{

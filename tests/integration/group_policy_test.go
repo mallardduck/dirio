@@ -68,8 +68,6 @@ func TestGroupPolicyInheritance(t *testing.T) {
 }
 
 func updateGroupMembers(t *testing.T, ts *TestServer, groupName string, members []string, isRemove bool) {
-	body := fmt.Sprintf(`{"group": "%s", "members": %s, "isRemove": %v}`,
-		groupName, fmt.Sprintf("%v", members), isRemove)
 	// Need to fix the slice formatting for JSON
 	membersJSON := "["
 	for i, m := range members {
@@ -80,7 +78,7 @@ func updateGroupMembers(t *testing.T, ts *TestServer, groupName string, members 
 	}
 	membersJSON += "]"
 
-	body = fmt.Sprintf(`{"group": "%s", "members": %s, "isRemove": %v}`,
+	body := fmt.Sprintf(`{"group": "%s", "members": %s, "isRemove": %v}`,
 		groupName, membersJSON, isRemove)
 
 	url := ts.URL("/minio/admin/v3/update-group-members")

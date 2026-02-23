@@ -184,7 +184,7 @@ func (m *Manager) reconcileIndexes(ctx context.Context) {
 // Must be called within a bolt Update transaction.
 func groupIndexAdd(b *bbolt.Bucket, groupName string, userUUID uuid.UUID) error {
 	key := userUUID[:]
-	var names []string
+	names := make([]string, 1, 2)
 	if v := b.Get(key); v != nil {
 		_ = json.Unmarshal(v, &names)
 	}

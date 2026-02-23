@@ -9,9 +9,9 @@ import (
 	"github.com/mallardduck/dirio/pkg/iam"
 )
 
-// PolicyResolver fetches IAM policy documents and user policy lists on demand.
-// It is called by the Engine during Evaluate() to implement IAM policy evaluation.
-type PolicyResolver interface {
+// Resolver fetches IAM policy documents and user policy lists on demand.
+// It is called by the Engine during [Engine.Evaluate] to implement IAM policy evaluation.
+type Resolver interface {
 	// GetPolicyDocument returns the parsed policy document for the named policy.
 	GetPolicyDocument(ctx context.Context, name string) (*iam.PolicyDocument, error)
 
@@ -23,7 +23,7 @@ type PolicyResolver interface {
 	GetGroupPoliciesForUser(ctx context.Context, userUUID uuid.UUID) ([]string, error)
 }
 
-// MetadataResolver implements PolicyResolver using the metadata.Manager.
+// MetadataResolver implements Resolver using the metadata.Manager.
 type MetadataResolver struct {
 	manager *metadata.Manager
 }
