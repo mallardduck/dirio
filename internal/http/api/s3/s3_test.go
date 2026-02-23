@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	httpresponse "github.com/mallardduck/dirio/internal/http/response"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
@@ -228,7 +229,7 @@ func TestWriteErrorResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			err := WriteErrorResponse(w, tt.requestID, tt.errCode, tt.err)
+			err := WriteErrorResponse(w, tt.requestID, tt.errCode, httpresponse.SetErrAsMessage(tt.err))
 
 			if err != nil {
 				t.Errorf("WriteErrorResponse() unexpected error = %v", err)
@@ -259,7 +260,7 @@ func TestWriteErrorResponse_XMLStructure(t *testing.T) {
 	requestID := "test-request-id"
 	testErr := errors.New("test error message")
 
-	err := WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchBucket, testErr)
+	err := WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchBucket, httpresponse.SetErrAsMessage(testErr))
 	if err != nil {
 		t.Fatalf("WriteErrorResponse() unexpected error = %v", err)
 	}

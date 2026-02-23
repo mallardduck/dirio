@@ -196,13 +196,9 @@ func (s *Storage) DeleteBucket(ctx context.Context, bucket string) error {
 	return s.metadata.DeleteBucket(ctx, bucket)
 }
 
-// ListObjects returns objects in a bucket with optional prefix and delimiter (V1 API)
-func (s *Storage) ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int) ([]s3types.Object, error) {
-	result, err := s.listInternal(ctx, bucket, prefix, "", delimiter, maxKeys, false)
-	if err != nil {
-		return nil, err
-	}
-	return result.Objects, nil
+// ListObjects returns objects in a bucket with optional prefix, marker, and delimiter (V1 API)
+func (s *Storage) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (InternalResult, error) {
+	return s.listInternal(ctx, bucket, prefix, marker, delimiter, maxKeys, false)
 }
 
 // ListObjectsV2 returns objects in a bucket with optional prefix and delimiter (V2 API)

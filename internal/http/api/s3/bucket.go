@@ -169,11 +169,11 @@ func (h *HTTPHandler) ListObjects(w http.ResponseWriter, r *http.Request, bucket
 	listRequest := &s3.ListObjectsRequest{
 		Bucket:    bucket,
 		Prefix:    prefix,
+		Marker:    marker,
 		Delimiter: delimiter,
-		// Marker: marker,
-		MaxKeys: maxKeys,
+		MaxKeys:   maxKeys,
 	}
-	objects, err := h.s3Service.ListObjects(r.Context(), listRequest)
+	result, err := h.s3Service.ListObjects(r.Context(), listRequest)
 	if err != nil {
 		requestID := middleware.GetRequestID(r.Context())
 		if errors.Is(err, s3types.ErrBucketNotFound) {
@@ -193,16 +193,18 @@ func (h *HTTPHandler) ListObjects(w http.ResponseWriter, r *http.Request, bucket
 	}
 
 	// Filter objects based on permissions
-	filteredObjects := h.filterObjects(r.Context(), bucket, objects, r)
+	filteredObjects := h.filterObjects(r.Context(), bucket, result.Objects, r)
 
 	response := s3types.ListBucketResult{
-		Name:        bucket,
-		Prefix:      prefix,
-		Delimiter:   delimiter,
-		Marker:      marker,
-		MaxKeys:     maxKeys,
-		IsTruncated: false,
-		Contents:    filteredObjects,
+		Name:           bucket,
+		Prefix:         prefix,
+		Delimiter:      delimiter,
+		Marker:         marker,
+		NextMarker:     result.NextMarker,
+		MaxKeys:        maxKeys,
+		IsTruncated:    result.IsTruncated,
+		Contents:       filteredObjects,
+		CommonPrefixes: result.CommonPrefixes,
 	}
 
 	if writeErr := WriteXMLResponse(w, http.StatusOK, response); writeErr != nil {

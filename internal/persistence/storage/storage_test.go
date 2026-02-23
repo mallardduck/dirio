@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-git/go-billy/v5/memfs"
+	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,9 +18,10 @@ import (
 func setupTestStorage(t *testing.T) *Storage {
 	t.Helper()
 
-	rootFS := memfs.New()
+	rootFS := osfs.New(t.TempDir())
 	metaMgr, err := metadata.New(rootFS)
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = metaMgr.Close() })
 
 	storage, err := New(rootFS, metaMgr)
 	require.NoError(t, err)

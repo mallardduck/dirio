@@ -18,7 +18,7 @@ func TestImport_WithObjectMetadata(t *testing.T) {
 	// Create minimal format.json
 	minioSys := filepath.Join(tmpDir, ".minio.sys")
 	require.NoError(t, os.MkdirAll(minioSys, 0755))
-	formatJSON := `{"version":"1","format":"fs","id":"test-fs","fs":{"version":"2"}}`
+	_, formatJSON := formatJSONText()
 	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0644))
 
 	// Create bucket directory structure

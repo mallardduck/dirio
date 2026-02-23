@@ -214,18 +214,16 @@ func (s *Service) DeleteObject(ctx context.Context, req *DeleteObjectRequest) er
 
 // ListObjects lists objects in a bucket (V1)
 // Note: Assumes bucket name has been validated by the caller
-func (s *Service) ListObjects(ctx context.Context, req *ListObjectsRequest) ([]s3types.Object, error) {
-	// List objects
-	objects, err := s.storage.ListObjects(ctx, req.Bucket, req.Prefix, req.Delimiter, req.MaxKeys)
+func (s *Service) ListObjects(ctx context.Context, req *ListObjectsRequest) (storage.InternalResult, error) {
+	result, err := s.storage.ListObjects(ctx, req.Bucket, req.Prefix, req.Marker, req.Delimiter, req.MaxKeys)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoSuchBucket) {
-			return nil, s3types.ErrBucketNotFound
+			return storage.InternalResult{}, s3types.ErrBucketNotFound
 		}
-		return nil, err
+		return storage.InternalResult{}, err
 	}
 
-	// todo maybe this should return s3types.ListBucketResult?
-	return objects, nil
+	return result, nil
 }
 
 // ListObjectsV2 lists objects in a bucket (V2)

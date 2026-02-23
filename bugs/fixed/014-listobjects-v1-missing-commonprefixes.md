@@ -1,9 +1,11 @@
 # Bug #014: ListObjects V1 Returns Empty CommonPrefixes
 
-**Status:** Open
+**Status:** ✅ RESOLVED  
 **Priority:** High
 **Discovered:** 2026-02-23
+**Resolved:** 2026-02-23
 **Affects:** Any client using ListObjectsV1 with a delimiter (aws CLI `s3api list-objects`, boto3 `list_objects`)
+**Resolution:** Modify v1 list objects to output `storage.InternalResult` like v2 version does among other small refactors
 
 ## Summary
 

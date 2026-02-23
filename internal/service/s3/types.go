@@ -91,9 +91,9 @@ type DeleteObjectsResponse struct {
 type ListObjectsRequest struct {
 	Bucket    string
 	Prefix    string
+	Marker    string
 	Delimiter string
-	// TODO add marker support
-	MaxKeys int
+	MaxKeys   int
 }
 
 // ListObjectsV2Request represents a request to list objects (V2)
