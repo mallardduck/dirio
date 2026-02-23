@@ -194,16 +194,36 @@ test_presigned_url_download() {
 }
 
 test_presigned_url_upload() {
-    UPLOAD_URL=$(mc share upload --expire=1h ${MC_ALIAS}/${BUCKET}/presigned-upload.txt 2>&1 | awk '/^Share:/ {print $2}')
-    if [ -z "$UPLOAD_URL" ]; then
-        fail_test "Failed to generate upload URL"
+    echo "presigned upload content" > /tmp/presigned-upload.txt
+
+    # mc share upload generates an S3 POST policy for browser-based multipart/form-data uploads.
+    # The output contains a ready-to-use curl command with all required form fields.
+    MC_SHARE_OUTPUT=$(mc share upload --expire=1h "${MC_ALIAS}/${BUCKET}/presigned-upload.txt" 2>&1)
+
+    # Extract the curl command line.
+    # Old mc format:  "Share:  curl http://..."
+    # New mc format:  " Curl  : curl -L -X POST http://..."
+    CURL_LINE=$(printf '%s\n' "$MC_SHARE_OUTPUT" | grep -i " curl " | grep -v "^#" | head -1)
+
+    if [ -z "$CURL_LINE" ]; then
+        printf 'mc share upload output:\n%s\n' "$MC_SHARE_OUTPUT" >&2
+        fail_test "Failed to extract curl command from mc share upload output"
     fi
 
-    echo "presigned upload content" > /tmp/presigned-upload.txt
-    curl -f -s -X PUT -T /tmp/presigned-upload.txt "$UPLOAD_URL" > /dev/null 2>&1
+    # Strip any label prefix (e.g. "Share: ", "Curl  : ", leading spaces)
+    # leaving just "curl ..." regardless of mc version.
+    CURL_CMD=$(printf '%s' "$CURL_LINE" | sed 's/^.*curl /curl /')
 
-    # Verify uploaded content
-    mc cat ${MC_ALIAS}/${BUCKET}/presigned-upload.txt > /tmp/presigned-upload-verify.txt 2>&1
+    # Replace the <FILE> placeholder with the actual test file path
+    CURL_CMD="${CURL_CMD//<FILE>///tmp/presigned-upload.txt}"
+
+    # Execute the POST policy upload; -f makes curl fail on HTTP 4xx/5xx
+    if ! eval "$CURL_CMD" -f -s -o /dev/null 2>&1; then
+        fail_test "POST policy upload failed"
+    fi
+
+    # Verify the uploaded object's content integrity
+    mc cat "${MC_ALIAS}/${BUCKET}/presigned-upload.txt" > /tmp/presigned-upload-verify.txt 2>&1
     validate_content_integrity /tmp/presigned-upload.txt /tmp/presigned-upload-verify.txt
 }
 

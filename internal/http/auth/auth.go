@@ -228,6 +228,44 @@ func (a *Authenticator) AuthenticateRequest(r *http.Request) (*metadata.User, er
 	return user, nil
 }
 
+// AuthenticatePostPolicyRequest validates an HTTP request that uses S3 POST policy form-based upload.
+//
+// Credentials are embedded in the multipart form body (not headers or query string).
+// The method parses the form, decodes the policy, checks expiration, looks up the user,
+// and verifies the HMAC-SHA256 signature over the base64-encoded policy string.
+func (a *Authenticator) AuthenticatePostPolicyRequest(r *http.Request) (*metadata.User, *PostPolicyForm, *PostPolicyDocument, error) {
+	form, err := ParsePostPolicyForm(r)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("%w: %v", ErrAuthenticationFailed, err)
+	}
+
+	doc, err := ParsePostPolicyDocument(form.PolicyBase64)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("%w: %v", ErrAuthenticationFailed, err)
+	}
+
+	if err := ValidatePostPolicyExpiration(doc); err != nil {
+		return nil, nil, nil, err
+	}
+
+	user, err := a.GetUserForAccessKey(r.Context(), form.AccessKey)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if user == nil {
+		return nil, nil, nil, ErrUserNotFound
+	}
+	if !user.Status.IsActive() {
+		return nil, nil, nil, ErrUserInactive
+	}
+
+	if err := VerifyPostPolicySignature(form, user.SecretKey); err != nil {
+		return nil, nil, nil, err
+	}
+
+	return user, form, doc, nil
+}
+
 // IsServiceAccount checks if the given access key belongs to a service account.
 // Returns the ServiceAccount and true if found, nil and false otherwise.
 func (a *Authenticator) IsServiceAccount(ctx context.Context, accessKey string) (*iam.ServiceAccount, bool) {

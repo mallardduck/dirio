@@ -38,6 +38,14 @@ const (
 	// ServiceAccountInfoKey holds service account metadata for policy evaluation.
 	// Set by auth middleware when the authenticated access key belongs to a service account.
 	ServiceAccountInfoKey KeyID = "serviceAccountInfo"
+
+	// IsPostPolicyRequestKey marks a request authenticated via POST policy form upload.
+	// Set by auth middleware when request uses multipart/form-data with a policy field.
+	IsPostPolicyRequestKey KeyID = "isPostPolicyRequest"
+
+	// PostPolicyPolicyB64Key stores the base64-encoded policy document from the form.
+	// Used by the PostObject handler to validate conditions.
+	PostPolicyPolicyB64Key KeyID = "postPolicyPolicyB64"
 )
 
 // ServiceAccountInfo holds service account metadata used by the policy engine
@@ -106,6 +114,31 @@ func GetPreSignedExpiresAt(ctx context.Context) (interface{}, bool) {
 		return t, true
 	}
 	return nil, false
+}
+
+// WithPostPolicyRequest adds a user authenticated via POST policy form upload to context.
+// Also marks the request as a POST policy upload and stores the base64 policy for the handler.
+func WithPostPolicyRequest(ctx context.Context, user *iam.User, policyB64 string) context.Context {
+	ctx = context.WithValue(ctx, RequestUserKey, user)
+	ctx = context.WithValue(ctx, IsPostPolicyRequestKey, true)
+	ctx = context.WithValue(ctx, PostPolicyPolicyB64Key, policyB64)
+	return ctx
+}
+
+// IsPostPolicyRequest returns true if request was authenticated via POST policy form upload.
+func IsPostPolicyRequest(ctx context.Context) bool {
+	if v, ok := ctx.Value(IsPostPolicyRequestKey).(bool); ok {
+		return v
+	}
+	return false
+}
+
+// GetPostPolicyPolicyB64 returns the base64-encoded policy document from the POST policy form.
+func GetPostPolicyPolicyB64(ctx context.Context) string {
+	if v, ok := ctx.Value(PostPolicyPolicyB64Key).(string); ok {
+		return v
+	}
+	return ""
 }
 
 // WithServiceAccountInfo returns a new context with service account metadata set.

@@ -475,12 +475,12 @@ Current status: **Phase 4.4 COMPLETE** — All testing done including console st
 ## Phase 4.5: Stability & Performance
 
 ### Browser Upload Support
-- [ ] **POST Policy Uploads** - Browser-based form uploads
-  - [ ] Parse POST policy documents
-  - [ ] Validate policy signature and expiration
-  - [ ] Support multipart/form-data uploads
-  - [ ] HTML form upload examples
-  - [ ] MinIO `mc share upload` compatibility
+- [x] **POST Policy Uploads** - Browser-based form uploads
+  - [x] Parse POST policy documents
+  - [x] Validate policy signature and expiration
+  - [x] Support multipart/form-data uploads
+  - [x] HTML form upload examples (`examples/post-policy/index.html`)
+  - [x] MinIO `mc share upload` compatibility
 
 ### Performance Optimization
 - [ ] Metadata caching strategy (based on profiling)

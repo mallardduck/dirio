@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 
@@ -99,6 +100,47 @@ func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 			// Add user to context with pre-signed marker
 			ctx := contextInt.WithPreSignedUser(r.Context(), user, expiresAt)
 			// Store SA metadata in context for policy evaluation (non-admin users only)
+			if !a.isRootAdminKey(user.AccessKey) {
+				if sa, ok := a.IsServiceAccount(r.Context(), user.AccessKey); ok {
+					ctx = contextInt.WithServiceAccountInfo(ctx, &contextInt.ServiceAccountInfo{
+						ParentUserUUID: sa.ParentUserUUID,
+						PolicyMode:     sa.PolicyMode,
+					})
+				}
+			}
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		// POST policy form uploads (browser-based multipart/form-data with embedded credentials)
+		if r.Method == "POST" && strings.Contains(r.Header.Get(headers.ContentType), "multipart/form-data") {
+			user, form, _, err := a.AuthenticatePostPolicyRequest(r)
+			if err != nil {
+				var errCode s3types.ErrorCode
+				switch {
+				case errors.Is(err, ErrPresignedURLExpired):
+					errCode = s3types.ErrCodeAccessDenied
+				case errors.Is(err, ErrAuthenticationFailed):
+					errCode = s3types.ErrCodeAccessDenied
+				case errors.Is(err, ErrUserNotFound):
+					errCode = s3types.ErrCodeInvalidAccessKeyID
+				case errors.Is(err, ErrUserInactive):
+					errCode = s3types.ErrCodeAccessDenied
+				case errors.Is(err, ErrSignatureMismatch):
+					errCode = s3types.ErrCodeSignatureDoesNotMatch
+				default:
+					errCode = s3types.ErrCodeAccessDenied
+				}
+				requestID := middleware.GetRequestID(r.Context())
+				if writeErr := writeAuthError(w, requestID, errCode); writeErr != nil {
+					authLogger.With("err", err, "error_code", errCode, "write_err", writeErr).Warn("encountered error authenticating POST policy request and additional error writing XML error response")
+					return
+				}
+				authLogger.With("err", err, "error_code", errCode).Warn("encountered error authenticating POST policy request")
+				return
+			}
+
+			ctx := contextInt.WithPostPolicyRequest(r.Context(), user, form.PolicyBase64)
 			if !a.isRootAdminKey(user.AccessKey) {
 				if sa, ok := a.IsServiceAccount(r.Context(), user.AccessKey); ok {
 					ctx = contextInt.WithServiceAccountInfo(ctx, &contextInt.ServiceAccountInfo{

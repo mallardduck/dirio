@@ -93,6 +93,7 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 			createBucket:            bucket(deps.APIHandler.S3Handler.CreateBucket),
 			listObjects:             bucket(deps.APIHandler.S3Handler.ListObjects),
 			deleteBucket:            bucket(deps.APIHandler.S3Handler.DeleteBucket),
+			postObject:              bucket(deps.APIHandler.S3Handler.PostObject),
 			listObjectsV2:           bucket(deps.APIHandler.S3Handler.ListObjectsV2),
 			getBucketLocation:       bucket(deps.APIHandler.S3Handler.GetBucketLocation),
 			getBucketPolicy:         bucket(deps.APIHandler.S3Handler.GetBucketPolicy),
@@ -273,6 +274,7 @@ type s3RouteDeps struct {
 	createBucket http.HandlerFunc
 	listObjects  http.HandlerFunc
 	deleteBucket http.HandlerFunc
+	postObject   http.HandlerFunc
 	// Bucket — query-dispatched operations
 	listObjectsV2        http.HandlerFunc
 	getBucketLocation    http.HandlerFunc
@@ -326,16 +328,11 @@ func setupS3Routes(r *teapot.Router, deps *s3RouteDeps) {
 	r.GET("/{bucket}", deps.listObjects).Name("buckets.show").Action("s3:ListObjects")
 	r.DELETE("/{bucket}", deps.deleteBucket).Name("buckets.destroy").Action("s3:DeleteBucket")
 
-	// TODO(Future - MinIO compatibility): POST Policy Uploads (Browser-based Form Upload)
-	// MinIO mc `share upload` uses S3 POST policy for browser-based form uploads with multipart/form-data
-	// This is S3-compliant but different from pre-signed PUT URLs (which already work)
+	// POST Policy Uploads (browser-based form upload via multipart/form-data)
+	// Credentials are embedded in the form body — auth middleware handles authentication,
+	// authz middleware skips (no Action), and the handler validates policy conditions.
 	// Spec: https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html
-	// Handler would need to:
-	//   1. Parse multipart/form-data with policy document
-	//   2. Validate policy signature and expiration
-	//   3. Extract file from form field
-	//   4. Enforce policy conditions (bucket, key, content-type, etc.)
-	// r.POST("/{bucket}", deps.postObject).Name("buckets.post-policy-upload").Action("s3:PutObject")
+	r.POST("/{bucket}", deps.postObject).Name("buckets.post-policy-upload")
 
 	// Query-based bucket operations
 	// ListObjectsV2 (preferred over v1)

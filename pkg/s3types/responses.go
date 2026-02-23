@@ -129,3 +129,13 @@ type Tag struct {
 	Key   string `xml:"Key"`
 	Value string `xml:"Value"`
 }
+
+// PostResponse is the XML response body for a successful POST policy upload when
+// success_action_status=201 is specified.
+type PostResponse struct {
+	XMLName  xml.Name `xml:"PostResponse"`
+	Location string   `xml:"Location"`
+	Bucket   string   `xml:"Bucket"`
+	Key      string   `xml:"Key"`
+	ETag     string   `xml:"ETag"`
+}
