@@ -21,6 +21,7 @@ import (
 	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/http/server"
+	"github.com/mallardduck/dirio/internal/startup"
 )
 
 // TestServer wraps a dirio server for admin integration testing
@@ -45,12 +46,26 @@ func NewTestServer(t *testing.T) *TestServer {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 
+	s, err := startup.Init(dataDir)
+	if err != nil {
+		os.RemoveAll(dataDir)
+		t.Fatalf("Failed to init data directory: %v", err)
+	}
+	if err := s.Prepare(context.Background(), "us-east-1", "testaccess", "testsecretkey123", true); err != nil {
+		os.RemoveAll(dataDir)
+		t.Fatalf("Failed to prepare data directory: %v", err)
+	}
+
 	port := findAvailablePort(t)
 	config := &server.Config{
-		DataDir:   dataDir,
-		Port:      port,
-		AccessKey: "testaccess",
-		SecretKey: "testsecretkey123",
+		DataDir:                     dataDir,
+		Port:                        port,
+		AccessKey:                   "testaccess",
+		SecretKey:                   "testsecretkey123",
+		DataConfig:                  s.DataConfig,
+		CLICredentialsExplicitlySet: true,
+		RootFS:                      s.RootFS(),
+		Metadata:                    s.MetadataManager(),
 	}
 
 	srv, err := server.New(config)
@@ -86,12 +101,24 @@ func NewTestServer(t *testing.T) *TestServer {
 func NewTestServerWithDataDir(t *testing.T, dataDir string) *TestServer {
 	t.Helper()
 
+	s, err := startup.Init(dataDir)
+	if err != nil {
+		t.Fatalf("Failed to init data directory: %v", err)
+	}
+	if err := s.Prepare(context.Background(), "us-east-1", "testaccess", "testsecretkey123", true); err != nil {
+		t.Fatalf("Failed to prepare data directory: %v", err)
+	}
+
 	port := findAvailablePort(t)
 	config := &server.Config{
-		DataDir:   dataDir,
-		Port:      port,
-		AccessKey: "testaccess",
-		SecretKey: "testsecretkey123",
+		DataDir:                     dataDir,
+		Port:                        port,
+		AccessKey:                   "testaccess",
+		SecretKey:                   "testsecretkey123",
+		DataConfig:                  s.DataConfig,
+		CLICredentialsExplicitlySet: true,
+		RootFS:                      s.RootFS(),
+		Metadata:                    s.MetadataManager(),
 	}
 
 	srv, err := server.New(config)

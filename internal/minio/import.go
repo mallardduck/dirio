@@ -32,7 +32,8 @@ type ImportResult struct {
 // 3. Reads bucket metadata from buckets/
 func Import(minioFS billy.Filesystem) (*ImportResult, error) {
 	// First check: validate format
-	if err := ValidateFormat(minioFS); err != nil {
+	nodeUID, err := ValidateFormat(minioFS)
+	if err != nil {
 		return nil, fmt.Errorf("format validation failed: %w", err)
 	}
 
@@ -48,6 +49,7 @@ func Import(minioFS billy.Filesystem) (*ImportResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to import config: %w", err)
 	}
+	dataConfig.InstanceID = nodeUID
 	result.DataConfig = dataConfig
 
 	// Import policies first

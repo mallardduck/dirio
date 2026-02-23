@@ -1,9 +1,7 @@
 package policy
 
 import (
-	"bytes"
 	stdcontext "context"
-	"encoding/xml"
 	"net/http"
 	"strings"
 	"time"
@@ -14,6 +12,7 @@ import (
 
 	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/context"
+	httpresponse "github.com/mallardduck/dirio/internal/http/response"
 	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/policy/variables"
@@ -380,29 +379,10 @@ func fetchOwnership(ctx stdcontext.Context, metadataMgr *metadata.Manager, bucke
 func writeAccessDenied(w http.ResponseWriter, r *http.Request) {
 	requestID := getRequestID(r.Context())
 
-	response := s3types.ErrorResponse{
-		Code:      s3types.ErrCodeAccessDenied.String(),
-		Message:   s3types.ErrCodeAccessDenied.Description(),
-		Resource:  r.URL.Path,
-		RequestID: requestID,
-	}
-
-	var buf bytes.Buffer
-	buf.Write([]byte(xml.Header))
-
-	encoder := xml.NewEncoder(&buf)
-	encoder.Indent("", "  ")
-	if err := encoder.Encode(response); err != nil {
-		authzLogger.With("error", err).Error("failed to encode access denied response")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set(headers.ContentType, "application/xml")
-	w.WriteHeader(http.StatusForbidden)
-	_, err := w.Write(buf.Bytes())
-	if err != nil {
-		authzLogger.With("error", err).Error("failed to write access denied response")
-		return
+	if writeErr := httpresponse.WriteErrorResponse(w, requestID, s3types.ErrCodeAccessDenied, func(response s3types.ErrorResponse) s3types.ErrorResponse {
+		response.Resource = r.URL.Path
+		return response
+	}); writeErr != nil {
+		authzLogger.With("error", writeErr).Error("failed to write access denied response")
 	}
 }

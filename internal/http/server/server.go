@@ -10,11 +10,13 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 	"github.com/mallardduck/teapot-router/pkg/urlbuilder"
@@ -30,11 +32,10 @@ import (
 	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/mdns"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
-	"github.com/mallardduck/dirio/internal/persistence/path"
 	"github.com/mallardduck/dirio/internal/persistence/storage"
 )
 
-// Config holds server configuration
+// Config holds server configuration.
 type Config struct {
 	DataDir   string
 	Port      int
@@ -53,20 +54,25 @@ type Config struct {
 	// Debug mode
 	Debug bool
 
-	// Data directory configuration (optional)
-	// If present, provides alternative admin credentials from data config
+	// DataConfig provides alternative admin credentials from .dirio/config.json.
+	// Always populated when coming from the Starter (serve command).
 	DataConfig *data.ConfigData
 
 	// CLICredentialsExplicitlySet tracks whether AccessKey/SecretKey were
-	// explicitly provided (via env, flag, or config) vs using defaults
+	// explicitly provided (via env, flag, or config) vs using defaults.
 	CLICredentialsExplicitlySet bool
 
 	// ShutdownTimeout is how long to wait for in-flight requests to finish
 	// during graceful shutdown before connections are forcefully closed.
 	ShutdownTimeout time.Duration
+
+	// Pre-initialised components supplied by the Starter.
+	// Both fields are required; server.New does not construct them itself.
+	RootFS   billy.Filesystem
+	Metadata *metadata.Manager
 }
 
-// Server represents the S3-compatible HTTP server
+// Server represents the S3-compatible HTTP server.
 type Server struct {
 	config       *Config
 	router       *teapot.Router
@@ -85,6 +91,19 @@ type Server struct {
 	// HTTP servers, set during Start.
 	httpServer    *http.Server
 	consoleServer *http.Server
+
+	// Concurrency fields.
+	// inShutdown is set to true at the start of gracefulShutdown so that
+	// middleware can return 503 for any request that slips through after the
+	// listener closes.
+	inShutdown atomic.Bool
+	// shutdownOnce ensures the gracefulShutdown body executes exactly once
+	// even if multiple signals or context cancellations arrive simultaneously.
+	shutdownOnce sync.Once
+	// requestCount tracks the number of requests currently being handled.
+	// Incremented/decremented by the trackRequest middleware.  Read during
+	// shutdown to detect handler leaks.
+	requestCount atomic.Int32
 }
 
 // Metadata returns the metadata manager (used by the console wire file).
@@ -102,8 +121,8 @@ func (s *Server) Router() *teapot.Router { return s.router }
 // Auth returns the authenticator (used by the console wire file for admin credential validation).
 func (s *Server) Auth() *auth.Authenticator { return s.auth }
 
-// SetConsole registers the console handler with the server. When port is
-// 0 the console is mounted at /dirio/ui/ on the main port. When port is
+// SetConsole registers the console handler with the server.  When port is
+// 0 the console is mounted at /dirio/ui/ on the main port.  When port is
 // non-zero (e.g. 9001) a separate listener is started for the console.
 // Must be called before Start.
 func (s *Server) SetConsole(h *teapot.Router, port int) {
@@ -111,34 +130,24 @@ func (s *Server) SetConsole(h *teapot.Router, port int) {
 	s.consolePort = port
 }
 
-// New creates a new server instance
+// New creates a new Server from a fully-prepared Config.
+//
+// The Config must carry RootFS and Metadata from the Starter — server.New no
+// longer constructs those itself, ensuring MinIO import and DataConfig
+// finalisation have already completed before the HTTP layer is wired up.
 func New(config *Config) (*Server, error) {
 	log := logging.Component("server")
 
-	// Create root filesystem with chroot protection
-	rootFS, err := path.NewRootFS(config.DataDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create root filesystem: %w", err)
-	}
+	rootFS := config.RootFS
+	metaMgr := config.Metadata
 
-	// Initialize metadata manager
-	metaMgr, err := metadata.New(rootFS)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize metadata: %w", err)
-	}
-
-	// Check for MinIO migration
-	if err := metaMgr.CheckAndImportMinIO(context.Background()); err != nil {
-		log.Warn("minio data check & import failed", "error", err)
-	}
-
-	// Initialize storage backend
+	// Initialize storage backend.
 	store, err := storage.New(rootFS, metaMgr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize storage: %w", err)
 	}
 
-	// Initialize authenticator with appropriate credentials
+	// Initialize authenticator with appropriate credentials.
 	var authenticator *auth.Authenticator
 
 	dataCredsConfigured := config.DataConfig != nil && config.DataConfig.Credentials.IsConfigured()
@@ -163,8 +172,6 @@ func New(config *Config) (*Server, error) {
 		)
 	} else {
 		// No configured data credentials — fall back to CLI/env credentials.
-		// This covers: new data dirs, or existing dirs where credentials haven't
-		// been set yet via "dirio init".
 		if !config.CLICredentialsExplicitlySet {
 			log.Warn("No admin credentials configured — using defaults. Run \"dirio init\" to set up admin credentials.",
 				"admin", config.AccessKey)
@@ -172,11 +179,11 @@ func New(config *Config) (*Server, error) {
 		authenticator = auth.New(metaMgr, config.AccessKey, config.SecretKey)
 	}
 
-	// Initialize policy engine with IAM policy resolver
+	// Initialize policy engine with IAM policy resolver.
 	resolver := policy.NewMetadataResolver(metaMgr)
 	policyEngine := policy.New(resolver)
 
-	// Load all bucket policies from metadata at startup
+	// Load all bucket policies from metadata at startup.
 	bucketPolicies, err := metaMgr.GetAllBucketPolicies(context.Background())
 	if err != nil {
 		log.Warn("failed to load bucket policies", "error", err)
@@ -185,7 +192,6 @@ func New(config *Config) (*Server, error) {
 		log.Info("loaded bucket policies", "count", len(bucketPolicies))
 	}
 
-	// Create server
 	srv := &Server{
 		config:       config,
 		storage:      store,
@@ -195,26 +201,23 @@ func New(config *Config) (*Server, error) {
 		log:          log,
 	}
 
-	// Setup routes
 	srv.setupRoutes()
 
 	return srv, nil
 }
 
-// setupRoutes configures HTTP routing
+// setupRoutes configures HTTP routing.
 func (s *Server) setupRoutes() {
 	s.router = teapot.New()
 
-	// Add middleware (timing first for accurate timestamps, then trace ID, request ID, logging, auth)
 	s.router.Use(chiMiddleware.StripSlashes)
 	s.router.Use(middleware.Timing)
+	s.router.Use(s.trackRequest) // count in-flight requests; check inShutdown
 	s.router.Use(middleware.TraceID)
 	s.router.Use(middleware.RequestID)
 	s.router.Use(teapot.RouteContextMiddleware(s.router))
 	s.router.Use(loggingHttp.PrepareAccessLogMiddleware(s.log))
 
-	// Create API handler — pass the authenticator directly as the AdminKeyChecker
-	// so that live credential reloads are reflected without rebuilding routes.
 	apiHandler := api.New(
 		s.storage,
 		s.metadata,
@@ -224,7 +227,6 @@ func (s *Server) setupRoutes() {
 		s.auth,
 	)
 
-	// Setup routes using shared function
 	deps := &RouteDependencies{
 		Auth:         s.auth,
 		PolicyEngine: s.policyEngine,
@@ -237,21 +239,34 @@ func (s *Server) setupRoutes() {
 	SetupRoutes(s.router, deps)
 }
 
-// consoleSamePort reports whether the console should be mounted on the main
-// port. This is true when no separate port is configured, or when the
-// configured port matches the main server port.
+// trackRequest is a middleware that increments requestCount for each
+// in-flight request and decrements it when the handler returns.  It also
+// returns 503 early for any request that arrives after shutdown has begun,
+// giving upstream load balancers a fast signal to stop routing here.
+func (s *Server) trackRequest(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.inShutdown.Load() {
+			http.Error(w, "server shutting down", http.StatusServiceUnavailable)
+			return
+		}
+		s.requestCount.Add(1)
+		defer s.requestCount.Add(-1)
+		next.ServeHTTP(w, r)
+	})
+}
+
+// consoleSamePort reports whether the console should be mounted on the main port.
 func (s *Server) consoleSamePort() bool {
 	return s.consolePort == 0 || s.consolePort == s.config.Port
 }
 
-// buildHandler constructs the top-level http.Handler, mounting the console when
-// it is configured for same-port operation.
+// buildHandler constructs the top-level http.Handler, mounting the console
+// when it is configured for same-port operation.
 func (s *Server) buildHandler() http.Handler {
 	if s.consoleRouter == nil || !s.consoleSamePort() {
 		return s.router
 	}
 
-	// Same-port console: mount at /dirio/ui/, everything else goes to the S3 router.
 	s.router.MountNamed("/dirio/ui", "dirio", s.consoleRouter)
 	s.log.Info("console mounted on main port", "path", "/dirio/ui/")
 	return s.router
@@ -265,7 +280,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	s.httpServer = &http.Server{
 		Addr:         addr,
-		Handler:      s.buildHandler(),
+		Handler:      middleware.SetDefaultHeadersMiddleware(s.buildHandler()),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -276,7 +291,7 @@ func (s *Server) Start(ctx context.Context) error {
 		consoleAddr := fmt.Sprintf(":%d", s.consolePort)
 		s.consoleServer = &http.Server{
 			Addr:         consoleAddr,
-			Handler:      s.consoleRouter,
+			Handler:      middleware.SetDefaultHeadersMiddleware(s.consoleRouter),
 			ReadTimeout:  30 * time.Second,
 			WriteTimeout: 30 * time.Second,
 			IdleTimeout:  60 * time.Second,
@@ -338,46 +353,59 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 // gracefulShutdown drains all HTTP servers and stops ancillary services.
-// It uses the configured ShutdownTimeout for draining in-flight requests.
+// It is safe to call multiple times — the shutdown body executes exactly once.
 func (s *Server) gracefulShutdown() {
-	timeout := s.config.ShutdownTimeout
-	if timeout <= 0 {
-		timeout = 30 * time.Second
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
+	s.shutdownOnce.Do(func() {
+		// Signal middleware to return 503 for any straggling requests.
+		s.inShutdown.Store(true)
 
-	// Shut down both HTTP servers concurrently.
-	var wg sync.WaitGroup
-
-	if s.consoleServer != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := s.consoleServer.Shutdown(ctx); err != nil {
-				s.log.Error("console server shutdown error", "error", err)
-			}
-		}()
-	}
-
-	if err := s.httpServer.Shutdown(ctx); err != nil {
-		s.log.Error("http server shutdown error", "error", err)
-	}
-
-	wg.Wait()
-
-	// Stop mDNS service.
-	if s.mdns != nil {
-		if err := s.mdns.Stop(); err != nil {
-			s.log.Error("mdns shutdown error", "error", err)
+		timeout := s.config.ShutdownTimeout
+		if timeout <= 0 {
+			timeout = 30 * time.Second
 		}
-		s.mdns = nil
-	}
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
 
-	// Close the metadata bolt index.
-	if err := s.metadata.Close(); err != nil {
-		s.log.Error("metadata close error", "error", err)
-	}
+		// Shut down both HTTP servers concurrently.
+		var wg sync.WaitGroup
+
+		if s.consoleServer != nil {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := s.consoleServer.Shutdown(ctx); err != nil {
+					s.log.Error("console server shutdown error", "error", err)
+				}
+			}()
+		}
+
+		if err := s.httpServer.Shutdown(ctx); err != nil {
+			s.log.Error("http server shutdown error", "error", err)
+		}
+
+		wg.Wait()
+
+		// Sanity-check: http.Server.Shutdown waits for handlers to return, so
+		// the counter should be zero here.  A non-zero value indicates a handler
+		// that spawned a goroutine and returned early without finishing its work.
+		if n := s.requestCount.Load(); n != 0 {
+			s.log.Warn("shutdown complete but request counter non-zero — possible handler leak",
+				"count", n)
+		}
+
+		// Stop mDNS service.
+		if s.mdns != nil {
+			if err := s.mdns.Stop(); err != nil {
+				s.log.Error("mdns shutdown error", "error", err)
+			}
+			s.mdns = nil
+		}
+
+		// Close the metadata bolt index.
+		if err := s.metadata.Close(); err != nil {
+			s.log.Error("metadata close error", "error", err)
+		}
+	})
 }
 
 // watchDataConfig watches .dirio/config.json for changes and reloads admin
@@ -478,4 +506,15 @@ func (s *Server) reloadDataCredentials(log *slog.Logger) {
 
 	log.Info("admin credentials reloaded from data config",
 		"access_key", dc.Credentials.AccessKey)
+}
+
+// ActiveRequests returns the current number of in-flight requests.
+// Exposed for debug endpoints and tests.
+func (s *Server) ActiveRequests() int32 {
+	return s.requestCount.Load()
+}
+
+// InShutdown reports whether the server has begun graceful shutdown.
+func (s *Server) InShutdown() bool {
+	return s.inShutdown.Load()
 }

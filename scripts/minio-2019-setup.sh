@@ -402,14 +402,24 @@ rm -f "${tmpfile}"
 
 # Object with Content-Type and custom metadata
 tmpfile="$(mktemp)"
-echo "<html><body>Test</body></html>" > "${tmpfile}"
+cat > "${tmpfile}" <<'HTML'
+<!DOCTYPE html>
+<html>
+<head><title>DirIO Public Read Test</title></head>
+<body>
+  <h1>DirIO S3 Public Read &#10003;</h1>
+  <p>If you can read this page anonymously, the public-read bucket policy is working.</p>
+  <p><strong>Bucket:</strong> gamma &nbsp;|&nbsp; <strong>Object:</strong> index.html</p>
+</body>
+</html>
+HTML
 docker run --rm --network host \
   -e MC_HOST_minio2019 \
   -v "${tmpfile}:/index.html:ro" \
   "${MC_IMAGE}" \
   cp --attr "Content-Type=text/html,x-amz-meta-page=index" \
   /index.html "minio2019/gamma/index.html" >/dev/null 2>&1
-echo "  ✓ Uploaded gamma/index.html (Content-Type + custom metadata)"
+echo "  ✓ Uploaded gamma/index.html (Content-Type: text/html, browser smoke-test page)"
 rm -f "${tmpfile}"
 
 # Object with Content-Encoding

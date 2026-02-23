@@ -9,6 +9,7 @@ import (
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 
 	"github.com/mallardduck/dirio/internal/http/middleware"
+	"github.com/mallardduck/dirio/internal/http/response"
 	"github.com/mallardduck/dirio/internal/service/s3"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
@@ -21,7 +22,7 @@ func (h *HTTPHandler) PutObjectTagging(w http.ResponseWriter, r *http.Request, b
 	// Parse the request body
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, response.SetErrAsMessage(err)); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("failed to read tagging request body and failed to write error response")
 			return
 		}
@@ -32,7 +33,7 @@ func (h *HTTPHandler) PutObjectTagging(w http.ResponseWriter, r *http.Request, b
 	// Parse XML
 	var taggingReq s3types.PutObjectTaggingRequest
 	if err := xml.Unmarshal(body, &taggingReq); err != nil {
-		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeMalformedXML, err); writeErr != nil {
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeMalformedXML, response.SetErrAsMessage(err)); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("failed to parse tagging XML and failed to write error response")
 			return
 		}
@@ -54,7 +55,7 @@ func (h *HTTPHandler) PutObjectTagging(w http.ResponseWriter, r *http.Request, b
 	})
 	if err != nil {
 		if errors.Is(err, s3types.ErrObjectNotFound) {
-			if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchKey, err); writeErr != nil {
+			if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchKey, response.SetErrAsMessage(err)); writeErr != nil {
 				s3Logger.With("err", err, "write_err", writeErr).Warn("object not found for tagging and failed to write error response")
 				return
 			}
@@ -62,14 +63,14 @@ func (h *HTTPHandler) PutObjectTagging(w http.ResponseWriter, r *http.Request, b
 			return
 		}
 		if errors.Is(err, s3types.ErrBucketNotFound) {
-			if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchBucket, err); writeErr != nil {
+			if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchBucket, response.SetErrAsMessage(err)); writeErr != nil {
 				s3Logger.With("err", err, "write_err", writeErr).Warn("bucket not found for tagging and failed to write error response")
 				return
 			}
 			s3Logger.With("err", err).Warn("bucket not found for tagging")
 			return
 		}
-		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, response.SetErrAsMessage(err)); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("failed to set object tags and failed to write error response")
 			return
 		}
@@ -93,7 +94,7 @@ func (h *HTTPHandler) GetObjectTagging(w http.ResponseWriter, r *http.Request, b
 	})
 	if err != nil {
 		if errors.Is(err, s3types.ErrObjectNotFound) {
-			if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchKey, err); writeErr != nil {
+			if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchKey, response.SetErrAsMessage(err)); writeErr != nil {
 				s3Logger.With("err", err, "write_err", writeErr).Warn("object not found for getting tags and failed to write error response")
 				return
 			}
@@ -101,14 +102,14 @@ func (h *HTTPHandler) GetObjectTagging(w http.ResponseWriter, r *http.Request, b
 			return
 		}
 		if errors.Is(err, s3types.ErrBucketNotFound) {
-			if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchBucket, err); writeErr != nil {
+			if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchBucket, response.SetErrAsMessage(err)); writeErr != nil {
 				s3Logger.With("err", err, "write_err", writeErr).Warn("bucket not found for getting tags and failed to write error response")
 				return
 			}
 			s3Logger.With("err", err).Warn("bucket not found for getting tags")
 			return
 		}
-		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, response.SetErrAsMessage(err)); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("failed to get object tags and failed to write error response")
 			return
 		}

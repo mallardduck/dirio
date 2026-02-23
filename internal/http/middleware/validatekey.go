@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/mallardduck/dirio/internal/http/response"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
@@ -18,7 +19,7 @@ import (
 // The writeError function handles writing the S3-formatted error response.
 func ValidateS3BucketNameMiddleware(
 	getBucket func(*http.Request) string,
-	writeError func(w http.ResponseWriter, requestID string, errCode s3types.ErrorCode, err error) error,
+	writeError response.XMLErrorWriter,
 ) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -26,7 +27,7 @@ func ValidateS3BucketNameMiddleware(
 
 			if err := ValidateS3BucketName(bucket); err != nil {
 				requestID := GetRequestID(r.Context())
-				if writeErr := writeError(w, requestID, s3types.ErrCodeInvalidBucketName, err); writeErr != nil {
+				if writeErr := writeError(w, requestID, s3types.ErrCodeInvalidBucketName, response.SetErrAsMessage(err)); writeErr != nil {
 					// Error writing error response - headers likely already sent
 					return
 				}
@@ -107,7 +108,7 @@ func isLowerAlphaNum(c byte) bool {
 // The writeError function handles writing the S3-formatted error response.
 func ValidateS3KeyMiddleware(
 	getKey func(*http.Request) string,
-	writeError func(w http.ResponseWriter, requestID string, errCode s3types.ErrorCode, err error) error,
+	writeError response.XMLErrorWriter,
 ) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +116,7 @@ func ValidateS3KeyMiddleware(
 
 			if err := ValidateS3Key(key); err != nil {
 				requestID := GetRequestID(r.Context())
-				if writeErr := writeError(w, requestID, s3types.ErrCodeInvalidObjectKey, err); writeErr != nil {
+				if writeErr := writeError(w, requestID, s3types.ErrCodeInvalidObjectKey, response.SetErrAsMessage(err)); writeErr != nil {
 					// Error writing error response - headers likely already sent
 					return
 				}

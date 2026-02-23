@@ -172,6 +172,39 @@ upload_object beta bob-object.bin
 upload_object gamma public-object.bin
 
 # -----------------------
+# Additional public objects (gamma — anonymous-accessible)
+# -----------------------
+tmpfile="$(mktemp)"
+cat > "${tmpfile}" <<'HTML'
+<!DOCTYPE html>
+<html>
+<head><title>DirIO Public Read Test</title></head>
+<body>
+  <h1>DirIO S3 Public Read ✓</h1>
+  <p>If you can read this page anonymously, the public-read bucket policy is working.</p>
+  <p><strong>Bucket:</strong> gamma &nbsp;|&nbsp; <strong>Object:</strong> index.html</p>
+</body>
+</html>
+HTML
+docker run --rm --network host \
+  -e MC_HOST_local \
+  -v "${tmpfile}:/index.html:ro" \
+  "${MC_IMAGE}" \
+  cp --attr "Content-Type=text/html" /index.html "local/gamma/index.html"
+echo "  ✓ Uploaded gamma/index.html (Content-Type: text/html, browser smoke-test page)"
+rm -f "${tmpfile}"
+
+largefile="$(mktemp)"
+dd if=/dev/zero of="${largefile}" bs=1M count=10 2>/dev/null
+docker run --rm --network host \
+  -e MC_HOST_local \
+  -v "${largefile}:/large-public.dat:ro" \
+  "${MC_IMAGE}" \
+  cp /large-public.dat "local/gamma/large-public.dat"
+echo "  ✓ Uploaded gamma/large-public.dat (10MB, anonymously readable)"
+rm -f "${largefile}"
+
+# -----------------------
 # Done
 # -----------------------
 echo

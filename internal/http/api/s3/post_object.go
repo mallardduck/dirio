@@ -10,6 +10,7 @@ import (
 	contextInt "github.com/mallardduck/dirio/internal/context"
 	authpkg "github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/http/middleware"
+	"github.com/mallardduck/dirio/internal/http/response"
 	svcs3 "github.com/mallardduck/dirio/internal/service/s3"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
@@ -30,7 +31,7 @@ func (h *HTTPHandler) PostObject(w http.ResponseWriter, r *http.Request, bucket 
 
 	// Safety check — auth middleware must have set this
 	if !contextInt.IsPostPolicyRequest(ctx) {
-		if err := WriteErrorResponse(w, requestID, s3types.ErrCodeAccessDenied, nil); err != nil {
+		if err := WriteErrorResponse(w, requestID, s3types.ErrCodeAccessDenied); err != nil {
 			s3Logger.With("err", err).Warn("error writing access denied for non-post-policy request to PostObject")
 		}
 		return
@@ -40,7 +41,7 @@ func (h *HTTPHandler) PostObject(w http.ResponseWriter, r *http.Request, bucket 
 	policyB64 := contextInt.GetPostPolicyPolicyB64(ctx)
 	doc, err := authpkg.ParsePostPolicyDocument(policyB64)
 	if err != nil {
-		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInvalidRequest, err); writeErr != nil {
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInvalidRequest, response.SetErrAsMessage(err)); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("error parsing post policy document")
 		}
 		return
@@ -49,7 +50,7 @@ func (h *HTTPHandler) PostObject(w http.ResponseWriter, r *http.Request, bucket 
 	// Extract fields from the already-parsed multipart form
 	mf := r.MultipartForm
 	if mf == nil {
-		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInvalidRequest, fmt.Errorf("no multipart form data")); writeErr != nil {
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInvalidRequest, response.SetErrAsMessage(fmt.Errorf("no multipart form data"))); writeErr != nil {
 			s3Logger.With("write_err", writeErr).Warn("error writing invalid request response")
 		}
 		return
@@ -76,7 +77,7 @@ func (h *HTTPHandler) PostObject(w http.ResponseWriter, r *http.Request, bucket 
 	// Get the uploaded file
 	file, fileHeader, err := r.FormFile("file")
 	if err != nil {
-		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInvalidRequest, fmt.Errorf("missing file field: %w", err)); writeErr != nil {
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInvalidRequest, response.SetErrAsMessage(fmt.Errorf("missing file field: %w", err))); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("error writing invalid request (missing file field)")
 		}
 		return
@@ -90,7 +91,7 @@ func (h *HTTPHandler) PostObject(w http.ResponseWriter, r *http.Request, bucket 
 
 	// Validate policy conditions against the actual upload parameters
 	if err := authpkg.ValidatePostPolicyConditions(doc, bucket, key, contentType, fileHeader.Size); err != nil {
-		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeAccessDenied, err); writeErr != nil {
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeAccessDenied, response.SetErrAsMessage(err)); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("post policy condition validation failed")
 		}
 		return
@@ -106,12 +107,12 @@ func (h *HTTPHandler) PostObject(w http.ResponseWriter, r *http.Request, bucket 
 	etag, err := h.s3Service.PutObject(ctx, putRequest)
 	if err != nil {
 		if errors.Is(err, s3types.ErrBucketNotFound) {
-			if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchBucket, err); writeErr != nil {
+			if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchBucket, response.SetErrAsMessage(err)); writeErr != nil {
 				s3Logger.With("err", err, "write_err", writeErr).Warn("bucket not found during POST policy upload")
 			}
 			return
 		}
-		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, err); writeErr != nil {
+		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, response.SetErrAsMessage(err)); writeErr != nil {
 			s3Logger.With("err", err, "write_err", writeErr).Warn("error storing object during POST policy upload")
 		}
 		return

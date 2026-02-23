@@ -2,18 +2,14 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
-	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/mallardduck/dirio/internal/crypto"
-	"github.com/mallardduck/dirio/internal/http/server"
-
 	"github.com/mallardduck/dirio/internal/config"
-	"github.com/mallardduck/dirio/internal/config/data"
+	"github.com/mallardduck/dirio/internal/http/server"
 	"github.com/mallardduck/dirio/internal/logging"
+	"github.com/mallardduck/dirio/internal/startup"
 )
 
 var serveCmd = &cobra.Command{
@@ -81,30 +77,32 @@ func init() {
 	_ = viper.BindPFlag(config.ShutdownTimeout.GetViperKey(), serveCmd.Flags().Lookup(config.ShutdownTimeout.GetFlagKey()))
 }
 
-func runServer(cmd *cobra.Command, args []string) error {
-	// Initialize credential encryption before any data config or metadata
-	// operations. Read the data dir flag early — cobra has already parsed flags
-	// before RunE fires, so this is safe even before full config loading.
+func runServer(cmd *cobra.Command, _ []string) error {
+	// Read the data directory flag early — the Starter needs it before
+	// config.LoadConfig runs so that the encryption keyring is ready for
+	// credential decryption inside LoadConfig.
 	dataDir, _ := cmd.Flags().GetString(config.DataDir.GetFlagKey())
 	if dataDir == "" {
 		dataDir = config.DataDir.GetDefaultAsString()
 	}
-	if err := crypto.Init(dataDir); err != nil {
-		return fmt.Errorf("failed to initialise encryption: %w", err)
+
+	// Phase 1 — Starter init: MkdirAll, crypto, rootFS, DataConfig load/default.
+	s, err := startup.Init(dataDir)
+	if err != nil {
+		return fmt.Errorf("failed to initialise data directory: %w", err)
 	}
 
-	// Load configuration using the new config system
-	settings, err := config.LoadConfig(cmd.Flags(), nil)
+	// Load full application config (viper/cobra).  Crypto is now initialised
+	// so any encrypted credential values in config.json can be decrypted.
+	settings, err := config.LoadConfig(cmd.Flags(), viper.GetViper())
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Validate configuration
 	if err := settings.Validate(); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
-	// Initialize logging
 	logging.Setup(logging.Config{
 		Level:     settings.LogLevel,
 		Format:    settings.LogFormat,
@@ -112,137 +110,55 @@ func runServer(cmd *cobra.Command, args []string) error {
 	})
 
 	log := logging.Component("server")
-	log.Info("logging service setup", "level", settings.LogLevel, "format", settings.LogFormat, "verbosity", settings.Verbosity)
+	log.Info("logging service setup",
+		"level", settings.LogLevel,
+		"format", settings.LogFormat,
+		"verbosity", settings.Verbosity,
+	)
 
-	// Validate data directory exists or can be created
-	if err := validateDataDir(settings.DataDir); err != nil {
-		return fmt.Errorf("invalid data directory: %w", err)
+	// Phase 2 — Starter prepare: metadata manager, MinIO import, DataConfig
+	// finalisation, global InstanceID.  After this returns DataConfig is
+	// authoritative and MetadataManager is ready to hand to server.New.
+	if err := s.Prepare(
+		cmd.Context(),
+		settings.Region,
+		settings.AccessKey,
+		settings.SecretKey,
+		settings.CLICredentialsExplicitlySet,
+	); err != nil {
+		return fmt.Errorf("failed to prepare data directory: %w", err)
 	}
 
-	// Initialize or migrate: create data config if missing
-	if err := initOrMigrateDataConfig(settings); err != nil {
-		return fmt.Errorf("failed to initialize data config: %w", err)
-	}
-
-	// Create server configuration from settings
+	// Phase 3 — wire up the HTTP server using the Starter's finalised components.
 	serverConfig := &server.Config{
 		DataDir:                     settings.DataDir,
 		Port:                        settings.Port,
-		AccessKey:                   settings.AccessKey, // CLI admin
-		SecretKey:                   settings.SecretKey, // CLI admin
+		AccessKey:                   settings.AccessKey,
+		SecretKey:                   settings.SecretKey,
 		MDNSEnabled:                 settings.MDNSEnabled,
 		MDNSName:                    settings.MDNSName,
 		MDNSHostname:                settings.MDNSHostname,
 		MDNSMode:                    settings.MDNSMode,
 		CanonicalDomain:             settings.CanonicalDomain,
 		Debug:                       settings.Debug,
-		DataConfig:                  settings.DataConfig, // Data admin (if exists)
+		DataConfig:                  s.DataConfig,
 		CLICredentialsExplicitlySet: settings.CLICredentialsExplicitlySet,
 		ShutdownTimeout:             settings.ShutdownTimeout,
+		RootFS:                      s.RootFS(),
+		Metadata:                    s.MetadataManager(),
 	}
 
-	// Initialize and start server
 	srv, err := server.New(serverConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
 	}
 
-	// Wire the web admin console (no-op when built with -tags noconsole)
 	setupConsole(srv, settings.ConsoleEnabled, settings.ConsolePort)
 
 	log.Info("starting server", "port", settings.Port, "data_dir", settings.DataDir)
 
-	ctx := cmd.Context()
-	if err := srv.Start(ctx); err != nil {
+	if err := srv.Start(cmd.Context()); err != nil {
 		return fmt.Errorf("server error: %w", err)
-	}
-
-	return nil
-}
-
-func validateDataDir(path string) error {
-	info, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		// Try to create it
-		if err := os.MkdirAll(path, 0755); err != nil {
-			return fmt.Errorf("cannot create data directory: %w", err)
-		}
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("path exists but is not a directory")
-	}
-	return nil
-}
-
-// initOrMigrateDataConfig creates data config for new or existing installations
-// that don't have .dirio/config.json yet
-func initOrMigrateDataConfig(settings *config.Settings) error {
-	log := logging.Component("init")
-
-	// If data config already exists (either loaded or from MinIO import), skip
-	if settings.DataConfig != nil {
-		return nil
-	}
-
-	// Create filesystem for data directory
-	fs := osfs.New(settings.DataDir)
-
-	// Check if .dirio/config.json already exists
-	if data.ConfigDataExists(fs) {
-		// Should have been loaded, but wasn't - this might indicate a problem
-		log.Warn("Data config file exists but wasn't loaded - skipping initialization")
-		return nil
-	}
-
-	// Check if this looks like an existing installation (has .metadata directory)
-	metadataExists := false
-	if _, err := fs.Stat(".metadata"); err == nil {
-		metadataExists = true
-	}
-
-	if metadataExists {
-		log.Info("Migrating existing installation - creating data config from CLI settings")
-	} else {
-		log.Info("Initializing new DirIO data directory")
-	}
-
-	// Create data config with region and storage defaults.
-	dc := data.DefaultDataConfig()
-	dc.Region = settings.Region
-
-	// Only persist credentials if they were explicitly provided — never bake
-	// defaults into config.json. Use "dirio init" to configure admin credentials.
-	if settings.CLICredentialsExplicitlySet {
-		dc.Credentials.AccessKey = settings.AccessKey
-		dc.Credentials.SecretKey = settings.SecretKey
-		log.Info("persisting explicit CLI credentials to data config", "access_key", settings.AccessKey)
-	} else {
-		log.Info("no explicit credentials provided — data config created without credentials",
-			"hint", "run \"dirio init --access-key ... --secret-key ...\" or \"dirio credentials set\" to configure admin credentials",
-		)
-	}
-
-	if err := data.SaveDataConfig(fs, dc); err != nil {
-		return fmt.Errorf("failed to save data config: %w", err)
-	}
-
-	// Update settings to use the new data config
-	settings.DataConfig = dc
-
-	if metadataExists {
-		log.Info("Migration complete - data config created",
-			"admin", dc.Credentials.AccessKey,
-			"region", dc.Region)
-	} else {
-		log.Info("Initialization complete - core config files created",
-			"admin", dc.Credentials.AccessKey,
-			"region", dc.Region,
-			"compression", dc.Compression.Enabled,
-			"worm", dc.WORMEnabled)
 	}
 
 	return nil

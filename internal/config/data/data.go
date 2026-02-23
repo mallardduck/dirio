@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/util"
+	"github.com/google/uuid"
 
 	"github.com/mallardduck/dirio/internal/crypto"
 )
@@ -22,6 +23,8 @@ const (
 type ConfigData struct {
 	// Version of this config format for future migrations
 	Version string `json:"version"`
+
+	InstanceID uuid.UUID `json:"instance_id"`
 
 	// Root credentials for this data directory
 	Credentials CredentialsConfig `json:"credentials"`
@@ -91,6 +94,7 @@ type StorageClassConfig struct {
 func DefaultDataConfig() *ConfigData {
 	return &ConfigData{
 		Version:     ConfigDataVersion,
+		InstanceID:  uuid.New(),
 		Credentials: CredentialsConfig{}, // empty — must be configured explicitly
 		Region:      "us-east-1",         // AWS-style region for consistency
 		Compression: CompressionConfig{
@@ -136,7 +140,7 @@ func LoadDataConfig(rootFS billy.Filesystem) (*ConfigData, error) {
 		return nil, fmt.Errorf("failed to parse data config: %w", err)
 	}
 
-	// Decrypt secret key if stored encrypted (skip when credentials are not configured).
+	// Decrypt a secret key if stored encrypted (skip when credentials are not configured).
 	if config.Credentials.SecretKey != "" {
 		decrypted, err := crypto.Decrypt(config.Credentials.SecretKey)
 		if err != nil {

@@ -500,8 +500,6 @@ Current status: **Phase 4.5 IN PROGRESS** — Performance optimizations shipped;
 - [ ] Concurrent access testing
 - [ ] Error handling audit across all API handlers
 - [ ] Load testing with large files and many small files
-- [ ] Test migration from actual MinIO instance
-- [ ] Test behind reverse proxy (nginx) with canonical domain
 
 ## Phase 5: Production Readiness & Operations
 
@@ -518,6 +516,8 @@ Current status: **Phase 4.5 IN PROGRESS** — Performance optimizations shipped;
 - [ ] Log rotation for application logs (OS/container can handle)
 - [ ] HTTP Audit Logging (complex, lower value - see Phase 6)
 - [ ] Sustained load test (multipart upload memory under concurrent load) — deferred, needs wrk/hey/k6 infra
+- [ ] Test migration from actual MinIO instance
+- [ ] Test behind reverse proxy (nginx) with canonical domain
 
 ### Configuration Management TODOs
 - [ ] **Add explicit config update command** - Allow updating data config values explicitly

@@ -6,6 +6,7 @@ import (
 	"github.com/mallardduck/dirio/internal/http/api/iam"
 	"github.com/mallardduck/dirio/internal/http/api/s3"
 	"github.com/mallardduck/dirio/internal/http/auth"
+	httpresponse "github.com/mallardduck/dirio/internal/http/response"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/persistence/storage"
 	"github.com/mallardduck/dirio/internal/policy"
@@ -54,8 +55,8 @@ func New(
 
 // WriteXMLResponse writes an S3 response in XML format.
 // It is exported so that middleware can use it.
-var WriteXMLResponse = s3.WriteXMLResponse
+var WriteXMLResponse = httpresponse.WriteXMLResponse
 
 // WriteErrorResponse writes an S3 error response in XML format.
 // It is exported so that middleware can use it for validation errors.
-var WriteErrorResponse = s3.WriteErrorResponse
+var WriteErrorResponse = httpresponse.WriteErrorResponse

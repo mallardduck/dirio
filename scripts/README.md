@@ -10,6 +10,12 @@ This directory contains scripts to set up test data on S3-compatible storage sys
 - **`minio-2019-setup.sh`** - Sets up a MinIO 2019 instance in Docker (FS mode "golden era")
 - **`minio-import-2019-to-2022.sh`** - Imports 2019 data into a 2022 MinIO instance for migration testing
 
+> **Windows users:** The Docker-based scripts (`minio-standalone-setup.sh`, `minio-2019-setup.sh`) **must be run from a WSL terminal**, not from Git Bash or PowerShell. See [Running on Windows](#running-on-windows) below.
+
+### Validation Script
+
+- **`validate-setup.sh`** - "Outside in" validation of a running server against the test data created by the setup scripts above
+
 ### Generic S3 Setup Scripts (New!)
 
 - **`s3-minio-setup.sh`** - Bash script for Linux/macOS/WSL (uses MinIO client)
@@ -216,6 +222,80 @@ aws s3 rb s3://alpha --force --endpoint-url=http://localhost:8080
 aws s3 rb s3://beta --force --endpoint-url=http://localhost:8080
 aws s3 rb s3://gamma --force --endpoint-url=http://localhost:8080
 ```
+
+## Validating the Setup
+
+After running a setup script and importing the data into DirIO, run `validate-setup.sh` to confirm the server is behaving correctly:
+
+```bash
+# Start DirIO pointing at the imported data directory, then:
+S3_ENDPOINT=http://localhost:8080 \
+S3_ACCESS_KEY=minioadmin \
+S3_SECRET_KEY=minioadmin \
+./validate-setup.sh
+```
+
+By default it validates against the 2019 dataset (the richer one). For the standalone dataset:
+
+```bash
+DATASET=standalone ./validate-setup.sh
+```
+
+To skip IAM user tests (if DirIO doesn't have full IAM support yet):
+
+```bash
+SKIP_IAM=true ./validate-setup.sh
+```
+
+### What the validator checks
+
+**Common to both datasets:**
+- Connectivity and credential validity
+- All expected buckets are present (`ListBuckets`)
+- Core objects exist in each bucket (`HeadObject`)
+- `GetObject` returns data
+- `gamma` and `beta` are anonymously readable via raw `curl`
+- `alpha` is auth-gated (curl returns 403/401)
+- Raw HTTP `Content-Type` header on public objects
+- Per-user auth: alice can access `alpha`, bob can access `beta`, and neither can cross into the other's bucket
+
+**2019 dataset additionally:**
+- Folder structure: `ListObjects` with `delimiter=/` returns correct common prefixes
+- Prefix filtering: objects under `folder1/`, `prefix/` etc. are correctly scoped
+- Custom metadata (`x-amz-meta-*`) is preserved on retrieved objects
+- Standard content headers (`Content-Type`, `Content-Encoding`, `Content-Language`) survive the round-trip
+- 10MB large file (multipart upload artifact) is present and publicly readable
+- Server-side copy results (`alice-copy.bin`, `copied-from-alpha.txt`) exist
+
+### Prerequisites
+
+```bash
+# aws CLI (for authenticated S3 calls — handles SigV4 signing)
+pip install awscli
+# or: apt install awscli
+
+# curl (standard on most Linux/macOS installs)
+```
+
+## Running on Windows
+
+The Docker-based setup scripts (`minio-standalone-setup.sh`, `minio-2019-setup.sh`) rely on two things that only work correctly when running inside Linux:
+
+- **`--network host`** — makes the `mc` client containers share the host's network stack to reach the MinIO server. On Docker Desktop this only works from within the WSL2 Linux VM; when run from Git Bash or PowerShell the flag is silently ignored and the containers can't reach MinIO, so all bucket/object creation commands fail silently.
+- **Volume mount paths** — the scripts pass `$(pwd)`-based paths as Docker bind mounts. Git Bash translates these through MSYS path conversion, which can produce incorrect paths. WSL paths (e.g. `/home/user/...`) are native Linux paths that Docker Desktop maps directly.
+
+**Always run these scripts from a WSL terminal on Windows:**
+
+```bash
+# Open a WSL terminal (e.g. Ubuntu from the Start menu, or `wsl` in Windows Terminal)
+cd /home/dan/projects/dirio/scripts   # or wherever your checkout lives under the WSL filesystem
+./minio-standalone-setup.sh
+./minio-2019-setup.sh
+```
+
+Keep the project files under the WSL filesystem (e.g. `~/projects/`) rather than under `/mnt/c/...`. Docker Desktop integrates with the WSL2 VM directly, so bind mounts from the WSL filesystem are fast and reliable. Mounts from `/mnt/c/` (the Windows filesystem projected into WSL) work but are slower and have occasionally caused issues with file metadata.
+
+Docker Desktop's WSL integration must be enabled: **Docker Desktop → Settings → Resources → WSL Integration → enable for your distro**.
 
 ## Troubleshooting
 

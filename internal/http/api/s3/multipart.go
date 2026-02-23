@@ -2,6 +2,7 @@ package s3
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -9,21 +10,12 @@ import (
 
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 
+	"github.com/mallardduck/dirio/internal/http/response"
+
+	"github.com/mallardduck/dirio/internal/http/middleware"
 	"github.com/mallardduck/dirio/internal/service/s3"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
-
-// writeS3Error writes an S3 error response
-func writeS3Error(w http.ResponseWriter, statusCode int, errorCode, message string) {
-	response := s3types.ErrorResponse{
-		Code:    errorCode,
-		Message: message,
-	}
-
-	w.Header().Set(headers.ContentType, "application/xml")
-	w.WriteHeader(statusCode)
-	_ = xml.NewEncoder(w).Encode(response)
-}
 
 // CreateMultipartUpload initiates a multipart upload
 func (h *HTTPHandler) CreateMultipartUpload(w http.ResponseWriter, r *http.Request, bucket, key string) {
@@ -52,7 +44,8 @@ func (h *HTTPHandler) CreateMultipartUpload(w http.ResponseWriter, r *http.Reque
 
 	resp, err := h.s3Service.CreateMultipartUpload(r.Context(), req)
 	if err != nil {
-		writeS3Error(w, http.StatusInternalServerError, "InternalError", err.Error())
+		requestID := middleware.GetRequestID(r.Context())
+		_ = WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError)
 		return
 	}
 
@@ -78,14 +71,16 @@ func (h *HTTPHandler) UploadPart(w http.ResponseWriter, r *http.Request, bucket,
 	uploadID := r.URL.Query().Get("uploadId")
 	partNumberStr := r.URL.Query().Get("partNumber")
 
+	requestID := middleware.GetRequestID(r.Context())
+
 	if uploadID == "" || partNumberStr == "" {
-		writeS3Error(w, http.StatusBadRequest, "InvalidRequest", "uploadId and partNumber are required")
+		_ = WriteErrorResponse(w, requestID, s3types.ErrCodeInvalidRequest, response.SetErrAsMessage(errors.New("uploadId and partNumber are required")))
 		return
 	}
 
 	partNumber, err := strconv.Atoi(partNumberStr)
 	if err != nil || partNumber < 1 || partNumber > 10000 {
-		writeS3Error(w, http.StatusBadRequest, "InvalidPart", "part number must be between 1 and 10000")
+		_ = WriteErrorResponse(w, requestID, s3types.ErrCodeInvalidPart, response.SetErrAsMessage(errors.New("part number must be between 1 and 10000")))
 		return
 	}
 
@@ -101,9 +96,9 @@ func (h *HTTPHandler) UploadPart(w http.ResponseWriter, r *http.Request, bucket,
 	resp, err := h.s3Service.UploadPart(r.Context(), req)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			writeS3Error(w, http.StatusNotFound, "NoSuchUpload", "The specified multipart upload does not exist")
+			_ = WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchUpload)
 		} else {
-			writeS3Error(w, http.StatusInternalServerError, "InternalError", err.Error())
+			_ = WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, response.SetErrAsMessage(err))
 		}
 		return
 	}
@@ -116,15 +111,18 @@ func (h *HTTPHandler) UploadPart(w http.ResponseWriter, r *http.Request, bucket,
 // CompleteMultipartUpload completes a multipart upload by assembling all parts
 func (h *HTTPHandler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request, bucket, key string) {
 	uploadID := r.URL.Query().Get("uploadId")
+
+	requestID := middleware.GetRequestID(r.Context())
+
 	if uploadID == "" {
-		writeS3Error(w, http.StatusBadRequest, "InvalidRequest", "uploadId is required")
+		_ = WriteErrorResponse(w, requestID, s3types.ErrCodeInvalidRequest, response.SetErrAsMessage(errors.New("uploadId is required")))
 		return
 	}
 
 	// Parse request body
 	var completeReq s3types.CompleteMultipartUpload
 	if err := xml.NewDecoder(r.Body).Decode(&completeReq); err != nil {
-		writeS3Error(w, http.StatusBadRequest, "MalformedXML", "Invalid XML in request body")
+		_ = WriteErrorResponse(w, requestID, s3types.ErrCodeMalformedXML, response.SetErrAsMessage(errors.New("Invalid XML in request body")))
 		return
 	}
 
@@ -147,11 +145,11 @@ func (h *HTTPHandler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Req
 	resp, err := h.s3Service.CompleteMultipartUpload(r.Context(), req)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			writeS3Error(w, http.StatusNotFound, "NoSuchUpload", "The specified multipart upload does not exist")
+			_ = WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchUpload)
 		} else if strings.Contains(err.Error(), "mismatch") {
-			writeS3Error(w, http.StatusBadRequest, "InvalidPart", err.Error())
+			_ = WriteErrorResponse(w, requestID, s3types.ErrCodeInvalidPart, response.SetErrAsMessage(err))
 		} else {
-			writeS3Error(w, http.StatusInternalServerError, "InternalError", err.Error())
+			_ = WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, response.SetErrAsMessage(err))
 		}
 		return
 	}
@@ -175,8 +173,11 @@ func (h *HTTPHandler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Req
 // AbortMultipartUpload aborts a multipart upload and cleans up all parts
 func (h *HTTPHandler) AbortMultipartUpload(w http.ResponseWriter, r *http.Request, bucket, key string) {
 	uploadID := r.URL.Query().Get("uploadId")
+
+	requestID := middleware.GetRequestID(r.Context())
+
 	if uploadID == "" {
-		writeS3Error(w, http.StatusBadRequest, "InvalidRequest", "uploadId is required")
+		_ = WriteErrorResponse(w, requestID, s3types.ErrCodeInvalidRequest, response.SetErrAsMessage(errors.New("uploadId is required")))
 		return
 	}
 
@@ -188,9 +189,9 @@ func (h *HTTPHandler) AbortMultipartUpload(w http.ResponseWriter, r *http.Reques
 
 	if err := h.s3Service.AbortMultipartUpload(r.Context(), req); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			writeS3Error(w, http.StatusNotFound, "NoSuchUpload", "The specified multipart upload does not exist")
+			_ = WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchUpload)
 		} else {
-			writeS3Error(w, http.StatusInternalServerError, "InternalError", err.Error())
+			_ = WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, response.SetErrAsMessage(err))
 		}
 		return
 	}
@@ -201,8 +202,11 @@ func (h *HTTPHandler) AbortMultipartUpload(w http.ResponseWriter, r *http.Reques
 // ListParts lists all uploaded parts for a multipart upload
 func (h *HTTPHandler) ListParts(w http.ResponseWriter, r *http.Request, bucket, key string) {
 	uploadID := r.URL.Query().Get("uploadId")
+
+	requestID := middleware.GetRequestID(r.Context())
+
 	if uploadID == "" {
-		writeS3Error(w, http.StatusBadRequest, "InvalidRequest", "uploadId is required")
+		_ = WriteErrorResponse(w, requestID, s3types.ErrCodeInvalidRequest, response.SetErrAsMessage(errors.New("uploadId is required")))
 		return
 	}
 
@@ -223,9 +227,9 @@ func (h *HTTPHandler) ListParts(w http.ResponseWriter, r *http.Request, bucket, 
 	resp, err := h.s3Service.ListParts(r.Context(), req)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			writeS3Error(w, http.StatusNotFound, "NoSuchUpload", "The specified multipart upload does not exist")
+			_ = WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchUpload)
 		} else {
-			writeS3Error(w, http.StatusInternalServerError, "InternalError", err.Error())
+			_ = WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, response.SetErrAsMessage(err))
 		}
 		return
 	}
@@ -260,5 +264,6 @@ func (h *HTTPHandler) ListParts(w http.ResponseWriter, r *http.Request, bucket, 
 func (h *HTTPHandler) UploadPartCopy(w http.ResponseWriter, r *http.Request, bucket, key string) {
 	// TODO: implement UploadPartCopy
 	// This is similar to UploadPart but copies from an existing S3 object instead of request body
-	writeS3Error(w, http.StatusNotImplemented, "NotImplemented", "UploadPartCopy is not yet implemented")
+	requestID := middleware.GetRequestID(r.Context())
+	_ = WriteErrorResponse(w, requestID, s3types.ErrCodeNotImplemented, response.SetErrAsMessage(errors.New("UploadPartCopy is not yet implemented")))
 }

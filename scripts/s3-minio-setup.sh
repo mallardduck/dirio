@@ -338,10 +338,20 @@ rm -f "${tmpfile}"
 
 # Object with Content-Type and custom metadata
 tmpfile="$(mktemp)"
-echo "<html><body>Test</body></html>" > "${tmpfile}"
+cat > "${tmpfile}" <<'HTML'
+<!DOCTYPE html>
+<html>
+<head><title>DirIO Public Read Test</title></head>
+<body>
+  <h1>DirIO S3 Public Read ✓</h1>
+  <p>If you can read this page anonymously, the public-read bucket policy is working.</p>
+  <p><strong>Bucket:</strong> gamma &nbsp;|&nbsp; <strong>Object:</strong> index.html</p>
+</body>
+</html>
+HTML
 mc cp --attr "Content-Type=text/html;x-amz-meta-page=index" \
   "${tmpfile}" "${S3_ALIAS}/gamma/index.html"
-echo "  ✓ Uploaded gamma/index.html (Content-Type + custom metadata)"
+echo "  ✓ Uploaded gamma/index.html (Content-Type: text/html, browser smoke-test page)"
 rm -f "${tmpfile}"
 
 # Object with Content-Encoding
@@ -384,6 +394,8 @@ largefile="$(mktemp)"
 dd if=/dev/zero of="${largefile}" bs=1M count=10 2>/dev/null
 mc cp "${largefile}" "${S3_ALIAS}/alpha/large-file.dat"
 echo "  ✓ Uploaded alpha/large-file.dat (10MB, likely multipart)"
+mc cp "${largefile}" "${S3_ALIAS}/gamma/large-public.dat"
+echo "  ✓ Uploaded gamma/large-public.dat (10MB, anonymously readable)"
 rm -f "${largefile}"
 
 # -----------------------

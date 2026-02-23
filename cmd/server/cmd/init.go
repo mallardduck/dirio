@@ -2,16 +2,14 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
-	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/spf13/cobra"
 
 	"github.com/mallardduck/dirio/internal/cli/output"
 	"github.com/mallardduck/dirio/internal/config"
 	"github.com/mallardduck/dirio/internal/config/data"
-	"github.com/mallardduck/dirio/internal/crypto"
 	"github.com/mallardduck/dirio/internal/logging"
+	"github.com/mallardduck/dirio/internal/startup"
 )
 
 var initCmd = &cobra.Command{
@@ -49,40 +47,39 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	accessKey, _ := cmd.Flags().GetString(config.AccessKey.GetFlagKey())
 	secretKey, _ := cmd.Flags().GetString(config.SecretKey.GetFlagKey())
 
-	// Validate: credentials must be provided together or not at all.
+	// Credentials must be provided together or not at all.
 	if (accessKey == "") != (secretKey == "") {
 		return fmt.Errorf("--access-key and --secret-key must both be provided or both be omitted")
 	}
 
-	// Ensure the data directory exists.
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		return fmt.Errorf("cannot create data directory: %w", err)
+	// Init: MkdirAll, crypto keyring, rootFS, DataConfig load-or-default.
+	s, err := startup.Init(dataDir)
+	if err != nil {
+		return err
 	}
 
-	// Initialise encryption keyring (creates one if needed) before any config writes.
-	if err := crypto.Init(dataDir); err != nil {
-		return fmt.Errorf("failed to initialise encryption: %w", err)
+	// MinIO migration: detect and import .minio.sys if present.  Must run
+	// before credential handling so that DataConfig reflects the imported
+	// InstanceID and settings rather than the fresh default.  The metadata
+	// manager (if created) is closed when init exits.
+	defer func() { _ = s.Close() }()
+	if err := s.MigrateMinIO(cmd.Context()); err != nil {
+		log.Warn("minio check/import failed", "error", err)
 	}
 
-	fs := osfs.New(dataDir)
-
-	if data.ConfigDataExists(fs) {
+	if !s.IsNew() {
 		// Config already exists — only apply credentials if provided and not yet set.
-		existing, err := data.LoadDataConfig(fs)
-		if err != nil {
-			return fmt.Errorf("config.json exists but could not be loaded: %w", err)
-		}
 		if accessKey != "" {
-			if existing.Credentials.IsConfigured() {
+			if s.DataConfig.Credentials.IsConfigured() {
 				log.Warn("admin credentials already configured, skipping",
 					"data_dir", dataDir,
-					"access_key", existing.Credentials.AccessKey,
+					"access_key", s.DataConfig.Credentials.AccessKey,
 				)
 				output.Warn("Admin credentials already configured — use \"dirio credentials set\" to update them.")
 			} else {
-				existing.Credentials.AccessKey = accessKey
-				existing.Credentials.SecretKey = secretKey
-				if err := data.SaveDataConfig(fs, existing); err != nil {
+				s.DataConfig.Credentials.AccessKey = accessKey
+				s.DataConfig.Credentials.SecretKey = secretKey
+				if err := data.SaveDataConfig(s.RootFS(), s.DataConfig); err != nil {
 					return fmt.Errorf("failed to save credentials: %w", err)
 				}
 				log.Info("admin credentials configured", "data_dir", dataDir, "access_key", accessKey)
@@ -93,13 +90,12 @@ func runInit(cmd *cobra.Command, _ []string) error {
 			output.Success("Data directory already initialised: " + dataDir)
 		}
 	} else {
-		// First init — create config with defaults and optional credentials.
-		dc := data.DefaultDataConfig()
+		// First init — apply optional credentials and persist the default config.
 		if accessKey != "" {
-			dc.Credentials.AccessKey = accessKey
-			dc.Credentials.SecretKey = secretKey
+			s.DataConfig.Credentials.AccessKey = accessKey
+			s.DataConfig.Credentials.SecretKey = secretKey
 		}
-		if err := data.SaveDataConfig(fs, dc); err != nil {
+		if err := data.SaveDataConfig(s.RootFS(), s.DataConfig); err != nil {
 			return fmt.Errorf("failed to save data config: %w", err)
 		}
 		log.Info("data directory initialised", "data_dir", dataDir, "credentials_set", accessKey != "")

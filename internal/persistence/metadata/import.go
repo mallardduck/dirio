@@ -24,23 +24,25 @@ type ImportState struct {
 	SourceVersion string    `json:"sourceVersion"`
 }
 
-// CheckAndImportMinIO checks for MinIO data and imports if needed
-func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
+// CheckAndImportMinIO checks for MinIO data and imports if needed.
+// Returns true when this call performed the import (first time only), false
+// when there was nothing to import or the data was already imported previously.
+func (m *Manager) CheckAndImportMinIO(ctx context.Context) (bool, error) {
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("context cancelled: %w", err)
+		return false, fmt.Errorf("context cancelled: %w", err)
 	}
 	// Check if .minio.sys exists
 	if _, err := m.rootFS.Stat(path.MinIODir); err != nil {
 		if isNotExist(err) {
-			return nil // No MinIO data to import
+			return false, nil // No MinIO data to import
 		}
-		return err
+		return false, err
 	}
 
 	// Check import state
 	state, err := m.getImportState()
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if state.Imported {
@@ -49,7 +51,7 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 		if err == nil && minioModTime.After(state.MinIOModTime) {
 			fmt.Printf("Warning: MinIO data modified after import. Consider re-importing.\n")
 		}
-		return nil
+		return false, nil
 	}
 
 	// Perform import using minio package
@@ -58,12 +60,12 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 	// Get MinIO filesystem
 	minioFS, err := path.NewMinIOFS(m.rootFS)
 	if err != nil {
-		return fmt.Errorf("failed to create MinIO filesystem: %w", err)
+		return false, fmt.Errorf("failed to create MinIO filesystem: %w", err)
 	}
 
 	result, err := minio.Import(minioFS)
 	if err != nil {
-		return fmt.Errorf("MinIO import failed: %w", err)
+		return false, fmt.Errorf("MinIO import failed: %w", err)
 	}
 
 	// Convert and save policies
@@ -194,7 +196,7 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 	// Save data config from MinIO import
 	if result.DataConfig != nil {
 		if err := data.SaveDataConfig(m.rootFS, result.DataConfig); err != nil {
-			return fmt.Errorf("failed to save data config: %w", err)
+			return false, fmt.Errorf("failed to save data config: %w", err)
 		}
 		fmt.Printf("Saved data config (region=%s, compression=%v, worm=%v)\n",
 			result.DataConfig.Region,
@@ -217,11 +219,11 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) error {
 		SourceVersion: "RELEASE.2022-10-24T18-35-07Z",
 	}
 	if err := m.saveImportState(state); err != nil {
-		return fmt.Errorf("failed to save import state: %w", err)
+		return false, fmt.Errorf("failed to save import state: %w", err)
 	}
 
 	fmt.Println("MinIO import completed successfully")
-	return nil
+	return true, nil
 }
 
 // getImportState retrieves the import state

@@ -1,11 +1,8 @@
 package auth
 
 import (
-	"bytes"
 	"context"
-	"encoding/xml"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -13,6 +10,7 @@ import (
 
 	contextInt "github.com/mallardduck/dirio/internal/context"
 	"github.com/mallardduck/dirio/internal/http/middleware"
+	httpresponse "github.com/mallardduck/dirio/internal/http/response"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
@@ -41,7 +39,7 @@ func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 					errCode = s3types.ErrCodeSignatureDoesNotMatch
 				}
 				requestID := middleware.GetRequestID(r.Context())
-				if writeErr := writeAuthError(w, requestID, errCode); writeErr != nil {
+				if writeErr := httpresponse.WriteErrorResponse(w, requestID, errCode); writeErr != nil {
 					authLogger.With("err", err, "error_code", errCode, "write_err", writeErr).Warn("encountered error authenticating request and additional error writing XML error response")
 					return
 				}
@@ -89,7 +87,7 @@ func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 					errCode = s3types.ErrCodeSignatureDoesNotMatch
 				}
 				requestID := middleware.GetRequestID(r.Context())
-				if writeErr := writeAuthError(w, requestID, errCode); writeErr != nil {
+				if writeErr := httpresponse.WriteErrorResponse(w, requestID, errCode); writeErr != nil {
 					authLogger.With("err", err, "error_code", errCode, "write_err", writeErr).Warn("encountered error authenticating pre-signed URL request and additional error writing XML error response")
 					return
 				}
@@ -132,7 +130,7 @@ func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 					errCode = s3types.ErrCodeAccessDenied
 				}
 				requestID := middleware.GetRequestID(r.Context())
-				if writeErr := writeAuthError(w, requestID, errCode); writeErr != nil {
+				if writeErr := httpresponse.WriteErrorResponse(w, requestID, errCode); writeErr != nil {
 					authLogger.With("err", err, "error_code", errCode, "write_err", writeErr).Warn("encountered error authenticating POST policy request and additional error writing XML error response")
 					return
 				}
@@ -158,29 +156,6 @@ func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 		ctx := contextInt.WithAnonymousRequest(r.Context())
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
-}
-
-// writeAuthError writes an S3 error response
-func writeAuthError(w http.ResponseWriter, requestID string, errCode s3types.ErrorCode) error {
-	response := s3types.ErrorResponse{
-		Code:      errCode.String(),
-		Message:   errCode.Description(),
-		RequestID: requestID,
-	}
-
-	var buf bytes.Buffer
-	buf.Write([]byte(xml.Header))
-
-	encoder := xml.NewEncoder(&buf)
-	encoder.Indent("", "  ")
-	if err := encoder.Encode(response); err != nil {
-		return fmt.Errorf("failed to encode error response: %w", err)
-	}
-
-	w.Header().Set(headers.ContentType, "application/xml")
-	w.WriteHeader(errCode.HTTPStatus())
-	_, err := w.Write(buf.Bytes())
-	return err
 }
 
 func GetRequestUser(ctx context.Context) *metadata.User {

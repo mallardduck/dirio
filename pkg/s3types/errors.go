@@ -8,11 +8,17 @@ import (
 
 // ErrorResponse represents an S3 error
 type ErrorResponse struct {
-	XMLName   xml.Name `xml:"Error"`
-	Code      string   `xml:"Code"`
-	Message   string   `xml:"Message"`
-	Resource  string   `xml:"Resource,omitempty"`
-	RequestID string   `xml:"RequestId,omitempty"`
+	XMLName          xml.Name `xml:"Error" json:"-"`
+	Code             string   `xml:"Code"`
+	Message          string   `xml:"Message"`
+	Key              string   `xml:"Key,omitempty" json:"Key,omitempty"`
+	BucketName       string   `xml:"BucketName,omitempty" json:"BucketName,omitempty"`
+	Resource         string
+	Region           string `xml:"Region,omitempty" json:"Region,omitempty"`
+	RequestID        string `xml:"RequestId" json:"RequestId"`
+	HostID           string `xml:"HostId" json:"HostId"`
+	ActualObjectSize string `xml:"ActualObjectSize,omitempty" json:"ActualObjectSize,omitempty"`
+	RangeRequested   string `xml:"RangeRequested,omitempty" json:"RangeRequested,omitempty"`
 }
 
 // ErrorCode represents S3 error codes
@@ -35,6 +41,9 @@ const (
 	ErrCodeMalformedPolicy
 	ErrCodeInvalidRequest
 	ErrCodeMalformedXML
+	ErrCodeNoSuchUpload
+	ErrCodeInvalidPart
+	ErrCodeNotImplemented
 )
 
 // String returns the string representation of error code
@@ -72,6 +81,12 @@ func (e ErrorCode) String() string {
 		return "InvalidRequest"
 	case ErrCodeMalformedXML:
 		return "MalformedXML"
+	case ErrCodeNoSuchUpload:
+		return "NoSuchUpload"
+	case ErrCodeInvalidPart:
+		return "InvalidPart"
+	case ErrCodeNotImplemented:
+		return "NotImplemented"
 	default:
 		return "InternalError"
 	}
@@ -110,6 +125,12 @@ func (e ErrorCode) Description() string {
 		return "Invalid request"
 	case ErrCodeMalformedXML:
 		return "The XML provided was not well-formed or did not validate against our published schema"
+	case ErrCodeNoSuchUpload:
+		return "The specified multipart upload does not exist."
+	case ErrCodeInvalidPart:
+		return "One or more of the specified parts could not be found."
+	case ErrCodeNotImplemented:
+		return "A header you provided implies functionality that is not implemented."
 	default:
 		return "Internal error"
 	}
@@ -130,8 +151,12 @@ func (e ErrorCode) HTTPStatus() int {
 		return http.StatusForbidden
 	case ErrCodeInvalidBucketName, ErrCodeInvalidObjectKey, ErrCodeMalformedPolicy, ErrCodeInvalidRequest, ErrCodeMalformedXML:
 		return http.StatusBadRequest
-	case ErrCodeNoSuchBucketPolicy:
+	case ErrCodeNoSuchBucketPolicy, ErrCodeNoSuchUpload:
 		return http.StatusNotFound
+	case ErrCodeInvalidPart:
+		return http.StatusBadRequest
+	case ErrCodeNotImplemented:
+		return http.StatusNotImplemented
 	default:
 		return http.StatusInternalServerError
 	}
