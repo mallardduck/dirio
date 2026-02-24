@@ -3,7 +3,6 @@ package clients_test
 import (
 	"context"
 	"embed"
-	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"

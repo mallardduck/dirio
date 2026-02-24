@@ -6,9 +6,10 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/mallardduck/dirio/internal/http/response"
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 	"github.com/mallardduck/go-http-helpers/pkg/query"
+
+	"github.com/mallardduck/dirio/internal/http/response"
 
 	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/http/middleware"

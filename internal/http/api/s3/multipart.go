@@ -122,7 +122,7 @@ func (h *HTTPHandler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Req
 	// Parse request body
 	var completeReq s3types.CompleteMultipartUpload
 	if err := xml.NewDecoder(r.Body).Decode(&completeReq); err != nil {
-		_ = WriteErrorResponse(w, requestID, s3types.ErrCodeMalformedXML, response.SetErrAsMessage(errors.New("Invalid XML in request body")))
+		_ = WriteErrorResponse(w, requestID, s3types.ErrCodeMalformedXML, response.SetErrAsMessage(errors.New("invalid XML in request body")))
 		return
 	}
 
