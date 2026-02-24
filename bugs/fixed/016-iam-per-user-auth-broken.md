@@ -1,9 +1,20 @@
 # Bug #016: IAM Per-User Access Control Not Enforced Correctly
 
-**Status:** Open
+**Status:** ✅ RESOLVED
 **Priority:** Critical
 **Discovered:** 2026-02-23
+**Resolved:** 2026-02-23
 **Affects:** All IAM user access control — authenticated non-admin users
+**Resolution:** Fixed issues with tests causing false positive and negatives and improved MinIO imports.
+
+## Fix Summary
+
+The MinIO behaviour was found to be different than S3, DirIO is aiming to be a MinIO drop-in in some ways but not all.
+DirIO specifically has a hybrid MinIO+S3 style RBAC model, mixing concepts of the MinIO and S3 models but aligning more with S3 where it fits.
+
+MinIO prevents authed users from gaining access to resources unless that user specifically has a policy allowing it.
+Unlike that DirIO, like S3, will let bucket policy allows apply to authed users too.
+As such the fix involved a mix of changing test expectations based on server and fixes to MinIO imports to DirIO causing issues.
 
 ## Summary
 
