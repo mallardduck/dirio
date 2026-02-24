@@ -199,7 +199,17 @@ func (s *userHTTPService) InfoUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.log.Error("Failed to get user", "error", err, "accessKey", accessKey)
 		if svcerrors.IsNotFound(err) {
+			errBody := map[string]string{
+				"Code":      "XMinioAdminNoSuchUser",
+				"Message":   "The specified user does not exist. (Specified user does not exist)",
+				"Resource":  r.URL.Path,
+				"RequestId": httpMiddleware.GetRequestID(r.Context()),
+				"HostId":    global.GlobalInstanceID().String(),
+			}
+			data, _ := jsonutil.Marshal(errBody)
+			w.Header().Set(headers.ContentType, "application/json")
 			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write(data)
 			return
 		}
 		if svcerrors.IsValidation(err) {
