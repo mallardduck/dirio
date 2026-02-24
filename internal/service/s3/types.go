@@ -19,7 +19,7 @@ type CreateBucketRequest struct {
 	BucketPolicy *metadata.PolicyDocument // Optional bucket policy
 }
 
-// UpdateBucketRequest represents a request to update bucket metadata
+// UpdateBucketRequest represents a request to update bucket metadataManager
 type UpdateBucketRequest struct {
 	BucketPolicy *metadata.PolicyDocument // Update bucket policy
 }
@@ -34,7 +34,7 @@ type PutObjectRequest struct {
 	Key            string
 	Content        io.Reader
 	ContentType    string
-	CustomMetadata map[string]string // S3 metadata headers (Cache-Control, x-amz-meta-*, etc.)
+	CustomMetadata map[string]string // S3 metadataManager headers (Cache-Control, x-amz-meta-*, etc.)
 }
 
 // GetObjectRequest represents a request to download an object
@@ -53,13 +53,13 @@ type GetObjectResponse struct {
 	CustomMetadata map[string]string
 }
 
-// HeadObjectRequest represents a request to get object metadata
+// HeadObjectRequest represents a request to get object metadataManager
 type HeadObjectRequest struct {
 	Bucket string
 	Key    string
 }
 
-// HeadObjectResponse represents object metadata
+// HeadObjectResponse represents object metadataManager
 type HeadObjectResponse struct {
 	ContentType    string
 	Size           int64

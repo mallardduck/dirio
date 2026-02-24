@@ -34,6 +34,8 @@ func (v Verbosity) String() string {
 		return "quiet"
 	case VerbosityVerbose:
 		return "verbose"
+	case VerbosityNormal:
+		fallthrough //nolint:gocritic // emptyFallthrough: needed for exhaustive compliance
 	default:
 		return "normal"
 	}

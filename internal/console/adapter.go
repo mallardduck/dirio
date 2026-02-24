@@ -635,6 +635,8 @@ func (a *Adapter) SimulateRequest(ctx context.Context, req consoleapi.SimulateRe
 		result.Reason = "Allowed by bucket policy or resource ownership"
 	case policy.DecisionExplicitDeny:
 		result.Reason = "Explicitly denied by bucket policy"
+	case policy.DecisionDeny:
+		fallthrough //nolint:gocritic // emptyFallthrough: needed for exhaustive compliance
 	default:
 		result.Reason = "Default deny — no matching allow rule found"
 	}

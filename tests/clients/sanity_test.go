@@ -38,13 +38,13 @@ func (m *mockServerWrapper) Close() {
 
 // createMockServer creates a test HTTP server with the specified behavior.
 // It binds to 0.0.0.0 on a random port so Docker containers can reach it via host.docker.internal.
-func createMockServer(port int, serverType mockServerType) (*mockServerWrapper, string) {
+func createMockServer(port int, serverType mockServerType) (wrapper *mockServerWrapper, addr string) {
 	// Create handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch serverType {
 		case mockServerFailing:
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <Error>
   <Code>InternalError</Code>
   <Message>Mock server - all requests fail</Message>
@@ -73,14 +73,14 @@ func createMockServer(port int, serverType mockServerType) (*mockServerWrapper, 
 	go server.Serve(listener)
 
 	// Build URL using host.docker.internal for container access to host
-	containerURL := fmt.Sprintf("http://host.docker.internal:%d", port)
+	addr = fmt.Sprintf("http://host.docker.internal:%d", port)
 
-	wrapper := &mockServerWrapper{
+	wrapper = &mockServerWrapper{
 		server: server,
 		port:   strconv.Itoa(port),
 	}
 
-	return wrapper, containerURL
+	return wrapper, addr
 }
 
 // runClientTest is a helper that runs a client test against a mock server

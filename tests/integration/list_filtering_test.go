@@ -91,7 +91,7 @@ func TestListFiltering(t *testing.T) {
 	attachIAMPolicy(t, ts, "bob-policy", bobAccessKey)
 
 	t.Run("Alice ListBuckets", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, ts.URL("/"), nil)
+		req, _ := http.NewRequest(http.MethodGet, ts.URL("/"), http.NoBody)
 		SignRequestWithCredentials(req, nil, aliceAccessKey, aliceSecretKey)
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
@@ -109,7 +109,7 @@ func TestListFiltering(t *testing.T) {
 	})
 
 	t.Run("Bob ListBuckets", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, ts.URL("/"), nil)
+		req, _ := http.NewRequest(http.MethodGet, ts.URL("/"), http.NoBody)
 		SignRequestWithCredentials(req, nil, bobAccessKey, bobSecretKey)
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
@@ -127,7 +127,7 @@ func TestListFiltering(t *testing.T) {
 	})
 
 	t.Run("Alice ListObjects alice-bucket", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, ts.BucketURL("alice-bucket")+"?list-type=2", nil)
+		req, _ := http.NewRequest(http.MethodGet, ts.BucketURL("alice-bucket")+"?list-type=2", http.NoBody)
 		SignRequestWithCredentials(req, nil, aliceAccessKey, aliceSecretKey)
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
@@ -145,7 +145,7 @@ func TestListFiltering(t *testing.T) {
 	})
 
 	t.Run("Alice ListObjects bob-bucket", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, ts.BucketURL("bob-bucket")+"?list-type=2", nil)
+		req, _ := http.NewRequest(http.MethodGet, ts.BucketURL("bob-bucket")+"?list-type=2", http.NoBody)
 		SignRequestWithCredentials(req, nil, aliceAccessKey, aliceSecretKey)
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
@@ -163,7 +163,7 @@ func TestListFiltering(t *testing.T) {
 	})
 
 	t.Run("Bob ListObjects bob-bucket", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, ts.BucketURL("bob-bucket")+"?list-type=2", nil)
+		req, _ := http.NewRequest(http.MethodGet, ts.BucketURL("bob-bucket")+"?list-type=2", http.NoBody)
 		SignRequestWithCredentials(req, nil, bobAccessKey, bobSecretKey)
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
@@ -184,7 +184,7 @@ func TestListFiltering(t *testing.T) {
 // Helpers for Admin API calls within integration tests
 
 func createIAMUser(t *testing.T, ts *TestServer, accessKey, secretKey string) {
-	body := fmt.Sprintf(`{"secretKey": "%s", "status": "enabled"}`, secretKey)
+	body := fmt.Sprintf(`{"secretKey": "%q", "status": "enabled"}`, secretKey)
 	encrypted, err := madmin.EncryptData(ts.SecretKey, []byte(body))
 	require.NoError(t, err)
 
@@ -209,7 +209,7 @@ func createIAMPolicy(t *testing.T, ts *TestServer, name, policyDoc string) {
 
 func attachIAMPolicy(t *testing.T, ts *TestServer, policyName, userAccessKey string) {
 	url := fmt.Sprintf("%s/minio/admin/v3/set-policy?policyName=%s&userOrGroup=%s&isGroup=false", ts.URL(""), policyName, userAccessKey)
-	req, _ := http.NewRequest(http.MethodPost, url, nil)
+	req, _ := http.NewRequest(http.MethodPost, url, http.NoBody)
 	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)

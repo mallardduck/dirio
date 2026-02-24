@@ -50,7 +50,7 @@ func detachIAMPolicy(t *testing.T, ts *TestServer, policyName, userAccessKey str
 	t.Helper()
 	url := fmt.Sprintf("%s/minio/admin/v3/idp/builtin/policy/detach?policyName=%s&userOrGroup=%s&isGroup=false",
 		ts.URL(""), policyName, userAccessKey)
-	req, _ := http.NewRequest(http.MethodPost, url, nil)
+	req, _ := http.NewRequest(http.MethodPost, url, http.NoBody)
 	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)

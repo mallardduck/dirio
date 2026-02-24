@@ -86,7 +86,7 @@ func (ts *TestServer) NewRequest(method, url string, body []byte) (*http.Request
 // CreateBucket creates a bucket via the S3 API and fails the test on error.
 func (ts *TestServer) CreateBucket(t *testing.T, bucket string) {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodPut, ts.BucketURL(bucket), nil)
+	req, err := http.NewRequest(http.MethodPut, ts.BucketURL(bucket), http.NoBody)
 	if err != nil {
 		t.Fatalf("testutil: build CreateBucket request: %v", err)
 	}

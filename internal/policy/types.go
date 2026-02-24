@@ -82,6 +82,8 @@ func (d Decision) String() string {
 		return "Allow"
 	case DecisionExplicitDeny:
 		return "ExplicitDeny"
+	case DecisionDeny:
+		fallthrough //nolint:gocritic // emptyFallthrough: needed for exhaustive compliance
 	default:
 		return "Deny"
 	}

@@ -19,7 +19,7 @@ func IsAlphanumericWithHyphens(s string) bool {
 }
 
 // InRange checks if a string length is within the specified range
-func InRange(s string, min, max int) bool {
+func InRange(s string, minVal, maxVal int) bool {
 	length := len(s)
-	return length >= min && length <= max
+	return length >= minVal && length <= maxVal
 }

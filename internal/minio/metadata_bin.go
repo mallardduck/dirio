@@ -201,69 +201,69 @@ func parseBucketMetadataBin(data []byte) (*BucketMetadata, error) {
 // mergeBucketMetadata merges binary metadata into legacy metadata.
 // Legacy config takes precedence - binary metadata only fills in missing fields.
 // This handles hybrid configurations where some data is in legacy files and some in .metadata.bin.
-func mergeBucketMetadata(legacy *BucketMetadata, binary *BucketMetadata) {
-	// Only use binary data if legacy doesn't have it
+func mergeBucketMetadata(legacyMeta, binaryMeta *BucketMetadata) {
+	// Only use binaryMeta data if legacyMeta doesn't have it
 
-	// Name - keep legacy (always present)
-	// Created - use binary if legacy is zero
-	if legacy.Created.IsZero() && !binary.Created.IsZero() {
-		legacy.Created = binary.Created
+	// Name - keep legacyMeta (always present)
+	// Created - use binaryMeta if legacyMeta is zero
+	if legacyMeta.Created.IsZero() && !binaryMeta.Created.IsZero() {
+		legacyMeta.Created = binaryMeta.Created
 	}
 
-	// LockEnabled - legacy takes precedence
-	if !legacy.LockEnabled && binary.LockEnabled {
-		legacy.LockEnabled = binary.LockEnabled
+	// LockEnabled - legacyMeta takes precedence
+	if !legacyMeta.LockEnabled && binaryMeta.LockEnabled {
+		legacyMeta.LockEnabled = binaryMeta.LockEnabled
 	}
 
-	// Config blobs - only use binary if legacy is empty
-	if len(legacy.PolicyConfigJSON) == 0 && len(binary.PolicyConfigJSON) > 0 {
-		legacy.PolicyConfigJSON = binary.PolicyConfigJSON
-		legacy.PolicyConfigUpdatedAt = binary.PolicyConfigUpdatedAt
+	// Config blobs - only use binaryMeta if legacyMeta is empty
+	if len(legacyMeta.PolicyConfigJSON) == 0 && len(binaryMeta.PolicyConfigJSON) > 0 {
+		legacyMeta.PolicyConfigJSON = binaryMeta.PolicyConfigJSON
+		legacyMeta.PolicyConfigUpdatedAt = binaryMeta.PolicyConfigUpdatedAt
 	}
 
-	if len(legacy.NotificationConfigXML) == 0 && len(binary.NotificationConfigXML) > 0 {
-		legacy.NotificationConfigXML = binary.NotificationConfigXML
+	if len(legacyMeta.NotificationConfigXML) == 0 && len(binaryMeta.NotificationConfigXML) > 0 {
+		legacyMeta.NotificationConfigXML = binaryMeta.NotificationConfigXML
 	}
 
-	if len(legacy.LifecycleConfigXML) == 0 && len(binary.LifecycleConfigXML) > 0 {
-		legacy.LifecycleConfigXML = binary.LifecycleConfigXML
+	if len(legacyMeta.LifecycleConfigXML) == 0 && len(binaryMeta.LifecycleConfigXML) > 0 {
+		legacyMeta.LifecycleConfigXML = binaryMeta.LifecycleConfigXML
 	}
 
-	if len(legacy.ObjectLockConfigXML) == 0 && len(binary.ObjectLockConfigXML) > 0 {
-		legacy.ObjectLockConfigXML = binary.ObjectLockConfigXML
-		legacy.ObjectLockConfigUpdatedAt = binary.ObjectLockConfigUpdatedAt
+	if len(legacyMeta.ObjectLockConfigXML) == 0 && len(binaryMeta.ObjectLockConfigXML) > 0 {
+		legacyMeta.ObjectLockConfigXML = binaryMeta.ObjectLockConfigXML
+		legacyMeta.ObjectLockConfigUpdatedAt = binaryMeta.ObjectLockConfigUpdatedAt
 	}
 
-	if len(legacy.VersioningConfigXML) == 0 && len(binary.VersioningConfigXML) > 0 {
-		legacy.VersioningConfigXML = binary.VersioningConfigXML
-		legacy.VersioningConfigUpdatedAt = binary.VersioningConfigUpdatedAt
+	if len(legacyMeta.VersioningConfigXML) == 0 && len(binaryMeta.VersioningConfigXML) > 0 {
+		legacyMeta.VersioningConfigXML = binaryMeta.VersioningConfigXML
+		legacyMeta.VersioningConfigUpdatedAt = binaryMeta.VersioningConfigUpdatedAt
 	}
 
-	if len(legacy.EncryptionConfigXML) == 0 && len(binary.EncryptionConfigXML) > 0 {
-		legacy.EncryptionConfigXML = binary.EncryptionConfigXML
-		legacy.EncryptionConfigUpdatedAt = binary.EncryptionConfigUpdatedAt
+	if len(legacyMeta.EncryptionConfigXML) == 0 && len(binaryMeta.EncryptionConfigXML) > 0 {
+		legacyMeta.EncryptionConfigXML = binaryMeta.EncryptionConfigXML
+		legacyMeta.EncryptionConfigUpdatedAt = binaryMeta.EncryptionConfigUpdatedAt
 	}
 
-	if len(legacy.TaggingConfigXML) == 0 && len(binary.TaggingConfigXML) > 0 {
-		legacy.TaggingConfigXML = binary.TaggingConfigXML
-		legacy.TaggingConfigUpdatedAt = binary.TaggingConfigUpdatedAt
+	if len(legacyMeta.TaggingConfigXML) == 0 && len(binaryMeta.TaggingConfigXML) > 0 {
+		legacyMeta.TaggingConfigXML = binaryMeta.TaggingConfigXML
+		legacyMeta.TaggingConfigUpdatedAt = binaryMeta.TaggingConfigUpdatedAt
 	}
 
-	if len(legacy.QuotaConfigJSON) == 0 && len(binary.QuotaConfigJSON) > 0 {
-		legacy.QuotaConfigJSON = binary.QuotaConfigJSON
-		legacy.QuotaConfigUpdatedAt = binary.QuotaConfigUpdatedAt
+	if len(legacyMeta.QuotaConfigJSON) == 0 && len(binaryMeta.QuotaConfigJSON) > 0 {
+		legacyMeta.QuotaConfigJSON = binaryMeta.QuotaConfigJSON
+		legacyMeta.QuotaConfigUpdatedAt = binaryMeta.QuotaConfigUpdatedAt
 	}
 
-	if len(legacy.ReplicationConfigXML) == 0 && len(binary.ReplicationConfigXML) > 0 {
-		legacy.ReplicationConfigXML = binary.ReplicationConfigXML
-		legacy.ReplicationConfigUpdatedAt = binary.ReplicationConfigUpdatedAt
+	if len(legacyMeta.ReplicationConfigXML) == 0 && len(binaryMeta.ReplicationConfigXML) > 0 {
+		legacyMeta.ReplicationConfigXML = binaryMeta.ReplicationConfigXML
+		legacyMeta.ReplicationConfigUpdatedAt = binaryMeta.ReplicationConfigUpdatedAt
 	}
 
-	if len(legacy.BucketTargetsConfigJSON) == 0 && len(binary.BucketTargetsConfigJSON) > 0 {
-		legacy.BucketTargetsConfigJSON = binary.BucketTargetsConfigJSON
+	if len(legacyMeta.BucketTargetsConfigJSON) == 0 && len(binaryMeta.BucketTargetsConfigJSON) > 0 {
+		legacyMeta.BucketTargetsConfigJSON = binaryMeta.BucketTargetsConfigJSON
 	}
 
-	if len(legacy.BucketTargetsConfigMetaJSON) == 0 && len(binary.BucketTargetsConfigMetaJSON) > 0 {
-		legacy.BucketTargetsConfigMetaJSON = binary.BucketTargetsConfigMetaJSON
+	if len(legacyMeta.BucketTargetsConfigMetaJSON) == 0 && len(binaryMeta.BucketTargetsConfigMetaJSON) > 0 {
+		legacyMeta.BucketTargetsConfigMetaJSON = binaryMeta.BucketTargetsConfigMetaJSON
 	}
 }

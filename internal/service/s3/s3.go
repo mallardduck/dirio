@@ -15,17 +15,17 @@ import (
 
 // Service provides S3 operations for buckets and objects
 type Service struct {
-	storage      *storage.Storage
-	metadata     *metadata.Manager
-	policyEngine *policy.Engine
+	diskStorage     *storage.Storage
+	metadataManager *metadata.Manager
+	policyEngine    *policy.Engine
 }
 
 // NewService creates a new S3 service
-func NewService(storage *storage.Storage, metadata *metadata.Manager, policyEngine *policy.Engine) *Service {
+func NewService(diskStorage *storage.Storage, metadataManager *metadata.Manager, policyEngine *policy.Engine) *Service {
 	return &Service{
-		storage:      storage,
-		metadata:     metadata,
-		policyEngine: policyEngine,
+		diskStorage:     diskStorage,
+		metadataManager: metadataManager,
+		policyEngine:    policyEngine,
 	}
 }
 
@@ -40,8 +40,8 @@ func (s *Service) CreateBucket(ctx context.Context, req *CreateBucketRequest) (*
 		return nil, err
 	}
 
-	// Check if bucket already exists
-	exists, err := s.storage.BucketExists(ctx, req.Name)
+	// Check if the bucket already exists
+	exists, err := s.diskStorage.BucketExists(ctx, req.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -49,17 +49,17 @@ func (s *Service) CreateBucket(ctx context.Context, req *CreateBucketRequest) (*
 		return nil, s3types.ErrBucketAlreadyExists
 	}
 
-	// Create bucket using storage layer
-	if err := s.storage.CreateBucket(ctx, req.Name); err != nil {
+	// Create bucket using diskStorage layer
+	if err := s.diskStorage.CreateBucket(ctx, req.Name); err != nil {
 		if errors.Is(err, storage.ErrBucketExists) {
 			return nil, s3types.ErrBucketAlreadyExists
 		}
 		return nil, err
 	}
 
-	// If bucket policy was provided, update it
+	// If a bucket policy was provided, update it
 	if req.BucketPolicy != nil {
-		bucketMeta, err := s.metadata.GetBucketMetadata(ctx, req.Name)
+		bucketMeta, err := s.metadataManager.GetBucketMetadata(ctx, req.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -70,22 +70,22 @@ func (s *Service) CreateBucket(ctx context.Context, req *CreateBucketRequest) (*
 	return s.GetBucket(ctx, req.Name)
 }
 
-// GetBucket retrieves bucket metadata
-// Note: Assumes bucket name has been validated by the caller
+// GetBucket retrieves bucket metadataManager
+// Note: Assumes the caller has validated bucket name
 func (s *Service) GetBucket(ctx context.Context, bucket string) (*metadata.BucketMetadata, error) {
-	return s.metadata.GetBucketMetadata(ctx, bucket)
+	return s.metadataManager.GetBucketMetadata(ctx, bucket)
 }
 
 // HeadBucket checks if a bucket exists
-// Note: Assumes bucket name has been validated by the caller
+// Note: Assumes the caller has validated bucket name
 func (s *Service) HeadBucket(ctx context.Context, bucket string) (bool, error) {
-	return s.storage.BucketExists(ctx, bucket)
+	return s.diskStorage.BucketExists(ctx, bucket)
 }
 
 // DeleteBucket deletes a bucket
-// Note: Assumes bucket name has been validated by the caller
+// Note: Assumes the caller has validated bucket name
 func (s *Service) DeleteBucket(ctx context.Context, bucket string) error {
-	if err := s.storage.DeleteBucket(ctx, bucket); err != nil {
+	if err := s.diskStorage.DeleteBucket(ctx, bucket); err != nil {
 		if errors.Is(err, storage.ErrNoSuchBucket) {
 			return s3types.ErrBucketNotFound
 		}
@@ -100,11 +100,11 @@ func (s *Service) DeleteBucket(ctx context.Context, bucket string) error {
 
 // ListBuckets returns all buckets
 func (s *Service) ListBuckets(ctx context.Context) ([]s3types.Bucket, error) {
-	return s.storage.ListBuckets(ctx)
+	return s.diskStorage.ListBuckets(ctx)
 }
 
 // GetBucketLocation returns the bucket location (region)
-// Note: Assumes bucket name has been validated by the caller
+// Note: Assumes the caller has validated bucket name
 func (s *Service) GetBucketLocation(ctx context.Context, bucket string) (string, error) {
 	exists, err := s.HeadBucket(ctx, bucket)
 	if err != nil {
@@ -123,7 +123,7 @@ func (s *Service) GetBucketLocation(ctx context.Context, bucket string) (string,
 // ============================================================================
 
 // PutObject uploads an object to a bucket
-// Note: Assumes bucket and key have been validated by the caller
+// Note: Assumes the caller has validated bucket and key
 func (s *Service) PutObject(ctx context.Context, req *PutObjectRequest) (string, error) {
 	// Default content type if not provided
 	contentType := req.ContentType
@@ -132,7 +132,7 @@ func (s *Service) PutObject(ctx context.Context, req *PutObjectRequest) (string,
 	}
 
 	// Upload object
-	etag, err := s.storage.PutObject(ctx, req.Bucket, req.Key, req.Content, contentType, req.CustomMetadata)
+	etag, err := s.diskStorage.PutObject(ctx, req.Bucket, req.Key, req.Content, contentType, req.CustomMetadata)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoSuchBucket) {
 			return "", s3types.ErrBucketNotFound
@@ -147,7 +147,7 @@ func (s *Service) PutObject(ctx context.Context, req *PutObjectRequest) (string,
 // Note: Assumes bucket and key have been validated by the caller
 func (s *Service) GetObject(ctx context.Context, req *GetObjectRequest) (*GetObjectResponse, error) {
 	// Get object
-	obj, err := s.storage.GetObject(ctx, req.Bucket, req.Key)
+	obj, err := s.diskStorage.GetObject(ctx, req.Bucket, req.Key)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoSuchKey) {
 			return nil, s3types.ErrObjectNotFound
@@ -168,11 +168,11 @@ func (s *Service) GetObject(ctx context.Context, req *GetObjectRequest) (*GetObj
 	}, nil
 }
 
-// HeadObject retrieves object metadata without downloading the object
+// HeadObject retrieves object metadataManager without downloading the object
 // Note: Assumes bucket and key have been validated by the caller
 func (s *Service) HeadObject(ctx context.Context, req *HeadObjectRequest) (*HeadObjectResponse, error) {
-	// Get metadata
-	meta, err := s.storage.GetObjectMetadata(ctx, req.Bucket, req.Key)
+	// Get metadataManager
+	meta, err := s.diskStorage.GetObjectMetadata(ctx, req.Bucket, req.Key)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoSuchKey) {
 			return nil, s3types.ErrObjectNotFound
@@ -197,7 +197,7 @@ func (s *Service) HeadObject(ctx context.Context, req *HeadObjectRequest) (*Head
 // Note: Assumes bucket and key have been validated by the caller
 func (s *Service) DeleteObject(ctx context.Context, req *DeleteObjectRequest) error {
 	// Delete object
-	err := s.storage.DeleteObject(ctx, req.Bucket, req.Key)
+	err := s.diskStorage.DeleteObject(ctx, req.Bucket, req.Key)
 	if err != nil {
 		// S3 spec: DeleteObject is idempotent, ignore "not found" errors
 		if errors.Is(err, storage.ErrNoSuchKey) {
@@ -215,7 +215,7 @@ func (s *Service) DeleteObject(ctx context.Context, req *DeleteObjectRequest) er
 // ListObjects lists objects in a bucket (V1)
 // Note: Assumes bucket name has been validated by the caller
 func (s *Service) ListObjects(ctx context.Context, req *ListObjectsRequest) (storage.InternalResult, error) {
-	result, err := s.storage.ListObjects(ctx, req.Bucket, req.Prefix, req.Marker, req.Delimiter, req.MaxKeys)
+	result, err := s.diskStorage.ListObjects(ctx, req.Bucket, req.Prefix, req.Marker, req.Delimiter, req.MaxKeys)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoSuchBucket) {
 			return storage.InternalResult{}, s3types.ErrBucketNotFound
@@ -230,7 +230,7 @@ func (s *Service) ListObjects(ctx context.Context, req *ListObjectsRequest) (sto
 // Note: Assumes bucket name has been validated by the caller
 func (s *Service) ListObjectsV2(ctx context.Context, req *ListObjectsV2Request) (storage.InternalResult, error) {
 	// List objects
-	result, err := s.storage.ListObjectsV2(ctx, req.Bucket, req.Prefix, req.ContinuationToken, req.StartAfter, req.Delimiter, req.MaxKeys, req.FetchOwner)
+	result, err := s.diskStorage.ListObjectsV2(ctx, req.Bucket, req.Prefix, req.ContinuationToken, req.StartAfter, req.Delimiter, req.MaxKeys, req.FetchOwner)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoSuchBucket) {
 			return storage.InternalResult{}, s3types.ErrBucketNotFound
@@ -314,7 +314,7 @@ func (s *Service) GetObjectWithRange(ctx context.Context, bucket, key string, st
 		return nil, err
 	}
 
-	// TODO: Implement range request support in storage layer
+	// TODO: Implement range request support in diskStorage layer
 	// For now, return the full object
 	obj, err := s.GetObject(ctx, &GetObjectRequest{
 		Bucket: bucket,
@@ -371,7 +371,7 @@ func (s *Service) DeleteObjects(ctx context.Context, request *DeleteObjectsReque
 
 	// Delete each object
 	for _, obj := range request.Objects {
-		err := s.storage.DeleteObject(ctx, request.Bucket, obj.Key)
+		err := s.diskStorage.DeleteObject(ctx, request.Bucket, obj.Key)
 
 		if err != nil {
 			// Per S3 spec, DeleteObject is idempotent - treat not-found as success
@@ -431,8 +431,8 @@ func (s *Service) PutObjectTagging(ctx context.Context, req *PutObjectTaggingReq
 		return s3types.ErrObjectNotFound
 	}
 
-	// Get existing metadata
-	meta, err := s.metadata.GetObjectMetadata(ctx, req.Bucket, req.Key)
+	// Get existing metadataManager
+	meta, err := s.metadataManager.GetObjectMetadata(ctx, req.Bucket, req.Key)
 	if err != nil {
 		return err
 	}
@@ -440,8 +440,8 @@ func (s *Service) PutObjectTagging(ctx context.Context, req *PutObjectTaggingReq
 	// Update tags
 	meta.Tags = req.Tags
 
-	// Save metadata
-	return s.metadata.PutObjectMetadata(ctx, req.Bucket, req.Key, meta)
+	// Save metadataManager
+	return s.metadataManager.PutObjectMetadata(ctx, req.Bucket, req.Key, meta)
 }
 
 // GetObjectTagging retrieves tags from an object
@@ -463,8 +463,8 @@ func (s *Service) GetObjectTagging(ctx context.Context, req *GetObjectTaggingReq
 		return nil, s3types.ErrObjectNotFound
 	}
 
-	// Get metadata
-	meta, err := s.metadata.GetObjectMetadata(ctx, req.Bucket, req.Key)
+	// Get metadataManager
+	meta, err := s.metadataManager.GetObjectMetadata(ctx, req.Bucket, req.Key)
 	if err != nil {
 		return nil, err
 	}

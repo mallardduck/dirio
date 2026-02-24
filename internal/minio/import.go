@@ -111,7 +111,7 @@ func importUsers(minioFS billy.Filesystem, users map[string]*User) error {
 		identityPath := filepath.Join(usersDir, username, "identity.json")
 
 		// Read identity.json
-		data, err := util.ReadFile(minioFS, identityPath)
+		userData, err := util.ReadFile(minioFS, identityPath)
 		if err != nil {
 			fmt.Printf("Warning: failed to read identity for user %s: %v\n", username, err)
 			continue
@@ -120,7 +120,7 @@ func importUsers(minioFS billy.Filesystem, users map[string]*User) error {
 		// Try modern format first
 		var identity UserIdentity
 		var user *User
-		if err := json.Unmarshal(data, &identity); err == nil && identity.Credentials.SecretKey != "" {
+		if err := json.Unmarshal(userData, &identity); err == nil && identity.Credentials.SecretKey != "" {
 			// Modern format
 			user = &User{
 				AccessKey: identity.Credentials.AccessKey,
@@ -132,7 +132,7 @@ func importUsers(minioFS billy.Filesystem, users map[string]*User) error {
 		} else {
 			// Try legacy MinIO 2019 format
 			var legacyIdentity LegacyUserIdentity
-			if err := json.Unmarshal(data, &legacyIdentity); err != nil {
+			if err := json.Unmarshal(userData, &legacyIdentity); err != nil {
 				fmt.Printf("Warning: failed to parse identity for user %s: %v\n", username, err)
 				continue
 			}
@@ -190,7 +190,7 @@ func importPolicies(minioFS billy.Filesystem, policies map[string]*Policy) error
 		policyPath := filepath.Join(policiesDir, policyName, "policy.json")
 
 		// Read policy.json
-		data, err := util.ReadFile(minioFS, policyPath)
+		policyData, err := util.ReadFile(minioFS, policyPath)
 		if err != nil {
 			fmt.Printf("Warning: failed to read policy %s: %v\n", policyName, err)
 			continue
@@ -199,7 +199,7 @@ func importPolicies(minioFS billy.Filesystem, policies map[string]*Policy) error
 		// Try modern format first (wrapped in MinIO metadata)
 		var policyFile PolicyFile
 		var policy *Policy
-		if err := json.Unmarshal(data, &policyFile); err == nil && policyFile.Policy != nil {
+		if err := json.Unmarshal(policyData, &policyFile); err == nil && policyFile.Policy != nil {
 			// Modern format - extract the Policy field
 			policyJSON, err := json.Marshal(policyFile.Policy)
 			if err != nil {
@@ -217,13 +217,13 @@ func importPolicies(minioFS billy.Filesystem, policies map[string]*Policy) error
 			// Legacy MinIO 2019 format - policy.json IS the IAM policy document
 			// Just validate it's valid JSON by unmarshaling
 			var iamPolicy map[string]any
-			if err := json.Unmarshal(data, &iamPolicy); err != nil {
+			if err := json.Unmarshal(policyData, &iamPolicy); err != nil {
 				fmt.Printf("Warning: failed to parse policy %s: %v\n", policyName, err)
 				continue
 			}
 			policy = &Policy{
 				Name:       policyName,
-				PolicyJSON: string(data),
+				PolicyJSON: string(policyData),
 				CreateDate: time.Now(), // 2019 format doesn't have CreateDate
 				UpdateDate: time.Now(),
 			}
@@ -266,14 +266,14 @@ func importUserPolicyMappings(minioFS billy.Filesystem, users map[string]*User) 
 		mappingPath := filepath.Join(policydbDir, filename)
 
 		// Read user policy mapping
-		data, err := util.ReadFile(minioFS, mappingPath)
+		userPolicyData, err := util.ReadFile(minioFS, mappingPath)
 		if err != nil {
 			fmt.Printf("Warning: failed to read policy mapping for %s: %v\n", username, err)
 			continue
 		}
 
 		var mapping UserPolicyMapping
-		if err := json.Unmarshal(data, &mapping); err != nil {
+		if err := json.Unmarshal(userPolicyData, &mapping); err != nil {
 			fmt.Printf("Warning: failed to parse policy mapping for %s: %v\n", username, err)
 			continue
 		}
@@ -443,14 +443,14 @@ func walkBucketMetadata(minioFS billy.Filesystem, currentPath, bucketName string
 			objectKey := filepath.Dir(strings.TrimPrefix(entryPath, filepath.Join("buckets", bucketName)+string(filepath.Separator)))
 
 			// Read and parse fs.json
-			data, err := util.ReadFile(minioFS, entryPath)
+			objectFsData, err := util.ReadFile(minioFS, entryPath)
 			if err != nil {
 				fmt.Printf("Warning: failed to read %s: %v\n", entryPath, err)
 				continue
 			}
 
 			var objMeta ObjectMetadata
-			if err := json.Unmarshal(data, &objMeta); err != nil {
+			if err := json.Unmarshal(objectFsData, &objMeta); err != nil {
 				fmt.Printf("Warning: failed to parse %s: %v\n", entryPath, err)
 				continue
 			}

@@ -27,8 +27,8 @@ func loadOrCreateRandomID() string {
 	_, _ = rand.Read(b)
 	id := hex.EncodeToString(b)
 
-	_ = os.MkdirAll(filepath.Dir(path), 0700)
-	_ = os.WriteFile(path, []byte(id), 0600)
+	_ = os.MkdirAll(filepath.Dir(path), 0o700)
+	_ = os.WriteFile(path, []byte(id), 0o600)
 
 	return id
 }

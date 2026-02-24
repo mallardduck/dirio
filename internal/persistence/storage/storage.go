@@ -32,21 +32,21 @@ var errStopWalk = errors.New("stop walk")
 
 // Storage handles filesystem operations for buckets and objects
 type Storage struct {
-	rootFS   billy.Filesystem
-	metadata *metadata.Manager
-	log      *slog.Logger
+	rootFS          billy.Filesystem
+	metadataManager *metadata.Manager
+	log             *slog.Logger
 }
 
 // New creates a new storage backend
-func New(rootFS billy.Filesystem, metadata *metadata.Manager) (*Storage, error) {
+func New(rootFS billy.Filesystem, metadataManager *metadata.Manager) (*Storage, error) {
 	if rootFS == nil {
 		return nil, fmt.Errorf("rootFS cannot be nil")
 	}
 
 	return &Storage{
-		rootFS:   rootFS,
-		metadata: metadata,
-		log:      logging.Component("storage"),
+		rootFS:          rootFS,
+		metadataManager: metadataManager,
+		log:             logging.Component("storage"),
 	}, nil
 }
 
@@ -78,7 +78,7 @@ func (s *Storage) ListBuckets(ctx context.Context) ([]s3types.Bucket, error) {
 			continue
 		}
 
-		// Skip metadata directories
+		// Skip metadataManager directories
 		name := entry.Name()
 		if name == ".minio.sys" || name == ".dirio" || name[0] == '.' {
 			continue
@@ -116,12 +116,12 @@ func (s *Storage) CreateBucket(ctx context.Context, bucket string) error {
 	}
 
 	// Create bucket directory
-	if err := s.rootFS.MkdirAll(bucket, 0755); err != nil {
+	if err := s.rootFS.MkdirAll(bucket, 0o755); err != nil {
 		return fmt.Errorf("failed to create bucket: %w", err)
 	}
 
-	// Create bucket metadata
-	if err := s.metadata.CreateBucket(ctx, bucket); err != nil {
+	// Create bucket metadataManager
+	if err := s.metadataManager.CreateBucket(ctx, bucket); err != nil {
 		// Cleanup on failure
 		if err := s.rootFS.Remove(bucket); err != nil {
 			s.log.Error("failed to cleanup bucket directory", "error", err)
@@ -192,8 +192,8 @@ func (s *Storage) DeleteBucket(ctx context.Context, bucket string) error {
 		return err
 	}
 
-	// Remove bucket metadata
-	return s.metadata.DeleteBucket(ctx, bucket)
+	// Remove bucket metadataManager
+	return s.metadataManager.DeleteBucket(ctx, bucket)
 }
 
 // ListObjects returns objects in a bucket with optional prefix, marker, and delimiter (V1 API)
@@ -234,13 +234,13 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 	// This is used by ListObjectsV2 but not ListObjects (V1 always omits owner)
 	var bucketOwner *s3types.Owner
 	if fetchOwner {
-		bucketMeta, err := s.metadata.GetBucketMetadata(ctx, bucket)
+		bucketMeta, err := s.metadataManager.GetBucketMetadata(ctx, bucket)
 		if err == nil && bucketMeta.Owner != nil {
 			ownerStr := bucketMeta.Owner.String()
 			displayName := ownerStr // Default to UUID string
 
 			// Look up the user's username for a more friendly display name
-			user, err := s.metadata.GetUser(ctx, *bucketMeta.Owner)
+			user, err := s.metadataManager.GetUser(ctx, *bucketMeta.Owner)
 			if err == nil && user != nil && user.Username != "" {
 				displayName = user.Username
 			}
@@ -250,7 +250,7 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 				DisplayName: displayName,
 			}
 		}
-		// If we can't get bucket metadata or owner is nil, that's ok - owner will be nil
+		// If we can't get bucket metadataManager or owner is nil, that's ok - owner will be nil
 	}
 
 	// Collect all matching objects
@@ -285,10 +285,10 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 			}
 		}
 
-		// Get object metadata
-		meta, err := s.metadata.GetObjectMetadata(ctx, bucket, key)
+		// Get object metadataManager
+		meta, err := s.metadataManager.GetObjectMetadata(ctx, bucket, key)
 		if err != nil {
-			// If no metadata, create basic metadata
+			// If no metadataManager, create basic metadataManager
 			meta = &metadata.ObjectMetadata{
 				ContentType:  "application/octet-stream",
 				Size:         info.Size(),

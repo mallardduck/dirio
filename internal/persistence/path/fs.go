@@ -94,7 +94,7 @@ func NewMinIOFS(rootFS billy.Filesystem) (billy.Filesystem, error) {
 // Creates the metadata directory if it doesn't exist.
 func NewMetadataFS(rootFS billy.Filesystem) (billy.Filesystem, error) {
 	// Ensure metadata directory exists
-	if err := rootFS.MkdirAll(MetadataDir, 0755); err != nil {
+	if err := rootFS.MkdirAll(MetadataDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create metadata directory: %w", err)
 	}
 
@@ -116,7 +116,7 @@ func NewBucketFS(rootFS billy.Filesystem, bucket string) (billy.Filesystem, erro
 	}
 
 	// Ensure bucket directory exists
-	if err := rootFS.MkdirAll(bucket, 0755); err != nil {
+	if err := rootFS.MkdirAll(bucket, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create bucket directory: %w", err)
 	}
 

@@ -50,7 +50,7 @@ func (h *HTTPHandler) CreateMultipartUpload(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Build response
-	response := s3types.InitiateMultipartUploadResult{
+	initResp := s3types.InitiateMultipartUploadResult{
 		XMLName:  xml.Name{Space: "http://s3.amazonaws.com/doc/2006-03-01/", Local: "InitiateMultipartUploadResult"},
 		Bucket:   resp.Bucket,
 		Key:      resp.Key,
@@ -59,7 +59,7 @@ func (h *HTTPHandler) CreateMultipartUpload(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set(headers.ContentType, "application/xml")
 	w.WriteHeader(http.StatusOK)
-	if err := xml.NewEncoder(w).Encode(response); err != nil {
+	if err := xml.NewEncoder(w).Encode(initResp); err != nil {
 		// Already wrote headers, can't change status code
 		return
 	}
@@ -104,7 +104,7 @@ func (h *HTTPHandler) UploadPart(w http.ResponseWriter, r *http.Request, bucket,
 	}
 
 	// Return ETag in header
-	w.Header().Set("ETag", fmt.Sprintf(`"%s"`, resp.ETag))
+	w.Header().Set("ETag", fmt.Sprintf(`"%q"`, resp.ETag))
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -144,28 +144,29 @@ func (h *HTTPHandler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Req
 
 	resp, err := h.s3Service.CompleteMultipartUpload(r.Context(), req)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		switch {
+		case strings.Contains(err.Error(), "not found"):
 			_ = WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchUpload)
-		} else if strings.Contains(err.Error(), "mismatch") {
+		case strings.Contains(err.Error(), "mismatch"):
 			_ = WriteErrorResponse(w, requestID, s3types.ErrCodeInvalidPart, response.SetErrAsMessage(err))
-		} else {
+		default:
 			_ = WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, response.SetErrAsMessage(err))
 		}
 		return
 	}
 
 	// Build response
-	response := s3types.CompleteMultipartUploadResult{
+	completeResp := s3types.CompleteMultipartUploadResult{
 		XMLName:  xml.Name{Space: "http://s3.amazonaws.com/doc/2006-03-01/", Local: "CompleteMultipartUploadResult"},
 		Location: h.urlBuilder.ObjectURL(r, bucket, key),
 		Bucket:   resp.Bucket,
 		Key:      resp.Key,
-		ETag:     fmt.Sprintf(`"%s"`, resp.ETag),
+		ETag:     fmt.Sprintf(`"%q"`, resp.ETag),
 	}
 
 	w.Header().Set(headers.ContentType, "application/xml")
 	w.WriteHeader(http.StatusOK)
-	if err := xml.NewEncoder(w).Encode(response); err != nil {
+	if err := xml.NewEncoder(w).Encode(completeResp); err != nil {
 		return
 	}
 }
@@ -239,13 +240,13 @@ func (h *HTTPHandler) ListParts(w http.ResponseWriter, r *http.Request, bucket, 
 	for i, part := range resp.Parts {
 		parts[i] = s3types.Part{
 			PartNumber:   part.PartNumber,
-			ETag:         fmt.Sprintf(`"%s"`, part.ETag),
+			ETag:         fmt.Sprintf(`"%q"`, part.ETag),
 			Size:         part.Size,
 			LastModified: part.LastModified.Format("2006-01-02T15:04:05.000Z"),
 		}
 	}
 
-	response := s3types.ListPartsResult{
+	partsResp := s3types.ListPartsResult{
 		XMLName:  xml.Name{Space: "http://s3.amazonaws.com/doc/2006-03-01/", Local: "ListPartsResult"},
 		Bucket:   resp.Bucket,
 		Key:      resp.Key,
@@ -255,7 +256,7 @@ func (h *HTTPHandler) ListParts(w http.ResponseWriter, r *http.Request, bucket, 
 
 	w.Header().Set(headers.ContentType, "application/xml")
 	w.WriteHeader(http.StatusOK)
-	if err := xml.NewEncoder(w).Encode(response); err != nil {
+	if err := xml.NewEncoder(w).Encode(partsResp); err != nil {
 		return
 	}
 }

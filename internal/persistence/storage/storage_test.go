@@ -68,7 +68,7 @@ func createTestObject(t *testing.T, s *Storage, bucket, key string, size int64) 
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 
-	// Create metadata
+	// Create metadataManager
 	meta := &metadata.ObjectMetadata{
 		Version:      metadata.ObjectMetadataVersion,
 		ContentType:  "application/octet-stream",
@@ -76,7 +76,7 @@ func createTestObject(t *testing.T, s *Storage, bucket, key string, size int64) 
 		ETag:         "test-etag",
 		LastModified: time.Now().Truncate(time.Second),
 	}
-	err = s.metadata.PutObjectMetadata(testContext(), bucket, key, meta)
+	err = s.metadataManager.PutObjectMetadata(testContext(), bucket, key, meta)
 	require.NoError(t, err)
 }
 
@@ -323,9 +323,8 @@ func TestListInternal_Pagination(t *testing.T) {
 
 func TestListInternal_FetchOwner(t *testing.T) {
 	s := setupTestStorage(t)
-	asserts := assert.New(t)
 
-	// Save the test user to metadata so GetUserByUUID can find it
+	// Save the test user to metadataManager so GetUserByUUID can find it
 	testUUID := uuid.MustParse("12345678-1234-1234-1234-123456789012")
 	testUser := &iam.User{
 		UUID:      testUUID,
@@ -334,7 +333,7 @@ func TestListInternal_FetchOwner(t *testing.T) {
 		SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
 		Status:    iam.UserStatusActive,
 	}
-	err := s.metadata.CreateOrUpdateUser(context.Background(), testUser)
+	err := s.metadataManager.CreateOrUpdateUser(context.Background(), testUser)
 	require.NoError(t, err)
 
 	createTestBucket(t, s, "test-bucket")
@@ -343,18 +342,18 @@ func TestListInternal_FetchOwner(t *testing.T) {
 	// Test with fetchOwner=false - owner should be nil
 	result, err := s.listInternal(testContext(), "test-bucket", "", "", "", 1000, false)
 	require.NoError(t, err)
-	asserts.Len(result.Objects, 1)
-	asserts.Nil(result.Objects[0].Owner)
+	assert.Len(t, result.Objects, 1)
+	assert.Nil(t, result.Objects[0].Owner)
 
 	// Test with fetchOwner=true - owner should match the user from context
 	result2, err := s.listInternal(testContext(), "test-bucket", "", "", "", 1000, true)
 	require.NoError(t, err)
-	asserts.Len(result2.Objects, 1)
-	// Owner should be populated from bucket metadata (which was set from context user)
-	if asserts.NotNil(result2.Objects[0].Owner) {
+	assert.Len(t, result2.Objects, 1)
+	// Owner should be populated from bucket metadataManager (which was set from context user)
+	if assert.NotNil(t, result2.Objects[0].Owner) {
 		// Owner.ID should be the UUID string, DisplayName should be the username
-		asserts.Equal("12345678-1234-1234-1234-123456789012", result2.Objects[0].Owner.ID)
-		asserts.Equal("testuser", result2.Objects[0].Owner.DisplayName)
+		assert.Equal(t, "12345678-1234-1234-1234-123456789012", result2.Objects[0].Owner.ID)
+		assert.Equal(t, "testuser", result2.Objects[0].Owner.DisplayName)
 	}
 }
 

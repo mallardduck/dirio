@@ -294,7 +294,7 @@ func TestBucketPolicy_AuthenticatedUserStillWorksOnPublicBucket(t *testing.T) {
 	ts.SetBucketPolicy(t, bucket, policy)
 
 	// Authenticated GET should also work (admin bypass)
-	req, err := http.NewRequest("GET", ts.ObjectURL(bucket, "file.txt"), nil)
+	req, err := http.NewRequest("GET", ts.ObjectURL(bucket, "file.txt"), http.NoBody)
 	require.NoError(t, err)
 	ts.SignRequest(req, nil)
 

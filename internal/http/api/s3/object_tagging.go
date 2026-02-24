@@ -127,13 +127,13 @@ func (h *HTTPHandler) GetObjectTagging(w http.ResponseWriter, r *http.Request, b
 	}
 
 	// Build response
-	response := s3types.Tagging{
+	taggingResp := s3types.Tagging{
 		TagSet: tagSlice,
 	}
 
 	// Return XML response
 	w.Header().Set(headers.ContentType, "application/xml")
-	if writeErr := WriteXMLResponse(w, http.StatusOK, response); writeErr != nil {
+	if writeErr := WriteXMLResponse(w, http.StatusOK, taggingResp); writeErr != nil {
 		s3Logger.With("err", writeErr).Warn("failed to write tagging XML response")
 	}
 }

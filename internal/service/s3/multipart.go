@@ -21,7 +21,7 @@ import (
 // Multipart Upload Operations
 // ============================================================================
 
-// multipartMetadata stores metadata for a multipart upload
+// multipartMetadata stores metadataManager for a multipart upload
 type multipartMetadata struct {
 	UploadID       string            `json:"uploadId"`
 	Bucket         string            `json:"bucket"`
@@ -31,7 +31,7 @@ type multipartMetadata struct {
 	Initiated      time.Time         `json:"initiated"`
 }
 
-// partMetadata stores metadata for an uploaded part
+// partMetadata stores metadataManager for an uploaded part
 type partMetadata struct {
 	PartNumber   int       `json:"partNumber"`
 	ETag         string    `json:"etag"`
@@ -42,7 +42,7 @@ type partMetadata struct {
 // CreateMultipartUpload initiates a multipart upload
 func (s *Service) CreateMultipartUpload(ctx context.Context, req *CreateMultipartUploadRequest) (*CreateMultipartUploadResponse, error) {
 	// Verify bucket exists
-	bucketMeta, err := s.metadata.GetBucketMetadata(ctx, req.Bucket)
+	bucketMeta, err := s.metadataManager.GetBucketMetadata(ctx, req.Bucket)
 	if err != nil || bucketMeta == nil {
 		return nil, errors.New("bucket does not exist")
 	}
@@ -51,18 +51,18 @@ func (s *Service) CreateMultipartUpload(ctx context.Context, req *CreateMultipar
 	uploadID := uuid.New().String()
 
 	// Get bucket filesystem
-	bucketFS, err := s.storage.GetBucketFS(ctx, req.Bucket)
+	bucketFS, err := s.diskStorage.GetBucketFS(ctx, req.Bucket)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bucket filesystem: %w", err)
 	}
 
 	// Create multipart directory
 	multipartDir := filepath.Join(".multipart", uploadID)
-	if err := bucketFS.MkdirAll(multipartDir, 0755); err != nil {
+	if err := bucketFS.MkdirAll(multipartDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create multipart directory: %w", err)
 	}
 
-	// Store upload metadata
+	// Store upload metadataManager
 	uploadMeta := &multipartMetadata{
 		UploadID:       uploadID,
 		Bucket:         req.Bucket,
@@ -74,18 +74,18 @@ func (s *Service) CreateMultipartUpload(ctx context.Context, req *CreateMultipar
 
 	metaBytes, err := json.Marshal(uploadMeta)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal upload metadata: %w", err)
+		return nil, fmt.Errorf("failed to marshal upload metadataManager: %w", err)
 	}
 
 	metaPath := filepath.Join(multipartDir, "upload.json")
 	metaFile, err := bucketFS.Create(metaPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create upload metadata file: %w", err)
+		return nil, fmt.Errorf("failed to create upload metadataManager file: %w", err)
 	}
 	defer metaFile.Close()
 
 	if _, err := metaFile.Write(metaBytes); err != nil {
-		return nil, fmt.Errorf("failed to write upload metadata: %w", err)
+		return nil, fmt.Errorf("failed to write upload metadataManager: %w", err)
 	}
 
 	return &CreateMultipartUploadResponse{
@@ -98,7 +98,7 @@ func (s *Service) CreateMultipartUpload(ctx context.Context, req *CreateMultipar
 // UploadPart uploads a single part for a multipart upload
 func (s *Service) UploadPart(ctx context.Context, req *UploadPartRequest) (*UploadPartResponse, error) {
 	// Get bucket filesystem
-	bucketFS, err := s.storage.GetBucketFS(ctx, req.Bucket)
+	bucketFS, err := s.diskStorage.GetBucketFS(ctx, req.Bucket)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bucket filesystem: %w", err)
 	}
@@ -113,7 +113,7 @@ func (s *Service) UploadPart(ctx context.Context, req *UploadPartRequest) (*Uplo
 
 	// Create parts directory if needed
 	partsDir := filepath.Join(multipartDir, "parts")
-	if err := bucketFS.MkdirAll(partsDir, 0755); err != nil {
+	if err := bucketFS.MkdirAll(partsDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create parts directory: %w", err)
 	}
 
@@ -135,7 +135,7 @@ func (s *Service) UploadPart(ctx context.Context, req *UploadPartRequest) (*Uplo
 
 	etag := hex.EncodeToString(hash.Sum(nil))
 
-	// Store part metadata
+	// Store part metadataManager
 	partMeta := &partMetadata{
 		PartNumber:   req.PartNumber,
 		ETag:         etag,
@@ -145,18 +145,18 @@ func (s *Service) UploadPart(ctx context.Context, req *UploadPartRequest) (*Uplo
 
 	metaBytes, err := json.Marshal(partMeta)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal part metadata: %w", err)
+		return nil, fmt.Errorf("failed to marshal part metadataManager: %w", err)
 	}
 
 	partMetaPath := filepath.Join(partsDir, fmt.Sprintf("part-%d.json", req.PartNumber))
 	partMetaFile, err := bucketFS.Create(partMetaPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create part metadata file: %w", err)
+		return nil, fmt.Errorf("failed to create part metadataManager file: %w", err)
 	}
 	defer partMetaFile.Close()
 
 	if _, err := partMetaFile.Write(metaBytes); err != nil {
-		return nil, fmt.Errorf("failed to write part metadata: %w", err)
+		return nil, fmt.Errorf("failed to write part metadataManager: %w", err)
 	}
 
 	return &UploadPartResponse{
@@ -167,12 +167,12 @@ func (s *Service) UploadPart(ctx context.Context, req *UploadPartRequest) (*Uplo
 // CompleteMultipartUpload completes a multipart upload by assembling all parts
 func (s *Service) CompleteMultipartUpload(ctx context.Context, req *CompleteMultipartUploadRequest) (*CompleteMultipartUploadResponse, error) {
 	// Get bucket filesystem
-	bucketFS, err := s.storage.GetBucketFS(ctx, req.Bucket)
+	bucketFS, err := s.diskStorage.GetBucketFS(ctx, req.Bucket)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bucket filesystem: %w", err)
 	}
 
-	// Verify multipart upload exists and get metadata
+	// Verify multipart upload exists and get metadataManager
 	multipartDir := filepath.Join(".multipart", req.UploadID)
 	uploadMetaPath := filepath.Join(multipartDir, "upload.json")
 	uploadMetaFile, err := bucketFS.Open(uploadMetaPath)
@@ -183,7 +183,7 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, req *CompleteMult
 	var uploadMeta multipartMetadata
 	if err := json.NewDecoder(uploadMetaFile).Decode(&uploadMeta); err != nil {
 		uploadMetaFile.Close()
-		return nil, fmt.Errorf("failed to read upload metadata: %w", err)
+		return nil, fmt.Errorf("failed to read upload metadataManager: %w", err)
 	}
 	uploadMetaFile.Close()
 
@@ -204,7 +204,7 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, req *CompleteMult
 		var partMeta partMetadata
 		if err := json.NewDecoder(partMetaFile).Decode(&partMeta); err != nil {
 			partMetaFile.Close()
-			return nil, fmt.Errorf("failed to read part %d metadata: %w", part.PartNumber, err)
+			return nil, fmt.Errorf("failed to read part %d metadataManager: %w", part.PartNumber, err)
 		}
 		partMetaFile.Close()
 
@@ -234,7 +234,7 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, req *CompleteMult
 	}
 
 	// Store the complete object
-	etag, err := s.storage.PutObject(ctx, req.Bucket, req.Key, &assembledData, uploadMeta.ContentType, uploadMeta.CustomMetadata)
+	etag, err := s.diskStorage.PutObject(ctx, req.Bucket, req.Key, &assembledData, uploadMeta.ContentType, uploadMeta.CustomMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store complete object: %w", err)
 	}
@@ -253,7 +253,7 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, req *CompleteMult
 // AbortMultipartUpload aborts a multipart upload and cleans up all parts
 func (s *Service) AbortMultipartUpload(ctx context.Context, req *AbortMultipartUploadRequest) error {
 	// Verify multipart upload exists
-	bucketFS, err := s.storage.GetBucketFS(ctx, req.Bucket)
+	bucketFS, err := s.diskStorage.GetBucketFS(ctx, req.Bucket)
 	if err != nil {
 		return fmt.Errorf("failed to get bucket filesystem: %w", err)
 	}
@@ -272,7 +272,7 @@ func (s *Service) AbortMultipartUpload(ctx context.Context, req *AbortMultipartU
 // ListParts lists all parts for a multipart upload
 func (s *Service) ListParts(ctx context.Context, req *ListPartsRequest) (*ListPartsResponse, error) {
 	// Get bucket filesystem
-	bucketFS, err := s.storage.GetBucketFS(ctx, req.Bucket)
+	bucketFS, err := s.diskStorage.GetBucketFS(ctx, req.Bucket)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bucket filesystem: %w", err)
 	}
@@ -298,7 +298,7 @@ func (s *Service) ListParts(ctx context.Context, req *ListPartsRequest) (*ListPa
 		}, err
 	}
 
-	// Read part metadata
+	// Read part metadataManager
 	responseParts := make([]Part, 0, len(partFiles))
 	for _, fileInfo := range partFiles {
 		if !strings.HasSuffix(fileInfo.Name(), ".json") {
@@ -334,10 +334,10 @@ func (s *Service) ListParts(ctx context.Context, req *ListPartsRequest) (*ListPa
 	}, nil
 }
 
-// cleanupMultipartUpload removes all parts and metadata for a multipart upload
+// cleanupMultipartUpload removes all parts and metadataManager for a multipart upload
 func (s *Service) cleanupMultipartUpload(ctx context.Context, bucket, uploadID string) error {
 	// Get bucket filesystem
-	bucketFS, err := s.storage.GetBucketFS(ctx, bucket)
+	bucketFS, err := s.diskStorage.GetBucketFS(ctx, bucket)
 	if err != nil {
 		return fmt.Errorf("failed to get bucket filesystem: %w", err)
 	}

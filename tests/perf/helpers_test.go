@@ -262,7 +262,7 @@ func captureProfile(t *testing.T, ps *perfServer, profileType string, seconds in
 	t.Helper()
 
 	outDir := filepath.Join("profiles")
-	if err := os.MkdirAll(outDir, 0755); err != nil {
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		t.Fatalf("create profiles dir: %v", err)
 	}
 

@@ -200,9 +200,9 @@ func (s *Service) GetAdvertisedHost() string {
 }
 
 // createServiceConfigs creates dnssd.Config for each service type.
-func (s *Service) createServiceConfigs(hostname string) []dnssd.Config {
+func (s *Service) createServiceConfigs(nodeHostname string) []dnssd.Config {
 	baseConfig := dnssd.Config{
-		Host: hostname,
+		Host: nodeHostname,
 		Port: s.config.Port,
 	}
 

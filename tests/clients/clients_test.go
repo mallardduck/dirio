@@ -626,6 +626,7 @@ func TestMCAdmin(t *testing.T) {
 
 	if state.ExitCode != 0 {
 		t.Skipf("mc-admin: Failed - For now MinIO mc Admin commands are expected to fail")
+		// TODO eventually we can fix more of the admin code and then uncomment this
 		// t.Errorf("mc admin tests failed with exit code %d", state.ExitCode)
 	}
 }

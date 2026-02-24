@@ -300,7 +300,7 @@ func TestNewMetadataFS(t *testing.T) {
 
 	// Verify we can write to the metadata filesystem
 	testData := []byte("test metadata")
-	err = util.WriteFile(metadataFS, "test.json", testData, 0644)
+	err = util.WriteFile(metadataFS, "test.json", testData, 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write to metadata filesystem: %v", err)
 	}
@@ -327,7 +327,7 @@ func TestNewMinIOFS(t *testing.T) {
 
 	// Create MinIO directory
 	minioPath := filepath.Join(tmpDir, MinIODir)
-	if err := os.MkdirAll(minioPath, 0755); err != nil {
+	if err := os.MkdirAll(minioPath, 0o755); err != nil {
 		t.Fatalf("Failed to create MinIO directory: %v", err)
 	}
 
@@ -344,7 +344,7 @@ func TestNewMinIOFS(t *testing.T) {
 	// Create a test file in MinIO directory
 	testPath := filepath.Join(minioPath, "format.json")
 	testData := []byte("{\"version\":\"1\"}")
-	if err := os.WriteFile(testPath, testData, 0644); err != nil {
+	if err := os.WriteFile(testPath, testData, 0o644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -364,8 +364,8 @@ func TestScopedFS_BoundaryEnforcement(t *testing.T) {
 	baseFS := memfs.New()
 
 	// Create some directories
-	baseFS.MkdirAll("bucket1/subdir", 0755)
-	baseFS.MkdirAll("bucket2", 0755)
+	baseFS.MkdirAll("bucket1/subdir", 0o755)
+	baseFS.MkdirAll("bucket2", 0o755)
 
 	// Create scoped filesystem for bucket1
 	scopedFS := newScopedFS(baseFS, "bucket1")
@@ -384,7 +384,7 @@ func TestScopedFS_BoundaryEnforcement(t *testing.T) {
 	}
 
 	// Test subdirectories work
-	err = scopedFS.MkdirAll("nested/deep/dir", 0755)
+	err = scopedFS.MkdirAll("nested/deep/dir", 0o755)
 	if err != nil {
 		t.Fatalf("MkdirAll() within scope failed: %v", err)
 	}
@@ -403,8 +403,8 @@ func TestScopedFS_ReadDir(t *testing.T) {
 	baseFS := memfs.New()
 
 	// Create directory structure
-	baseFS.MkdirAll("bucket/dir1", 0755)
-	baseFS.MkdirAll("bucket/dir2", 0755)
+	baseFS.MkdirAll("bucket/dir1", 0o755)
+	baseFS.MkdirAll("bucket/dir2", 0o755)
 	f1, _ := baseFS.Create("bucket/file1.txt")
 	f1.Close()
 	f2, _ := baseFS.Create("bucket/file2.txt")
@@ -440,7 +440,7 @@ func TestScopedFS_ReadDir(t *testing.T) {
 
 func TestScopedFS_Rename(t *testing.T) {
 	baseFS := memfs.New()
-	baseFS.MkdirAll("bucket", 0755)
+	baseFS.MkdirAll("bucket", 0o755)
 
 	scopedFS := newScopedFS(baseFS, "bucket")
 
@@ -475,7 +475,7 @@ func TestScopedFS_Rename(t *testing.T) {
 
 func TestScopedFS_TempFile(t *testing.T) {
 	baseFS := memfs.New()
-	baseFS.MkdirAll("bucket", 0755)
+	baseFS.MkdirAll("bucket", 0o755)
 
 	scopedFS := newScopedFS(baseFS, "bucket")
 
@@ -499,7 +499,7 @@ func TestScopedFS_TempFile(t *testing.T) {
 
 func TestScopedFS_Chroot(t *testing.T) {
 	baseFS := memfs.New()
-	baseFS.MkdirAll("bucket/subdir/nested", 0755)
+	baseFS.MkdirAll("bucket/subdir/nested", 0o755)
 
 	scopedFS := newScopedFS(baseFS, "bucket")
 

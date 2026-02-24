@@ -71,7 +71,7 @@ func TestLoadOrCreateRandomID(t *testing.T) {
 		path := filepath.Join(tmpDir, "hostid")
 
 		// Write invalid data
-		os.WriteFile(path, []byte("bad"), 0600)
+		os.WriteFile(path, []byte("bad"), 0o600)
 
 		id := loadOrCreateRandomID()
 		assert.Len(t, id, idBytes*2)

@@ -166,7 +166,7 @@ func SaveDataConfig(rootFS billy.Filesystem, config *ConfigData) error {
 	config.UpdatedAt = time.Now()
 
 	// Ensure .dirio directory exists
-	if err := rootFS.MkdirAll(".dirio", 0755); err != nil {
+	if err := rootFS.MkdirAll(".dirio", 0o755); err != nil {
 		return fmt.Errorf("failed to create .dirio directory: %w", err)
 	}
 
@@ -190,7 +190,7 @@ func SaveDataConfig(rootFS billy.Filesystem, config *ConfigData) error {
 		return fmt.Errorf("failed to marshal data config: %w", err)
 	}
 
-	if err := util.WriteFile(rootFS, configPath, data, 0644); err != nil {
+	if err := util.WriteFile(rootFS, configPath, data, 0o644); err != nil {
 		return fmt.Errorf("failed to write data config: %w", err)
 	}
 

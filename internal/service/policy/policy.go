@@ -13,13 +13,13 @@ import (
 
 // Service provides policy management operations
 type Service struct {
-	metadata *metadata.Manager
+	metadataManager *metadata.Manager
 }
 
 // NewService creates a new policy service
-func NewService(metadata *metadata.Manager) *Service {
+func NewService(metadataManager *metadata.Manager) *Service {
 	return &Service{
-		metadata: metadata,
+		metadataManager: metadataManager,
 	}
 }
 
@@ -34,7 +34,7 @@ func (s *Service) Create(ctx context.Context, req *CreatePolicyRequest) (*iam.Po
 	}
 
 	// Check if policy already exists
-	existing, err := s.metadata.GetPolicy(ctx, req.Name)
+	existing, err := s.metadataManager.GetPolicy(ctx, req.Name)
 	if err == nil && existing != nil {
 		return nil, svcerrors.ErrPolicyAlreadyExists
 	}
@@ -50,7 +50,7 @@ func (s *Service) Create(ctx context.Context, req *CreatePolicyRequest) (*iam.Po
 	}
 
 	// Persist policy
-	if err := s.metadata.SavePolicy(ctx, policy); err != nil {
+	if err := s.metadataManager.SavePolicy(ctx, policy); err != nil {
 		return nil, err
 	}
 
@@ -63,7 +63,7 @@ func (s *Service) Get(ctx context.Context, name string) (*iam.Policy, error) {
 		return nil, err
 	}
 
-	policy, err := s.metadata.GetPolicy(ctx, name)
+	policy, err := s.metadataManager.GetPolicy(ctx, name)
 	if err != nil {
 		if errors.Is(err, metadata.ErrPolicyNotFound) {
 			return nil, svcerrors.ErrPolicyNotFound
@@ -95,7 +95,7 @@ func (s *Service) Update(ctx context.Context, name string, req *UpdatePolicyRequ
 	policy.UpdateDate = time.Now()
 
 	// Persist changes
-	if err := s.metadata.SavePolicy(ctx, policy); err != nil {
+	if err := s.metadataManager.SavePolicy(ctx, policy); err != nil {
 		return nil, err
 	}
 
@@ -113,15 +113,15 @@ func (s *Service) Delete(ctx context.Context, name string) error {
 		return err
 	}
 
-	return s.metadata.DeletePolicy(ctx, name)
+	return s.metadataManager.DeletePolicy(ctx, name)
 }
 
 // List returns all policies
 func (s *Service) List(ctx context.Context) (map[string]*metadata.Policy, error) {
-	return s.metadata.GetPolicies(ctx)
+	return s.metadataManager.GetPolicies(ctx)
 }
 
 // ListNames returns all policy names
 func (s *Service) ListNames(ctx context.Context) ([]string, error) {
-	return s.metadata.ListPolicyNames(ctx)
+	return s.metadataManager.ListPolicyNames(ctx)
 }

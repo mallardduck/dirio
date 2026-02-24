@@ -153,7 +153,7 @@ func TestLoadDataConfig_InvalidJSON(t *testing.T) {
 	fs := memfs.New()
 
 	// Create .dirio directory
-	err := fs.MkdirAll(".dirio", 0755)
+	err := fs.MkdirAll(".dirio", 0o755)
 	require.NoError(t, err)
 
 	// Write invalid JSON
@@ -181,7 +181,7 @@ func TestLoadDataConfig_InvalidData(t *testing.T) {
 	}
 
 	// Manually save it without validation
-	err := fs.MkdirAll(".dirio", 0755)
+	err := fs.MkdirAll(".dirio", 0o755)
 	require.NoError(t, err)
 
 	data, err := json.MarshalIndent(invalidConfig, "", "  ")

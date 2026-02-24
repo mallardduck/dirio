@@ -62,8 +62,7 @@ func TestPutObjectTagging(t *testing.T) {
 	require.NoError(t, err)
 	defer tagResp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusOK, tagResp.StatusCode)
+	assert.Equal(t, http.StatusOK, tagResp.StatusCode)
 }
 
 func TestGetObjectTagging(t *testing.T) {
@@ -106,15 +105,14 @@ func TestGetObjectTagging(t *testing.T) {
 	require.Equal(t, http.StatusOK, tagResp.StatusCode)
 
 	// Get tags back
-	getTagReq, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "test.txt")+"?tagging", nil)
+	getTagReq, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "test.txt")+"?tagging", http.NoBody)
 	ts.SignRequest(getTagReq, nil)
 
 	getTagResp, err := http.DefaultClient.Do(getTagReq)
 	require.NoError(t, err)
 	defer getTagResp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusOK, getTagResp.StatusCode)
+	assert.Equal(t, http.StatusOK, getTagResp.StatusCode)
 
 	// Parse response
 	var responseTags Tagging
@@ -124,7 +122,7 @@ func TestGetObjectTagging(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify tags
-	assert.Len(responseTags.TagSet, 2)
+	assert.Len(t, responseTags.TagSet, 2)
 
 	// Create a map for easier assertion
 	tagMap := make(map[string]string)
@@ -132,8 +130,8 @@ func TestGetObjectTagging(t *testing.T) {
 		tagMap[tag.Key] = tag.Value
 	}
 
-	assert.Equal("production", tagMap["env"])
-	assert.Equal("backend", tagMap["team"])
+	assert.Equal(t, "production", tagMap["env"])
+	assert.Equal(t, "backend", tagMap["team"])
 }
 
 func TestObjectTaggingDoesNotCorruptContent(t *testing.T) {
@@ -156,7 +154,7 @@ func TestObjectTaggingDoesNotCorruptContent(t *testing.T) {
 	require.Equal(t, http.StatusOK, putResp.StatusCode)
 
 	// Verify content before tagging
-	getReq1, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "test.txt"), nil)
+	getReq1, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "test.txt"), http.NoBody)
 	ts.SignRequest(getReq1, nil)
 
 	getResp1, err := http.DefaultClient.Do(getReq1)
@@ -187,7 +185,7 @@ func TestObjectTaggingDoesNotCorruptContent(t *testing.T) {
 	require.Equal(t, http.StatusOK, tagResp.StatusCode)
 
 	// CRITICAL: Verify content after tagging
-	getReq2, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "test.txt"), nil)
+	getReq2, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "test.txt"), http.NoBody)
 	ts.SignRequest(getReq2, nil)
 
 	getResp2, err := http.DefaultClient.Do(getReq2)
@@ -196,13 +194,12 @@ func TestObjectTaggingDoesNotCorruptContent(t *testing.T) {
 	getResp2.Body.Close()
 	require.NoError(t, err)
 
-	assert := assert.New(t)
 	// This is the critical assertion - content should NOT have changed
-	assert.Equal(originalContent, string(contentAfter), "Object content was corrupted by tagging operation")
+	assert.Equal(t, originalContent, string(contentAfter), "Object content was corrupted by tagging operation")
 
 	// Also verify the content doesn't contain the XML tagging structure
-	assert.NotContains(string(contentAfter), "<Tagging>", "Object content was replaced with tagging XML")
-	assert.NotContains(string(contentAfter), "<TagSet>", "Object content was replaced with tagging XML")
+	assert.NotContains(t, string(contentAfter), "<Tagging>", "Object content was replaced with tagging XML")
+	assert.NotContains(t, string(contentAfter), "<TagSet>", "Object content was replaced with tagging XML")
 }
 
 func TestGetObjectTaggingOnNonexistentObject(t *testing.T) {
@@ -212,18 +209,17 @@ func TestGetObjectTaggingOnNonexistentObject(t *testing.T) {
 	ts.CreateBucket(t, "test-bucket")
 
 	// Try to get tags from nonexistent object
-	getTagReq, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "nonexistent.txt")+"?tagging", nil)
+	getTagReq, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "nonexistent.txt")+"?tagging", http.NoBody)
 	ts.SignRequest(getTagReq, nil)
 
 	getTagResp, err := http.DefaultClient.Do(getTagReq)
 	require.NoError(t, err)
 	defer getTagResp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusNotFound, getTagResp.StatusCode)
+	assert.Equal(t, http.StatusNotFound, getTagResp.StatusCode)
 
 	body, _ := io.ReadAll(getTagResp.Body)
-	assert.Contains(string(body), "NoSuchKey")
+	assert.Contains(t, string(body), "NoSuchKey")
 }
 
 func TestPutObjectTaggingOnNonexistentObject(t *testing.T) {
@@ -250,9 +246,8 @@ func TestPutObjectTaggingOnNonexistentObject(t *testing.T) {
 	require.NoError(t, err)
 	defer tagResp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusNotFound, tagResp.StatusCode)
+	assert.Equal(t, http.StatusNotFound, tagResp.StatusCode)
 
 	body, _ := io.ReadAll(tagResp.Body)
-	assert.Contains(string(body), "NoSuchKey")
+	assert.Contains(t, string(body), "NoSuchKey")
 }

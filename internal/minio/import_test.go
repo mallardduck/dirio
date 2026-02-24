@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func formatJSONText() (uuid.UUID, string) {
+func formatJSONText() (serverUID uuid.UUID, config string) {
 	testUid := uuid.New()
 	return testUid, `{"version":"1","format":"fs","id":"` + testUid.String() + `","fs":{"version":"2"}}`
 }
@@ -24,10 +24,10 @@ func TestImport_EmptyDirectory(t *testing.T) {
 
 	// Create minimal format.json for validation
 	minioSys := filepath.Join(tmpDir, ".minio.sys")
-	require.NoError(t, os.MkdirAll(minioSys, 0755))
+	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 
 	_, formatJSON := formatJSONText()
-	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
 
 	// Create billy filesystem scoped to .minio.sys directory
 	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
@@ -45,13 +45,13 @@ func TestImport_WithUsers(t *testing.T) {
 
 	// Create minimal format.json
 	minioSys := filepath.Join(tmpDir, ".minio.sys")
-	require.NoError(t, os.MkdirAll(minioSys, 0755))
+	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 	_, formatJSON := formatJSONText()
-	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
 
 	// Create test user
 	usersDir := filepath.Join(minioSys, "config", "iam", "users", "testuser")
-	require.NoError(t, os.MkdirAll(usersDir, 0755))
+	require.NoError(t, os.MkdirAll(usersDir, 0o755))
 
 	identity := UserIdentity{
 		Version: 1,
@@ -64,7 +64,7 @@ func TestImport_WithUsers(t *testing.T) {
 	}
 	identityJSON, err := json.Marshal(identity)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(usersDir, "identity.json"), identityJSON, 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(usersDir, "identity.json"), identityJSON, 0o644))
 
 	// Create billy filesystem scoped to .minio.sys directory
 	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
@@ -85,13 +85,13 @@ func TestImport_WithPolicies(t *testing.T) {
 
 	// Create minimal format.json
 	minioSys := filepath.Join(tmpDir, ".minio.sys")
-	require.NoError(t, os.MkdirAll(minioSys, 0755))
+	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 	_, formatJSON := formatJSONText()
-	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
 
 	// Create test policy
 	policiesDir := filepath.Join(minioSys, "config", "iam", "policies", "test-policy")
-	require.NoError(t, os.MkdirAll(policiesDir, 0755))
+	require.NoError(t, os.MkdirAll(policiesDir, 0o755))
 
 	policyDoc := map[string]any{
 		"Version": "2012-10-17",
@@ -112,7 +112,7 @@ func TestImport_WithPolicies(t *testing.T) {
 	}
 	policyJSON, err := json.Marshal(policyFile)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(policiesDir, "policy.json"), policyJSON, 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(policiesDir, "policy.json"), policyJSON, 0o644))
 
 	// Create billy filesystem scoped to .minio.sys directory
 	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
@@ -132,13 +132,13 @@ func TestImport_WithUserPolicyMappings(t *testing.T) {
 
 	// Create minimal format.json
 	minioSys := filepath.Join(tmpDir, ".minio.sys")
-	require.NoError(t, os.MkdirAll(minioSys, 0755))
+	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 	_, formatJSON := formatJSONText()
-	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
 
 	// Create test user
 	usersDir := filepath.Join(minioSys, "config", "iam", "users", "alice")
-	require.NoError(t, os.MkdirAll(usersDir, 0755))
+	require.NoError(t, os.MkdirAll(usersDir, 0o755))
 	identity := UserIdentity{
 		Version: 1,
 		Credentials: UserCredentials{
@@ -150,18 +150,18 @@ func TestImport_WithUserPolicyMappings(t *testing.T) {
 	}
 	identityJSON, err := json.Marshal(identity)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(usersDir, "identity.json"), identityJSON, 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(usersDir, "identity.json"), identityJSON, 0o644))
 
 	// Create policy mapping
 	policydbDir := filepath.Join(minioSys, "config", "iam", "policydb", "users")
-	require.NoError(t, os.MkdirAll(policydbDir, 0755))
+	require.NoError(t, os.MkdirAll(policydbDir, 0o755))
 	mapping := UserPolicyMapping{
 		Version: 1,
 		Policy:  PolicyList{"readwrite"},
 	}
 	mappingJSON, err := json.Marshal(mapping)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(policydbDir, "alice.json"), mappingJSON, 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(policydbDir, "alice.json"), mappingJSON, 0o644))
 
 	// Create billy filesystem scoped to .minio.sys directory
 	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
@@ -179,13 +179,13 @@ func TestImport_WithBucketsNoMetadata(t *testing.T) {
 
 	// Create minimal format.json
 	minioSys := filepath.Join(tmpDir, ".minio.sys")
-	require.NoError(t, os.MkdirAll(minioSys, 0755))
+	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 	_, formatJSON := formatJSONText()
-	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
 
 	// Create bucket directory without metadata
 	bucketsDir := filepath.Join(minioSys, "buckets", "test-bucket")
-	require.NoError(t, os.MkdirAll(bucketsDir, 0755))
+	require.NoError(t, os.MkdirAll(bucketsDir, 0o755))
 
 	// Create billy filesystem scoped to .minio.sys directory
 	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
@@ -205,9 +205,9 @@ func TestImport_InvalidFormat(t *testing.T) {
 
 	// Create invalid format.json (erasure mode instead of fs)
 	minioSys := filepath.Join(tmpDir, ".minio.sys")
-	require.NoError(t, os.MkdirAll(minioSys, 0755))
+	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 	formatJSON := `{"version":"1","format":"erasure","id":"test-erasure"}`
-	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
 
 	// Create billy filesystem scoped to .minio.sys directory
 	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
@@ -233,14 +233,14 @@ func TestImport_CompleteSetup(t *testing.T) {
 
 	// Setup format.json
 	minioSys := filepath.Join(tmpDir, ".minio.sys")
-	require.NoError(t, os.MkdirAll(minioSys, 0755))
+	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 	_, formatJSON := formatJSONText()
-	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
 
 	// Create two users
 	for _, username := range []string{"alice", "bob"} {
 		usersDir := filepath.Join(minioSys, "config", "iam", "users", username)
-		require.NoError(t, os.MkdirAll(usersDir, 0755))
+		require.NoError(t, os.MkdirAll(usersDir, 0o755))
 		identity := UserIdentity{
 			Version: 1,
 			Credentials: UserCredentials{
@@ -252,13 +252,13 @@ func TestImport_CompleteSetup(t *testing.T) {
 		}
 		identityJSON, err := json.Marshal(identity)
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(filepath.Join(usersDir, "identity.json"), identityJSON, 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(usersDir, "identity.json"), identityJSON, 0o644))
 	}
 
 	// Create two policies
 	for _, policyName := range []string{"alpha-rw", "beta-rw"} {
 		policiesDir := filepath.Join(minioSys, "config", "iam", "policies", policyName)
-		require.NoError(t, os.MkdirAll(policiesDir, 0755))
+		require.NoError(t, os.MkdirAll(policiesDir, 0o755))
 		policyDoc := map[string]any{
 			"Version": "2012-10-17",
 			"Statement": []map[string]any{
@@ -277,24 +277,24 @@ func TestImport_CompleteSetup(t *testing.T) {
 		}
 		policyJSON, err := json.Marshal(policyFile)
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(filepath.Join(policiesDir, "policy.json"), policyJSON, 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(policiesDir, "policy.json"), policyJSON, 0o644))
 	}
 
 	// Create user-policy mappings
 	policydbDir := filepath.Join(minioSys, "config", "iam", "policydb", "users")
-	require.NoError(t, os.MkdirAll(policydbDir, 0755))
+	require.NoError(t, os.MkdirAll(policydbDir, 0o755))
 	mappings := map[string]PolicyList{"alice": {"alpha-rw"}, "bob": {"beta-rw"}}
 	for user, policy := range mappings {
 		mapping := UserPolicyMapping{Version: 1, Policy: policy}
 		mappingJSON, err := json.Marshal(mapping)
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(filepath.Join(policydbDir, user+".json"), mappingJSON, 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(policydbDir, user+".json"), mappingJSON, 0o644))
 	}
 
 	// Create two buckets
 	for _, bucketName := range []string{"alpha", "beta"} {
 		bucketsDir := filepath.Join(minioSys, "buckets", bucketName)
-		require.NoError(t, os.MkdirAll(bucketsDir, 0755))
+		require.NoError(t, os.MkdirAll(bucketsDir, 0o755))
 	}
 
 	// Run import

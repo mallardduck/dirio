@@ -16,13 +16,13 @@ import (
 
 // Service provides user management operations
 type Service struct {
-	metadata *metadata.Manager
+	metadataManager *metadata.Manager
 }
 
 // NewService creates a new user service
-func NewService(metadata *metadata.Manager) *Service {
+func NewService(metadataManager *metadata.Manager) *Service {
 	return &Service{
-		metadata: metadata,
+		metadataManager: metadataManager,
 	}
 }
 
@@ -39,7 +39,7 @@ func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*iam.User
 	}
 
 	// Check if access key is already taken
-	existing, err := s.metadata.GetUserByAccessKey(ctx, req.AccessKey)
+	existing, err := s.metadataManager.GetUserByAccessKey(ctx, req.AccessKey)
 	if err == nil && existing != nil {
 		return nil, svcerrors.ErrUserAlreadyExists
 	}
@@ -59,7 +59,7 @@ func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*iam.User
 		AttachedPolicies: []string{},
 	}
 
-	if err := s.metadata.CreateOrUpdateUser(ctx, user); err != nil {
+	if err := s.metadataManager.CreateOrUpdateUser(ctx, user); err != nil {
 		return nil, err
 	}
 
@@ -68,7 +68,7 @@ func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*iam.User
 
 // Get retrieves a user by UUID.
 func (s *Service) Get(ctx context.Context, userUID uuid.UUID) (*iam.User, error) {
-	user, err := s.metadata.GetUser(ctx, userUID)
+	user, err := s.metadataManager.GetUser(ctx, userUID)
 	if err != nil {
 		if errors.Is(err, metadata.ErrUserNotFound) {
 			return nil, svcerrors.ErrUserNotFound
@@ -85,7 +85,7 @@ func (s *Service) GetByAccessKey(ctx context.Context, accessKey string) (*iam.Us
 	if err := validation2.ValidateAccessKey(accessKey); err != nil {
 		return nil, err
 	}
-	user, err := s.metadata.GetUserByAccessKey(ctx, accessKey)
+	user, err := s.metadataManager.GetUserByAccessKey(ctx, accessKey)
 	if err != nil {
 		if errors.Is(err, metadata.ErrUserNotFound) {
 			return nil, svcerrors.ErrUserNotFound
@@ -122,7 +122,7 @@ func (s *Service) Update(ctx context.Context, userUID uuid.UUID, req *UpdateUser
 
 	user.UpdatedAt = time.Now()
 
-	if err := s.metadata.CreateOrUpdateUser(ctx, user); err != nil {
+	if err := s.metadataManager.CreateOrUpdateUser(ctx, user); err != nil {
 		return nil, err
 	}
 
@@ -134,12 +134,12 @@ func (s *Service) Delete(ctx context.Context, userUID uuid.UUID) error {
 	if _, err := s.Get(ctx, userUID); err != nil {
 		return err
 	}
-	return s.metadata.DeleteUser(ctx, userUID)
+	return s.metadataManager.DeleteUser(ctx, userUID)
 }
 
 // List returns all user UUIDs.
 func (s *Service) List(ctx context.Context) ([]uuid.UUID, error) {
-	return s.metadata.ListUsers(ctx)
+	return s.metadataManager.ListUsers(ctx)
 }
 
 // AttachPolicy attaches a policy to a user (idempotent).
@@ -148,7 +148,7 @@ func (s *Service) AttachPolicy(ctx context.Context, userUID uuid.UUID, policyNam
 		return err
 	}
 
-	if _, err := s.metadata.GetPolicy(ctx, policyName); err != nil {
+	if _, err := s.metadataManager.GetPolicy(ctx, policyName); err != nil {
 		if errors.Is(err, metadata.ErrPolicyNotFound) {
 			return svcerrors.ErrPolicyNotFound
 		}
@@ -167,7 +167,7 @@ func (s *Service) AttachPolicy(ctx context.Context, userUID uuid.UUID, policyNam
 	user.AttachedPolicies = append(user.AttachedPolicies, policyName)
 	user.UpdatedAt = time.Now()
 
-	return s.metadata.CreateOrUpdateUser(ctx, user)
+	return s.metadataManager.CreateOrUpdateUser(ctx, user)
 }
 
 // DetachPolicy detaches a policy from a user.
@@ -191,9 +191,9 @@ func (s *Service) DetachPolicy(ctx context.Context, userUID uuid.UUID, policyNam
 	user.AttachedPolicies = newPolicies
 	user.UpdatedAt = time.Now()
 
-	return s.metadata.CreateOrUpdateUser(ctx, user)
+	return s.metadataManager.CreateOrUpdateUser(ctx, user)
 }
 
 func (s *Service) GetGroups(ctx context.Context, uid uuid.UUID) ([]string, error) {
-	return s.metadata.GetGroupNamesForUser(ctx, uid)
+	return s.metadataManager.GetGroupNamesForUser(ctx, uid)
 }

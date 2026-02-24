@@ -27,12 +27,11 @@ func TestPutObject(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusOK, resp.StatusCode)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Verify ETag is returned
 	etag := resp.Header.Get("ETag")
-	assert.NotEmpty(etag)
+	assert.NotEmpty(t, etag)
 }
 
 func TestPutObjectInSubfolder(t *testing.T) {
@@ -67,11 +66,10 @@ func TestPutObjectToNonexistentBucket(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	assert.Contains(string(body), "NoSuchBucket")
+	assert.Contains(t, string(body), "NoSuchBucket")
 }
 
 func TestGetObject(t *testing.T) {
@@ -83,24 +81,23 @@ func TestGetObject(t *testing.T) {
 	content := "Hello, DirIO!"
 	ts.PutObject(t, "test-bucket", "hello.txt", content)
 
-	req, err := http.NewRequest("GET", ts.ObjectURL("test-bucket", "hello.txt"), nil)
+	req, err := http.NewRequest("GET", ts.ObjectURL("test-bucket", "hello.txt"), http.NoBody)
 	require.NoError(t, err)
 	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusOK, resp.StatusCode)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	assert.Equal(content, string(body))
+	assert.Equal(t, content, string(body))
 
 	// Verify headers
-	assert.NotEmpty(resp.Header.Get("ETag"))
-	assert.Equal("13", resp.Header.Get("Content-Length"))
-	assert.NotEmpty(resp.Header.Get("Last-Modified"))
-	assert.Equal("bytes", resp.Header.Get("Accept-Ranges"))
+	assert.NotEmpty(t, resp.Header.Get("ETag"))
+	assert.Equal(t, "13", resp.Header.Get("Content-Length"))
+	assert.NotEmpty(t, resp.Header.Get("Last-Modified"))
+	assert.Equal(t, "bytes", resp.Header.Get("Accept-Ranges"))
 }
 
 func TestGetObjectNotExists(t *testing.T) {
@@ -109,36 +106,34 @@ func TestGetObjectNotExists(t *testing.T) {
 
 	ts.CreateBucket(t, "test-bucket")
 
-	req, err := http.NewRequest("GET", ts.ObjectURL("test-bucket", "nonexistent.txt"), nil)
+	req, err := http.NewRequest("GET", ts.ObjectURL("test-bucket", "nonexistent.txt"), http.NoBody)
 	require.NoError(t, err)
 	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	assert.Contains(string(body), "NoSuchKey")
+	assert.Contains(t, string(body), "NoSuchKey")
 }
 
 func TestGetObjectFromNonexistentBucket(t *testing.T) {
 	ts := NewTestServer(t)
 	defer ts.Cleanup()
 
-	req, err := http.NewRequest("GET", ts.ObjectURL("nonexistent", "file.txt"), nil)
+	req, err := http.NewRequest("GET", ts.ObjectURL("nonexistent", "file.txt"), http.NoBody)
 	require.NoError(t, err)
 	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	assert.Contains(string(body), "NoSuchBucket")
+	assert.Contains(t, string(body), "NoSuchBucket")
 }
 
 func TestHeadObject(t *testing.T) {
@@ -148,19 +143,18 @@ func TestHeadObject(t *testing.T) {
 	ts.CreateBucket(t, "test-bucket")
 	ts.PutObject(t, "test-bucket", "hello.txt", "Hello, DirIO!")
 
-	req, _ := http.NewRequest("HEAD", ts.ObjectURL("test-bucket", "hello.txt"), nil)
+	req, _ := http.NewRequest("HEAD", ts.ObjectURL("test-bucket", "hello.txt"), http.NoBody)
 	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusOK, resp.StatusCode)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// HEAD should return headers but no body
-	assert.Equal("13", resp.Header.Get("Content-Length"))
-	assert.NotEmpty(resp.Header.Get("ETag"))
-	assert.NotEmpty(resp.Header.Get("Last-Modified"))
+	assert.Equal(t, "13", resp.Header.Get("Content-Length"))
+	assert.NotEmpty(t, resp.Header.Get("ETag"))
+	assert.NotEmpty(t, resp.Header.Get("Last-Modified"))
 }
 
 func TestHeadObjectNotExists(t *testing.T) {
@@ -169,7 +163,7 @@ func TestHeadObjectNotExists(t *testing.T) {
 
 	ts.CreateBucket(t, "test-bucket")
 
-	req, _ := http.NewRequest("HEAD", ts.ObjectURL("test-bucket", "nonexistent.txt"), nil)
+	req, _ := http.NewRequest("HEAD", ts.ObjectURL("test-bucket", "nonexistent.txt"), http.NoBody)
 	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -185,7 +179,7 @@ func TestDeleteObject(t *testing.T) {
 	ts.CreateBucket(t, "test-bucket")
 	ts.PutObject(t, "test-bucket", "hello.txt", "Hello, DirIO!")
 
-	req, _ := http.NewRequest("DELETE", ts.ObjectURL("test-bucket", "hello.txt"), nil)
+	req, _ := http.NewRequest("DELETE", ts.ObjectURL("test-bucket", "hello.txt"), http.NoBody)
 	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -194,7 +188,7 @@ func TestDeleteObject(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 
 	// Verify object is gone
-	req, err = http.NewRequest("GET", ts.ObjectURL("test-bucket", "hello.txt"), nil)
+	req, err = http.NewRequest("GET", ts.ObjectURL("test-bucket", "hello.txt"), http.NoBody)
 	require.NoError(t, err)
 	ts.SignRequest(req, nil)
 	getResp, err := http.DefaultClient.Do(req)
@@ -211,7 +205,7 @@ func TestDeleteObjectNotExists(t *testing.T) {
 	ts.CreateBucket(t, "test-bucket")
 
 	// S3 returns 204 even when deleting non-existent object
-	req, _ := http.NewRequest("DELETE", ts.ObjectURL("test-bucket", "nonexistent.txt"), nil)
+	req, _ := http.NewRequest("DELETE", ts.ObjectURL("test-bucket", "nonexistent.txt"), http.NoBody)
 	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -224,17 +218,16 @@ func TestDeleteObjectFromNonexistentBucket(t *testing.T) {
 	ts := NewTestServer(t)
 	defer ts.Cleanup()
 
-	req, _ := http.NewRequest("DELETE", ts.ObjectURL("nonexistent", "file.txt"), nil)
+	req, _ := http.NewRequest("DELETE", ts.ObjectURL("nonexistent", "file.txt"), http.NoBody)
 	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	assert.Contains(string(body), "NoSuchBucket")
+	assert.Contains(t, string(body), "NoSuchBucket")
 }
 
 func TestPutAndGetLargeObject(t *testing.T) {
@@ -254,16 +247,15 @@ func TestPutAndGetLargeObject(t *testing.T) {
 	require.NoError(t, err)
 	resp.Body.Close()
 
-	assert := assert.New(t)
-	assert.Equal(http.StatusOK, resp.StatusCode)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Retrieve and verify
-	getReq, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "large.bin"), nil)
+	getReq, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "large.bin"), http.NoBody)
 	ts.SignRequest(getReq, nil)
 	getResp, err := http.DefaultClient.Do(getReq)
 	require.NoError(t, err)
 	defer getResp.Body.Close()
 
 	body, _ := io.ReadAll(getResp.Body)
-	assert.Len(body, len(content))
+	assert.Len(t, body, len(content))
 }

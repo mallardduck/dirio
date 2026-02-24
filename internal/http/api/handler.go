@@ -15,7 +15,7 @@ import (
 
 // Handler handles S3 API requests
 type Handler struct {
-	auth           *auth.Authenticator
+	authHandler    *auth.Authenticator
 	serviceFactory *service.ServicesFactory
 	S3Handler      *s3.HTTPHandler
 	IAMHandler     *miniohttp.Handler
@@ -29,16 +29,16 @@ type URLBuilder interface {
 
 // New creates a new DirIO API handler
 func New(
-	storage *storage.Storage,
-	metadata *metadata.Manager,
-	auth *auth.Authenticator,
+	diskStorage *storage.Storage,
+	metadataManager *metadata.Manager,
+	authHandler *auth.Authenticator,
 	urlBuilder URLBuilder,
 	policyEngine *policy.Engine,
 	adminKeys policy.AdminKeyChecker,
 ) *Handler {
-	serviceFactory := service.NewServiceFactory(storage, metadata, policyEngine)
+	serviceFactory := service.NewServiceFactory(diskStorage, metadataManager, policyEngine)
 	return &Handler{
-		auth:           auth,
+		authHandler:    authHandler,
 		serviceFactory: serviceFactory,
 		S3Handler: s3.New(
 			serviceFactory,

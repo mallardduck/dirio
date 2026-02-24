@@ -172,7 +172,7 @@ func (cr *ChunkedReader) readChunkHeader() error {
 	line = strings.TrimSuffix(line, "\r\n")
 	line = strings.TrimSuffix(line, "\n")
 
-	// Parse: size;chunk-signature=xxx
+	// Trim the header value - Parse: size;chunk-signature=xxx
 	parts := strings.SplitN(line, ";", 2)
 	if len(parts) < 1 {
 		return fmt.Errorf("%w: missing chunk size", ErrInvalidChunkFormat)

@@ -13,9 +13,9 @@ import (
 
 // ServicesFactory provides access to all service instances
 type ServicesFactory struct {
-	storage      *storage.Storage
-	metadata     *metadata.Manager
-	policyEngine *policyEngine.Engine
+	diskStorage     *storage.Storage
+	metadataManager *metadata.Manager
+	policyEngine    *policyEngine.Engine
 
 	// The actual services
 	userService           *user.Service
@@ -26,16 +26,16 @@ type ServicesFactory struct {
 }
 
 // NewServiceFactory creates a new service factory with dependency injection
-func NewServiceFactory(storage *storage.Storage, metadata *metadata.Manager, engine *policyEngine.Engine) *ServicesFactory {
+func NewServiceFactory(diskStorage *storage.Storage, metadataManager *metadata.Manager, engine *policyEngine.Engine) *ServicesFactory {
 	return &ServicesFactory{
-		storage:               storage,
-		metadata:              metadata,
+		diskStorage:           diskStorage,
+		metadataManager:       metadataManager,
 		policyEngine:          engine,
-		userService:           user.NewService(metadata),
-		policyService:         policy.NewService(metadata),
-		s3Service:             s3.NewService(storage, metadata, engine),
-		groupService:          group.NewService(metadata),
-		serviceAccountService: serviceaccount.NewService(metadata),
+		userService:           user.NewService(metadataManager),
+		policyService:         policy.NewService(metadataManager),
+		s3Service:             s3.NewService(diskStorage, metadataManager, engine),
+		groupService:          group.NewService(metadataManager),
+		serviceAccountService: serviceaccount.NewService(metadataManager),
 	}
 }
 
@@ -54,9 +54,9 @@ func (f *ServicesFactory) S3() *s3.Service {
 	return f.s3Service
 }
 
-// Metadata returns the metadata manager for direct admin access.
+// Metadata returns the metadataManager manager for direct admin access.
 func (f *ServicesFactory) Metadata() *metadata.Manager {
-	return f.metadata
+	return f.metadataManager
 }
 
 // PolicyEngine returns the policy evaluation engine.

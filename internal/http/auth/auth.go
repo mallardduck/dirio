@@ -26,7 +26,7 @@ var (
 
 // Authenticator handles authentication and authorization
 type Authenticator struct {
-	metadata *metadata.Manager
+	metadataManager *metadata.Manager
 
 	mu            sync.RWMutex
 	rootAccessKey string
@@ -39,11 +39,11 @@ type Authenticator struct {
 }
 
 // New creates a new authenticator with primary root credentials
-func New(metadata *metadata.Manager, rootAccessKey, rootSecretKey string) *Authenticator {
+func New(metadataManager *metadata.Manager, rootAccessKey, rootSecretKey string) *Authenticator {
 	return &Authenticator{
-		metadata:      metadata,
-		rootAccessKey: rootAccessKey,
-		rootSecretKey: rootSecretKey,
+		metadataManager: metadataManager,
+		rootAccessKey:   rootAccessKey,
+		rootSecretKey:   rootSecretKey,
 	}
 }
 
@@ -117,7 +117,7 @@ func (a *Authenticator) ValidateCredentials(ctx context.Context, accessKey, secr
 	}
 
 	// Check user credentials (efficient single-user lookup)
-	user, err := a.metadata.GetUserByAccessKey(ctx, accessKey)
+	user, err := a.metadataManager.GetUserByAccessKey(ctx, accessKey)
 	if err != nil || user == nil {
 		return false
 	}
@@ -156,14 +156,14 @@ func (a *Authenticator) GetUserForAccessKey(ctx context.Context, accessKey strin
 	}
 
 	// Efficient single-user lookup
-	user, err := a.metadata.GetUserByAccessKey(ctx, accessKey)
+	user, err := a.metadataManager.GetUserByAccessKey(ctx, accessKey)
 	if err == nil {
 		return user, nil
 	}
 
 	// Fall back to service account lookup
 	if errors.Is(err, metadata.ErrUserNotFound) {
-		sa, saErr := a.metadata.GetServiceAccount(ctx, accessKey)
+		sa, saErr := a.metadataManager.GetServiceAccount(ctx, accessKey)
 		if saErr != nil {
 			// Return the original user-not-found error
 			return nil, err
@@ -269,7 +269,7 @@ func (a *Authenticator) AuthenticatePostPolicyRequest(r *http.Request) (*metadat
 // IsServiceAccount checks if the given access key belongs to a service account.
 // Returns the ServiceAccount and true if found, nil and false otherwise.
 func (a *Authenticator) IsServiceAccount(ctx context.Context, accessKey string) (*iam.ServiceAccount, bool) {
-	sa, err := a.metadata.GetServiceAccount(ctx, accessKey)
+	sa, err := a.metadataManager.GetServiceAccount(ctx, accessKey)
 	if err != nil {
 		return nil, false
 	}

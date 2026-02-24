@@ -84,7 +84,7 @@ func TestPutObject_ChunkedEncoding(t *testing.T) {
 	}
 
 	// Now retrieve the object to verify content was decoded correctly
-	getReq, err := http.NewRequest("GET", ts.ObjectURL("test-bucket", "chunked-test.txt"), nil)
+	getReq, err := http.NewRequest("GET", ts.ObjectURL("test-bucket", "chunked-test.txt"), http.NoBody)
 	require.NoError(t, err)
 	ts.SignRequest(getReq, nil)
 
@@ -133,7 +133,7 @@ func TestPutObject_MultipleChunks(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Verify content
-	getReq, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "multi-chunk.txt"), nil)
+	getReq, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "multi-chunk.txt"), http.NoBody)
 	ts.SignRequest(getReq, nil)
 
 	getResp, err := http.DefaultClient.Do(getReq)
@@ -169,7 +169,7 @@ func TestPutObject_LargeChunkedData(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Verify size matches expected (1024 bytes, not 1024 + chunk overhead)
-	headReq, _ := http.NewRequest("HEAD", ts.ObjectURL("test-bucket", "large-chunk.txt"), nil)
+	headReq, _ := http.NewRequest("HEAD", ts.ObjectURL("test-bucket", "large-chunk.txt"), http.NoBody)
 	ts.SignRequest(headReq, nil)
 
 	headResp, err := http.DefaultClient.Do(headReq)
@@ -180,7 +180,7 @@ func TestPutObject_LargeChunkedData(t *testing.T) {
 	assert.Equal(t, "1024", contentLength, "Content-Length should be 1024, not including chunk overhead")
 
 	// Verify actual content
-	getReq, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "large-chunk.txt"), nil)
+	getReq, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "large-chunk.txt"), http.NoBody)
 	ts.SignRequest(getReq, nil)
 
 	getResp, err := http.DefaultClient.Do(getReq)
@@ -214,7 +214,7 @@ func TestPutObject_NonChunkedStillWorks(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Verify content
-	getReq, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "normal.txt"), nil)
+	getReq, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "normal.txt"), http.NoBody)
 	ts.SignRequest(getReq, nil)
 
 	getResp, err := http.DefaultClient.Do(getReq)
@@ -247,7 +247,7 @@ func TestPutObject_EmptyChunkedUpload(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Verify empty content
-	getReq, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "empty.txt"), nil)
+	getReq, _ := http.NewRequest("GET", ts.ObjectURL("test-bucket", "empty.txt"), http.NoBody)
 	ts.SignRequest(getReq, nil)
 
 	getResp, err := http.DefaultClient.Do(getReq)

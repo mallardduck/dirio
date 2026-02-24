@@ -4,6 +4,7 @@ package auth
 
 import (
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -18,7 +19,7 @@ func TestAWSCLICompatibility(t *testing.T) {
 	region := consts.DefaultBucketLocation
 
 	// Create a test request similar to what AWS CLI would send
-	req := httptest.NewRequest("GET", "http://localhost:9000/", nil)
+	req := httptest.NewRequest("GET", "http://localhost:9000/", http.NoBody)
 
 	// AWS CLI sets these headers
 	timestamp := time.Date(2026, 1, 23, 12, 0, 0, 0, time.UTC)

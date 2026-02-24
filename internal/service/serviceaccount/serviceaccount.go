@@ -126,7 +126,7 @@ func (s *Service) Update(ctx context.Context, accessKey string, req *UpdateServi
 	}
 
 	if req.Status != nil {
-		if err := (*req.Status).Validate(); err != nil {
+		if err := req.Status.Validate(); err != nil {
 			return nil, svcerrors.NewValidationError("Status", err.Error())
 		}
 		sa.Status = *req.Status

@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -357,7 +358,7 @@ func (ts *TestServer) ObjectURL(bucket, key string) string {
 func (ts *TestServer) DataPath(parts ...string) string {
 	joined := ts.DataDir
 	for _, p := range parts {
-		joined = joined + string(os.PathSeparator) + p
+		joined = filepath.Join(joined, p)
 	}
 	return joined
 }
@@ -418,6 +419,6 @@ func FindFreePort(t *testing.T) int {
 
 // DrainAndClose discards the response body and closes it.
 func DrainAndClose(resp *http.Response) {
-	io.Copy(io.Discard, resp.Body) //nolint:errcheck
+	_, _ = io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 }

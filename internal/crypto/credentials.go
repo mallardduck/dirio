@@ -25,18 +25,18 @@ const (
 )
 
 // GenerateDirIOKey creates a formatted Access Key and Secret Key pair
-func GenerateDirIOKey(prefix KeyPrefix) (string, string, error) {
-	accessID, err := generateRandomString(string(prefix), charset, accessKeyLength)
+func GenerateDirIOKey(prefix KeyPrefix) (accessKey, secretKey string, err error) {
+	accessKey, err = generateRandomString(string(prefix), charset, accessKeyLength)
 	if err != nil {
 		return "", "", err
 	}
 
-	secretKey, err := generateRandomString("", secretCharset, secretKeyLength)
+	secretKey, err = generateRandomString("", secretCharset, secretKeyLength)
 	if err != nil {
 		return "", "", err
 	}
 
-	return accessID, secretKey, nil
+	return accessKey, secretKey, nil
 }
 
 func generateRandomString(prefix, alphabet string, length int) (string, error) {

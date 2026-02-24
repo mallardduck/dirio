@@ -204,7 +204,7 @@ func evaluateMultiResourceAction(
 	r *http.Request,
 	conditions *ConditionContext,
 	varCtx *variables.Context,
-	metadata *metadata.Manager,
+	metadataManager *metadata.Manager,
 ) Decision {
 	// Parse source from X-Amz-Copy-Source header
 	sourceBucket, sourceKey := parseCopySource(r)
@@ -216,7 +216,7 @@ func evaluateMultiResourceAction(
 	}
 
 	// Fetch ownership for source resource
-	sourceBucketOwnerUUID, sourceObjectOwnerUUID := fetchOwnership(r.Context(), metadata, sourceBucket, sourceKey)
+	sourceBucketOwnerUUID, sourceObjectOwnerUUID := fetchOwnership(r.Context(), metadataManager, sourceBucket, sourceKey)
 
 	// Check source permission (GetObject)
 	sourceCtx := &RequestContext{
@@ -241,7 +241,7 @@ func evaluateMultiResourceAction(
 	}
 
 	// Fetch ownership for destination resource
-	destBucketOwnerUUID, destObjectOwnerUUID := fetchOwnership(r.Context(), metadata, destBucket, destKey)
+	destBucketOwnerUUID, destObjectOwnerUUID := fetchOwnership(r.Context(), metadataManager, destBucket, destKey)
 
 	// Check destination permission (PutObject)
 	destCtx := &RequestContext{

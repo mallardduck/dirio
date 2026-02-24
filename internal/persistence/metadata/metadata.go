@@ -123,22 +123,22 @@ func New(rootFS billy.Filesystem) (*Manager, error) {
 	}
 
 	// Create subdirectories
-	if err := metadataFS.MkdirAll("buckets", 0755); err != nil {
+	if err := metadataFS.MkdirAll("buckets", 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create buckets directory: %w", err)
 	}
-	if err := metadataFS.MkdirAll("iam/users", 0755); err != nil {
+	if err := metadataFS.MkdirAll("iam/users", 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create IAM users directory: %w", err)
 	}
-	if err := metadataFS.MkdirAll("iam/policies", 0755); err != nil {
+	if err := metadataFS.MkdirAll("iam/policies", 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create IAM policies directory: %w", err)
 	}
-	if err := metadataFS.MkdirAll("objects", 0755); err != nil {
+	if err := metadataFS.MkdirAll("objects", 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create objects directory: %w", err)
 	}
-	if err := metadataFS.MkdirAll("iam/groups", 0755); err != nil {
+	if err := metadataFS.MkdirAll("iam/groups", 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create IAM groups directory: %w", err)
 	}
-	if err := metadataFS.MkdirAll("iam/service-accounts", 0755); err != nil {
+	if err := metadataFS.MkdirAll("iam/service-accounts", 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create IAM service-accounts directory: %w", err)
 	}
 
@@ -291,7 +291,7 @@ func (m *Manager) PutObjectMetadata(ctx context.Context, bucket, key string, met
 
 	// Create parent directories
 	dir := filepath.Dir(metaPath)
-	if err := m.metadataFS.MkdirAll(dir, 0755); err != nil {
+	if err := m.metadataFS.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create metadata directory: %w", err)
 	}
 

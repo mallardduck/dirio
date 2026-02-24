@@ -237,7 +237,7 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (bool, error) {
 
 // getImportState retrieves the import state
 func (m *Manager) getImportState() (*ImportState, error) {
-	data, err := util.ReadFile(m.metadataFS, ".import-state")
+	importData, err := util.ReadFile(m.metadataFS, ".import-state")
 	if err != nil {
 		if isNotExist(err) {
 			return &ImportState{}, nil
@@ -246,7 +246,7 @@ func (m *Manager) getImportState() (*ImportState, error) {
 	}
 
 	var state ImportState
-	if err := jsonutil.Unmarshal(data, &state); err != nil {
+	if err := jsonutil.Unmarshal(importData, &state); err != nil {
 		return nil, err
 	}
 

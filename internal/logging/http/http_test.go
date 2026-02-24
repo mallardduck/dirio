@@ -19,7 +19,7 @@ func TestPrepareAccessLogMiddleware(t *testing.T) {
 		var logBuf bytes.Buffer
 		logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
 
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		rec := httptest.NewRecorder()
 
 		// Add trace ID so we can verify context-aware logging
@@ -65,7 +65,7 @@ func TestPrepareAccessLogMiddleware(t *testing.T) {
 		var logBuf bytes.Buffer
 		logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
 
-		req := httptest.NewRequest("GET", "/bucket?list-type=2&prefix=test/", nil)
+		req := httptest.NewRequest("GET", "/bucket?list-type=2&prefix=test/", http.NoBody)
 		rec := httptest.NewRecorder()
 
 		handler := PrepareAccessLogMiddleware(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +94,7 @@ func TestPrepareAccessLogMiddleware(t *testing.T) {
 		var logBuf bytes.Buffer
 		logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
 
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		rec := httptest.NewRecorder()
 
 		handler := PrepareAccessLogMiddleware(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +119,7 @@ func TestPrepareAccessLogMiddleware(t *testing.T) {
 		var logBuf bytes.Buffer
 		logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
 
-		req := httptest.NewRequest("GET", "/", nil)
+		req := httptest.NewRequest("GET", "/", http.NoBody)
 		rec := httptest.NewRecorder()
 
 		handler := PrepareAccessLogMiddleware(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -152,7 +152,7 @@ func TestPrepareAccessLogMiddleware(t *testing.T) {
 		var logBuf bytes.Buffer
 		logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
 
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		rec := httptest.NewRecorder()
 
 		handler := PrepareAccessLogMiddleware(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +189,7 @@ func TestPrepareAccessLogMiddleware(t *testing.T) {
 		var logBuf bytes.Buffer
 		logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
 
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		rec := httptest.NewRecorder()
 
 		// Chain Timing middleware first, then logging middleware

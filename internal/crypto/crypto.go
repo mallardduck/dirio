@@ -15,7 +15,7 @@
 //     deployments.
 //
 //  2. Keyring file at <dataDir>/.dirio/keyring — auto-created on first run
-//     with a randomly generated key (permissions 0600). Back this file up
+//     with a randomly generated key (permissions 0o600). Back this file up
 //     separately from the data directory; losing it means encrypted credentials
 //     cannot be recovered without key rotation.
 //
@@ -168,13 +168,13 @@ func loadOrCreateKeyring(dataDir string) (current []byte, previous [][]byte, err
 
 	// Ensure .dirio directory exists (restrictive permissions).
 	dirPath := filepath.Join(dataDir, ".dirio")
-	if err := os.MkdirAll(dirPath, 0700); err != nil {
+	if err := os.MkdirAll(dirPath, 0o700); err != nil {
 		return nil, nil, fmt.Errorf("create %s: %w", dirPath, err)
 	}
 
 	// Write keyring file — owner read/write only.
 	encoded := encodeKey(key) + "\n"
-	if err := os.WriteFile(keyringPath, []byte(encoded), 0600); err != nil {
+	if err := os.WriteFile(keyringPath, []byte(encoded), 0o600); err != nil {
 		return nil, nil, fmt.Errorf("write %s: %w", keyringPath, err)
 	}
 
@@ -225,10 +225,10 @@ func RotateKeyring(dataDir string) (string, error) {
 	}
 
 	dirPath := filepath.Join(dataDir, ".dirio")
-	if err := os.MkdirAll(dirPath, 0700); err != nil {
+	if err := os.MkdirAll(dirPath, 0o700); err != nil {
 		return "", fmt.Errorf("create %s: %w", dirPath, err)
 	}
-	if err := os.WriteFile(keyringPath, []byte(content), 0600); err != nil {
+	if err := os.WriteFile(keyringPath, []byte(content), 0o600); err != nil {
 		return "", fmt.Errorf("write keyring: %w", err)
 	}
 

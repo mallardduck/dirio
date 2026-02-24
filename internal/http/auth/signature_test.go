@@ -3,6 +3,7 @@ package auth
 import (
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -186,7 +187,7 @@ func TestBuildCanonicalHeaders(t *testing.T) {
 }
 
 func TestBuildCanonicalRequest(t *testing.T) {
-	req, _ := http.NewRequest("GET", "https://examplebucket.s3.amazonaws.com/test.txt", nil)
+	req, _ := http.NewRequest("GET", "https://examplebucket.s3.amazonaws.com/test.txt", http.NoBody)
 	req.Header.Set("Host", "examplebucket.s3.amazonaws.com")
 	req.Header.Set("X-Amz-Date", "20130524T000000Z")
 
@@ -196,16 +197,16 @@ func TestBuildCanonicalRequest(t *testing.T) {
 	canonical := BuildCanonicalRequest(req, signedHeaders, payloadHash)
 
 	// Verify it contains the expected components
-	if !containsString(canonical, "GET") {
+	if !strings.Contains(canonical, "GET") {
 		t.Error("Canonical request should contain HTTP method")
 	}
-	if !containsString(canonical, "/test.txt") {
+	if !strings.Contains(canonical, "/test.txt") {
 		t.Error("Canonical request should contain URI path")
 	}
-	if !containsString(canonical, "host;x-amz-date") {
+	if !strings.Contains(canonical, "host;x-amz-date") {
 		t.Error("Canonical request should contain signed headers")
 	}
-	if !containsString(canonical, payloadHash) {
+	if !strings.Contains(canonical, payloadHash) {
 		t.Error("Canonical request should contain payload hash")
 	}
 }
@@ -218,13 +219,13 @@ func TestBuildStringToSign(t *testing.T) {
 	stringToSign := BuildStringToSign(timestamp, region, canonicalRequest)
 
 	// Verify it contains the expected components
-	if !containsString(stringToSign, "AWS4-HMAC-SHA256") {
+	if !strings.Contains(stringToSign, "AWS4-HMAC-SHA256") {
 		t.Error("String to sign should contain algorithm")
 	}
-	if !containsString(stringToSign, "20130524T000000Z") {
+	if !strings.Contains(stringToSign, "20130524T000000Z") {
 		t.Error("String to sign should contain timestamp")
 	}
-	if !containsString(stringToSign, "20130524/us-east-1/s3/aws4_request") {
+	if !strings.Contains(stringToSign, "20130524/us-east-1/s3/aws4_request") {
 		t.Error("String to sign should contain credential scope")
 	}
 }
@@ -255,7 +256,7 @@ func TestVerifySignature(t *testing.T) {
 	region := consts.DefaultBucketLocation
 
 	// Create a test request
-	req, _ := http.NewRequest("GET", "https://examplebucket.s3.amazonaws.com/test.txt", nil)
+	req, _ := http.NewRequest("GET", "https://examplebucket.s3.amazonaws.com/test.txt", http.NoBody)
 	req.Header.Set("Host", "examplebucket.s3.amazonaws.com")
 	req.Header.Set("X-Amz-Date", timestamp.Format(iso8601TimeFormat))
 	req.Header.Set(consts.HeaderContentSHA256, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
@@ -307,7 +308,7 @@ func TestGetAccessKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req, _ := http.NewRequest("GET", "https://example.com", nil)
+			req, _ := http.NewRequest("GET", "https://example.com", http.NoBody)
 			if tt.authHeader != "" {
 				req.Header.Set("Authorization", tt.authHeader)
 			}
@@ -322,9 +323,4 @@ func TestGetAccessKey(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Helper function
-func containsString(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && (s == substr || len(s) >= len(substr) && (s[0:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsString(s[1:len(s)-1], substr)))
 }

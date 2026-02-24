@@ -71,14 +71,14 @@ func Example_migration() {
 	// if err != nil {
 	//     return err
 	// }
-	// util.WriteFile(fs, "user.json", userData, 0644)
+	// util.WriteFile(fs, "user.json", userData, 0o644)
 	//
 	// // Other files use Marshal
 	// bucketData, err := json.Marshal(bucket)
 	// if err != nil {
 	//     return err
 	// }
-	// util.WriteFile(fs, "bucket.json", bucketData, 0644)
+	// util.WriteFile(fs, "bucket.json", bucketData, 0o644)
 
 	// NEW CODE (consistent, automatic):
 	fs := memfs.New()

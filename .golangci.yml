@@ -3,6 +3,8 @@ run:
   build-tags:
     - integration
   tests: true
+  skip-dirs:
+    - console/components
 linters:
   enable:
     - depguard
@@ -15,7 +17,13 @@ linters:
     - nilerr
     - nilnil
     - nakedret
+    - gocritic
+    - exhaustive
   settings:
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
     depguard:
       rules:
         console-no-internal:
@@ -57,6 +65,8 @@ linters:
       - third_party$
       - builtin$
       - examples$
+      - console/components
+      - console/utils/templui.go
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0

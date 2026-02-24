@@ -66,7 +66,7 @@ func TestPutObject_LargeChunkedUpload(t *testing.T) {
 	t.Logf("Upload successful")
 
 	// Download and verify content
-	getReq, err := http.NewRequest("GET", ts.ObjectURL("test-bucket", "large-chunked.dat"), nil)
+	getReq, err := http.NewRequest("GET", ts.ObjectURL("test-bucket", "large-chunked.dat"), http.NoBody)
 	require.NoError(t, err)
 	ts.SignRequest(getReq, nil)
 

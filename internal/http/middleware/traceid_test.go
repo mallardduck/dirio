@@ -10,7 +10,7 @@ import (
 
 func TestTraceID(t *testing.T) {
 	t.Run("generates trace ID when not present", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		rec := httptest.NewRecorder()
 
 		var capturedID string
@@ -39,7 +39,7 @@ func TestTraceID(t *testing.T) {
 
 	t.Run("uses existing trace ID from header", func(t *testing.T) {
 		existingID := "existing-trace-id-456"
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		req.Header.Set(trace.TraceIDHeader, existingID)
 		rec := httptest.NewRecorder()
 
@@ -63,7 +63,7 @@ func TestTraceID(t *testing.T) {
 	})
 
 	t.Run("trace ID and request ID work together", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		rec := httptest.NewRecorder()
 
 		var capturedTraceID string

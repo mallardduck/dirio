@@ -85,7 +85,7 @@ func (s *Starter) Close() error {
 //
 // Shared between the serve and init commands.
 func Init(dataDir string) (*Starter, error) {
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return nil, fmt.Errorf("cannot create data directory: %w", err)
 	}
 

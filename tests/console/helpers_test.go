@@ -59,7 +59,7 @@ func (ts *TestServer) ConsoleURL(path string) string {
 // ConsoleGet makes a GET request to the console with the given session cookie.
 func (ts *TestServer) ConsoleGet(t *testing.T, path string, session *http.Cookie) *http.Response {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodGet, ts.ConsoleURL(path), nil)
+	req, err := http.NewRequest(http.MethodGet, ts.ConsoleURL(path), http.NoBody)
 	if err != nil {
 		t.Fatalf("build console GET request: %v", err)
 	}
@@ -108,7 +108,7 @@ func (ts *TestServer) LoginAs(t *testing.T, accessKey, secretKey string) *http.C
 	if err != nil {
 		t.Fatalf("login request: %v", err)
 	}
-	io.Copy(io.Discard, resp.Body) //nolint:errcheck
+	_, _ = io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 
 	if resp.StatusCode != http.StatusSeeOther {

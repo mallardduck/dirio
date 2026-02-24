@@ -17,17 +17,17 @@ func TestImport_WithObjectMetadata(t *testing.T) {
 
 	// Create minimal format.json
 	minioSys := filepath.Join(tmpDir, ".minio.sys")
-	require.NoError(t, os.MkdirAll(minioSys, 0755))
+	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 	_, formatJSON := formatJSONText()
-	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
 
 	// Create bucket directory structure
 	bucketsDir := filepath.Join(minioSys, "buckets", "test-bucket")
-	require.NoError(t, os.MkdirAll(bucketsDir, 0755))
+	require.NoError(t, os.MkdirAll(bucketsDir, 0o755))
 
 	// Create object metadata directory with fs.json
 	objectDir := filepath.Join(bucketsDir, "test-file.txt")
-	require.NoError(t, os.MkdirAll(objectDir, 0755))
+	require.NoError(t, os.MkdirAll(objectDir, 0o755))
 
 	// Create fs.json metadata
 	fsJSON := ObjectMetadata{
@@ -47,11 +47,11 @@ func TestImport_WithObjectMetadata(t *testing.T) {
 	}
 	fsJSONData, err := json.Marshal(fsJSON)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(objectDir, "fs.json"), fsJSONData, 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(objectDir, "fs.json"), fsJSONData, 0o644))
 
 	// Create another object with subdirectory path
 	subObjDir := filepath.Join(bucketsDir, "docs", "readme.md")
-	require.NoError(t, os.MkdirAll(subObjDir, 0755))
+	require.NoError(t, os.MkdirAll(subObjDir, 0o755))
 	fsJSON2 := ObjectMetadata{
 		Version: "1.0.2",
 		Meta: map[string]string{
@@ -61,7 +61,7 @@ func TestImport_WithObjectMetadata(t *testing.T) {
 	}
 	fsJSON2Data, err := json.Marshal(fsJSON2)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(subObjDir, "fs.json"), fsJSON2Data, 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(subObjDir, "fs.json"), fsJSON2Data, 0o644))
 
 	// Run import
 	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))

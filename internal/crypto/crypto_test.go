@@ -239,8 +239,8 @@ func TestInitCreatesKeyringOnFirstRun(t *testing.T) {
 	// Permission check is Unix-only; Windows uses ACLs and ignores mode bits.
 	if runtime.GOOS != "windows" {
 		info, _ := os.Stat(keyringPath)
-		if info.Mode().Perm() != 0600 {
-			t.Errorf("expected keyring permissions 0600, got %v", info.Mode().Perm())
+		if info.Mode().Perm() != 0o600 {
+			t.Errorf("expected keyring permissions 0o600, got %v", info.Mode().Perm())
 		}
 	}
 }
@@ -252,10 +252,10 @@ func TestInitLoadsExistingKeyring(t *testing.T) {
 
 	// Write a known key to the keyring.
 	keyringDir := filepath.Join(dir, ".dirio")
-	if err := os.MkdirAll(keyringDir, 0700); err != nil {
+	if err := os.MkdirAll(keyringDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(keyringDir, "keyring"), []byte(testKeyB64+"\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(keyringDir, "keyring"), []byte(testKeyB64+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -284,11 +284,11 @@ func TestInitLoadsKeyringWithPreviousKeys(t *testing.T) {
 
 	// Keyring with current + one previous key.
 	keyringDir := filepath.Join(dir, ".dirio")
-	if err := os.MkdirAll(keyringDir, 0700); err != nil {
+	if err := os.MkdirAll(keyringDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	content := altKeyB64 + "\n" + testKeyB64 + "\n"
-	if err := os.WriteFile(filepath.Join(keyringDir, "keyring"), []byte(content), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(keyringDir, "keyring"), []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

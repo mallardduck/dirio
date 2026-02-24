@@ -80,10 +80,10 @@ func (s *Storage) GetObject(ctx context.Context, bucket, key string) (*Object, e
 		return nil, err
 	}
 
-	// Get object metadata
-	meta, err := s.metadata.GetObjectMetadata(ctx, bucket, key)
+	// Get object metadataManager
+	meta, err := s.metadataManager.GetObjectMetadata(ctx, bucket, key)
 	if err != nil {
-		// If no metadata, create basic metadata
+		// If no metadataManager, create basic metadataManager
 		etag := s.calculateETag(bucketFS, objectPath)
 		meta = &metadata.ObjectMetadata{
 			Version:      metadata.ObjectMetadataVersion,
@@ -141,7 +141,7 @@ func (s *Storage) PutObject(ctx context.Context, bucket, key string, content io.
 	// Create parent directories
 	dir := filepath.Dir(objectPath)
 	if dir != "." && dir != "" {
-		if err := bucketFS.MkdirAll(dir, 0755); err != nil {
+		if err := bucketFS.MkdirAll(dir, 0o755); err != nil {
 			return "", fmt.Errorf("failed to create directory: %w", err)
 		}
 	}
@@ -214,7 +214,7 @@ func (s *Storage) PutObject(ctx context.Context, bucket, key string, content io.
 	}
 	// Note: nil owner = admin-only access (if created by admin) or anonymous (if no user context)
 
-	// Store object metadata
+	// Store object metadataManager
 	meta := &metadata.ObjectMetadata{
 		Version:        metadata.ObjectMetadataVersion,
 		Owner:          ownerUUID, // nil for admin, UUID pointer for regular user
@@ -224,21 +224,21 @@ func (s *Storage) PutObject(ctx context.Context, bucket, key string, content io.
 		LastModified:   time.Now(),
 		CustomMetadata: customMetadata,
 	}
-	if err := s.metadata.PutObjectMetadata(ctx, bucket, key, meta); err != nil {
-		// If custom metadata was provided, fail the operation since user's explicit request cannot be fulfilled
-		// Basic metadata (ContentType, Size, ETag) can be regenerated if needed
+	if err := s.metadataManager.PutObjectMetadata(ctx, bucket, key, meta); err != nil {
+		// If custom metadataManager was provided, fail the operation since user's explicit request cannot be fulfilled
+		// Basic metadataManager (ContentType, Size, ETag) can be regenerated if needed
 		if len(customMetadata) > 0 {
 			// Clean up the object file to maintain atomicity (S3 API contract: PutObject succeeds completely or not at all)
-			// This prevents orphaned objects with missing custom metadata
+			// This prevents orphaned objects with missing custom metadataManager
 			if removeErr := bucketFS.Remove(objectPath); removeErr != nil {
-				s.log.Error("failed to remove object after metadata save failure - object may be orphaned",
+				s.log.Error("failed to remove object after metadataManager save failure - object may be orphaned",
 					"bucket", bucket, "key", key, "metadata_error", err, "cleanup_error", removeErr)
-				return "", fmt.Errorf("failed to save object metadata and failed to cleanup object file: metadata error: %w, cleanup error: %v", err, removeErr)
+				return "", fmt.Errorf("failed to save object metadataManager and failed to cleanup object file: metadataManager error: %w, cleanup error: %v", err, removeErr)
 			}
-			return "", fmt.Errorf("failed to save custom metadata (object upload rolled back to maintain consistency): %w", err)
+			return "", fmt.Errorf("failed to save custom metadataManager (object upload rolled back to maintain consistency): %w", err)
 		}
-		// Just log warning for basic metadata (can be regenerated)
-		s.log.Warn("failed to save object metadata", "bucket", bucket, "key", key, "error", err)
+		// Just log warning for basic metadataManager (can be regenerated)
+		s.log.Warn("failed to save object metadataManager", "bucket", bucket, "key", key, "error", err)
 	}
 
 	return etag, nil
@@ -251,7 +251,7 @@ func (rf readerFunc) Read(p []byte) (int, error) {
 	return rf(p)
 }
 
-// GetObjectMetadata retrieves metadata for an object
+// GetObjectMetadata retrieves metadataManager for an object
 func (s *Storage) GetObjectMetadata(ctx context.Context, bucket, key string) (*metadata.ObjectMetadata, error) {
 	// Check if context is already cancelled
 	if err := ctx.Err(); err != nil {
@@ -272,7 +272,7 @@ func (s *Storage) GetObjectMetadata(ctx context.Context, bucket, key string) (*m
 
 	// Check context before proceeding
 	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled before reading metadata: %w", err)
+		return nil, fmt.Errorf("context cancelled before reading metadataManager: %w", err)
 	}
 
 	// Get bucket filesystem
@@ -296,10 +296,10 @@ func (s *Storage) GetObjectMetadata(ctx context.Context, bucket, key string) (*m
 		return nil, ErrNoSuchKey
 	}
 
-	// Try to get metadata from metadata store
-	meta, err := s.metadata.GetObjectMetadata(ctx, bucket, key)
+	// Try to get metadataManager from metadataManager store
+	meta, err := s.metadataManager.GetObjectMetadata(ctx, bucket, key)
 	if err != nil {
-		// If no metadata, create basic metadata
+		// If no metadataManager, create basic metadataManager
 		etag := s.calculateETag(bucketFS, objectPath)
 		meta = &metadata.ObjectMetadata{
 			Version:      metadata.ObjectMetadataVersion,
@@ -363,9 +363,9 @@ func (s *Storage) DeleteObject(ctx context.Context, bucket, key string) error {
 		return err
 	}
 
-	// Delete metadata
-	if err := s.metadata.DeleteObjectMetadata(ctx, bucket, key); err != nil {
-		s.log.Error("failed to delete object metadata", "bucket", bucket, "key", key, "error", err)
+	// Delete metadataManager
+	if err := s.metadataManager.DeleteObjectMetadata(ctx, bucket, key); err != nil {
+		s.log.Error("failed to delete object metadataManager", "bucket", bucket, "key", key, "error", err)
 	}
 
 	// Clean up empty parent directories
@@ -392,8 +392,8 @@ func (s *Storage) cleanupEmptyDirs(bucketFS billy.Filesystem, dir string) error 
 }
 
 // calculateETag computes the ETag for a file
-func (s *Storage) calculateETag(bucketFS billy.Filesystem, path string) string {
-	file, err := bucketFS.Open(path)
+func (s *Storage) calculateETag(bucketFS billy.Filesystem, filePath string) string {
+	file, err := bucketFS.Open(filePath)
 	if err != nil {
 		return ""
 	}

@@ -9,7 +9,7 @@ import (
 
 func main() {
 	// Recreate the exact request from AWS CLI
-	req, _ := http.NewRequest("GET", "http://localhost:19000/", nil)
+	req, _ := http.NewRequest("GET", "http://localhost:19000/", http.NoBody)
 
 	// Set the exact headers from AWS CLI output
 	req.Header.Set("Host", "localhost:19000")

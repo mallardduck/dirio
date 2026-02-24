@@ -95,6 +95,8 @@ func (e ErrorCode) String() string {
 // Description returns the error description
 func (e ErrorCode) Description() string {
 	switch e {
+	case ErrCodeNone:
+		return ""
 	case ErrCodeInternalError:
 		return "We encountered an internal error. Please try again."
 	case ErrCodeNoSuchBucket:
@@ -139,6 +141,8 @@ func (e ErrorCode) Description() string {
 // HTTPStatus returns the HTTP status code for the error
 func (e ErrorCode) HTTPStatus() int {
 	switch e {
+	case ErrCodeNone:
+		return http.StatusTeapot
 	case ErrCodeNoSuchBucket, ErrCodeNoSuchKey:
 		return http.StatusNotFound
 	case ErrCodeBucketAlreadyExists:
@@ -157,6 +161,8 @@ func (e ErrorCode) HTTPStatus() int {
 		return http.StatusBadRequest
 	case ErrCodeNotImplemented:
 		return http.StatusNotImplemented
+	case ErrCodeInternalError:
+		fallthrough //nolint:gocritic // emptyFallthrough: needed for exhaustive compliance
 	default:
 		return http.StatusInternalServerError
 	}

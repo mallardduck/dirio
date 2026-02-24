@@ -231,7 +231,7 @@ func TestMarshalToFile_FileSystemError(t *testing.T) {
 	fs := memfs.New()
 
 	// Create a directory with the same name to cause a conflict
-	err := fs.MkdirAll("test.json", 0755)
+	err := fs.MkdirAll("test.json", 0o755)
 	require.NoError(t, err)
 
 	data := testStruct{Name: "test"}

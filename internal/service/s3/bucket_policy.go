@@ -16,7 +16,7 @@ type PutBucketPolicyRequest struct {
 // PutBucketPolicy sets or updates a bucket policy
 func (s *Service) PutBucketPolicy(ctx context.Context, req *PutBucketPolicyRequest) error {
 	// Check if bucket exists
-	exists, err := s.storage.BucketExists(ctx, req.Bucket)
+	exists, err := s.diskStorage.BucketExists(ctx, req.Bucket)
 	if err != nil {
 		return err
 	}
@@ -24,8 +24,8 @@ func (s *Service) PutBucketPolicy(ctx context.Context, req *PutBucketPolicyReque
 		return s3types.ErrBucketNotFound
 	}
 
-	// Store the policy in metadata
-	if err := s.metadata.SetBucketPolicy(ctx, req.Bucket, req.PolicyDocument); err != nil {
+	// Store the policy in metadataManager
+	if err := s.metadataManager.SetBucketPolicy(ctx, req.Bucket, req.PolicyDocument); err != nil {
 		return err
 	}
 
@@ -40,7 +40,7 @@ func (s *Service) PutBucketPolicy(ctx context.Context, req *PutBucketPolicyReque
 // GetBucketPolicy retrieves the bucket policy
 func (s *Service) GetBucketPolicy(ctx context.Context, bucket string) (*iam.PolicyDocument, error) {
 	// Check if bucket exists
-	exists, err := s.storage.BucketExists(ctx, bucket)
+	exists, err := s.diskStorage.BucketExists(ctx, bucket)
 	if err != nil {
 		return nil, err
 	}
@@ -48,8 +48,8 @@ func (s *Service) GetBucketPolicy(ctx context.Context, bucket string) (*iam.Poli
 		return nil, s3types.ErrBucketNotFound
 	}
 
-	// Get the policy from metadata
-	policy, err := s.metadata.GetBucketPolicy(ctx, bucket)
+	// Get the policy from metadataManager
+	policy, err := s.metadataManager.GetBucketPolicy(ctx, bucket)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func (s *Service) GetBucketPolicy(ctx context.Context, bucket string) (*iam.Poli
 // DeleteBucketPolicy removes the bucket policy
 func (s *Service) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	// Check if bucket exists
-	exists, err := s.storage.BucketExists(ctx, bucket)
+	exists, err := s.diskStorage.BucketExists(ctx, bucket)
 	if err != nil {
 		return err
 	}
@@ -71,8 +71,8 @@ func (s *Service) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 		return s3types.ErrBucketNotFound
 	}
 
-	// Delete the policy from metadata
-	if err := s.metadata.DeleteBucketPolicy(ctx, bucket); err != nil {
+	// Delete the policy from metadataManager
+	if err := s.metadataManager.DeleteBucketPolicy(ctx, bucket); err != nil {
 		return err
 	}
 

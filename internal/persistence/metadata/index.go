@@ -22,7 +22,7 @@ const (
 // openDB opens the bbolt database at dbPath and ensures the two index buckets exist.
 // The caller is responsible for calling db.Close() when done.
 func openDB(dbPath string) (*bbolt.DB, error) {
-	db, err := bbolt.Open(dbPath, 0600, &bbolt.Options{Timeout: 1 * time.Second})
+	db, err := bbolt.Open(dbPath, 0o600, &bbolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open bolt db: %w", err)
 	}

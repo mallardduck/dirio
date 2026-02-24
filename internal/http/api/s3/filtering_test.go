@@ -200,7 +200,7 @@ func TestBuildConditionContext(t *testing.T) {
 		{
 			name: "basic HTTP request",
 			setupRequest: func() *http.Request {
-				req := httptest.NewRequest("GET", "http://example.com", nil)
+				req := httptest.NewRequest("GET", "http://example.com", http.NoBody)
 				req.Header.Set("User-Agent", "test-agent")
 				req.RemoteAddr = "192.168.1.1:1234"
 				return req
@@ -212,7 +212,7 @@ func TestBuildConditionContext(t *testing.T) {
 		{
 			name: "request with X-Forwarded-For",
 			setupRequest: func() *http.Request {
-				req := httptest.NewRequest("GET", "http://example.com", nil)
+				req := httptest.NewRequest("GET", "http://example.com", http.NoBody)
 				req.Header.Set("X-Forwarded-For", "10.0.0.1, 10.0.0.2")
 				req.RemoteAddr = "192.168.1.1:1234"
 				return req
@@ -291,7 +291,7 @@ func TestExtractClientIP(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "http://example.com", nil)
+			req := httptest.NewRequest("GET", "http://example.com", http.NoBody)
 			req.RemoteAddr = tt.remoteAddr
 			if tt.xForwarded != "" {
 				req.Header.Set("X-Forwarded-For", tt.xForwarded)

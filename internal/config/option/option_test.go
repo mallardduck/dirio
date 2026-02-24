@@ -12,17 +12,17 @@ func TestNewOption(t *testing.T) {
 	options = make(map[string]RegisteredOption)
 
 	t.Run("creates option with defaults", func(t *testing.T) {
-		assert := assert.New(t)
+
 		opt := NewOption("test-option", "default-value")
 
-		assert.Equal("test-option", opt.GetName())
-		assert.Equal("default-value", opt.GetDefaultAsString())
-		assert.Equal("DIRIO_TEST_OPTION", opt.GetEnvKey())
-		assert.Equal("test-option", opt.GetFlagKey())
-		assert.Equal("test_option", opt.GetViperKey())
-		assert.True(opt.AllowsEnv())
-		assert.True(opt.AllowsFlag())
-		assert.True(opt.AllowsViper())
+		assert.Equal(t, "test-option", opt.GetName())
+		assert.Equal(t, "default-value", opt.GetDefaultAsString())
+		assert.Equal(t, "DIRIO_TEST_OPTION", opt.GetEnvKey())
+		assert.Equal(t, "test-option", opt.GetFlagKey())
+		assert.Equal(t, "test_option", opt.GetViperKey())
+		assert.True(t, opt.AllowsEnv())
+		assert.True(t, opt.AllowsFlag())
+		assert.True(t, opt.AllowsViper())
 	})
 
 	t.Run("registers option globally", func(t *testing.T) {
@@ -34,7 +34,7 @@ func TestNewOption(t *testing.T) {
 	})
 
 	t.Run("custom keys via functional options", func(t *testing.T) {
-		assert := assert.New(t)
+
 		options = make(map[string]RegisteredOption) // reset
 		opt := NewOption("custom-opt", "value",
 			WithEnvKey("CUSTOM_ENV_KEY"),
@@ -42,27 +42,27 @@ func TestNewOption(t *testing.T) {
 			WithViperKey("custom_viper"),
 		)
 
-		assert.Equal("CUSTOM_ENV_KEY", opt.GetEnvKey())
-		assert.Equal("custom-flag", opt.GetFlagKey())
-		assert.Equal("custom_viper", opt.GetViperKey())
+		assert.Equal(t, "CUSTOM_ENV_KEY", opt.GetEnvKey())
+		assert.Equal(t, "custom-flag", opt.GetFlagKey())
+		assert.Equal(t, "custom_viper", opt.GetViperKey())
 	})
 
 	t.Run("WithoutEnv disables env", func(t *testing.T) {
-		assert := assert.New(t)
+
 		options = make(map[string]RegisteredOption) // reset
 		opt := NewOption("no-env-opt", "value", WithoutEnv)
 
-		assert.False(opt.AllowsEnv())
-		assert.Empty(opt.GetEnvKey())
+		assert.False(t, opt.AllowsEnv())
+		assert.Empty(t, opt.GetEnvKey())
 	})
 
 	t.Run("WithoutFlag disables flag", func(t *testing.T) {
-		assert := assert.New(t)
+
 		options = make(map[string]RegisteredOption) // reset
 		opt := NewOption("no-flag-opt", "value", WithoutFlag)
 
-		assert.False(opt.AllowsFlag())
-		assert.Empty(opt.GetFlagKey())
+		assert.False(t, opt.AllowsFlag())
+		assert.Empty(t, opt.GetFlagKey())
 	})
 }
 
@@ -144,20 +144,20 @@ func TestAllEnvValues(t *testing.T) {
 	defer os.Unsetenv("DIRIO_OPT_TWO")
 
 	t.Run("AllEnvValues returns all env-enabled options", func(t *testing.T) {
-		assert := assert.New(t)
+
 		envVals := AllEnvValues()
 
-		assert.Len(envVals, 2) // opt-three is excluded
-		assert.Equal("value1", envVals["DIRIO_OPT_ONE"])
-		assert.Equal("value2", envVals["DIRIO_OPT_TWO"])
+		assert.Len(t, envVals, 2) // opt-three is excluded
+		assert.Equal(t, "value1", envVals["DIRIO_OPT_ONE"])
+		assert.Equal(t, "value2", envVals["DIRIO_OPT_TWO"])
 	})
 
 	t.Run("ConfiguredEnvValues returns only set values", func(t *testing.T) {
-		assert := assert.New(t)
+
 		os.Unsetenv("DIRIO_OPT_TWO") // unset one
 
 		envVals := ConfiguredEnvValues()
-		assert.Len(envVals, 1)
-		assert.Equal("value1", envVals["DIRIO_OPT_ONE"])
+		assert.Len(t, envVals, 1)
+		assert.Equal(t, "value1", envVals["DIRIO_OPT_ONE"])
 	})
 }

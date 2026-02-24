@@ -20,7 +20,7 @@ func TestDualAdminAccess(t *testing.T) {
 
 		// Test CLI credentials work
 		t.Run("CLI credentials authenticate", func(t *testing.T) {
-			req, err := http.NewRequest("GET", ts.URL("/"), nil)
+			req, err := http.NewRequest("GET", ts.URL("/"), http.NoBody)
 			require.NoError(t, err)
 			SignRequestWithCredentials(req, nil, "cli-admin", "cli-secret")
 
@@ -35,7 +35,7 @@ func TestDualAdminAccess(t *testing.T) {
 
 		// Test data config credentials work
 		t.Run("data config credentials authenticate", func(t *testing.T) {
-			req, err := http.NewRequest("GET", ts.URL("/"), nil)
+			req, err := http.NewRequest("GET", ts.URL("/"), http.NoBody)
 			require.NoError(t, err)
 			SignRequestWithCredentials(req, nil, "data-admin", "data-secret")
 
@@ -50,7 +50,7 @@ func TestDualAdminAccess(t *testing.T) {
 
 		// Test wrong credentials fail
 		t.Run("wrong credentials fail", func(t *testing.T) {
-			req, err := http.NewRequest("GET", ts.URL("/"), nil)
+			req, err := http.NewRequest("GET", ts.URL("/"), http.NoBody)
 			require.NoError(t, err)
 			SignRequestWithCredentials(req, nil, "wrong-key", "wrong-secret")
 
@@ -71,7 +71,7 @@ func TestDualAdminAccess(t *testing.T) {
 
 		// Test data config credentials work
 		t.Run("data config credentials authenticate", func(t *testing.T) {
-			req, err := http.NewRequest("GET", ts.URL("/"), nil)
+			req, err := http.NewRequest("GET", ts.URL("/"), http.NoBody)
 			require.NoError(t, err)
 			SignRequestWithCredentials(req, nil, "data-admin", "data-secret")
 
@@ -86,7 +86,7 @@ func TestDualAdminAccess(t *testing.T) {
 
 		// Test default CLI credentials do NOT work (security feature)
 		t.Run("default CLI credentials blocked", func(t *testing.T) {
-			req, err := http.NewRequest("GET", ts.URL("/"), nil)
+			req, err := http.NewRequest("GET", ts.URL("/"), http.NoBody)
 			require.NoError(t, err)
 			SignRequestWithCredentials(req, nil, "testaccess", "testsecret")
 
@@ -110,7 +110,7 @@ func TestDualAdminAccess(t *testing.T) {
 
 		// Test default credentials work (needed for first run)
 		t.Run("default credentials work initially", func(t *testing.T) {
-			req, err := http.NewRequest("GET", ts.URL("/"), nil)
+			req, err := http.NewRequest("GET", ts.URL("/"), http.NoBody)
 			require.NoError(t, err)
 			SignRequestWithCredentials(req, nil, "testaccess", "testsecret")
 
@@ -125,7 +125,7 @@ func TestDualAdminAccess(t *testing.T) {
 
 		// Verify we can create a bucket with default credentials
 		t.Run("can create bucket with defaults", func(t *testing.T) {
-			req, err := http.NewRequest("PUT", ts.BucketURL("test-bucket"), nil)
+			req, err := http.NewRequest("PUT", ts.BucketURL("test-bucket"), http.NoBody)
 			require.NoError(t, err)
 			SignRequestWithCredentials(req, nil, "testaccess", "testsecret")
 
@@ -147,7 +147,7 @@ func TestDualAdminAccess(t *testing.T) {
 
 		// CLI admin creates a bucket
 		t.Run("CLI admin creates bucket", func(t *testing.T) {
-			req, err := http.NewRequest("PUT", ts.BucketURL("cli-bucket"), nil)
+			req, err := http.NewRequest("PUT", ts.BucketURL("cli-bucket"), http.NoBody)
 			require.NoError(t, err)
 			SignRequestWithCredentials(req, nil, "cli-admin", "cli-secret")
 
@@ -160,7 +160,7 @@ func TestDualAdminAccess(t *testing.T) {
 
 		// Data admin creates a bucket
 		t.Run("data admin creates bucket", func(t *testing.T) {
-			req, err := http.NewRequest("PUT", ts.BucketURL("data-bucket"), nil)
+			req, err := http.NewRequest("PUT", ts.BucketURL("data-bucket"), http.NoBody)
 			require.NoError(t, err)
 			SignRequestWithCredentials(req, nil, "data-admin", "data-secret")
 
@@ -173,7 +173,7 @@ func TestDualAdminAccess(t *testing.T) {
 
 		// Both can list buckets
 		t.Run("CLI admin lists buckets", func(t *testing.T) {
-			req, err := http.NewRequest("GET", ts.URL("/"), nil)
+			req, err := http.NewRequest("GET", ts.URL("/"), http.NoBody)
 			require.NoError(t, err)
 			SignRequestWithCredentials(req, nil, "cli-admin", "cli-secret")
 
@@ -190,7 +190,7 @@ func TestDualAdminAccess(t *testing.T) {
 		})
 
 		t.Run("data admin lists buckets", func(t *testing.T) {
-			req, err := http.NewRequest("GET", ts.URL("/"), nil)
+			req, err := http.NewRequest("GET", ts.URL("/"), http.NoBody)
 			require.NoError(t, err)
 			SignRequestWithCredentials(req, nil, "data-admin", "data-secret")
 

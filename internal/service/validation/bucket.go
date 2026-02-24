@@ -84,11 +84,12 @@ func isIPAddress(s string) bool {
 	}
 
 	for _, part := range parts {
-		// Check if each part is numeric
-		if len(part) == 0 || len(part) > 3 {
+		// Check if each part is non-empty and correct character count
+		if part == "" || len(part) > 3 {
 			return false
 		}
 		for _, c := range part {
+			// Check if each part is numeric
 			if !unicode.IsDigit(c) {
 				return false
 			}

@@ -314,7 +314,7 @@ func buildCanonicalQueryString(values url.Values) string {
 // buildCanonicalHeaders builds the canonical headers string
 // Note: The Host header must be passed separately via hostHeader parameter
 // because in Go's net/http, r.Host is not in r.Header
-func buildCanonicalHeaders(headers http.Header, signedHeaders []string, hostHeader string) string {
+func buildCanonicalHeaders(headerMap http.Header, signedHeaders []string, hostHeader string) string {
 	// Create a map for quick lookup
 	signedMap := make(map[string]bool)
 	for _, h := range signedHeaders {
@@ -323,7 +323,7 @@ func buildCanonicalHeaders(headers http.Header, signedHeaders []string, hostHead
 
 	// Build header lines
 	var lines []string
-	for key, values := range headers {
+	for key, values := range headerMap {
 		lowerKey := strings.ToLower(key)
 		if signedMap[lowerKey] {
 			// Trim and join multiple values with comma
@@ -338,7 +338,7 @@ func buildCanonicalHeaders(headers http.Header, signedHeaders []string, hostHead
 
 	// Handle Host header specially - it's in r.Host not r.Header
 	if signedMap["host"] && hostHeader != "" {
-		// Check if host wasn't already added from headers
+		// Check if host wasn't already added from headerMap
 		hasHost := false
 		for _, line := range lines {
 			if strings.HasPrefix(line, "host:") {

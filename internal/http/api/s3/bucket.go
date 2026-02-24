@@ -151,11 +151,11 @@ func (h *HTTPHandler) GetBucketLocation(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	response := s3types.LocationResponse{
+	locationResp := s3types.LocationResponse{
 		Location: region,
 	}
 
-	if writeErr := WriteXMLResponse(w, http.StatusOK, response); writeErr != nil {
+	if writeErr := WriteXMLResponse(w, http.StatusOK, locationResp); writeErr != nil {
 		s3Logger.With("err", writeErr).Warn("encountered error writing XML OK response")
 	}
 }
@@ -196,7 +196,7 @@ func (h *HTTPHandler) ListObjects(w http.ResponseWriter, r *http.Request, bucket
 	// Filter objects based on permissions
 	filteredObjects := h.filterObjects(r.Context(), bucket, result.Objects, r)
 
-	response := s3types.ListBucketResult{
+	listBucketResp := s3types.ListBucketResult{
 		Name:           bucket,
 		Prefix:         prefix,
 		Delimiter:      delimiter,
@@ -208,7 +208,7 @@ func (h *HTTPHandler) ListObjects(w http.ResponseWriter, r *http.Request, bucket
 		CommonPrefixes: result.CommonPrefixes,
 	}
 
-	if writeErr := WriteXMLResponse(w, http.StatusOK, response); writeErr != nil {
+	if writeErr := WriteXMLResponse(w, http.StatusOK, listBucketResp); writeErr != nil {
 		s3Logger.With("err", writeErr).Warn("encountered error writing XML OK response")
 	}
 }
@@ -259,7 +259,7 @@ func (h *HTTPHandler) ListObjectsV2(w http.ResponseWriter, r *http.Request, buck
 	// Recalculate after filtering
 	keyCount := len(filteredObjects) + len(objects.CommonPrefixes)
 
-	response := s3types.ListBucketV2Result{
+	listBucketResp := s3types.ListBucketV2Result{
 		Name:                  bucket,
 		Prefix:                prefix,
 		Delimiter:             delimiter,
@@ -273,7 +273,7 @@ func (h *HTTPHandler) ListObjectsV2(w http.ResponseWriter, r *http.Request, buck
 		CommonPrefixes:        objects.CommonPrefixes,
 	}
 
-	if writeErr := WriteXMLResponse(w, http.StatusOK, response); writeErr != nil {
+	if writeErr := WriteXMLResponse(w, http.StatusOK, listBucketResp); writeErr != nil {
 		s3Logger.With("err", writeErr).Warn("encountered error writing XML OK response")
 	}
 }
@@ -358,12 +358,12 @@ func (h *HTTPHandler) DeleteObjects(w http.ResponseWriter, r *http.Request, buck
 	}
 
 	// Build XML response
-	response := s3types.DeleteObjectsResult{
+	delResp := s3types.DeleteObjectsResult{
 		Deleted: result.Deleted,
 		Errors:  result.Errors,
 	}
 
-	if writeErr := WriteXMLResponse(w, http.StatusOK, response); writeErr != nil {
+	if writeErr := WriteXMLResponse(w, http.StatusOK, delResp); writeErr != nil {
 		s3Logger.With("err", writeErr).Warn("encountered error writing XML OK response")
 	}
 }

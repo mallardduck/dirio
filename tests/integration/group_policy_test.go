@@ -45,7 +45,7 @@ func TestGroupPolicyInheritance(t *testing.T) {
 
 	// 5. Verify user can access the bucket (via group policy inheritance)
 	t.Run("User inherits group policy", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, ts.BucketURL(bucketName)+"/data.txt", nil)
+		req, _ := http.NewRequest(http.MethodGet, ts.BucketURL(bucketName)+"/data.txt", http.NoBody)
 		SignRequestWithCredentials(req, nil, userAccessKey, userSecretKey)
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
@@ -58,7 +58,7 @@ func TestGroupPolicyInheritance(t *testing.T) {
 	updateGroupMembers(t, ts, groupName, []string{userAccessKey}, true)
 
 	t.Run("User access denied after removal from group", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, ts.BucketURL(bucketName)+"/data.txt", nil)
+		req, _ := http.NewRequest(http.MethodGet, ts.BucketURL(bucketName)+"/data.txt", http.NoBody)
 		SignRequestWithCredentials(req, nil, userAccessKey, userSecretKey)
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
@@ -80,7 +80,7 @@ func updateGroupMembers(t *testing.T, ts *TestServer, groupName string, members 
 	}
 	membersJSON.WriteString("]")
 
-	body := fmt.Sprintf(`{"group": "%s", "members": %s, "isRemove": %v}`,
+	body := fmt.Sprintf(`{"group": "%q", "members": %s, "isRemove": %v}`,
 		groupName, membersJSON.String(), isRemove)
 
 	url := ts.URL("/minio/admin/v3/update-group-members")
@@ -94,7 +94,7 @@ func updateGroupMembers(t *testing.T, ts *TestServer, groupName string, members 
 
 func attachGroupPolicy(t *testing.T, ts *TestServer, policyName, groupName string) {
 	url := fmt.Sprintf("%s/minio/admin/v3/set-policy?policyName=%s&userOrGroup=%s&isGroup=true", ts.URL(""), policyName, groupName)
-	req, _ := http.NewRequest(http.MethodPost, url, nil)
+	req, _ := http.NewRequest(http.MethodPost, url, http.NoBody)
 	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -105,7 +105,7 @@ func attachGroupPolicy(t *testing.T, ts *TestServer, policyName, groupName strin
 func detachGroupPolicy(t *testing.T, ts *TestServer, policyName, groupName string) {
 	t.Helper()
 	url := fmt.Sprintf("%s/minio/admin/v3/idp/builtin/policy/detach?policyName=%s&userOrGroup=%s&isGroup=true", ts.URL(""), policyName, groupName)
-	req, _ := http.NewRequest(http.MethodPost, url, nil)
+	req, _ := http.NewRequest(http.MethodPost, url, http.NoBody)
 	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -116,7 +116,7 @@ func detachGroupPolicy(t *testing.T, ts *TestServer, policyName, groupName strin
 func setGroupStatus(t *testing.T, ts *TestServer, groupName, status string) {
 	t.Helper()
 	url := fmt.Sprintf("%s/minio/admin/v3/set-group-status?group=%s&status=%s", ts.URL(""), groupName, status)
-	req, _ := http.NewRequest(http.MethodPost, url, nil)
+	req, _ := http.NewRequest(http.MethodPost, url, http.NoBody)
 	ts.SignRequest(req, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -126,7 +126,7 @@ func setGroupStatus(t *testing.T, ts *TestServer, groupName, status string) {
 
 func getObject(t *testing.T, ts *TestServer, bucket, key, accessKey, secretKey string) int {
 	t.Helper()
-	req, _ := http.NewRequest(http.MethodGet, ts.ObjectURL(bucket, key), nil)
+	req, _ := http.NewRequest(http.MethodGet, ts.ObjectURL(bucket, key), http.NoBody)
 	SignRequestWithCredentials(req, nil, accessKey, secretKey)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)

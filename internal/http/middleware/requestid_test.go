@@ -9,7 +9,7 @@ import (
 
 func TestRequestID(t *testing.T) {
 	t.Run("generates request ID when not present", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		rec := httptest.NewRecorder()
 
 		var capturedID string
@@ -38,7 +38,7 @@ func TestRequestID(t *testing.T) {
 
 	t.Run("uses existing request ID from header", func(t *testing.T) {
 		existingID := "existing-request-id-123"
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		req.Header.Set(RequestIDHeader, existingID)
 		rec := httptest.NewRecorder()
 
@@ -69,7 +69,7 @@ func TestRequestID(t *testing.T) {
 	})
 
 	t.Run("GetRequestID returns empty string when no ID in context", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		id := GetRequestID(req.Context())
 		if id != "" {
 			t.Errorf("expected empty string for context without ID, got %q", id)

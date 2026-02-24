@@ -12,7 +12,7 @@ import (
 
 func TestTiming(t *testing.T) {
 	t.Run("captures request start time", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		rec := httptest.NewRecorder()
 
 		beforeRequest := time.Now()
@@ -38,7 +38,7 @@ func TestTiming(t *testing.T) {
 	})
 
 	t.Run("allows duration calculation", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		rec := httptest.NewRecorder()
 
 		var duration time.Duration
@@ -65,7 +65,7 @@ func TestTiming(t *testing.T) {
 	})
 
 	t.Run("works in middleware chain", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		rec := httptest.NewRecorder()
 
 		var startTime time.Time

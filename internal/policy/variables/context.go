@@ -39,10 +39,10 @@ func FromRequest(r *http.Request) *Context {
 // This should be called when evaluating policies for ListObjects operations
 func (c *Context) WithS3Context(prefix, delimiter string) *Context {
 	// Create a copy to avoid mutating the original
-	copy := *c
-	copy.S3Prefix = prefix
-	copy.S3Delimiter = delimiter
-	return &copy
+	ctxCopy := *c
+	ctxCopy.S3Prefix = prefix
+	ctxCopy.S3Delimiter = delimiter
+	return &ctxCopy
 }
 
 // extractSourceIP gets the client's IP address from the request
