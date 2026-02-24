@@ -30,9 +30,12 @@ MC_ALIAS="${MC_ALIAS:-dirio}"
 
 # Capture the stdout (JSON) into a variable
 # We keep stderr (2) directed to /dev/null to keep the console clean
-ALIAS_JSON=$(mc alias ls "${MC_ALIAS}" --json 2>/dev/null)
-EXIT_CODE=$?
-[[ $EXIT_CODE -eq 0 ]] && ALIAS_EXISTS=1 || ALIAS_EXISTS=0
+# Use if-construct to avoid set -e aborting when alias does not exist
+if ALIAS_JSON=$(mc alias ls "${MC_ALIAS}" --json 2>/dev/null); then
+    ALIAS_EXISTS=1
+else
+    ALIAS_EXISTS=0
+fi
 
 if [ "$ALIAS_EXISTS" -eq 1 ]; then
     # Map to Environment Variables
@@ -42,7 +45,6 @@ if [ "$ALIAS_EXISTS" -eq 1 ]; then
 
     echo "Config loaded for: ${MC_ALIAS}"
 fi
-
 
 echo "=== MinIO mc Admin Tests ===" >&2
 echo "Alias: ${MC_ALIAS}" >&2
@@ -245,6 +247,7 @@ run_test "AdminPolicyDetach"           "policy_management" "exit_code" test_admi
 run_test "AdminPolicyDetachedFromUser" "policy_management" "exit_code" test_admin_policy_detached_from_user
 run_test "AdminPolicyRemove"         "policy_management" "exit_code" test_admin_policy_remove
 run_test "AdminUserRemove"           "user_management"   "exit_code" test_admin_user_remove
+printf "\n\n"
 
 # Output JSON results
 finalize_test_runner
