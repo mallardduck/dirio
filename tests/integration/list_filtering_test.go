@@ -185,7 +185,7 @@ func TestListFiltering(t *testing.T) {
 
 func createIAMUser(t *testing.T, ts *TestServer, accessKey, secretKey string) {
 	body := fmt.Sprintf(`{"secretKey": "%s", "status": "enabled"}`, secretKey)
-	encrypted, err := madmin.EncryptData("testsecret", []byte(body))
+	encrypted, err := madmin.EncryptData(ts.SecretKey, []byte(body))
 	require.NoError(t, err)
 
 	url := ts.URL("/minio/admin/v3/add-user?accessKey=" + accessKey)

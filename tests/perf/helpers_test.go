@@ -218,7 +218,7 @@ echo "total objects in bucket: $TOTAL"
 	req := testcontainers.ContainerRequest{
 		FromDockerfile: testcontainers.FromDockerfile{
 			Context:    "../clients/minio",
-			Dockerfile: "Dockerfile",
+			Dockerfile: "Dockerfile-minio",
 			Repo:       "dirio-mc-test",
 			Tag:        "local",
 			KeepImage:  true,

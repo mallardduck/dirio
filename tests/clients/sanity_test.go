@@ -6,14 +6,12 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
-
-	"github.com/mallardduck/dirio/tests/clients"
 )
 
 // mockServerType defines the behavior of the mock server
@@ -40,7 +38,7 @@ func (m *mockServerWrapper) Close() {
 
 // createMockServer creates a test HTTP server with the specified behavior.
 // It binds to 0.0.0.0 on a random port so Docker containers can reach it via host.docker.internal.
-func createMockServer(serverType mockServerType) (*mockServerWrapper, string) {
+func createMockServer(port int, serverType mockServerType) (*mockServerWrapper, string) {
 	// Create handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch serverType {
@@ -61,15 +59,9 @@ func createMockServer(serverType mockServerType) (*mockServerWrapper, string) {
 	})
 
 	// Create listener on 0.0.0.0 with random port (tcp4 forces IPv4)
-	listener, err := net.Listen("tcp4", "0.0.0.0:0")
+	listener, err := net.Listen("tcp4", fmt.Sprintf("0.0.0.0:%d", port))
 	if err != nil {
 		panic(fmt.Sprintf("failed to create listener: %v", err))
-	}
-
-	// Get the port that was assigned
-	_, port, err := net.SplitHostPort(listener.Addr().String())
-	if err != nil {
-		panic(fmt.Sprintf("failed to get port: %v", err))
 	}
 
 	// Create HTTP server
@@ -80,12 +72,12 @@ func createMockServer(serverType mockServerType) (*mockServerWrapper, string) {
 	// Start serving in background
 	go server.Serve(listener)
 
-	// Build URL using host.docker.internal for container access
-	containerURL := fmt.Sprintf("http://host.docker.internal:%s", port)
+	// Build URL using host.docker.internal for container access to host
+	containerURL := fmt.Sprintf("http://host.docker.internal:%d", port)
 
 	wrapper := &mockServerWrapper{
 		server: server,
-		port:   port,
+		port:   strconv.Itoa(port),
 	}
 
 	return wrapper, containerURL
@@ -132,7 +124,8 @@ func runClientTest(t *testing.T, testName string, req testcontainers.ContainerRe
 func TestSanityCheck_FailingServer(t *testing.T) {
 	t.Parallel()
 
-	mockServer, containerURL := createMockServer(mockServerFailing)
+	externalPort := findAvailablePort(t)
+	mockServer, containerURL := createMockServer(externalPort, mockServerFailing)
 	defer mockServer.Close()
 
 	t.Logf("Mock failing server started on port %s (container URL: %s)", mockServer.port, containerURL)
@@ -141,20 +134,14 @@ func TestSanityCheck_FailingServer(t *testing.T) {
 	t.Run("AWS_CLI_Should_Fail", func(t *testing.T) {
 		t.Parallel()
 
-		req := testcontainers.ContainerRequest{
-			Image: "amazon/aws-cli:2.15.0",
-			Env: map[string]string{
-				"AWS_ACCESS_KEY_ID":     testAccessKey,
-				"AWS_SECRET_ACCESS_KEY": testSecretKey,
-				"AWS_DEFAULT_REGION":    testRegion,
-				"DIRIO_ENDPOINT":        containerURL,
-			},
-			Entrypoint: []string{"/bin/bash", "-c"},
-			Cmd: []string{
-				awsCLITestScript(),
-			},
-			WaitingFor: wait.ForExit().WithExitTimeout(1 * 60 * 1000000000), // 1 minute
+		envMap := map[string]string{
+			"AWS_ACCESS_KEY_ID":     testAccessKey,
+			"AWS_SECRET_ACCESS_KEY": testSecretKey,
+			"AWS_DEFAULT_REGION":    testRegion,
+			"DIRIO_ENDPOINT":        containerURL,
 		}
+		// Use alpine with AWS CLI installed (has proper shell)
+		req := AwsClientContainer(envMap)
 
 		runClientTest(t, "AWS CLI", req)
 	})
@@ -163,20 +150,13 @@ func TestSanityCheck_FailingServer(t *testing.T) {
 	t.Run("boto3_Should_Fail", func(t *testing.T) {
 		t.Parallel()
 
-		req := testcontainers.ContainerRequest{
-			Image: "python:3.13-alpine",
-			Env: map[string]string{
-				"DIRIO_ENDPOINT":   containerURL,
-				"DIRIO_ACCESS_KEY": testAccessKey,
-				"DIRIO_SECRET_KEY": testSecretKey,
-				"DIRIO_REGION":     testRegion,
-			},
-			Entrypoint: []string{"/bin/bash", "-c"},
-			Cmd: []string{
-				boto3TestScript(),
-			},
-			WaitingFor: wait.ForExit().WithExitTimeout(2 * 60 * 1000000000), // 2 minutes
+		envMap := map[string]string{
+			"AWS_ACCESS_KEY_ID":     testAccessKey,
+			"AWS_SECRET_ACCESS_KEY": testSecretKey,
+			"AWS_DEFAULT_REGION":    testRegion,
+			"DIRIO_ENDPOINT":        containerURL,
 		}
+		req := Boto3ClientContainer(envMap)
 
 		runClientTest(t, "boto3", req)
 	})
@@ -190,7 +170,7 @@ func TestSanityCheck_FailingServer(t *testing.T) {
 			"DIRIO_ACCESS_KEY": testAccessKey,
 			"DIRIO_SECRET_KEY": testSecretKey,
 		}
-		req := clients.MinioClientContainer(envMap, minioMCTestScript())
+		req := MinioClientContainer(envMap)
 
 		runClientTest(t, "MinIO mc", req)
 	})
@@ -202,7 +182,8 @@ func TestSanityCheck_FailingServer(t *testing.T) {
 func TestSanityCheck_DumbSuccessServer(t *testing.T) {
 	t.Parallel()
 
-	mockServer, containerURL := createMockServer(mockServerDumbSuccess)
+	externalPort := findAvailablePort(t)
+	mockServer, containerURL := createMockServer(externalPort, mockServerDumbSuccess)
 	defer mockServer.Close()
 
 	t.Logf("Mock dumb-success server started on port %s (container URL: %s)", mockServer.port, containerURL)
@@ -211,20 +192,14 @@ func TestSanityCheck_DumbSuccessServer(t *testing.T) {
 	t.Run("AWS_CLI_Should_Fail", func(t *testing.T) {
 		t.Parallel()
 
-		req := testcontainers.ContainerRequest{
-			Image: "amazon/aws-cli:2.15.0",
-			Env: map[string]string{
-				"AWS_ACCESS_KEY_ID":     testAccessKey,
-				"AWS_SECRET_ACCESS_KEY": testSecretKey,
-				"AWS_DEFAULT_REGION":    testRegion,
-				"DIRIO_ENDPOINT":        containerURL,
-			},
-			Entrypoint: []string{"/bin/bash", "-c"},
-			Cmd: []string{
-				awsCLITestScript(),
-			},
-			WaitingFor: wait.ForExit().WithExitTimeout(1 * 60 * 1000000000), // 1 minute
+		envMap := map[string]string{
+			"AWS_ACCESS_KEY_ID":     testAccessKey,
+			"AWS_SECRET_ACCESS_KEY": testSecretKey,
+			"AWS_DEFAULT_REGION":    testRegion,
+			"DIRIO_ENDPOINT":        containerURL,
 		}
+		// Use alpine with AWS CLI installed (has proper shell)
+		req := AwsClientContainer(envMap)
 
 		runClientTest(t, "AWS CLI", req)
 	})
@@ -233,20 +208,13 @@ func TestSanityCheck_DumbSuccessServer(t *testing.T) {
 	t.Run("boto3_Should_Fail", func(t *testing.T) {
 		t.Parallel()
 
-		req := testcontainers.ContainerRequest{
-			Image: "python:3.13-alpine",
-			Env: map[string]string{
-				"DIRIO_ENDPOINT":   containerURL,
-				"DIRIO_ACCESS_KEY": testAccessKey,
-				"DIRIO_SECRET_KEY": testSecretKey,
-				"DIRIO_REGION":     testRegion,
-			},
-			Entrypoint: []string{"/bin/bash", "-c"},
-			Cmd: []string{
-				boto3TestScript(),
-			},
-			WaitingFor: wait.ForExit().WithExitTimeout(2 * 60 * 1000000000), // 2 minutes
+		envMap := map[string]string{
+			"AWS_ACCESS_KEY_ID":     testAccessKey,
+			"AWS_SECRET_ACCESS_KEY": testSecretKey,
+			"AWS_DEFAULT_REGION":    testRegion,
+			"DIRIO_ENDPOINT":        containerURL,
 		}
+		req := Boto3ClientContainer(envMap)
 
 		runClientTest(t, "boto3", req)
 	})
@@ -260,7 +228,7 @@ func TestSanityCheck_DumbSuccessServer(t *testing.T) {
 			"DIRIO_ACCESS_KEY": testAccessKey,
 			"DIRIO_SECRET_KEY": testSecretKey,
 		}
-		req := clients.MinioClientContainer(envMap, minioMCTestScript())
+		req := MinioClientContainer(envMap)
 
 		runClientTest(t, "MinIO mc", req)
 	})

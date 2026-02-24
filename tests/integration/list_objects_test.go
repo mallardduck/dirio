@@ -393,7 +393,7 @@ func TestListObjectsV2Boto3Scenario(t *testing.T) {
 	ts.CreateBucket(t, "test-bucket")
 
 	// Create objects in the same order as boto3 test
-	ts.PutObject(t, "test-bucket", "test.txt", "test content") // Line 76 in boto3.py
+	ts.PutObject(t, "test-bucket", "test.txt", "test content") // Line 76 in boto3cli.py
 	ts.PutObject(t, "test-bucket", "folder1/file1.txt", "f1")  // Line 114
 	ts.PutObject(t, "test-bucket", "folder1/file2.txt", "f2")  // Line 115
 	ts.PutObject(t, "test-bucket", "folder2/file3.txt", "f3")  // Line 116

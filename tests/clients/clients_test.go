@@ -2,7 +2,6 @@ package clients_test
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,18 +19,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
-
-	"github.com/mallardduck/dirio/tests/clients"
 )
-
-//go:embed scripts lib
-var assets embed.FS
-
-func GetAsset(path string) string {
-	data, _ := assets.ReadFile(path)
-	return string(data)
-}
 
 const (
 	testAccessKey = "testaccess"
@@ -97,9 +85,10 @@ var (
 
 // TestServer manages the DirIO server for testing
 type TestServer struct {
-	cmd     *exec.Cmd
-	port    int
-	dataDir string
+	cmd          *exec.Cmd
+	port         int
+	externalPort int
+	dataDir      string
 }
 
 func TestMain(m *testing.M) {
@@ -204,7 +193,7 @@ func startTestServer(t *testing.T) *TestServer {
 	}
 
 	// Find available port
-	port := findAvailablePort(t)
+	externalPort := findAvailablePort(t)
 
 	// Start server (on Windows, go build adds .exe automatically)
 	serverPath := filepath.Join(projectRoot, "bin", "dirio-test")
@@ -212,7 +201,7 @@ func startTestServer(t *testing.T) *TestServer {
 		serverPath += ".exe"
 	}
 	cmd := exec.Command(serverPath, "serve",
-		"--port", fmt.Sprintf("%d", port),
+		"--port", fmt.Sprintf("%d", externalPort),
 		"--data-dir", dataDir,
 		"--access-key", testAccessKey,
 		"--secret-key", testSecretKey,
@@ -226,13 +215,14 @@ func startTestServer(t *testing.T) *TestServer {
 	require.NoError(t, err, "Failed to start server")
 
 	ts := &TestServer{
-		cmd:     cmd,
-		port:    port,
-		dataDir: dataDir,
+		cmd:          cmd,
+		port:         externalPort,
+		externalPort: externalPort,
+		dataDir:      dataDir,
 	}
 
 	// Wait for server to be ready
-	require.True(t, waitForServer(t, port, 10*time.Second), "Server failed to start")
+	require.True(t, waitForServer(t, externalPort, 10*time.Second), "Server failed to start")
 
 	return ts
 }
@@ -259,7 +249,7 @@ func (ts *TestServer) Endpoint() string {
 }
 
 func (ts *TestServer) LocalEndpoint() string {
-	return fmt.Sprintf("http://localhost:%d", ts.port)
+	return fmt.Sprintf("http://localhost:%d", ts.externalPort)
 }
 
 func findProjectRoot(t *testing.T) string {
@@ -279,16 +269,6 @@ func findProjectRoot(t *testing.T) string {
 		}
 		dir = parent
 	}
-}
-
-func findAvailablePort(t *testing.T) int {
-	t.Helper()
-
-	listener, err := net.Listen("tcp", ":0")
-	require.NoError(t, err)
-	defer listener.Close()
-
-	return listener.Addr().(*net.TCPAddr).Port
 }
 
 func waitForServer(t *testing.T, port int, timeout time.Duration) bool {
@@ -363,21 +343,14 @@ func TestAWSCLI(t *testing.T) {
 	// Use the shared DirIO server (started once for all client tests)
 	server := getSharedClientServer(t)
 
-	// Use alpine with AWS CLI installed (has proper shell)
-	req := testcontainers.ContainerRequest{
-		Image: "amazon/aws-cli:2.15.0",
-		Env: map[string]string{
-			"AWS_ACCESS_KEY_ID":     testAccessKey,
-			"AWS_SECRET_ACCESS_KEY": testSecretKey,
-			"AWS_DEFAULT_REGION":    testRegion,
-			"DIRIO_ENDPOINT":        server.Endpoint(),
-		},
-		Entrypoint: []string{"/bin/bash", "-c"},
-		Cmd: []string{
-			awsCLITestScript(),
-		},
-		WaitingFor: wait.ForExit().WithExitTimeout(2 * time.Minute),
+	envMap := map[string]string{
+		"AWS_ACCESS_KEY_ID":     testAccessKey,
+		"AWS_SECRET_ACCESS_KEY": testSecretKey,
+		"AWS_DEFAULT_REGION":    testRegion,
+		"DIRIO_ENDPOINT":        server.Endpoint(),
 	}
+	// Use alpine with AWS CLI installed (has proper shell)
+	req := AwsClientContainer(envMap)
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
@@ -439,20 +412,13 @@ func TestBoto3(t *testing.T) {
 	server := getSharedClientServer(t)
 
 	// Create Python container with boto3
-	req := testcontainers.ContainerRequest{
-		Image: "python:3.13-alpine",
-		Env: map[string]string{
-			"DIRIO_ENDPOINT":   server.Endpoint(),
-			"DIRIO_ACCESS_KEY": testAccessKey,
-			"DIRIO_SECRET_KEY": testSecretKey,
-			"DIRIO_REGION":     testRegion,
-		},
-		Entrypoint: []string{"/bin/bash", "-c"},
-		Cmd: []string{
-			boto3TestScript(),
-		},
-		WaitingFor: wait.ForExit().WithExitTimeout(3 * time.Minute),
+	envMap := map[string]string{
+		"AWS_ACCESS_KEY_ID":     testAccessKey,
+		"AWS_SECRET_ACCESS_KEY": testSecretKey,
+		"AWS_DEFAULT_REGION":    testRegion,
+		"DIRIO_ENDPOINT":        server.Endpoint(),
 	}
+	req := Boto3ClientContainer(envMap)
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
@@ -520,7 +486,7 @@ func TestMinIOMC(t *testing.T) {
 		"DIRIO_SECRET_KEY": testSecretKey,
 	}
 
-	req := clients.MinioClientContainer(envMap, minioMCTestScript())
+	req := MinioClientContainer(envMap)
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
@@ -588,7 +554,8 @@ func TestMCAdmin(t *testing.T) {
 		"DIRIO_SECRET_KEY": testSecretKey,
 	}
 
-	req := clients.MinioClientContainer(envMap, minioMCAdminTestScript())
+	req := MinioClientContainer(envMap)
+	req.Cmd = []string{"mc_admin.sh"}
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
@@ -633,74 +600,4 @@ func TestMCAdmin(t *testing.T) {
 	if state.ExitCode != 0 {
 		t.Errorf("mc admin tests failed with exit code %d", state.ExitCode)
 	}
-}
-
-// awsCLITestScript returns the test script for AWS CLI
-func awsCLITestScript() string {
-	// Write lib files to /tmp first
-	return fmt.Sprintf(`
-# Write test framework libraries to /tmp
-cat > /tmp/test_framework.sh << 'EOF_FRAMEWORK'
-%s
-EOF_FRAMEWORK
-
-cat > /tmp/validators.sh << 'EOF_VALIDATORS'
-%s
-EOF_VALIDATORS
-
-# Run the test script
-%s
-`, GetAsset("lib/test_framework.sh"), GetAsset("lib/validators.sh"), GetAsset("scripts/awscli.sh"))
-}
-
-// boto3TestScript returns the Python test script for boto3
-func boto3TestScript() string {
-	return fmt.Sprintf(`pip install --quiet boto3 requests
-
-# Write Python test framework libraries to /tmp
-mkdir -p /tmp/lib
-cat > /tmp/lib/test_framework.py << 'EOF_FRAMEWORK'
-%s
-EOF_FRAMEWORK
-
-cat > /tmp/lib/validators.py << 'EOF_VALIDATORS'
-%s
-EOF_VALIDATORS
-
-# Add /tmp/lib to Python path and run test
-cd /tmp
-python3 << 'PYTHON_SCRIPT'
-%s
-PYTHON_SCRIPT
-`, GetAsset("lib/test_framework.py"), GetAsset("lib/validators.py"), GetAsset("scripts/boto3.py"))
-}
-
-// minioMCTestScript returns the test script for MinIO mc
-func minioMCTestScript() string {
-	return fmt.Sprintf(`
-# Write test framework libraries to /tmp
-cat > /tmp/test_framework.sh << 'EOF_FRAMEWORK'
-%s
-EOF_FRAMEWORK
-
-cat > /tmp/validators.sh << 'EOF_VALIDATORS'
-%s
-EOF_VALIDATORS
-
-# Run the test script
-%s
-`, GetAsset("lib/test_framework.sh"), GetAsset("lib/validators.sh"), GetAsset("scripts/mc.sh"))
-}
-
-// minioMCAdminTestScript returns the test script for mc admin commands
-func minioMCAdminTestScript() string {
-	return fmt.Sprintf(`
-# Write test framework library to /tmp
-cat > /tmp/test_framework.sh << 'EOF_FRAMEWORK'
-%s
-EOF_FRAMEWORK
-
-# Run the admin test script
-%s
-`, GetAsset("lib/test_framework.sh"), GetAsset("scripts/mc_admin.sh"))
 }

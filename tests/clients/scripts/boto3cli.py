@@ -15,6 +15,7 @@ from botocore.exceptions import ClientError
 # Add lib directory to path - try both local and container locations
 lib_paths = [
     os.path.join(os.path.dirname(__file__), '..', 'lib'),  # Local
+    os.path.join(os.path.dirname(__file__), 'lib'),  # Local
     '/tmp/lib',  # Container
     '/tmp'  # Container fallback
 ]
@@ -40,9 +41,9 @@ except ImportError as e:
 
 # Test configuration
 endpoint = os.environ.get("DIRIO_ENDPOINT")
-access_key = os.environ.get("DIRIO_ACCESS_KEY")
-secret_key = os.environ.get("DIRIO_SECRET_KEY")
-region = os.environ.get("DIRIO_REGION", "us-east-1")
+access_key = os.environ.get("AWS_ACCESS_KEY_ID")
+secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 
 # Initialize boto3 client
 config = Config(signature_version="s3v4", s3={"addressing_style": "path"}, retries={'max_attempts': 1})

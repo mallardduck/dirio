@@ -22,7 +22,7 @@ func buildMinIOSys(t *testing.T, dataDir string) string {
 	minioSys := filepath.Join(dataDir, ".minio.sys")
 	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 
-	formatJSON := `{"version":"1","format":"fs","id":"test-import-fs","fs":{"version":"2"}}`
+	formatJSON := `{"version":"1","format":"fs","id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","fs":{"version":"2"}}`
 	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
 
 	return minioSys

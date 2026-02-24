@@ -1,0 +1,31 @@
+FROM alpine:3.19
+
+# 1. Install dependencies
+RUN apk add --no-cache \
+    ca-certificates \
+    curl \
+    bash
+
+# 2. Install MinIO mc client
+RUN curl -fSL https://dl.min.io/client/mc/release/linux-amd64/mc \
+    -o /usr/local/bin/mc \
+    && chmod +x /usr/local/bin/mc
+
+# 3. Create a non-root user
+RUN adduser -D -h /home/mcuser mcuser
+
+# 4. Set working directory
+WORKDIR /work
+RUN chown mcuser:mcuser /work
+
+# 5. Switch to the non-root user
+USER mcuser
+
+# 6. copy needed scripts
+COPY lib/test_framework.sh ./lib/
+COPY lib/validators.sh ./lib/
+COPY scripts/mc.sh ./
+COPY scripts/mc_admin.sh ./
+
+# 7. Set bash as the entrypoint
+ENTRYPOINT ["/bin/bash"]

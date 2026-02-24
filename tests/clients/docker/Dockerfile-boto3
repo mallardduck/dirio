@@ -1,0 +1,29 @@
+FROM python:3.13-alpine
+
+# 1. Install deps
+RUN apk add --no-cache bash curl
+
+# 2. Create a non-root user
+RUN adduser -D -h /home/pythonuser pythonuser
+
+# 3. Set the Environment Path
+# This ensures binaries installed via 'pip install --user' are executable
+ENV PATH="/home/pythonuser/.local/bin:${PATH}"
+
+# 4. Set the working directory
+RUN pip install --upgrade pip
+WORKDIR /work
+RUN chown pythonuser:pythonuser /work
+
+# 5. Switch to the non-root user
+USER pythonuser
+
+# 6. copy needed scripts
+COPY --chown=pythonuser:pythonuser lib/test_framework.py ./lib/
+COPY --chown=pythonuser:pythonuser lib/validators.py ./lib/
+COPY --chown=pythonuser:pythonuser scripts/boto3cli.py ./boto3cli.py
+
+RUN pip install --quiet boto3 requests
+
+# 7. Set bash as the entrypoint
+ENTRYPOINT ["/bin/bash"]

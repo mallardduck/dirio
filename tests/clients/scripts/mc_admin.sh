@@ -9,8 +9,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Source test framework - handle both container and local execution
 if [ -f "$SCRIPT_DIR/../lib/test_framework.sh" ]; then
     source "$SCRIPT_DIR/../lib/test_framework.sh"
+    source "$SCRIPT_DIR/../lib/validators.sh"
+elif [ -f "$SCRIPT_DIR/lib/test_framework.sh" ]; then
+      source "$SCRIPT_DIR/lib/test_framework.sh"
+      source "$SCRIPT_DIR/lib/validators.sh"
 elif [ -f "/tmp/test_framework.sh" ]; then
     source /tmp/test_framework.sh
+    source /tmp/validators.sh
 else
     echo "ERROR: Cannot find test_framework.sh" >&2
     exit 1

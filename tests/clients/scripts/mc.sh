@@ -11,6 +11,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/../lib/test_framework.sh" ]; then
     source "$SCRIPT_DIR/../lib/test_framework.sh"
     source "$SCRIPT_DIR/../lib/validators.sh"
+elif [ -f "$SCRIPT_DIR/lib/test_framework.sh" ]; then
+      source "$SCRIPT_DIR/lib/test_framework.sh"
+      source "$SCRIPT_DIR/lib/validators.sh"
 elif [ -f "/tmp/test_framework.sh" ]; then
     source /tmp/test_framework.sh
     source /tmp/validators.sh
