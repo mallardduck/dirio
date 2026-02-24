@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -15,6 +16,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/phuslu/lru"
 	bbolt "go.etcd.io/bbolt"
+
+	"github.com/mallardduck/dirio/internal/logging"
 
 	contextInt "github.com/mallardduck/dirio/internal/context"
 
@@ -44,6 +47,7 @@ var (
 
 // Manager handles metadata storage and retrieval
 type Manager struct {
+	log        *slog.Logger
 	rootFS     billy.Filesystem
 	metadataFS billy.Filesystem
 	db         *bbolt.DB
@@ -145,6 +149,7 @@ func New(rootFS billy.Filesystem) (*Manager, error) {
 	}
 
 	mgr := &Manager{
+		log:          logging.Component("metadata-manager"),
 		rootFS:       rootFS,
 		metadataFS:   metadataFS,
 		db:           db,
@@ -306,8 +311,7 @@ func (m *Manager) DeleteObjectMetadata(ctx context.Context, bucket, key string) 
 
 	metaPath := filepath.Join("objects", bucket, key+".json")
 
-	err := m.metadataFS.Remove(metaPath)
-	if err != nil && !isNotExist(err) {
+	if err := m.metadataFS.Remove(metaPath); err != nil && !isNotExist(err) {
 		return err
 	}
 
@@ -323,6 +327,7 @@ func (m *Manager) DeleteObjectMetadata(ctx context.Context, bucket, key string) 
 
 		entries, err := m.metadataFS.ReadDir(dir)
 		if err != nil || len(entries) > 0 {
+			m.log.Debug("found non-empty directory during cleanup, skipping removal", "dir", dir)
 			break
 		}
 		if err := m.metadataFS.Remove(dir); err != nil {

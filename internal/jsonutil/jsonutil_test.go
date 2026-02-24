@@ -213,7 +213,7 @@ func TestMarshal_InvalidInput(t *testing.T) {
 	invalidData := make(chan int)
 
 	_, err := Marshal(invalidData)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestMarshalToFile_MarshalError(t *testing.T) {
@@ -224,7 +224,7 @@ func TestMarshalToFile_MarshalError(t *testing.T) {
 	invalidData := make(chan int)
 
 	err := MarshalToFile(fs, path, invalidData)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestMarshalToFile_FileSystemError(t *testing.T) {
@@ -238,7 +238,7 @@ func TestMarshalToFile_FileSystemError(t *testing.T) {
 
 	// Should fail because path exists as directory
 	err = MarshalToFile(fs, "test.json", data)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 // Note: Config-based debug mode testing requires integration tests

@@ -82,7 +82,7 @@ func TestObjectMetadata_Delete(t *testing.T) {
 
 	// Verify metadata is gone
 	_, err = mgr.GetObjectMetadata(context.Background(), "test-bucket", "test-object.txt")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "object metadata not found")
 }
 
@@ -96,7 +96,7 @@ func TestObjectMetadata_GetNonExistent(t *testing.T) {
 
 	// Try to get non-existent metadata
 	_, err = mgr.GetObjectMetadata(context.Background(), "test-bucket", "nonexistent.txt")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "object metadata not found")
 }
 

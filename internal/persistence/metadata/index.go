@@ -73,7 +73,7 @@ func (m *Manager) reconcileIndexes(ctx context.Context) {
 			uid, err := uuid.FromBytes(v)
 			if err != nil {
 				stale = append(stale, append([]byte(nil), k...))
-				return nil
+				return nil //nolint:nilerr // intentional: invalid bytes are stale; return nil to continue ForEach iteration
 			}
 			if _, ok := knownUUIDs[uid]; !ok {
 				stale = append(stale, append([]byte(nil), k...))
@@ -89,7 +89,7 @@ func (m *Manager) reconcileIndexes(ctx context.Context) {
 			uid, err := uuid.FromBytes(v)
 			if err != nil {
 				stale = append(stale, append([]byte(nil), k...))
-				return nil
+				return nil //nolint:nilerr // intentional: invalid bytes are stale; return nil to continue ForEach iteration
 			}
 			if _, ok := knownUUIDs[uid]; !ok {
 				stale = append(stale, append([]byte(nil), k...))

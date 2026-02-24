@@ -11,6 +11,10 @@ linters:
     - revive
     - unconvert
     - unparam
+    - testifylint
+    - nilerr
+    - nilnil
+    - nakedret
   settings:
     depguard:
       rules:

@@ -36,27 +36,25 @@ func TestNewService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert := assert.New(t)
 			svc, err := New(tt.config)
 			if tt.wantErr {
-				assert.Error(err)
+				require.Error(t, err)
 				return
 			}
-			assert.NoError(err)
-			assert.NotNil(svc)
+			require.NoError(t, err)
+			assert.NotNil(t, svc)
 		})
 	}
 }
 
 func TestServiceDefaults(t *testing.T) {
-	assert := assert.New(t)
 	cfg := &Config{}
 	svc, err := New(cfg)
 	require.NoError(t, err)
 
 	// Check that defaults were applied
-	assert.Equal("dirio-s3", svc.config.ServiceName)
-	assert.Equal(9000, svc.config.Port)
+	assert.Equal(t, "dirio-s3", svc.config.ServiceName)
+	assert.Equal(t, 9000, svc.config.Port)
 }
 
 func TestGetAdvertisedHost(t *testing.T) {
@@ -66,10 +64,9 @@ func TestGetAdvertisedHost(t *testing.T) {
 	host := svc.GetAdvertisedHost()
 
 	// Should be in format: my-service-{unique-id}.local
-	assert := assert.New(t)
-	assert.Contains(host, "my-service-")
-	assert.Contains(host, ".local")
-	assert.NotEqual("my-service.local", host, "Should include unique ID component")
+	assert.Contains(t, host, "my-service-")
+	assert.Contains(t, host, ".local")
+	assert.NotEqual(t, "my-service.local", host, "Should include unique ID component")
 }
 
 func TestIsRunning(t *testing.T) {
@@ -84,7 +81,6 @@ func TestStartStop(t *testing.T) {
 		t.Skip("skipping network test in short mode")
 	}
 
-	assert := assert.New(t)
 	svc, err := New(&Config{
 		ServiceName: "dirio-test",
 		Port:        19000, // Use a non-standard port to avoid conflicts
@@ -93,15 +89,15 @@ func TestStartStop(t *testing.T) {
 
 	// Start the service
 	require.NoError(t, svc.Start(context.Background()))
-	assert.True(svc.IsRunning())
+	assert.True(t, svc.IsRunning())
 
 	// Starting again should fail
-	assert.Error(svc.Start(context.Background()))
+	require.Error(t, svc.Start(context.Background()))
 
 	// Stop the service
 	require.NoError(t, svc.Stop())
-	assert.False(svc.IsRunning())
+	assert.False(t, svc.IsRunning())
 
 	// Stop should be idempotent
-	assert.NoError(svc.Stop())
+	assert.NoError(t, svc.Stop())
 }

@@ -295,7 +295,7 @@ func (s *Service) ListParts(ctx context.Context, req *ListPartsRequest) (*ListPa
 			Key:      req.Key,
 			UploadID: req.UploadID,
 			Parts:    []Part{},
-		}, nil
+		}, err
 	}
 
 	// Read part metadata

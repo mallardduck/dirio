@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStableID(t *testing.T) {
@@ -18,7 +19,7 @@ func TestStableID(t *testing.T) {
 	t.Run("returns hex string", func(t *testing.T) {
 		id := stableID()
 		_, err := hex.DecodeString(id)
-		assert.NoError(t, err, "should return valid hex string")
+		require.NoError(t, err, "should return valid hex string")
 	})
 
 	t.Run("returns consistent ID", func(t *testing.T) {
@@ -46,12 +47,12 @@ func TestLoadOrCreateRandomID(t *testing.T) {
 	t.Run("creates new ID when file doesn't exist", func(t *testing.T) {
 		id := loadOrCreateRandomID()
 		assert.NotEmpty(t, id)
-		assert.Equal(t, idBytes*2, len(id), "should return 6 hex characters")
+		assert.Len(t, id, idBytes*2, "should return 6 hex characters")
 
 		// Verify file was created
 		path := filepath.Join(tmpDir, "hostid")
 		_, err := os.Stat(path)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("loads existing ID from file", func(t *testing.T) {
@@ -63,7 +64,7 @@ func TestLoadOrCreateRandomID(t *testing.T) {
 	t.Run("creates valid hex ID", func(t *testing.T) {
 		id := loadOrCreateRandomID()
 		_, err := hex.DecodeString(id)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("recreates ID if file is corrupted", func(t *testing.T) {
@@ -73,12 +74,12 @@ func TestLoadOrCreateRandomID(t *testing.T) {
 		os.WriteFile(path, []byte("bad"), 0600)
 
 		id := loadOrCreateRandomID()
-		assert.Equal(t, idBytes*2, len(id))
+		assert.Len(t, id, idBytes*2)
 
 		// Verify new valid ID was written
 		data, err := os.ReadFile(path)
-		assert.NoError(t, err)
-		assert.Equal(t, idBytes*2, len(data))
+		require.NoError(t, err)
+		assert.Len(t, data, idBytes*2)
 	})
 }
 

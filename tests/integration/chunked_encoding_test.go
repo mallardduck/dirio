@@ -107,7 +107,7 @@ func TestPutObject_ChunkedEncoding(t *testing.T) {
 
 	// Verify exact content match
 	assert.Equal(t, expected, actual, "Content should match exactly without encoding artifacts")
-	assert.Equal(t, len(expected), len(actual), "Content length should match exactly")
+	assert.Len(t, actual, len(expected), "Content length should match exactly")
 }
 
 // TestPutObject_MultipleChunks verifies decoding of multiple chunks
@@ -189,7 +189,7 @@ func TestPutObject_LargeChunkedData(t *testing.T) {
 
 	content, _ := io.ReadAll(getResp.Body)
 	assert.Equal(t, data, string(content), "Downloaded content should match original data exactly")
-	assert.Equal(t, 1024, len(content), "Downloaded size should be 1024 bytes")
+	assert.Len(t, content, 1024, "Downloaded size should be 1024 bytes")
 }
 
 // TestPutObject_NonChunkedStillWorks verifies normal (non-chunked) uploads still work

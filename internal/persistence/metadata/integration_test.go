@@ -58,7 +58,7 @@ func TestMinIOImport_CreatesMetadataFiles(t *testing.T) {
 	}
 
 	t.Logf("Imported %d object metadata files", objectCount)
-	assert.Greater(t, objectCount, 0, "Should have imported at least one object")
+	assert.Positive(t, objectCount, "Should have imported at least one object")
 
 	// Debug: List all files in tmpDir
 	t.Logf("Listing all files in %s:", tmpDir)

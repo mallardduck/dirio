@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestContext_Substitute(t *testing.T) {
@@ -84,9 +85,9 @@ func TestContext_Substitute(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := ctx.Substitute(tt.input)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 			assert.Equal(t, tt.expected, result)
 		})
@@ -112,7 +113,7 @@ func TestContext_SubstituteSlice(t *testing.T) {
 	}
 
 	result, err := ctx.SubstituteSlice(input)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expected, result)
 }
 
@@ -183,9 +184,9 @@ func TestContext_MissingValues(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := ctx.Substitute(tt.input)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -221,7 +222,7 @@ func TestContext_SubstituteInterface(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := ctx.SubstituteInterface(tt.input)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

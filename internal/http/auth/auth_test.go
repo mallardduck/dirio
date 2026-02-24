@@ -135,8 +135,8 @@ func TestAuthenticator_GetUserForAccessKey(t *testing.T) {
 func TestAuthenticator_WithAlternativeRoot(t *testing.T) {
 	t.Run("alternative root can be added", func(t *testing.T) {
 		auth := New(nil, "primary-key", "primary-secret")
-		assert.Equal(t, "", auth.altRootAccessKey)
-		assert.Equal(t, "", auth.altRootSecretKey)
+		assert.Empty(t, auth.altRootAccessKey)
+		assert.Empty(t, auth.altRootSecretKey)
 
 		auth = auth.WithAlternativeRoot("alt-key", "alt-secret")
 		assert.Equal(t, "alt-key", auth.altRootAccessKey)

@@ -19,6 +19,7 @@ package startup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -138,7 +139,12 @@ func (s *Starter) MigrateMinIO(ctx context.Context) error {
 
 	// Fast path: skip entirely when there is no MinIO data directory.
 	if _, err := s.rootFS.Stat(path.MinIODir); err != nil {
-		return nil
+		if errors.Is(err, os.ErrNotExist) {
+			log.Debug("minio data directory not found, skipping import")
+			return nil
+		}
+
+		return fmt.Errorf("encountered additional error while finding minio dir for import: %w", err)
 	}
 
 	// MinIO data is present — we need the metadata manager.

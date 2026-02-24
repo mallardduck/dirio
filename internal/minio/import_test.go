@@ -212,7 +212,7 @@ func TestImport_InvalidFormat(t *testing.T) {
 	// Create billy filesystem scoped to .minio.sys directory
 	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
 	_, err := Import(minioFS)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "format validation failed")
 }
 
@@ -223,7 +223,7 @@ func TestImport_MissingFormatFile(t *testing.T) {
 	// Create billy filesystem scoped to .minio.sys directory
 	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
 	_, err := Import(minioFS)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "format validation failed")
 }
 

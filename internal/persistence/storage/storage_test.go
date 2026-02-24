@@ -369,7 +369,7 @@ func TestListInternal_ContextCancellation(t *testing.T) {
 
 	// Should return context error
 	_, err := s.listInternal(ctx, "test-bucket", "", "", "", 1000, false)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "context cancelled")
 }
 

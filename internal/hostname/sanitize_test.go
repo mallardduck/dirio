@@ -91,6 +91,6 @@ func TestSanitize(t *testing.T) {
 func TestSanitizeMaxLength(t *testing.T) {
 	input := strings.Repeat("a", 100)
 	result := sanitize(input)
-	assert.Equal(t, maxLabelLen, len(result))
+	assert.Len(t, result, maxLabelLen)
 	assert.Equal(t, strings.Repeat("a", maxLabelLen), result)
 }

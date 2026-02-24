@@ -86,7 +86,7 @@ func TestPutObject_LargeChunkedUpload(t *testing.T) {
 	assert.NotContains(t, string(downloaded), "chunk-signature", "Content should not contain chunked encoding markers")
 
 	// Verify exact size match
-	assert.Equal(t, len(originalData), len(downloaded), "Downloaded size should match original data size")
+	assert.Len(t, downloaded, len(originalData), "Downloaded size should match original data size")
 
 	// Verify exact content match
 	assert.True(t, bytes.Equal(originalData, downloaded), "Downloaded content should match original data exactly")

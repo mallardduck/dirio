@@ -228,7 +228,7 @@ func validateArrayCondition(cond []json.RawMessage, bucket, key, contentType str
 	}
 	var op string
 	if err := json.Unmarshal(cond[0], &op); err != nil {
-		return nil
+		return err
 	}
 
 	switch strings.ToLower(op) {
@@ -238,10 +238,10 @@ func validateArrayCondition(cond []json.RawMessage, bucket, key, contentType str
 		}
 		var field, expected string
 		if err := json.Unmarshal(cond[1], &field); err != nil {
-			return nil
+			return err
 		}
 		if err := json.Unmarshal(cond[2], &expected); err != nil {
-			return nil
+			return err
 		}
 		return checkEq(field, expected, bucket, key, contentType)
 
@@ -251,10 +251,10 @@ func validateArrayCondition(cond []json.RawMessage, bucket, key, contentType str
 		}
 		var field, prefix string
 		if err := json.Unmarshal(cond[1], &field); err != nil {
-			return nil
+			return err
 		}
 		if err := json.Unmarshal(cond[2], &prefix); err != nil {
-			return nil
+			return err
 		}
 		return checkStartsWith(field, prefix, bucket, key, contentType)
 
@@ -264,10 +264,10 @@ func validateArrayCondition(cond []json.RawMessage, bucket, key, contentType str
 		}
 		var minSize, maxSize int64
 		if err := json.Unmarshal(cond[1], &minSize); err != nil {
-			return nil
+			return err
 		}
 		if err := json.Unmarshal(cond[2], &maxSize); err != nil {
-			return nil
+			return err
 		}
 		if contentLength < minSize || contentLength > maxSize {
 			return fmt.Errorf("content length %d is outside allowed range [%d, %d]", contentLength, minSize, maxSize)

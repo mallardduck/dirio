@@ -23,7 +23,7 @@ func TestDefaultDataConfig(t *testing.T) {
 
 	// Validate should pass even with empty credentials.
 	err := config.Validate()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestDataConfig_Validate(t *testing.T) {
@@ -88,10 +88,10 @@ func TestDataConfig_Validate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.config.Validate()
 			if tt.expectErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errMsg)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -145,7 +145,7 @@ func TestLoadDataConfig_NotFound(t *testing.T) {
 	fs := memfs.New()
 
 	_, err := LoadDataConfig(fs)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to read data config")
 }
 
@@ -164,7 +164,7 @@ func TestLoadDataConfig_InvalidJSON(t *testing.T) {
 	f.Close()
 
 	_, err = LoadDataConfig(fs)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse data config")
 }
 
@@ -195,7 +195,7 @@ func TestLoadDataConfig_InvalidData(t *testing.T) {
 
 	// Loading should fail validation — mismatched credentials (one set, one empty).
 	_, err = LoadDataConfig(fs)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid data config")
 	assert.Contains(t, err.Error(), "must both be set or both be empty")
 }

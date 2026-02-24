@@ -114,7 +114,7 @@ func runClientTest(t *testing.T, testName string, req testcontainers.ContainerRe
 
 	// Verify we got some failures
 	failCount := strings.Count(logOutput, "FAIL:")
-	require.Greater(t, failCount, 0, "SANITY CHECK FAILED: No failures detected in %s!", testName)
+	require.Positive(t, failCount, "SANITY CHECK FAILED: No failures detected in %s!", testName)
 	t.Logf("✅ Sanity check passed: %s correctly detected %d failures", testName, failCount)
 }
 

@@ -79,7 +79,7 @@ func TestImport_MinIO2022_RealData(t *testing.T) {
 		assert.Equal(t, "minioadmin", result.DataConfig.Credentials.AccessKey)
 		assert.Equal(t, "minioadmin", result.DataConfig.Credentials.SecretKey)
 		// MinIO 2022 test data has empty region and compression disabled
-		assert.Equal(t, "", result.DataConfig.Region)
+		assert.Empty(t, result.DataConfig.Region)
 		assert.False(t, result.DataConfig.Compression.Enabled)
 	})
 

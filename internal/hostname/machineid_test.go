@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReadMachineID(t *testing.T) {
@@ -15,8 +16,8 @@ func TestReadMachineID(t *testing.T) {
 		// If it returns something, it should be valid hex
 		if id != "" {
 			_, err := hex.DecodeString(id)
-			assert.NoError(t, err, "machine ID should be valid hex")
-			assert.Equal(t, idBytes*2, len(id), "machine ID should be 6 hex characters")
+			require.NoError(t, err, "machine ID should be valid hex")
+			assert.Len(t, id, idBytes*2, "machine ID should be 6 hex characters")
 		}
 	})
 
@@ -37,8 +38,8 @@ func TestReadLinuxMachineID(t *testing.T) {
 
 		if id != "" {
 			_, err := hex.DecodeString(id)
-			assert.NoError(t, err)
-			assert.Equal(t, idBytes*2, len(id))
+			require.NoError(t, err)
+			assert.Len(t, id, idBytes*2)
 		}
 	})
 }
@@ -53,8 +54,8 @@ func TestReadDarwinMachineID(t *testing.T) {
 
 		if id != "" {
 			_, err := hex.DecodeString(id)
-			assert.NoError(t, err)
-			assert.Equal(t, idBytes*2, len(id))
+			require.NoError(t, err)
+			assert.Len(t, id, idBytes*2)
 		}
 	})
 }
@@ -69,8 +70,8 @@ func TestReadWindowsMachineID(t *testing.T) {
 
 		if id != "" {
 			_, err := hex.DecodeString(id)
-			assert.NoError(t, err)
-			assert.Equal(t, idBytes*2, len(id))
+			require.NoError(t, err)
+			assert.Len(t, id, idBytes*2)
 		}
 	})
 }
@@ -99,11 +100,11 @@ func TestHashAndTruncate(t *testing.T) {
 			result := hashAndTruncate(tt.input)
 
 			assert.NotEmpty(t, result)
-			assert.Equal(t, idBytes*2, len(result), "should return 6 hex characters")
+			assert.Len(t, result, idBytes*2, "should return 6 hex characters")
 
 			// Verify it's valid hex
 			_, err := hex.DecodeString(result)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		})
 	}
 
