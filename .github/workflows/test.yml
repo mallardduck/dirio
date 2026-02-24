@@ -47,11 +47,16 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         PASS=$(grep -c "^--- PASS:" test-output.txt 2>/dev/null || echo 0)
         FAIL=$(grep -c "^--- FAIL:" test-output.txt 2>/dev/null || echo 0)
-        echo "**Passed:** $PASS | **Failed:** $FAIL" >> $GITHUB_STEP_SUMMARY
+        SKIP=$(grep -c "^--- SKIP:" test-output.txt 2>/dev/null || echo 0)
         if [ "$FAIL" -gt 0 ]; then
+          echo "❌ **$FAIL failed** | ✅ $PASS passed | ⏭️ $SKIP skipped" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Failed Tests" >> $GITHUB_STEP_SUMMARY
           grep "^--- FAIL:" test-output.txt | sed 's/^--- FAIL: /- ❌ /' >> $GITHUB_STEP_SUMMARY
+        elif [ "$PASS" -eq 0 ] && [ "$SKIP" -eq 0 ]; then
+          echo "⚠️ No tests found or output could not be parsed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ All $PASS tests passed$([ "$SKIP" -gt 0 ] && echo " | ⏭️ $SKIP skipped")" >> $GITHUB_STEP_SUMMARY
         fi
 
   test-integration:
@@ -86,11 +91,16 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         PASS=$(grep -c "^--- PASS:" test-output.txt 2>/dev/null || echo 0)
         FAIL=$(grep -c "^--- FAIL:" test-output.txt 2>/dev/null || echo 0)
-        echo "**Passed:** $PASS | **Failed:** $FAIL" >> $GITHUB_STEP_SUMMARY
+        SKIP=$(grep -c "^--- SKIP:" test-output.txt 2>/dev/null || echo 0)
         if [ "$FAIL" -gt 0 ]; then
+          echo "❌ **$FAIL failed** | ✅ $PASS passed | ⏭️ $SKIP skipped" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Failed Tests" >> $GITHUB_STEP_SUMMARY
           grep "^--- FAIL:" test-output.txt | sed 's/^--- FAIL: /- ❌ /' >> $GITHUB_STEP_SUMMARY
+        elif [ "$PASS" -eq 0 ] && [ "$SKIP" -eq 0 ]; then
+          echo "⚠️ No tests found or output could not be parsed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ All $PASS tests passed$([ "$SKIP" -gt 0 ] && echo " | ⏭️ $SKIP skipped")" >> $GITHUB_STEP_SUMMARY
         fi
 
   test-admin:
@@ -125,11 +135,16 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         PASS=$(grep -c "^--- PASS:" test-output.txt 2>/dev/null || echo 0)
         FAIL=$(grep -c "^--- FAIL:" test-output.txt 2>/dev/null || echo 0)
-        echo "**Passed:** $PASS | **Failed:** $FAIL" >> $GITHUB_STEP_SUMMARY
+        SKIP=$(grep -c "^--- SKIP:" test-output.txt 2>/dev/null || echo 0)
         if [ "$FAIL" -gt 0 ]; then
+          echo "❌ **$FAIL failed** | ✅ $PASS passed | ⏭️ $SKIP skipped" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Failed Tests" >> $GITHUB_STEP_SUMMARY
           grep "^--- FAIL:" test-output.txt | sed 's/^--- FAIL: /- ❌ /' >> $GITHUB_STEP_SUMMARY
+        elif [ "$PASS" -eq 0 ] && [ "$SKIP" -eq 0 ]; then
+          echo "⚠️ No tests found or output could not be parsed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ All $PASS tests passed$([ "$SKIP" -gt 0 ] && echo " | ⏭️ $SKIP skipped")" >> $GITHUB_STEP_SUMMARY
         fi
 
   test-console:
@@ -164,11 +179,16 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         PASS=$(grep -c "^--- PASS:" test-output.txt 2>/dev/null || echo 0)
         FAIL=$(grep -c "^--- FAIL:" test-output.txt 2>/dev/null || echo 0)
-        echo "**Passed:** $PASS | **Failed:** $FAIL" >> $GITHUB_STEP_SUMMARY
+        SKIP=$(grep -c "^--- SKIP:" test-output.txt 2>/dev/null || echo 0)
         if [ "$FAIL" -gt 0 ]; then
+          echo "❌ **$FAIL failed** | ✅ $PASS passed | ⏭️ $SKIP skipped" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Failed Tests" >> $GITHUB_STEP_SUMMARY
           grep "^--- FAIL:" test-output.txt | sed 's/^--- FAIL: /- ❌ /' >> $GITHUB_STEP_SUMMARY
+        elif [ "$PASS" -eq 0 ] && [ "$SKIP" -eq 0 ]; then
+          echo "⚠️ No tests found or output could not be parsed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ All $PASS tests passed$([ "$SKIP" -gt 0 ] && echo " | ⏭️ $SKIP skipped")" >> $GITHUB_STEP_SUMMARY
         fi
 
   test-clients:
@@ -204,11 +224,16 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         PASS=$(grep -c "^--- PASS:" test-output.txt 2>/dev/null || echo 0)
         FAIL=$(grep -c "^--- FAIL:" test-output.txt 2>/dev/null || echo 0)
-        echo "**Passed:** $PASS | **Failed:** $FAIL" >> $GITHUB_STEP_SUMMARY
+        SKIP=$(grep -c "^--- SKIP:" test-output.txt 2>/dev/null || echo 0)
         if [ "$FAIL" -gt 0 ]; then
+          echo "❌ **$FAIL failed** | ✅ $PASS passed | ⏭️ $SKIP skipped" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Failed Tests" >> $GITHUB_STEP_SUMMARY
           grep "^--- FAIL:" test-output.txt | sed 's/^--- FAIL: /- ❌ /' >> $GITHUB_STEP_SUMMARY
+        elif [ "$PASS" -eq 0 ] && [ "$SKIP" -eq 0 ]; then
+          echo "⚠️ No tests found or output could not be parsed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ All $PASS tests passed$([ "$SKIP" -gt 0 ] && echo " | ⏭️ $SKIP skipped")" >> $GITHUB_STEP_SUMMARY
         fi
 
   lint:
