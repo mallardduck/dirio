@@ -69,7 +69,11 @@ func New(cfg *Config) (*Service, error) {
 //
 // Service discovery records (_http._tcp, _s3._tcp) point to this unique hostname,
 // allowing clients to discover and connect to the service.
-func (s *Service) Start() error {
+//
+// ctx controls the lifetime of the service: if the context is cancelled before
+// Stop is called the responder loop exits, though Stop should still be called
+// explicitly to send mDNS goodbye packets before the process exits.
+func (s *Service) Start(ctx context.Context) error {
 	if s.responder != nil {
 		return fmt.Errorf("mDNS service already started")
 	}
@@ -119,13 +123,14 @@ func (s *Service) Start() error {
 	s.responder = responder
 	s.handles = handles
 
-	// Create context for service lifecycle
-	ctx, cancel := context.WithCancel(context.Background())
-	s.ctx = ctx
+	// Derive a child context so Stop() can cancel independently of the parent.
+	childCtx, cancel := context.WithCancel(ctx)
+	s.ctx = childCtx
 	s.cancel = cancel
 
-	// Start responder in background
-	go s.run()
+	// Start responder in background — pass childCtx by value so run() never
+	// races with Stop() zeroing out s.ctx.
+	go s.run(childCtx)
 
 	s.log.Info("mdns service started",
 		"service", s.config.ServiceName,
@@ -136,11 +141,11 @@ func (s *Service) Start() error {
 }
 
 // run starts the dnssd responder loop.
-func (s *Service) run() {
+func (s *Service) run(ctx context.Context) {
 	s.log.Debug("starting dnssd responder")
 
-	err := s.responder.Respond(s.ctx)
-	if err != nil && s.ctx.Err() == nil {
+	err := s.responder.Respond(ctx)
+	if err != nil && ctx.Err() == nil {
 		s.log.Error("dnssd responder stopped with error", "error", err)
 	} else {
 		s.log.Debug("dnssd responder stopped")

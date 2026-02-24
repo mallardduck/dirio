@@ -315,7 +315,7 @@ func (s *Server) Start(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to create mDNS service: %w", err)
 		}
-		if err := mdnsSvc.Start(); err != nil {
+		if err := mdnsSvc.Start(ctx); err != nil {
 			return fmt.Errorf("failed to start mDNS service: %w", err)
 		}
 		s.mdns = mdnsSvc

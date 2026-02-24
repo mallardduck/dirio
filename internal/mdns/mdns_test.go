@@ -1,6 +1,7 @@
 package mdns
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -91,11 +92,11 @@ func TestStartStop(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start the service
-	require.NoError(t, svc.Start())
+	require.NoError(t, svc.Start(context.Background()))
 	assert.True(svc.IsRunning())
 
 	// Starting again should fail
-	assert.Error(svc.Start())
+	assert.Error(svc.Start(context.Background()))
 
 	// Stop the service
 	require.NoError(t, svc.Stop())
