@@ -23,7 +23,7 @@ else
 fi
 
 # Initialize test runner
-AWS_VERSION=$(aws --version 2>&1 | head -n1)
+AWS_VERSION=$(aws --version 2>&1 | sed -n '1p')
 init_test_runner "awscli" "$AWS_VERSION"
 
 # Test configuration

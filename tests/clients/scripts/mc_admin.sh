@@ -22,7 +22,7 @@ else
 fi
 
 # Initialize test runner
-MC_VERSION=$(mc --version 2>&1 | head -n1)
+MC_VERSION=$(mc --version 2>&1 | sed -n '1p')
 init_test_runner "mc-admin" "$MC_VERSION"
 
 ENDPOINT="${DIRIO_ENDPOINT}"

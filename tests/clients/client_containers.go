@@ -48,15 +48,40 @@ func AwsClientContainer(envMap map[string]string) testcontainers.ContainerReques
 }
 
 // MinioClientContainer returns a container request for the MinIO mc client
-// with the pre-built image. The Docker image is built once and cached for reuse.
+// using the latest mc binary. The Docker image is built once and cached for reuse.
 func MinioClientContainer(envMap map[string]string) testcontainers.ContainerRequest {
 	return testcontainers.ContainerRequest{
 		FromDockerfile: testcontainers.FromDockerfile{
 			Context:    ".",
 			Dockerfile: "docker/Dockerfile-minio",
 			Repo:       ContainerRepo,
-			Tag:        "mc",
+			Tag:        "mc-latest",
 			KeepImage:  true, // Keep the image for reuse across tests
+		},
+		Env: envMap,
+		HostConfigModifier: func(config *container.HostConfig) {
+			if extraGateways := hostGatewayHosts(); extraGateways != nil {
+				config.ExtraHosts = append(config.ExtraHosts, extraGateways...)
+			}
+		},
+		Cmd:        []string{"./mc.sh"},
+		WaitingFor: wait.ForExit().WithExitTimeout(3 * time.Minute),
+	}
+}
+
+// MinioVersionedClientContainer returns a container request for a specific pinned
+// mc release. The release string must match a tag on https://github.com/minio/mc/releases,
+// e.g. "RELEASE.2025-08-13T08-35-41Z". Each version gets its own cached image so
+// multiple pinned versions can coexist in the same test run.
+func MinioVersionedClientContainer(release string, envMap map[string]string) testcontainers.ContainerRequest {
+	return testcontainers.ContainerRequest{
+		FromDockerfile: testcontainers.FromDockerfile{
+			Context:    ".",
+			Dockerfile: "docker/Dockerfile-minio-versioned",
+			Repo:       ContainerRepo,
+			Tag:        "mc-" + release,
+			BuildArgs:  map[string]*string{"MC_RELEASE": &release},
+			KeepImage:  true, // Cache per version so CI doesn't rebuild on every run
 		},
 		Env: envMap,
 		HostConfigModifier: func(config *container.HostConfig) {

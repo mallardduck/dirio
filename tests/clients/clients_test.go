@@ -470,23 +470,17 @@ func TestBoto3(t *testing.T) {
 	}
 }
 
-// TestMinIOMC runs MinIO client compatibility tests
-func TestMinIOMC(t *testing.T) {
-	t.Parallel()
+// pinnedMCReleases lists specific mc release tags to run compatibility tests against.
+// Add releases here to guard against regressions on clients deployed in production.
+// Release tag format: RELEASE.YYYY-MM-DDTHH-MM-SSZ
+// Browse available releases: https://github.com/minio/mc/releases
+var pinnedMCReleases = []string{
+	"RELEASE.2025-08-13T08-35-41Z",
+}
 
-	ctx := context.Background()
-
-	// Use the shared DirIO server (started once for all client tests)
-	server := getSharedClientServer(t)
-
-	// Use pre-built mc container with mc installed
-	envMap := map[string]string{
-		"DIRIO_ENDPOINT":   server.Endpoint(),
-		"DIRIO_ACCESS_KEY": testAccessKey,
-		"DIRIO_SECRET_KEY": testSecretKey,
-	}
-
-	req := MinioClientContainer(envMap)
+// runMCClientTest executes mc.sh inside the given container and reports results.
+func runMCClientTest(t *testing.T, ctx context.Context, req testcontainers.ContainerRequest) {
+	t.Helper()
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
@@ -495,7 +489,6 @@ func TestMinIOMC(t *testing.T) {
 	require.NoError(t, err)
 	defer container.Terminate(ctx)
 
-	// Get container logs
 	logs, err := container.Logs(ctx)
 	require.NoError(t, err)
 	defer logs.Close()
@@ -506,15 +499,12 @@ func TestMinIOMC(t *testing.T) {
 
 	t.Logf("MinIO mc test output:\n%s", logOutput)
 
-	// Check for test results
 	state, err := container.State(ctx)
 	require.NoError(t, err)
 
-	// Parse JSON output
 	testOutput, err := parseTestOutput(logOutput)
 	if err != nil {
 		t.Errorf("Failed to parse test output: %v", err)
-		// Fallback to old method
 		passCount := strings.Count(logOutput, "PASS:")
 		failCount := strings.Count(logOutput, "FAIL:")
 		t.Logf("MinIO mc: %d passed, %d failed (fallback parsing)", passCount, failCount)
@@ -525,7 +515,6 @@ func TestMinIOMC(t *testing.T) {
 			testOutput.Summary.Failed,
 			testOutput.Summary.Skipped)
 
-		// Log failed tests
 		for _, result := range testOutput.Results {
 			if result.Status == "fail" {
 				t.Errorf("  FAILED: %s - %s", result.Feature, result.Message)
@@ -535,6 +524,43 @@ func TestMinIOMC(t *testing.T) {
 
 	if state.ExitCode != 0 {
 		t.Errorf("MinIO mc tests failed with exit code %d", state.ExitCode)
+	}
+}
+
+// TestMinIOMC runs MinIO client compatibility tests against the latest mc binary.
+func TestMinIOMC(t *testing.T) {
+	t.Parallel()
+
+	server := getSharedClientServer(t)
+	envMap := map[string]string{
+		"DIRIO_ENDPOINT":   server.Endpoint(),
+		"DIRIO_ACCESS_KEY": testAccessKey,
+		"DIRIO_SECRET_KEY": testSecretKey,
+	}
+	runMCClientTest(t, context.Background(), MinioClientContainer(envMap))
+}
+
+// TestMinIOMC_PinnedVersions runs the mc compatibility suite against each entry in
+// pinnedMCReleases. Add release tags there to guard against breaking older clients.
+func TestMinIOMC_PinnedVersions(t *testing.T) {
+	if len(pinnedMCReleases) == 0 {
+		t.Skip("no pinned mc versions configured")
+	}
+	t.Parallel()
+
+	server := getSharedClientServer(t)
+
+	for _, release := range pinnedMCReleases {
+		release := release
+		t.Run(release, func(t *testing.T) {
+			t.Parallel()
+			envMap := map[string]string{
+				"DIRIO_ENDPOINT":   server.Endpoint(),
+				"DIRIO_ACCESS_KEY": testAccessKey,
+				"DIRIO_SECRET_KEY": testSecretKey,
+			}
+			runMCClientTest(t, context.Background(), MinioVersionedClientContainer(release, envMap))
+		})
 	}
 }
 
