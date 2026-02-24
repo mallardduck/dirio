@@ -73,7 +73,7 @@ func updateGroupMembers(t *testing.T, ts *TestServer, groupName string, members 
 	var membersJSON strings.Builder
 	membersJSON.WriteString("[")
 	for i, m := range members {
-		membersJSON.WriteString(fmt.Sprintf(`"%s"`, m))
+		_, _ = fmt.Fprintf(&membersJSON, `"%s"`, m)
 		if i < len(members)-1 {
 			membersJSON.WriteString(",")
 		}

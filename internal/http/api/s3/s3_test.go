@@ -78,7 +78,7 @@ func TestWriteXMLResponse(t *testing.T) {
 
 func TestWriteXMLResponse_LargeResponse(t *testing.T) {
 	// Create a response with many buckets to test large response handling
-	buckets := make([]s3types.Bucket, 0)
+	buckets := make([]s3types.Bucket, 0, 15000)
 	// Add enough buckets to create > 10MB response
 	// Each bucket with a reasonably long name should help reach the threshold
 	longName := strings.Repeat("a", 1000)
