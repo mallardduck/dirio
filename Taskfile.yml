@@ -82,7 +82,10 @@ tasks:
   test-clients:
     desc: Run client tests (requires Docker)
     cmds:
-      - go test -v -race ./tests/clients/...
+      # No -race: client tests drive external processes (Docker containers + subprocess server binary),
+      # so the race detector only instruments testcontainers-go internals rather than DirIO code.
+      # Races in the server are invisible to this binary's detector.
+      - go test -v ./tests/clients/...
 
   test-perf:
     desc: Run opt-in profiling tests (seeds 10k objects, writes pprof files to tests/perf/profiles/)
