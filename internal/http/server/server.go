@@ -210,6 +210,7 @@ func New(config *Config) (*Server, error) {
 func (s *Server) setupRoutes() {
 	s.router = teapot.New()
 
+	s.router.Use(loggingHttp.RecoveryMiddleware)
 	s.router.Use(chiMiddleware.StripSlashes)
 	s.router.Use(middleware.Timing)
 	s.router.Use(s.trackRequest) // count in-flight requests; check inShutdown
@@ -289,6 +290,7 @@ func (s *Server) Start(ctx context.Context) error {
 	// Start separate console listener if configured on a different port.
 	if s.consoleRouter != nil && !s.consoleSamePort() {
 		consoleAddr := fmt.Sprintf(":%d", s.consolePort)
+		// TODO when on dedicated port we should also add loggingHttp.RecoveryMiddleware like main router too
 		s.consoleServer = &http.Server{
 			Addr:         consoleAddr,
 			Handler:      middleware.SetDefaultHeadersMiddleware(s.consoleRouter),
