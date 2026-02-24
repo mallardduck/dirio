@@ -241,3 +241,16 @@ func (ts *TestServer) DecryptAndDecodeJSON(t *testing.T, resp *http.Response, v 
 		t.Fatalf("testutil: decode decrypted JSON response: %v", err)
 	}
 }
+
+type UserListInfo struct {
+	MemberOf  string    `json:"memberOf"`
+	Status    string    `json:"status"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+func (ts *TestServer) GetUserList(t *testing.T, resp *http.Response) map[string]UserListInfo {
+	var usersList map[string]UserListInfo
+	ts.DecryptAndDecodeJSON(t, resp, &usersList)
+
+	return usersList
+}

@@ -109,7 +109,7 @@ func TestDeleteUser_Success(t *testing.T) {
 	DrainAndClose(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	resp2 := ts.AdminRequest(t, http.MethodPost, "/remove-user?accessKey=charlie", nil)
+	resp2 := ts.AdminRequest(t, http.MethodDelete, "/remove-user?accessKey=charlie", nil)
 	DrainAndClose(resp2)
 	assert.Equal(t, http.StatusOK, resp2.StatusCode)
 
@@ -137,7 +137,7 @@ func TestSetUserStatus_Disable(t *testing.T) {
 	DrainAndClose(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	resp2 := ts.AdminRequest(t, http.MethodPost, "/set-user-status?accessKey=dave&status=disabled", nil)
+	resp2 := ts.AdminRequest(t, http.MethodPut, "/set-user-status?accessKey=dave&status=disabled", nil)
 	DrainAndClose(resp2)
 	assert.Equal(t, http.StatusOK, resp2.StatusCode)
 
@@ -146,7 +146,7 @@ func TestSetUserStatus_Disable(t *testing.T) {
 
 	var info map[string]interface{}
 	DecodeJSON(t, resp3, &info)
-	assert.Equal(t, "off", info["status"])
+	assert.Equal(t, "disabled", info["status"])
 }
 
 // TestSetUserStatus_Enable creates a disabled user and enables it
@@ -158,7 +158,7 @@ func TestSetUserStatus_Enable(t *testing.T) {
 	DrainAndClose(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	resp2 := ts.AdminRequest(t, http.MethodPost, "/set-user-status?accessKey=eve&status=enabled", nil)
+	resp2 := ts.AdminRequest(t, http.MethodPut, "/set-user-status?accessKey=eve&status=enabled", nil)
 	DrainAndClose(resp2)
 	assert.Equal(t, http.StatusOK, resp2.StatusCode)
 
@@ -167,7 +167,7 @@ func TestSetUserStatus_Enable(t *testing.T) {
 
 	var info map[string]interface{}
 	DecodeJSON(t, resp3, &info)
-	assert.Equal(t, "on", info["status"])
+	assert.Equal(t, "enabled", info["status"])
 }
 
 // TestSetUserStatus_InvalidStatus returns 400 for an unknown status value
@@ -179,7 +179,7 @@ func TestSetUserStatus_InvalidStatus(t *testing.T) {
 	DrainAndClose(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	resp2 := ts.AdminRequest(t, http.MethodPost, "/set-user-status?accessKey=frank&status=suspended", nil)
+	resp2 := ts.AdminRequest(t, http.MethodPut, "/set-user-status?accessKey=frank&status=suspended", nil)
 	DrainAndClose(resp2)
 	assert.Equal(t, http.StatusBadRequest, resp2.StatusCode)
 }

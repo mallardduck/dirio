@@ -107,10 +107,9 @@ func TestMinIOImport_Users(t *testing.T) {
 	resp := ts.AdminRequest(t, http.MethodGet, "/list-users", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var users []string
-	DecodeJSON(t, resp, &users)
-	assert.Contains(t, users, "alice")
-	assert.Contains(t, users, "bob")
+	usersList := ts.GetUserList(t, resp)
+	assert.Contains(t, usersList, "alice")
+	assert.Contains(t, usersList, "bob")
 }
 
 // TestMinIOImport_Policies verifies that MinIO IAM policies are imported on server startup
@@ -174,8 +173,7 @@ func TestMinIOImport_DisabledUser(t *testing.T) {
 
 	var info map[string]interface{}
 	DecodeJSON(t, resp, &info)
-	// MinIO "disabled" maps to DirIO "off"
-	assert.Equal(t, "off", info["status"])
+	assert.Equal(t, "disabled", info["status"])
 }
 
 // TestMinIOImport_IdempotentRestart verifies that re-starting the server with already-imported
@@ -194,9 +192,8 @@ func TestMinIOImport_IdempotentRestart(t *testing.T) {
 	ts1 := NewTestServerWithDataDir(t, dataDir)
 	resp := ts1.AdminRequest(t, http.MethodGet, "/list-users", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	var users []string
-	DecodeJSON(t, resp, &users)
-	require.Contains(t, users, "alice")
+	usersList1 := ts1.GetUserList(t, resp)
+	require.Contains(t, usersList1, "alice")
 
 	// Stop ts1 so it releases the bolt DB lock before ts2 opens the same dataDir.
 	ts1.Stop()
@@ -206,12 +203,11 @@ func TestMinIOImport_IdempotentRestart(t *testing.T) {
 
 	resp2 := ts2.AdminRequest(t, http.MethodGet, "/list-users", nil)
 	require.Equal(t, http.StatusOK, resp2.StatusCode)
-	var users2 []string
-	DecodeJSON(t, resp2, &users2)
+	usersList2 := ts1.GetUserList(t, resp2)
 
 	// Should still have exactly one alice, not duplicated
 	count := 0
-	for _, u := range users2 {
+	for u := range usersList2 {
 		if u == "alice" {
 			count++
 		}
@@ -241,10 +237,9 @@ func TestMinIOImport_Complete(t *testing.T) {
 	// Verify users
 	resp := ts.AdminRequest(t, http.MethodGet, "/list-users", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	var users []string
-	DecodeJSON(t, resp, &users)
-	assert.Contains(t, users, "alice")
-	assert.Contains(t, users, "bob")
+	usersList := ts.GetUserList(t, resp)
+	assert.Contains(t, usersList, "alice")
+	assert.Contains(t, usersList, "bob")
 
 	// Verify policies
 	resp2 := ts.AdminRequest(t, http.MethodGet, "/list-canned-policies", nil)
@@ -289,7 +284,7 @@ func TestMinIOImport_PostImportUserManagement(t *testing.T) {
 	DrainAndClose(resp)
 
 	// Disable the imported user
-	resp2 := ts.AdminRequest(t, http.MethodPost, "/set-user-status?accessKey=importeduser&status=disabled", nil)
+	resp2 := ts.AdminRequest(t, http.MethodPut, "/set-user-status?accessKey=importeduser&status=disabled", nil)
 	DrainAndClose(resp2)
 	assert.Equal(t, http.StatusOK, resp2.StatusCode)
 
@@ -308,7 +303,7 @@ func TestMinIOImport_PostImportUserManagement(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp5.StatusCode)
 	var info map[string]interface{}
 	DecodeJSON(t, resp5, &info)
-	assert.Equal(t, "off", info["status"])
+	assert.Equal(t, "disabled", info["status"])
 	attachedPolicies, _ := info["attachedPolicies"].([]interface{})
 	assert.Contains(t, attachedPolicies, "imported-policy")
 }
