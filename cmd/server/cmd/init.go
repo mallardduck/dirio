@@ -68,48 +68,62 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	}
 
 	if !s.IsNew() {
-		// Config already exists — only apply credentials if provided and not yet set.
-		if accessKey != "" {
-			if s.DataConfig.Credentials.IsConfigured() {
-				log.Warn("admin credentials already configured, skipping",
-					"data_dir", dataDir,
-					"access_key", s.DataConfig.Credentials.AccessKey,
-				)
-				output.Warn("Admin credentials already configured — use \"dirio credentials set\" to update them.")
-			} else {
-				s.DataConfig.Credentials.AccessKey = accessKey
-				s.DataConfig.Credentials.SecretKey = secretKey
-				if err := data.SaveDataConfig(s.RootFS(), s.DataConfig); err != nil {
-					return fmt.Errorf("failed to save credentials: %w", err)
-				}
-				log.Info("admin credentials configured", "data_dir", dataDir, "access_key", accessKey)
-				printCredentialsSet(dataDir, accessKey)
-			}
-		} else {
-			log.Info("data directory already initialised", "data_dir", dataDir)
-			output.Success("Data directory already initialised: " + dataDir)
-		}
-	} else {
-		// First init — apply optional credentials and persist the default config.
-		if accessKey != "" {
-			s.DataConfig.Credentials.AccessKey = accessKey
-			s.DataConfig.Credentials.SecretKey = secretKey
-		}
-		if err := data.SaveDataConfig(s.RootFS(), s.DataConfig); err != nil {
-			return fmt.Errorf("failed to save data config: %w", err)
-		}
-		log.Info("data directory initialised", "data_dir", dataDir, "credentials_set", accessKey != "")
-		output.Blank()
-		output.Success("Data directory initialised: " + dataDir)
-		if accessKey != "" {
-			printCredentialsSet(dataDir, accessKey)
-		} else {
-			output.Hint("No admin credentials set.")
-			output.Hint("Run \"dirio credentials set\" or re-run \"dirio init --access-key ... --secret-key ...\" to configure them.")
-			output.Blank()
-		}
+		return handleExistingDir(s, dataDir, accessKey, secretKey)
+	}
+	return handleFirstInit(s, dataDir, accessKey, secretKey)
+}
+
+// handleExistingDir handles "dirio init" against a data directory that already exists.
+// Credentials are applied only if provided and not already configured.
+func handleExistingDir(s *startup.Starter, dataDir, accessKey, secretKey string) error {
+	log := logging.Component("init")
+
+	if accessKey == "" {
+		log.Info("data directory already initialised", "data_dir", dataDir)
+		output.Success("Data directory already initialised: " + dataDir)
+		return nil
 	}
 
+	if s.DataConfig.Credentials.IsConfigured() {
+		log.Warn("admin credentials already configured, skipping",
+			"data_dir", dataDir,
+			"access_key", s.DataConfig.Credentials.AccessKey,
+		)
+		output.Warn("Admin credentials already configured — use \"dirio credentials set\" to update them.")
+		return nil
+	}
+
+	s.DataConfig.Credentials.AccessKey = accessKey
+	s.DataConfig.Credentials.SecretKey = secretKey
+	if err := data.SaveDataConfig(s.RootFS(), s.DataConfig); err != nil {
+		return fmt.Errorf("failed to save credentials: %w", err)
+	}
+	log.Info("admin credentials configured", "data_dir", dataDir, "access_key", accessKey)
+	printCredentialsSet(dataDir, accessKey)
+	return nil
+}
+
+// handleFirstInit handles the first-time "dirio init" for a fresh data directory.
+func handleFirstInit(s *startup.Starter, dataDir, accessKey, secretKey string) error {
+	log := logging.Component("init")
+
+	if accessKey != "" {
+		s.DataConfig.Credentials.AccessKey = accessKey
+		s.DataConfig.Credentials.SecretKey = secretKey
+	}
+	if err := data.SaveDataConfig(s.RootFS(), s.DataConfig); err != nil {
+		return fmt.Errorf("failed to save data config: %w", err)
+	}
+	log.Info("data directory initialised", "data_dir", dataDir, "credentials_set", accessKey != "")
+	output.Blank()
+	output.Success("Data directory initialised: " + dataDir)
+	if accessKey != "" {
+		printCredentialsSet(dataDir, accessKey)
+		return nil
+	}
+	output.Hint("No admin credentials set.")
+	output.Hint("Run \"dirio credentials set\" or re-run \"dirio init --access-key ... --secret-key ...\" to configure them.")
+	output.Blank()
 	return nil
 }
 

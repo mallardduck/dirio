@@ -102,3 +102,13 @@ var WriteXMLResponse = httpresponse.WriteXMLResponse
 // WriteErrorResponse writes an S3 error response in XML format.
 // It is exported so that middleware can use it for validation errors.
 var WriteErrorResponse = httpresponse.WriteErrorResponse
+
+// respondError writes an S3 XML error response and logs the outcome.
+// The caller must return after this call.
+func respondError(w http.ResponseWriter, requestID string, err error, errCode s3types.ErrorCode, msg string, mods ...httpresponse.ErrorModifier) {
+	if writeErr := WriteErrorResponse(w, requestID, errCode, mods...); writeErr != nil {
+		s3Logger.With("err", err, "write_err", writeErr).Warn(msg + " and additional error writing XML error response")
+		return
+	}
+	s3Logger.With("err", err).Warn(msg)
+}

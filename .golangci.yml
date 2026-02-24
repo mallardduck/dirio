@@ -19,6 +19,7 @@ linters:
     - nakedret
     - gocritic
     - exhaustive
+    - nestif
   settings:
     gocritic:
       enabled-tags:

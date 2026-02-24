@@ -345,32 +345,35 @@ func importBuckets(minioFS billy.Filesystem, buckets map[string]*BucketMetadata)
 		// Check if .metadata.bin also exists (hybrid or modern MinIO 2022+)
 		// Parse it and merge with legacy config (legacy takes precedence)
 		metadataPath := filepath.Join(bucketsMetaDir, bucketName, ".metadata.bin")
-		if _, statErr := minioFS.Stat(metadataPath); statErr == nil {
-			// Read and parse .metadata.bin
-			binData, readErr := util.ReadFile(minioFS, metadataPath)
-			if readErr != nil {
-				fmt.Printf("Warning: failed to read .metadata.bin for %s: %v\n", bucketName, readErr)
-				fmt.Printf("Found MinIO bucket: %s (with .metadata.bin but failed to read)\n", bucketName)
-			} else {
-				binMeta, parseErr := parseBucketMetadataBin(binData)
-				if parseErr != nil {
-					fmt.Printf("Warning: failed to parse .metadata.bin for %s: %v\n", bucketName, parseErr)
-					fmt.Printf("Found MinIO bucket: %s (with .metadata.bin but failed to parse)\n", bucketName)
-				} else {
-					// Merge binary metadata with legacy config
-					// Legacy config takes precedence, binary fills in gaps
-					mergeBucketMetadata(minioMeta, binMeta)
-					fmt.Printf("Found MinIO bucket: %s (merged .metadata.bin + legacy config)\n", bucketName)
-				}
-			}
-		} else {
+		if _, statErr := minioFS.Stat(metadataPath); statErr != nil {
 			fmt.Printf("Found MinIO bucket: %s (legacy config only)\n", bucketName)
+		} else {
+			mergeMetadataBin(minioFS, metadataPath, bucketName, minioMeta)
 		}
 
 		buckets[bucketName] = minioMeta
 	}
 
 	return nil
+}
+
+// mergeMetadataBin reads and parses .metadata.bin and merges it into minioMeta.
+// Legacy config (minioMeta) takes precedence; binary metadata only fills gaps.
+func mergeMetadataBin(minioFS billy.Filesystem, metadataPath, bucketName string, minioMeta *BucketMetadata) {
+	binData, readErr := util.ReadFile(minioFS, metadataPath)
+	if readErr != nil {
+		fmt.Printf("Warning: failed to read .metadata.bin for %s: %v\n", bucketName, readErr)
+		fmt.Printf("Found MinIO bucket: %s (with .metadata.bin but failed to read)\n", bucketName)
+		return
+	}
+	binMeta, parseErr := parseBucketMetadataBin(binData)
+	if parseErr != nil {
+		fmt.Printf("Warning: failed to parse .metadata.bin for %s: %v\n", bucketName, parseErr)
+		fmt.Printf("Found MinIO bucket: %s (with .metadata.bin but failed to parse)\n", bucketName)
+		return
+	}
+	mergeBucketMetadata(minioMeta, binMeta)
+	fmt.Printf("Found MinIO bucket: %s (merged .metadata.bin + legacy config)\n", bucketName)
 }
 
 // importObjectMetadata reads per-object metadata from fs.json files

@@ -80,7 +80,7 @@ func updateGroupMembers(t *testing.T, ts *TestServer, groupName string, members 
 	}
 	membersJSON.WriteString("]")
 
-	body := fmt.Sprintf(`{"group": "%q", "members": %s, "isRemove": %v}`,
+	body := fmt.Sprintf(`{"group": %q, "members": %s, "isRemove": %v}`,
 		groupName, membersJSON.String(), isRemove)
 
 	url := ts.URL("/minio/admin/v3/update-group-members")

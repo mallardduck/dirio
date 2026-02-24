@@ -116,50 +116,39 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (bool, error) {
 	}
 
 	// Convert and save buckets
-	if len(result.Buckets) > 0 {
-		for bucketName, minioBucket := range result.Buckets {
-			// Parse bucket policy if present
-			var bucketPolicy *PolicyDocument
-			if len(minioBucket.PolicyConfigJSON) > 0 {
-				var policyDoc PolicyDocument
-				if err := jsonutil.Unmarshal(minioBucket.PolicyConfigJSON, &policyDoc); err != nil {
-					fmt.Printf("Warning: failed to parse bucket policy for %s: %v\n", bucketName, err)
-				} else {
-					bucketPolicy = &policyDoc
-				}
-			}
+	for bucketName, minioBucket := range result.Buckets {
+		meta := &BucketMetadata{
+			Version:      BucketMetadataVersion,
+			Name:         minioBucket.Name,
+			Owner:        nil, // nil = admin-only (MinIO doesn't store owner, assume admin created)
+			Created:      minioBucket.Created,
+			BucketPolicy: parseBucketPolicy(bucketName, minioBucket.PolicyConfigJSON),
 
-			meta := &BucketMetadata{
-				Version:      BucketMetadataVersion,
-				Name:         minioBucket.Name,
-				Owner:        nil, // nil = admin-only (MinIO doesn't store owner, assume admin created)
-				Created:      minioBucket.Created,
-				BucketPolicy: bucketPolicy,
-
-				// Import all extended MinIO metadata fields
-				NotificationConfigXML:       string(minioBucket.NotificationConfigXML),
-				LifecycleConfigXML:          string(minioBucket.LifecycleConfigXML),
-				ObjectLockConfigXML:         string(minioBucket.ObjectLockConfigXML),
-				VersioningConfigXML:         string(minioBucket.VersioningConfigXML),
-				EncryptionConfigXML:         string(minioBucket.EncryptionConfigXML),
-				TaggingConfigXML:            string(minioBucket.TaggingConfigXML),
-				QuotaConfigJSON:             string(minioBucket.QuotaConfigJSON),
-				ReplicationConfigXML:        string(minioBucket.ReplicationConfigXML),
-				BucketTargetsConfigJSON:     string(minioBucket.BucketTargetsConfigJSON),
-				BucketTargetsConfigMetaJSON: string(minioBucket.BucketTargetsConfigMetaJSON),
-				PolicyConfigUpdatedAt:       minioBucket.PolicyConfigUpdatedAt,
-				ObjectLockConfigUpdatedAt:   minioBucket.ObjectLockConfigUpdatedAt,
-				EncryptionConfigUpdatedAt:   minioBucket.EncryptionConfigUpdatedAt,
-				TaggingConfigUpdatedAt:      minioBucket.TaggingConfigUpdatedAt,
-				QuotaConfigUpdatedAt:        minioBucket.QuotaConfigUpdatedAt,
-				ReplicationConfigUpdatedAt:  minioBucket.ReplicationConfigUpdatedAt,
-				VersioningConfigUpdatedAt:   minioBucket.VersioningConfigUpdatedAt,
-			}
-			if err := m.saveBucketMetadata(ctx, bucketName, meta); err != nil {
-				fmt.Printf("Warning: failed to save metadata for bucket %s: %v\n", bucketName, err)
-				continue
-			}
+			// Import all extended MinIO metadata fields
+			NotificationConfigXML:       string(minioBucket.NotificationConfigXML),
+			LifecycleConfigXML:          string(minioBucket.LifecycleConfigXML),
+			ObjectLockConfigXML:         string(minioBucket.ObjectLockConfigXML),
+			VersioningConfigXML:         string(minioBucket.VersioningConfigXML),
+			EncryptionConfigXML:         string(minioBucket.EncryptionConfigXML),
+			TaggingConfigXML:            string(minioBucket.TaggingConfigXML),
+			QuotaConfigJSON:             string(minioBucket.QuotaConfigJSON),
+			ReplicationConfigXML:        string(minioBucket.ReplicationConfigXML),
+			BucketTargetsConfigJSON:     string(minioBucket.BucketTargetsConfigJSON),
+			BucketTargetsConfigMetaJSON: string(minioBucket.BucketTargetsConfigMetaJSON),
+			PolicyConfigUpdatedAt:       minioBucket.PolicyConfigUpdatedAt,
+			ObjectLockConfigUpdatedAt:   minioBucket.ObjectLockConfigUpdatedAt,
+			EncryptionConfigUpdatedAt:   minioBucket.EncryptionConfigUpdatedAt,
+			TaggingConfigUpdatedAt:      minioBucket.TaggingConfigUpdatedAt,
+			QuotaConfigUpdatedAt:        minioBucket.QuotaConfigUpdatedAt,
+			ReplicationConfigUpdatedAt:  minioBucket.ReplicationConfigUpdatedAt,
+			VersioningConfigUpdatedAt:   minioBucket.VersioningConfigUpdatedAt,
 		}
+		if err := m.saveBucketMetadata(ctx, bucketName, meta); err != nil {
+			fmt.Printf("Warning: failed to save metadata for bucket %s: %v\n", bucketName, err)
+			continue
+		}
+	}
+	if len(result.Buckets) > 0 {
 		fmt.Printf("Imported %d buckets\n", len(result.Buckets))
 	}
 
@@ -274,4 +263,18 @@ func (m *Manager) getMinIOModTime() (time.Time, error) {
 		return time.Time{}, err
 	}
 	return info.ModTime(), nil
+}
+
+// parseBucketPolicy unmarshals a raw JSON bucket policy.
+// Returns nil and logs a warning if policyJSON is empty or invalid.
+func parseBucketPolicy(bucketName string, policyJSON []byte) *PolicyDocument {
+	if len(policyJSON) == 0 {
+		return nil
+	}
+	var policyDoc PolicyDocument
+	if err := jsonutil.Unmarshal(policyJSON, &policyDoc); err != nil {
+		fmt.Printf("Warning: failed to parse bucket policy for %s: %v\n", bucketName, err)
+		return nil
+	}
+	return &policyDoc
 }

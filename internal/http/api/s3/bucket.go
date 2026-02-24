@@ -94,27 +94,14 @@ func (h *HTTPHandler) HeadBucket(w http.ResponseWriter, r *http.Request, bucket 
 func (h *HTTPHandler) DeleteBucket(w http.ResponseWriter, r *http.Request, bucket string) {
 	if err := h.s3Service.DeleteBucket(r.Context(), bucket); err != nil {
 		requestID := middleware.GetRequestID(r.Context())
-		if errors.Is(err, s3types.ErrBucketNotFound) {
-			if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeNoSuchBucket, response.SetErrAsMessage(err)); writeErr != nil {
-				s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error deleting bucket (no such bucket) and additional error writing XML error response")
-				return
-			}
-			s3Logger.With("err", err).Warn("encountered error deleting bucket (no such bucket)")
-			return
+		switch {
+		case errors.Is(err, s3types.ErrBucketNotFound):
+			respondError(w, requestID, err, s3types.ErrCodeNoSuchBucket, "encountered error deleting bucket (no such bucket)", response.SetErrAsMessage(err))
+		case errors.Is(err, s3types.ErrBucketNotEmpty):
+			respondError(w, requestID, err, s3types.ErrCodeBucketNotEmpty, "encountered error deleting bucket (not empty)", response.SetErrAsMessage(err))
+		default:
+			respondError(w, requestID, err, s3types.ErrCodeInternalError, "encountered error deleting bucket", response.SetErrAsMessage(err))
 		}
-		if errors.Is(err, s3types.ErrBucketNotEmpty) {
-			if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeBucketNotEmpty, response.SetErrAsMessage(err)); writeErr != nil {
-				s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error deleting bucket (not empty) and additional error writing XML error response")
-				return
-			}
-			s3Logger.With("err", err).Warn("encountered error deleting bucket (not empty)")
-			return
-		}
-		if writeErr := WriteErrorResponse(w, requestID, s3types.ErrCodeInternalError, response.SetErrAsMessage(err)); writeErr != nil {
-			s3Logger.With("err", err, "write_err", writeErr).Warn("encountered error deleting bucket and additional error writing XML error response")
-			return
-		}
-		s3Logger.With("err", err).Warn("encountered error deleting bucket")
 		return
 	}
 

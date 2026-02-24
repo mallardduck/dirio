@@ -57,15 +57,8 @@ func (e *Engine) Evaluate(ctx context.Context, req *RequestContext) Decision {
 
 	// 2. Bucket policy evaluation (if bucket specified)
 	if req.Resource != nil && req.Resource.Bucket != "" {
-		bucketPolicy := e.cache.GetBucketPolicy(req.Resource.Bucket)
-		if bucketPolicy != nil {
-			decision := e.evaluatePolicy(bucketPolicy, req)
-			if decision == DecisionExplicitDeny {
-				return DecisionExplicitDeny // Explicit deny always wins (AWS model)
-			}
-			if decision == DecisionAllow {
-				return DecisionAllow
-			}
+		if d := e.checkBucketPolicy(req); d != DecisionDeny {
+			return d
 		}
 	}
 
@@ -100,6 +93,16 @@ func (e *Engine) Evaluate(ctx context.Context, req *RequestContext) Decision {
 
 	// 5. Default deny
 	return DecisionDeny
+}
+
+// checkBucketPolicy evaluates the bucket policy for the request's bucket.
+// Returns DecisionDeny if no bucket policy is set (caller should continue evaluation).
+func (e *Engine) checkBucketPolicy(req *RequestContext) Decision {
+	bucketPolicy := e.cache.GetBucketPolicy(req.Resource.Bucket)
+	if bucketPolicy == nil {
+		return DecisionDeny
+	}
+	return e.evaluatePolicy(bucketPolicy, req)
 }
 
 // evaluatePolicy evaluates a single policy document against a request.

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	nethttp "net/http"
@@ -112,50 +113,65 @@ func (s *groupHTTPService) UpdateGroupMembers(w nethttp.ResponseWriter, r *netht
 	ctx := r.Context()
 
 	if body.IsRemove {
-		// Remove members from the group (resolve access key → UUID)
-		for _, accessKey := range body.Members {
-			if err := s.groups.RemoveMemberByAccessKey(ctx, body.Group, accessKey); err != nil {
-				s.log.Error("Failed to remove member from group", "error", err, "group", body.Group, "accessKey", accessKey)
-				if svcerrors.IsNotFound(err) {
-					w.WriteHeader(nethttp.StatusNotFound)
-					return
-				}
-				w.WriteHeader(nethttp.StatusInternalServerError)
-				return
-			}
-		}
-	} else {
-		// Ensure group exists (create if not)
-		_, err := s.groups.Get(ctx, body.Group)
-		if svcerrors.IsNotFound(err) {
-			if _, createErr := s.groups.Create(ctx, &group.CreateGroupRequest{Name: body.Group}); createErr != nil {
-				if !svcerrors.IsAlreadyExists(createErr) {
-					s.log.Error("Failed to create group", "error", createErr, "group", body.Group)
-					w.WriteHeader(nethttp.StatusInternalServerError)
-					return
-				}
-			}
-		} else if err != nil {
-			s.log.Error("Failed to get group", "error", err, "group", body.Group)
-			w.WriteHeader(nethttp.StatusInternalServerError)
+		if !s.removeGroupMembers(w, ctx, body.Group, body.Members) {
 			return
 		}
-
-		// Add members (resolve access key → UUID)
-		for _, accessKey := range body.Members {
-			if err := s.groups.AddMemberByAccessKey(ctx, body.Group, accessKey); err != nil {
-				s.log.Error("Failed to add member to group", "error", err, "group", body.Group, "accessKey", accessKey)
-				if svcerrors.IsNotFound(err) {
-					w.WriteHeader(nethttp.StatusNotFound)
-					return
-				}
-				w.WriteHeader(nethttp.StatusInternalServerError)
-				return
-			}
+	} else {
+		if !s.ensureGroupAndAddMembers(w, ctx, body.Group, body.Members) {
+			return
 		}
 	}
 
 	w.WriteHeader(nethttp.StatusOK)
+}
+
+// removeGroupMembers removes each member from the group by access key.
+// Writes an HTTP error and returns false on first failure.
+func (s *groupHTTPService) removeGroupMembers(w nethttp.ResponseWriter, ctx context.Context, groupName string, members []string) bool {
+	for _, accessKey := range members {
+		if err := s.groups.RemoveMemberByAccessKey(ctx, groupName, accessKey); err != nil {
+			s.log.Error("Failed to remove member from group", "error", err, "group", groupName, "accessKey", accessKey)
+			if svcerrors.IsNotFound(err) {
+				w.WriteHeader(nethttp.StatusNotFound)
+				return false
+			}
+			w.WriteHeader(nethttp.StatusInternalServerError)
+			return false
+		}
+	}
+	return true
+}
+
+// ensureGroupAndAddMembers creates the group if needed, then adds each member by access key.
+// Writes an HTTP error and returns false on first failure.
+func (s *groupHTTPService) ensureGroupAndAddMembers(w nethttp.ResponseWriter, ctx context.Context, groupName string, members []string) bool {
+	_, err := s.groups.Get(ctx, groupName)
+	if svcerrors.IsNotFound(err) {
+		if _, createErr := s.groups.Create(ctx, &group.CreateGroupRequest{Name: groupName}); createErr != nil {
+			if !svcerrors.IsAlreadyExists(createErr) {
+				s.log.Error("Failed to create group", "error", createErr, "group", groupName)
+				w.WriteHeader(nethttp.StatusInternalServerError)
+				return false
+			}
+		}
+	} else if err != nil {
+		s.log.Error("Failed to get group", "error", err, "group", groupName)
+		w.WriteHeader(nethttp.StatusInternalServerError)
+		return false
+	}
+
+	for _, accessKey := range members {
+		if err := s.groups.AddMemberByAccessKey(ctx, groupName, accessKey); err != nil {
+			s.log.Error("Failed to add member to group", "error", err, "group", groupName, "accessKey", accessKey)
+			if svcerrors.IsNotFound(err) {
+				w.WriteHeader(nethttp.StatusNotFound)
+				return false
+			}
+			w.WriteHeader(nethttp.StatusInternalServerError)
+			return false
+		}
+	}
+	return true
 }
 
 // SetGroupStatus handles POST /minio/admin/v3/set-group-status?group=...&status=enabled|disabled

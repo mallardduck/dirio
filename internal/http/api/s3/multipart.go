@@ -104,7 +104,7 @@ func (h *HTTPHandler) UploadPart(w http.ResponseWriter, r *http.Request, bucket,
 	}
 
 	// Return ETag in header
-	w.Header().Set("ETag", fmt.Sprintf(`"%q"`, resp.ETag))
+	w.Header().Set("ETag", fmt.Sprintf(`%q`, resp.ETag))
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -161,7 +161,7 @@ func (h *HTTPHandler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Req
 		Location: h.urlBuilder.ObjectURL(r, bucket, key),
 		Bucket:   resp.Bucket,
 		Key:      resp.Key,
-		ETag:     fmt.Sprintf(`"%q"`, resp.ETag),
+		ETag:     fmt.Sprintf(`%q`, resp.ETag),
 	}
 
 	w.Header().Set(headers.ContentType, "application/xml")
@@ -240,7 +240,7 @@ func (h *HTTPHandler) ListParts(w http.ResponseWriter, r *http.Request, bucket, 
 	for i, part := range resp.Parts {
 		parts[i] = s3types.Part{
 			PartNumber:   part.PartNumber,
-			ETag:         fmt.Sprintf(`"%q"`, part.ETag),
+			ETag:         fmt.Sprintf(`%q`, part.ETag),
 			Size:         part.Size,
 			LastModified: part.LastModified.Format("2006-01-02T15:04:05.000Z"),
 		}

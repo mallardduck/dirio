@@ -184,7 +184,7 @@ func TestListFiltering(t *testing.T) {
 // Helpers for Admin API calls within integration tests
 
 func createIAMUser(t *testing.T, ts *TestServer, accessKey, secretKey string) {
-	body := fmt.Sprintf(`{"secretKey": "%q", "status": "enabled"}`, secretKey)
+	body := fmt.Sprintf(`{"secretKey": %q, "status": "enabled"}`, secretKey)
 	encrypted, err := madmin.EncryptData(ts.SecretKey, []byte(body))
 	require.NoError(t, err)
 

@@ -59,13 +59,12 @@ func matchAWSPrincipal(aws any, reqPrincipal *Principal) bool {
 	// Handle array of ARNs
 	if arr, ok := aws.([]any); ok {
 		for _, item := range arr {
-			if s, ok := item.(string); ok {
-				if s == "*" {
-					return true
-				}
-				if matchUserARN(s, reqPrincipal) {
-					return true
-				}
+			s, ok := item.(string)
+			if !ok {
+				continue
+			}
+			if s == "*" || matchUserARN(s, reqPrincipal) {
+				return true
 			}
 		}
 	}

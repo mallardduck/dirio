@@ -172,54 +172,9 @@ func (s policyHTTPService) SetPolicy(w nethttp.ResponseWriter, r *nethttp.Reques
 	// Old: ?policyName=X&userOrGroup=Y&isGroup=false
 	// New: Encrypted JSON body with {User, Group, Policies[]}
 
-	var policyName, userOrGroup string
-	var isGroup bool
-
-	// Try encrypted body first (new MinIO admin API format)
-	if r.Header.Get(headers.ContentType) == "application/octet-stream" && r.ContentLength > 0 {
-		// Get the authenticated admin user's secret key for decryption
-		adminUser := auth.GetRequestUser(r.Context())
-		if adminUser == nil {
-			s.log.Error("No authenticated user in context")
-			w.WriteHeader(nethttp.StatusUnauthorized)
-			return
-		}
-
-		// Decrypt and parse the request body (MinIO PolicyAssociationReq format)
-		var req struct {
-			User     string   `json:"User"`
-			Group    string   `json:"Group"`
-			Policies []string `json:"Policies"`
-		}
-		if err := jsonutil.DecryptAndUnmarshal(adminUser.SecretKey, r.Body, &req); err != nil {
-			s.log.Error("Failed to decrypt/parse request body", "error", err)
-			w.WriteHeader(nethttp.StatusBadRequest)
-			return
-		}
-
-		s.log.Debug("Decrypted request", "user", req.User, "group", req.Group, "policies", req.Policies)
-
-		// Extract parameters
-		if req.User != "" {
-			userOrGroup = req.User
-			isGroup = false
-		} else if req.Group != "" {
-			userOrGroup = req.Group
-			isGroup = true
-		}
-		// Take the first policy (mc sends one at a time)
-		if len(req.Policies) > 0 {
-			policyName = req.Policies[0]
-		}
-
-		s.log.Debug("Parsed encrypted request", "policy", policyName, "userOrGroup", userOrGroup, "isGroup", isGroup)
-	} else {
-		// Fall back to old format (query parameters)
-		policyName = query.String(r, "policyName", "")
-		userOrGroup = query.String(r, "userOrGroup", "")
-		isGroup = query.Bool(r, "isGroup", false)
-
-		s.log.Debug("Parsed query parameters", "policy", policyName, "userOrGroup", userOrGroup, "isGroup", isGroup)
+	policyName, userOrGroup, isGroup, ok := s.parsePolicyAssocParams(w, r)
+	if !ok {
+		return
 	}
 
 	if policyName == "" || userOrGroup == "" {
@@ -298,48 +253,9 @@ func (s policyHTTPService) SetPolicy(w nethttp.ResponseWriter, r *nethttp.Reques
 }
 
 func (s policyHTTPService) DetachPolicy(w nethttp.ResponseWriter, r *nethttp.Request) {
-	var policyName, userOrGroup string
-	var isGroup bool
-
-	if r.Header.Get(headers.ContentType) == "application/octet-stream" && r.ContentLength > 0 {
-		adminUser := auth.GetRequestUser(r.Context())
-		if adminUser == nil {
-			s.log.Error("No authenticated user in context")
-			w.WriteHeader(nethttp.StatusUnauthorized)
-			return
-		}
-
-		var req struct {
-			User     string   `json:"User"`
-			Group    string   `json:"Group"`
-			Policies []string `json:"Policies"`
-		}
-		if err := jsonutil.DecryptAndUnmarshal(adminUser.SecretKey, r.Body, &req); err != nil {
-			s.log.Error("Failed to decrypt/parse request body", "error", err)
-			w.WriteHeader(nethttp.StatusBadRequest)
-			return
-		}
-
-		s.log.Debug("Decrypted request", "user", req.User, "group", req.Group, "policies", req.Policies)
-
-		if req.User != "" {
-			userOrGroup = req.User
-			isGroup = false
-		} else if req.Group != "" {
-			userOrGroup = req.Group
-			isGroup = true
-		}
-		if len(req.Policies) > 0 {
-			policyName = req.Policies[0]
-		}
-
-		s.log.Debug("Parsed encrypted request", "policy", policyName, "userOrGroup", userOrGroup, "isGroup", isGroup)
-	} else {
-		policyName = query.String(r, "policyName", "")
-		userOrGroup = query.String(r, "userOrGroup", "")
-		isGroup = query.Bool(r, "isGroup", false)
-
-		s.log.Debug("Parsed query parameters", "policy", policyName, "userOrGroup", userOrGroup, "isGroup", isGroup)
+	policyName, userOrGroup, isGroup, ok := s.parsePolicyAssocParams(w, r)
+	if !ok {
+		return
 	}
 
 	if policyName == "" || userOrGroup == "" {
@@ -478,4 +394,50 @@ func (s policyHTTPService) PolicyEntitiesList(w nethttp.ResponseWriter, r *netht
 		s.log.Error("Failed to write response", "error", err)
 		return
 	}
+}
+
+// parsePolicyAssocParams extracts policy association parameters from the request.
+// It handles both the new encrypted-body format (application/octet-stream) and
+// the legacy query-parameter format, writing an HTTP error and returning false on failure.
+func (s policyHTTPService) parsePolicyAssocParams(w nethttp.ResponseWriter, r *nethttp.Request) (policyName, userOrGroup string, isGroup, ok bool) {
+	if r.Header.Get(headers.ContentType) != "application/octet-stream" || r.ContentLength <= 0 {
+		s.log.Debug("Parsed query parameters", "policy", query.String(r, "policyName", ""), "userOrGroup", query.String(r, "userOrGroup", ""))
+		return query.String(r, "policyName", ""),
+			query.String(r, "userOrGroup", ""),
+			query.Bool(r, "isGroup", false),
+			true
+	}
+
+	adminUser := auth.GetRequestUser(r.Context())
+	if adminUser == nil {
+		s.log.Error("No authenticated user in context")
+		w.WriteHeader(nethttp.StatusUnauthorized)
+		return "", "", false, false
+	}
+
+	var req struct {
+		User     string   `json:"User"`
+		Group    string   `json:"Group"`
+		Policies []string `json:"Policies"`
+	}
+	if err := jsonutil.DecryptAndUnmarshal(adminUser.SecretKey, r.Body, &req); err != nil {
+		s.log.Error("Failed to decrypt/parse request body", "error", err)
+		w.WriteHeader(nethttp.StatusBadRequest)
+		return "", "", false, false
+	}
+
+	s.log.Debug("Decrypted request", "user", req.User, "group", req.Group, "policies", req.Policies)
+
+	if req.User != "" {
+		userOrGroup = req.User
+	} else if req.Group != "" {
+		userOrGroup = req.Group
+		isGroup = true
+	}
+	if len(req.Policies) > 0 {
+		policyName = req.Policies[0]
+	}
+
+	s.log.Debug("Parsed encrypted request", "policy", policyName, "userOrGroup", userOrGroup, "isGroup", isGroup)
+	return policyName, userOrGroup, isGroup, true
 }

@@ -472,40 +472,7 @@ func (m *Manager) UpdateUser(ctx context.Context, userUID uuid.UUID, updates *Us
 
 	// Sync bolt indexes when username or accessKey changed.
 	if usernameChanged || accessKeyChanged {
-		err = m.db.Update(func(tx *bbolt.Tx) error {
-			byUsername := tx.Bucket([]byte(boltUsersByUsername))
-			byAccessKey := tx.Bucket([]byte(boltUsersByAccessKey))
-			uidBytes := userUID[:]
-
-			if usernameChanged {
-				if v := byUsername.Get([]byte(existing.Username)); v != nil {
-					uid, err := uuid.FromBytes(v)
-					if err == nil && uid != userUID {
-						return ErrUsernameAlreadyTaken
-					}
-				}
-				_ = byUsername.Delete([]byte(oldUsername))
-				if err := byUsername.Put([]byte(existing.Username), uidBytes); err != nil {
-					return err
-				}
-			}
-
-			if accessKeyChanged {
-				if v := byAccessKey.Get([]byte(existing.AccessKey)); v != nil {
-					uid, err := uuid.FromBytes(v)
-					if err == nil && uid != userUID {
-						return ErrAccessKeyAlreadyTaken
-					}
-				}
-				_ = byAccessKey.Delete([]byte(oldAccessKey))
-				if err := byAccessKey.Put([]byte(existing.AccessKey), uidBytes); err != nil {
-					return err
-				}
-			}
-
-			return nil
-		})
-		if err != nil {
+		if err := m.syncUserIndexes(userUID, oldUsername, oldAccessKey, existing, usernameChanged, accessKeyChanged); err != nil {
 			return err
 		}
 	}
@@ -514,6 +481,59 @@ func (m *Manager) UpdateUser(ctx context.Context, userUID uuid.UUID, updates *Us
 	existing.Version = iam.UserMetadataVersion
 
 	return m.SaveUser(ctx, userUID, existing)
+}
+
+// syncUserIndexes runs a single bolt transaction that updates the username and/or
+// access-key indexes when the corresponding fields have changed.
+func (m *Manager) syncUserIndexes(
+	userUID uuid.UUID,
+	oldUsername, oldAccessKey string,
+	existing *User,
+	usernameChanged, accessKeyChanged bool,
+) error {
+	return m.db.Update(func(tx *bbolt.Tx) error {
+		byUsername := tx.Bucket([]byte(boltUsersByUsername))
+		byAccessKey := tx.Bucket([]byte(boltUsersByAccessKey))
+		uidBytes := userUID[:]
+
+		if usernameChanged {
+			if err := updateUsernameIndex(byUsername, oldUsername, existing.Username, userUID, uidBytes); err != nil {
+				return err
+			}
+		}
+		if accessKeyChanged {
+			if err := updateAccessKeyIndex(byAccessKey, oldAccessKey, existing.AccessKey, userUID, uidBytes); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// updateUsernameIndex updates the bolt username→UUID index, returning an error if the new
+// username is already taken by a different user.
+func updateUsernameIndex(b *bbolt.Bucket, oldUsername, newUsername string, userUID uuid.UUID, uidBytes []byte) error {
+	if v := b.Get([]byte(newUsername)); v != nil {
+		uid, err := uuid.FromBytes(v)
+		if err == nil && uid != userUID {
+			return ErrUsernameAlreadyTaken
+		}
+	}
+	_ = b.Delete([]byte(oldUsername))
+	return b.Put([]byte(newUsername), uidBytes)
+}
+
+// updateAccessKeyIndex updates the bolt accessKey→UUID index, returning an error if the new
+// access key is already taken by a different user.
+func updateAccessKeyIndex(b *bbolt.Bucket, oldAccessKey, newAccessKey string, userUID uuid.UUID, uidBytes []byte) error {
+	if v := b.Get([]byte(newAccessKey)); v != nil {
+		uid, err := uuid.FromBytes(v)
+		if err == nil && uid != userUID {
+			return ErrAccessKeyAlreadyTaken
+		}
+	}
+	_ = b.Delete([]byte(oldAccessKey))
+	return b.Put([]byte(newAccessKey), uidBytes)
 }
 
 // SaveUser saves a single user (atomic operation).

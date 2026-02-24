@@ -231,49 +231,12 @@ func (s *serviceAccountHTTPService) UpdateServiceAccount(w nethttp.ResponseWrite
 		return
 	}
 
-	var req serviceaccount.UpdateServiceAccountRequest
-
-	// Decrypt if content is encrypted
-	if len(bodyBytes) > 0 {
-		adminUser := auth.GetRequestUser(r.Context())
-		if adminUser == nil {
-			s.log.Error("No authenticated user in context")
-			w.WriteHeader(nethttp.StatusUnauthorized)
-			return
-		}
-
-		decryptedData, err := madmin.DecryptData(adminUser.SecretKey, bytes.NewReader(bodyBytes))
-		if err != nil {
-			s.log.Error("Failed to decrypt request body", "error", err)
-			w.WriteHeader(nethttp.StatusBadRequest)
-			return
-		}
-
-		var body struct {
-			NewSecretKey string `json:"newSecretKey"`
-			NewStatus    string `json:"newStatus"`
-		}
-		if err := json.Unmarshal(decryptedData, &body); err != nil {
-			s.log.Error("Failed to parse request body", "error", err)
-			w.WriteHeader(nethttp.StatusBadRequest)
-			return
-		}
-
-		if body.NewSecretKey != "" {
-			req.SecretKey = &body.NewSecretKey
-		}
-		if body.NewStatus != "" {
-			iamStatus := statusStringToServiceAcct(body.NewStatus)
-			if iamStatus == "" {
-				s.log.Error("Invalid status value", "status", body.NewStatus)
-				w.WriteHeader(nethttp.StatusBadRequest)
-				return
-			}
-			req.Status = &iamStatus
-		}
+	req, ok := s.parseUpdateBody(w, r, bodyBytes)
+	if !ok {
+		return
 	}
 
-	if _, err := s.serviceAccounts.Update(r.Context(), accessKey, &req); err != nil {
+	if _, err := s.serviceAccounts.Update(r.Context(), accessKey, req); err != nil {
 		s.log.Error("Failed to update service account", "error", err, "accessKey", accessKey)
 		if svcerrors.IsNotFound(err) {
 			w.WriteHeader(nethttp.StatusNotFound)
@@ -288,6 +251,54 @@ func (s *serviceAccountHTTPService) UpdateServiceAccount(w nethttp.ResponseWrite
 	}
 
 	w.WriteHeader(nethttp.StatusOK)
+}
+
+// parseUpdateBody decrypts and parses the UpdateServiceAccount request body.
+// Returns the populated request and true on success; writes an HTTP error and returns false on failure.
+func (s *serviceAccountHTTPService) parseUpdateBody(w nethttp.ResponseWriter, r *nethttp.Request, bodyBytes []byte) (*serviceaccount.UpdateServiceAccountRequest, bool) {
+	var req serviceaccount.UpdateServiceAccountRequest
+	if len(bodyBytes) == 0 {
+		return &req, true
+	}
+
+	adminUser := auth.GetRequestUser(r.Context())
+	if adminUser == nil {
+		s.log.Error("No authenticated user in context")
+		w.WriteHeader(nethttp.StatusUnauthorized)
+		return nil, false
+	}
+
+	decryptedData, err := madmin.DecryptData(adminUser.SecretKey, bytes.NewReader(bodyBytes))
+	if err != nil {
+		s.log.Error("Failed to decrypt request body", "error", err)
+		w.WriteHeader(nethttp.StatusBadRequest)
+		return nil, false
+	}
+
+	var body struct {
+		NewSecretKey string `json:"newSecretKey"`
+		NewStatus    string `json:"newStatus"`
+	}
+	if err := json.Unmarshal(decryptedData, &body); err != nil {
+		s.log.Error("Failed to parse request body", "error", err)
+		w.WriteHeader(nethttp.StatusBadRequest)
+		return nil, false
+	}
+
+	if body.NewSecretKey != "" {
+		req.SecretKey = &body.NewSecretKey
+	}
+	if body.NewStatus != "" {
+		iamStatus := statusStringToServiceAcct(body.NewStatus)
+		if iamStatus == "" {
+			s.log.Error("Invalid status value", "status", body.NewStatus)
+			w.WriteHeader(nethttp.StatusBadRequest)
+			return nil, false
+		}
+		req.Status = &iamStatus
+	}
+
+	return &req, true
 }
 
 // statusStringToServiceAcct converts MinIO status strings to internal format.
