@@ -65,8 +65,7 @@ func readLegacyBucketMetadata(bucketName string, readFileFunc func(string) ([]by
 		data, err := readFileFunc(filePath)
 		if err != nil {
 			// skip missing files
-			var pathErr *os.PathError
-			if errors.As(err, &pathErr) {
+			if _, ok := errors.AsType[*os.PathError](err); ok {
 				continue
 			}
 			return nil, fmt.Errorf("failed to read legacy config %s: %w", file, err)

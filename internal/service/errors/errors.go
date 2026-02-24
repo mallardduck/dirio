@@ -84,8 +84,8 @@ func IsAlreadyExists(err error) bool {
 
 // IsValidation checks if an error is a validation error
 func IsValidation(err error) bool {
-	var valErr *ValidationError
-	return errors.As(err, &valErr) ||
+	_, isValErr := errors.AsType[*ValidationError](err)
+	return isValErr ||
 		errors.Is(err, ErrInvalidAccessKey) ||
 		errors.Is(err, ErrInvalidSecretKey) ||
 		errors.Is(err, ErrInvalidStatus) ||
