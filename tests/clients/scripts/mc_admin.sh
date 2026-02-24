@@ -57,6 +57,27 @@ if [ "${PROBE_CODE}" = "000" ]; then
 fi
 echo "GET / -> HTTP ${PROBE_CODE}" >&2
 
+# -----------------------
+# Server Sniffing
+# -----------------------
+detect_server_type() {
+    local headers
+    headers=$(curl -s -D - -o /dev/null "${ENDPOINT}/" 2>/dev/null) || headers=""
+
+    if echo "${headers}" | grep -qi "Server: MinIO"; then
+        echo "MINIO"
+    elif echo "${headers}" | grep -qi "Server: AmazonS3"; then
+        echo "S3"
+    elif echo "${headers}" | grep -qi "Server: DirIO"; then
+        echo "DIRIO"
+    else
+        echo "UNKNOWN"
+    fi
+}
+
+SERVER_TYPE=$(detect_server_type)
+echo "Server type: ${SERVER_TYPE}" >&2
+
 # Configure mc alias
 if [ "$ALIAS_EXISTS" -eq 0 ]; then
   mc alias set ${MC_ALIAS} ${ENDPOINT} ${DIRIO_ACCESS_KEY} ${DIRIO_SECRET_KEY} --api S3v4 2>/dev/null
@@ -116,10 +137,16 @@ test_admin_policy_info() {
 }
 
 test_admin_policy_attach() {
+    if [ "${SERVER_TYPE}" = "MINIO" ]; then
+        skip_test "Policy attach not supported in MinIO FS mode"
+    fi
     mc admin policy attach ${MC_ALIAS} ${TEST_POLICY} --user ${TEST_USER} > /dev/null 2>&1
 }
 
 test_admin_policy_attached_to_user() {
+    if [ "${SERVER_TYPE}" = "MINIO" ]; then
+        skip_test "Policy attach not supported in MinIO FS mode"
+    fi
     # Verify that the user-info shows the attached policy
     mc admin user info ${MC_ALIAS} ${TEST_USER} 2>/dev/null | grep -q "${TEST_POLICY}"
 }
