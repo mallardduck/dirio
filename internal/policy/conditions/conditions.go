@@ -92,7 +92,7 @@ func NewEvaluator(ctx *Context) *Evaluator {
 // Evaluate evaluates a set of policy conditions
 // Returns true if all conditions pass (AND logic across operators)
 // Returns false if any condition fails or an error occurs (fail-closed)
-func (e *Evaluator) Evaluate(conditions map[string]interface{}) (bool, error) {
+func (e *Evaluator) Evaluate(conditions map[string]any) (bool, error) {
 	if len(conditions) == 0 {
 		return true, nil // No conditions means automatic pass
 	}
@@ -119,9 +119,9 @@ func (e *Evaluator) Evaluate(conditions map[string]interface{}) (bool, error) {
 
 // evaluateOperator evaluates a single operator with its key-value pairs
 // Returns true if all key-value pairs match (AND logic)
-func (e *Evaluator) evaluateOperator(op Operator, keyValues interface{}) (bool, error) {
+func (e *Evaluator) evaluateOperator(op Operator, keyValues any) (bool, error) {
 	// keyValues should be a map[string]interface{}
-	kvMap, ok := keyValues.(map[string]interface{})
+	kvMap, ok := keyValues.(map[string]any)
 	if !ok {
 		return false, fmt.Errorf("invalid condition format: expected map, got %T", keyValues)
 	}
@@ -145,7 +145,7 @@ func (e *Evaluator) evaluateOperator(op Operator, keyValues interface{}) (bool, 
 
 // evaluateSingleCondition evaluates a single condition key-value pair
 // Returns true if the condition matches
-func (e *Evaluator) evaluateSingleCondition(op Operator, key string, value interface{}) (bool, error) {
+func (e *Evaluator) evaluateSingleCondition(op Operator, key string, value any) (bool, error) {
 	// Get runtime value for this condition key
 	contextValue, err := e.getContextValue(key)
 	if err != nil {
@@ -165,7 +165,7 @@ func (e *Evaluator) evaluateSingleCondition(op Operator, key string, value inter
 	}
 
 	// Handle array values (OR logic - any match succeeds)
-	if arr, ok := substitutedValue.([]interface{}); ok {
+	if arr, ok := substitutedValue.([]any); ok {
 		for _, item := range arr {
 			match, err := e.evaluateConditionValue(op, key, contextValue, item)
 			if err != nil {
@@ -196,7 +196,7 @@ func (e *Evaluator) evaluateSingleCondition(op Operator, key string, value inter
 }
 
 // evaluateConditionValue evaluates a single value against the context
-func (e *Evaluator) evaluateConditionValue(op Operator, _ string, contextValue, conditionValue interface{}) (bool, error) {
+func (e *Evaluator) evaluateConditionValue(op Operator, _ string, contextValue, conditionValue any) (bool, error) {
 	switch op {
 	// String operators
 	case OpStringEquals:
@@ -264,7 +264,7 @@ func (e *Evaluator) evaluateConditionValue(op Operator, _ string, contextValue, 
 }
 
 // getContextValue retrieves the runtime value for a condition key
-func (e *Evaluator) getContextValue(key string) (interface{}, error) {
+func (e *Evaluator) getContextValue(key string) (any, error) {
 	switch key {
 	case "aws:SourceIp":
 		if e.ctx.SourceIP == nil {
@@ -316,7 +316,7 @@ func (e *Evaluator) getContextValue(key string) (interface{}, error) {
 }
 
 // Helper function to convert interface{} to string
-func toString(v interface{}) string {
+func toString(v any) string {
 	switch val := v.(type) {
 	case string:
 		return val
@@ -328,7 +328,7 @@ func toString(v interface{}) string {
 }
 
 // Helper function to convert interface{} to float64
-func toFloat64(v interface{}) (float64, error) {
+func toFloat64(v any) (float64, error) {
 	switch val := v.(type) {
 	case float64:
 		return val, nil
@@ -348,7 +348,7 @@ func toFloat64(v interface{}) (float64, error) {
 }
 
 // Helper function to convert interface{} to time.Time
-func toTime(v interface{}) (time.Time, error) {
+func toTime(v any) (time.Time, error) {
 	switch val := v.(type) {
 	case time.Time:
 		return val, nil
@@ -372,7 +372,7 @@ func toTime(v interface{}) (time.Time, error) {
 }
 
 // Helper function to convert interface{} to net.IP
-func toIP(v interface{}) (net.IP, error) {
+func toIP(v any) (net.IP, error) {
 	switch val := v.(type) {
 	case net.IP:
 		return val, nil
@@ -388,7 +388,7 @@ func toIP(v interface{}) (net.IP, error) {
 }
 
 // Helper function to convert interface{} to bool
-func toBool(v interface{}) (bool, error) {
+func toBool(v any) (bool, error) {
 	switch val := v.(type) {
 	case bool:
 		return val, nil

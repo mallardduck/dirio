@@ -4,6 +4,7 @@ import (
 	"io"
 	"log/slog"
 	nethttp "net/http"
+	"slices"
 
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 	"github.com/mallardduck/go-http-helpers/pkg/query"
@@ -270,7 +271,7 @@ func (s policyHTTPService) SetPolicy(w nethttp.ResponseWriter, r *nethttp.Reques
 		}
 
 		// Build and encrypt response matching MinIO's PolicyAssociationResp
-		response := map[string]interface{}{
+		response := map[string]any{
 			"updatedAt":        nil, // Could add timestamp if needed
 			"policiesAttached": []string{policyName},
 			"policiesDetached": []string{},
@@ -388,7 +389,7 @@ func (s policyHTTPService) DetachPolicy(w nethttp.ResponseWriter, r *nethttp.Req
 			return
 		}
 
-		response := map[string]interface{}{
+		response := map[string]any{
 			"updatedAt":        nil,
 			"policiesAttached": []string{},
 			"policiesDetached": []string{policyName},
@@ -436,11 +437,8 @@ func (s policyHTTPService) PolicyEntitiesList(w nethttp.ResponseWriter, r *netht
 		if err != nil {
 			continue
 		}
-		for _, p := range userEntity.AttachedPolicies {
-			if p == policyName {
-				usersWithPolicy = append(usersWithPolicy, userEntity.AccessKey)
-				break
-			}
+		if slices.Contains(userEntity.AttachedPolicies, policyName) {
+			usersWithPolicy = append(usersWithPolicy, userEntity.AccessKey)
 		}
 	}
 
@@ -458,15 +456,12 @@ func (s policyHTTPService) PolicyEntitiesList(w nethttp.ResponseWriter, r *netht
 		if err != nil {
 			continue
 		}
-		for _, p := range grp.AttachedPolicies {
-			if p == policyName {
-				groupsWithPolicy = append(groupsWithPolicy, name)
-				break
-			}
+		if slices.Contains(grp.AttachedPolicies, policyName) {
+			groupsWithPolicy = append(groupsWithPolicy, name)
 		}
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"userMappings":  usersWithPolicy,
 		"groupMappings": groupsWithPolicy,
 	}

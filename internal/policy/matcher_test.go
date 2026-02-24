@@ -19,7 +19,7 @@ func TestMatchPrincipal(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		stmtPrincipal interface{}
+		stmtPrincipal any
 		reqPrincipal  *Principal
 		expected      bool
 	}{
@@ -28,25 +28,25 @@ func TestMatchPrincipal(t *testing.T) {
 		{"wildcard string matches user", "*", userPrincipal, true},
 
 		// Map with AWS: "*"
-		{"AWS wildcard matches anonymous", map[string]interface{}{"AWS": "*"}, anonymousPrincipal, true},
-		{"AWS wildcard matches user", map[string]interface{}{"AWS": "*"}, userPrincipal, true},
+		{"AWS wildcard matches anonymous", map[string]any{"AWS": "*"}, anonymousPrincipal, true},
+		{"AWS wildcard matches user", map[string]any{"AWS": "*"}, userPrincipal, true},
 
 		// Specific user ARN
 		{
 			"specific ARN matches user",
-			map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/alice"},
+			map[string]any{"AWS": "arn:aws:iam::123456789012:user/alice"},
 			userPrincipal,
 			true,
 		},
 		{
 			"specific ARN does not match different user",
-			map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/bob"},
+			map[string]any{"AWS": "arn:aws:iam::123456789012:user/bob"},
 			userPrincipal,
 			false,
 		},
 		{
 			"specific ARN does not match anonymous",
-			map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/alice"},
+			map[string]any{"AWS": "arn:aws:iam::123456789012:user/alice"},
 			anonymousPrincipal,
 			false,
 		},
@@ -54,13 +54,13 @@ func TestMatchPrincipal(t *testing.T) {
 		// Array of ARNs
 		{
 			"array includes matching ARN",
-			map[string]interface{}{"AWS": []interface{}{"arn:aws:iam::123456789012:user/alice"}},
+			map[string]any{"AWS": []any{"arn:aws:iam::123456789012:user/alice"}},
 			userPrincipal,
 			true,
 		},
 		{
 			"array includes wildcard",
-			map[string]interface{}{"AWS": []interface{}{"arn:aws:iam::123456789012:user/bob", "*"}},
+			map[string]any{"AWS": []any{"arn:aws:iam::123456789012:user/bob", "*"}},
 			anonymousPrincipal,
 			true,
 		},
@@ -82,7 +82,7 @@ func TestMatchPrincipal(t *testing.T) {
 func TestMatchAction(t *testing.T) {
 	tests := []struct {
 		name       string
-		stmtAction interface{}
+		stmtAction any
 		reqAction  string
 		expected   bool
 	}{
@@ -99,9 +99,9 @@ func TestMatchAction(t *testing.T) {
 		{"s3 Get wildcard does not match Put", "s3:Get*", "s3:PutObject", false},
 
 		// Array of actions
-		{"array includes action", []interface{}{"s3:GetObject", "s3:PutObject"}, "s3:GetObject", true},
-		{"array does not include action", []interface{}{"s3:GetObject", "s3:PutObject"}, "s3:DeleteObject", false},
-		{"array with wildcard", []interface{}{"s3:Get*", "s3:List*"}, "s3:ListBucket", true},
+		{"array includes action", []any{"s3:GetObject", "s3:PutObject"}, "s3:GetObject", true},
+		{"array does not include action", []any{"s3:GetObject", "s3:PutObject"}, "s3:DeleteObject", false},
+		{"array with wildcard", []any{"s3:Get*", "s3:List*"}, "s3:ListBucket", true},
 
 		// String array
 		{"string array includes action", []string{"s3:GetObject", "s3:PutObject"}, "s3:GetObject", true},
@@ -127,7 +127,7 @@ func TestMatchResource(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		stmtResource interface{}
+		stmtResource any
 		reqResource  *Resource
 		expected     bool
 	}{
@@ -148,13 +148,13 @@ func TestMatchResource(t *testing.T) {
 		// Array of resources
 		{
 			"array includes resource",
-			[]interface{}{"arn:aws:s3:::my-bucket", "arn:aws:s3:::other-bucket"},
+			[]any{"arn:aws:s3:::my-bucket", "arn:aws:s3:::other-bucket"},
 			bucketResource,
 			true,
 		},
 		{
 			"array with wildcard",
-			[]interface{}{"arn:aws:s3:::my-bucket/*", "arn:aws:s3:::other-bucket/*"},
+			[]any{"arn:aws:s3:::my-bucket/*", "arn:aws:s3:::other-bucket/*"},
 			objectResource,
 			true,
 		},
@@ -258,7 +258,7 @@ func TestEvaluateStatement(t *testing.T) {
 			name: "specific user access",
 			stmt: &iam.Statement{
 				Effect:    "Allow",
-				Principal: map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/alice"},
+				Principal: map[string]any{"AWS": "arn:aws:iam::123456789012:user/alice"},
 				Action:    "s3:*",
 				Resource:  "arn:aws:s3:::alice-bucket/*",
 			},
@@ -319,7 +319,7 @@ func TestMatchResourceWithVariables(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		stmtResource interface{}
+		stmtResource any
 		reqResource  *Resource
 		varCtx       *variables.Context
 		expected     bool
@@ -495,7 +495,7 @@ func TestEvaluateStatementWithVariables(t *testing.T) {
 func TestMatchNotAction(t *testing.T) {
 	tests := []struct {
 		name          string
-		stmtNotAction interface{}
+		stmtNotAction any
 		reqAction     string
 		expected      bool
 	}{
@@ -524,7 +524,7 @@ func TestMatchNotResource(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		stmtNotResource interface{}
+		stmtNotResource any
 		reqResource     *Resource
 		expected        bool
 	}{
@@ -560,7 +560,7 @@ func TestMatchNotResourceWithVariables(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		stmtNotResource interface{}
+		stmtNotResource any
 		reqResource     *Resource
 		varCtx          *variables.Context
 		expected        bool
@@ -611,7 +611,7 @@ func TestMatchNotPrincipal(t *testing.T) {
 
 	tests := []struct {
 		name             string
-		stmtNotPrincipal interface{}
+		stmtNotPrincipal any
 		reqPrincipal     *Principal
 		expected         bool
 	}{
@@ -620,31 +620,31 @@ func TestMatchNotPrincipal(t *testing.T) {
 		{"wildcard excludes anonymous", "*", anonymousPrincipal, false},
 		{
 			"specific ARN excludes that user",
-			map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/alice"},
+			map[string]any{"AWS": "arn:aws:iam::123456789012:user/alice"},
 			alicePrincipal,
 			false,
 		},
 		{
 			"specific ARN allows other user",
-			map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/alice"},
+			map[string]any{"AWS": "arn:aws:iam::123456789012:user/alice"},
 			bobPrincipal,
 			true,
 		},
 		{
 			"specific ARN allows anonymous",
-			map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/alice"},
+			map[string]any{"AWS": "arn:aws:iam::123456789012:user/alice"},
 			anonymousPrincipal,
 			true,
 		},
 		{
 			"array excludes included user",
-			map[string]interface{}{"AWS": []string{"arn:aws:iam::123456789012:user/alice", "arn:aws:iam::123456789012:user/bob"}},
+			map[string]any{"AWS": []string{"arn:aws:iam::123456789012:user/alice", "arn:aws:iam::123456789012:user/bob"}},
 			alicePrincipal,
 			false,
 		},
 		{
 			"array allows user not in list",
-			map[string]interface{}{"AWS": []string{"arn:aws:iam::123456789012:user/bob"}},
+			map[string]any{"AWS": []string{"arn:aws:iam::123456789012:user/bob"}},
 			alicePrincipal,
 			true,
 		},
@@ -848,7 +848,7 @@ func TestEvaluateStatementWithNotPrincipal(t *testing.T) {
 			name: "NotPrincipal allows principals not in exclusion list",
 			stmt: &iam.Statement{
 				Effect:       "Allow",
-				NotPrincipal: map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/alice"},
+				NotPrincipal: map[string]any{"AWS": "arn:aws:iam::123456789012:user/alice"},
 				Action:       "s3:*",
 				Resource:     "*",
 			},
@@ -863,7 +863,7 @@ func TestEvaluateStatementWithNotPrincipal(t *testing.T) {
 			name: "NotPrincipal denies excluded principal",
 			stmt: &iam.Statement{
 				Effect:       "Allow",
-				NotPrincipal: map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/alice"},
+				NotPrincipal: map[string]any{"AWS": "arn:aws:iam::123456789012:user/alice"},
 				Action:       "s3:*",
 				Resource:     "*",
 			},
@@ -893,7 +893,7 @@ func TestEvaluateStatementWithNotPrincipal(t *testing.T) {
 			name: "NotPrincipal allows anonymous when user excluded",
 			stmt: &iam.Statement{
 				Effect:       "Allow",
-				NotPrincipal: map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/alice"},
+				NotPrincipal: map[string]any{"AWS": "arn:aws:iam::123456789012:user/alice"},
 				Action:       "s3:*",
 				Resource:     "*",
 			},

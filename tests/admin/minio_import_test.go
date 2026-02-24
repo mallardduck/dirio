@@ -56,9 +56,9 @@ func writeMinIOPolicy(t *testing.T, minioSys, policyName, bucket string) {
 	policiesDir := filepath.Join(minioSys, "config", "iam", "policies", policyName)
 	require.NoError(t, os.MkdirAll(policiesDir, 0o755))
 
-	policyDoc := map[string]interface{}{
+	policyDoc := map[string]any{
 		"Version": "2012-10-17",
-		"Statement": []map[string]interface{}{
+		"Statement": []map[string]any{
 			{
 				"Effect":   "Allow",
 				"Action":   []string{"s3:GetObject", "s3:PutObject"},
@@ -127,7 +127,7 @@ func TestMinIOImport_Policies(t *testing.T) {
 	resp := ts.AdminRequest(t, http.MethodGet, "/list-canned-policies", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var policies map[string]interface{}
+	var policies map[string]any
 	DecodeJSON(t, resp, &policies)
 	assert.Contains(t, policies, "readonly")
 	assert.Contains(t, policies, "readwrite")
@@ -149,10 +149,10 @@ func TestMinIOImport_UserPolicyMappings(t *testing.T) {
 	resp := ts.AdminRequest(t, http.MethodGet, "/user-info?accessKey=alice", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp, &info)
 
-	attachedPolicies, ok := info["attachedPolicies"].([]interface{})
+	attachedPolicies, ok := info["attachedPolicies"].([]any)
 	require.True(t, ok, "attachedPolicies should be an array")
 	assert.Contains(t, attachedPolicies, "alice-rw")
 }
@@ -171,7 +171,7 @@ func TestMinIOImport_DisabledUser(t *testing.T) {
 	resp := ts.AdminRequest(t, http.MethodGet, "/user-info?accessKey=disableduser", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp, &info)
 	assert.Equal(t, "disabled", info["status"])
 }
@@ -244,7 +244,7 @@ func TestMinIOImport_Complete(t *testing.T) {
 	// Verify policies
 	resp2 := ts.AdminRequest(t, http.MethodGet, "/list-canned-policies", nil)
 	require.Equal(t, http.StatusOK, resp2.StatusCode)
-	var policies map[string]interface{}
+	var policies map[string]any
 	DecodeJSON(t, resp2, &policies)
 	assert.Contains(t, policies, "alpha-rw")
 	assert.Contains(t, policies, "beta-rw")
@@ -252,17 +252,17 @@ func TestMinIOImport_Complete(t *testing.T) {
 	// Verify alice's policy attachment
 	resp3 := ts.AdminRequest(t, http.MethodGet, "/user-info?accessKey=alice", nil)
 	require.Equal(t, http.StatusOK, resp3.StatusCode)
-	var aliceInfo map[string]interface{}
+	var aliceInfo map[string]any
 	DecodeJSON(t, resp3, &aliceInfo)
-	alicePolicies, _ := aliceInfo["attachedPolicies"].([]interface{})
+	alicePolicies, _ := aliceInfo["attachedPolicies"].([]any)
 	assert.Contains(t, alicePolicies, "alpha-rw")
 
 	// Verify bob's policy attachment
 	resp4 := ts.AdminRequest(t, http.MethodGet, "/user-info?accessKey=bob", nil)
 	require.Equal(t, http.StatusOK, resp4.StatusCode)
-	var bobInfo map[string]interface{}
+	var bobInfo map[string]any
 	DecodeJSON(t, resp4, &bobInfo)
-	bobPolicies, _ := bobInfo["attachedPolicies"].([]interface{})
+	bobPolicies, _ := bobInfo["attachedPolicies"].([]any)
 	assert.Contains(t, bobPolicies, "beta-rw")
 }
 
@@ -301,9 +301,9 @@ func TestMinIOImport_PostImportUserManagement(t *testing.T) {
 	// Verify final state
 	resp5 := ts.AdminRequest(t, http.MethodGet, "/user-info?accessKey=importeduser", nil)
 	require.Equal(t, http.StatusOK, resp5.StatusCode)
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp5, &info)
 	assert.Equal(t, "disabled", info["status"])
-	attachedPolicies, _ := info["attachedPolicies"].([]interface{})
+	attachedPolicies, _ := info["attachedPolicies"].([]any)
 	assert.Contains(t, attachedPolicies, "imported-policy")
 }

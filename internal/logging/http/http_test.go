@@ -35,7 +35,7 @@ func TestPrepareAccessLogMiddleware(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 
 		// Parse log output
-		var logEntry map[string]interface{}
+		var logEntry map[string]any
 		if err := json.Unmarshal(logBuf.Bytes(), &logEntry); err != nil {
 			t.Fatalf("failed to parse log output: %v", err)
 		}
@@ -75,7 +75,7 @@ func TestPrepareAccessLogMiddleware(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 
 		// Parse log output
-		var logEntry map[string]interface{}
+		var logEntry map[string]any
 		if err := json.Unmarshal(logBuf.Bytes(), &logEntry); err != nil {
 			t.Fatalf("failed to parse log output: %v", err)
 		}
@@ -104,7 +104,7 @@ func TestPrepareAccessLogMiddleware(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 
 		// Parse log output
-		var logEntry map[string]interface{}
+		var logEntry map[string]any
 		if err := json.Unmarshal(logBuf.Bytes(), &logEntry); err != nil {
 			t.Fatalf("failed to parse log output: %v", err)
 		}
@@ -133,7 +133,7 @@ func TestPrepareAccessLogMiddleware(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 
 		// Parse log output
-		var logEntry map[string]interface{}
+		var logEntry map[string]any
 		if err := json.Unmarshal(logBuf.Bytes(), &logEntry); err != nil {
 			t.Fatalf("failed to parse log output: %v", err)
 		}
@@ -167,13 +167,13 @@ func TestPrepareAccessLogMiddleware(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 
 		// Parse log output
-		var logEntry map[string]interface{}
+		var logEntry map[string]any
 		if err := json.Unmarshal(logBuf.Bytes(), &logEntry); err != nil {
 			t.Fatalf("failed to parse log output: %v", err)
 		}
 
 		// Verify custom metadata is logged
-		extra, ok := logEntry["extra"].(map[string]interface{})
+		extra, ok := logEntry["extra"].(map[string]any)
 		if !ok {
 			t.Fatalf("expected extra to be present as map, got %v", logEntry["extra"])
 		}
@@ -204,7 +204,7 @@ func TestPrepareAccessLogMiddleware(t *testing.T) {
 		afterRequest := time.Now()
 
 		// Parse log output
-		var logEntry map[string]interface{}
+		var logEntry map[string]any
 		if err := json.Unmarshal(logBuf.Bytes(), &logEntry); err != nil {
 			t.Fatalf("failed to parse log output: %v", err)
 		}

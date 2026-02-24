@@ -46,7 +46,7 @@ func isDebugMode() bool {
 //
 // In debug mode, uses indented format with 2 spaces.
 // In production mode (default), uses compact format.
-func Marshal(v interface{}) ([]byte, error) {
+func Marshal(v any) ([]byte, error) {
 	if isDebugMode() {
 		return json.MarshalIndent(v, "", "  ")
 	}
@@ -56,7 +56,7 @@ func Marshal(v interface{}) ([]byte, error) {
 // MarshalToFile encodes v to JSON and writes it to the specified path on the given filesystem.
 // Automatically selects compact or pretty format based on debug mode.
 // Uses file permissions 0644 for the output file.
-func MarshalToFile(fs billy.Filesystem, path string, v interface{}) error {
+func MarshalToFile(fs billy.Filesystem, path string, v any) error {
 	data, err := Marshal(v)
 	if err != nil {
 		return err
@@ -74,14 +74,14 @@ func MarshalToFile(fs billy.Filesystem, path string, v interface{}) error {
 
 // Unmarshal is a convenience wrapper around json.Unmarshal for consistency.
 // It decodes JSON data into v.
-func Unmarshal(data []byte, v interface{}) error {
+func Unmarshal(data []byte, v any) error {
 	return json.Unmarshal(data, v)
 }
 
 // DecryptAndUnmarshal decrypts MinIO admin API encrypted data and unmarshals it into v.
 // This is used for handling MinIO admin API requests that use encrypted payloads.
 // The password is typically the admin user's secret key.
-func DecryptAndUnmarshal(password string, data io.Reader, v interface{}) error {
+func DecryptAndUnmarshal(password string, data io.Reader, v any) error {
 	decrypted, err := madmin.DecryptData(password, data)
 	if err != nil {
 		return err
@@ -92,7 +92,7 @@ func DecryptAndUnmarshal(password string, data io.Reader, v interface{}) error {
 // MarshalAndEncrypt marshals v to JSON and encrypts it using MinIO admin API encryption.
 // This is used for returning encrypted responses to MinIO admin API clients.
 // The password is typically the admin user's secret key.
-func MarshalAndEncrypt(password string, v interface{}) ([]byte, error) {
+func MarshalAndEncrypt(password string, v any) ([]byte, error) {
 	jsonData, err := Marshal(v)
 	if err != nil {
 		return nil, err

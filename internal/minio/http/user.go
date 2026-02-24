@@ -42,7 +42,7 @@ func (s *userHTTPService) ListUsers(w nethttp.ResponseWriter, r *nethttp.Request
 	}
 
 	// MinIO madmin ListUsers expects map[accessKey]UserInfo encrypted response.
-	result := make(map[string]interface{}, len(uids))
+	result := make(map[string]any, len(uids))
 	for _, uid := range uids {
 		u, err := s.users.Get(r.Context(), uid)
 		if err != nil {
@@ -56,7 +56,7 @@ func (s *userHTTPService) ListUsers(w nethttp.ResponseWriter, r *nethttp.Request
 			groups = gs
 		}
 
-		result[u.AccessKey] = map[string]interface{}{
+		result[u.AccessKey] = map[string]any{
 			"status":    u.Status.MinioString(),
 			"memberOf":  groups,
 			"updatedAt": u.UpdatedAt,
@@ -227,7 +227,7 @@ func (s *userHTTPService) InfoUser(w nethttp.ResponseWriter, r *nethttp.Request)
 		groups = gs
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"accessKey":        userEntity.AccessKey,
 		"status":           userEntity.Status.MinioString(),
 		"policyName":       "", // TODO: figure out how they handle these

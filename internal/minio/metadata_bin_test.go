@@ -34,7 +34,7 @@ func TestParseBucketMetadataBin_Beta(t *testing.T) {
 	}
 
 	// Parse policy JSON to verify it's valid
-	var policy map[string]interface{}
+	var policy map[string]any
 	if err := json.Unmarshal(meta.PolicyConfigJSON, &policy); err != nil {
 		t.Errorf("PolicyConfigJSON is not valid JSON: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestParseBucketMetadataBin_Beta(t *testing.T) {
 		t.Errorf("Expected policy Version='2012-10-17', got %v", policy["Version"])
 	}
 
-	statements, ok := policy["Statement"].([]interface{})
+	statements, ok := policy["Statement"].([]any)
 	if !ok {
 		t.Fatal("Expected policy to have Statement array")
 	}
@@ -90,7 +90,7 @@ func TestParseBucketMetadataBin_Gamma(t *testing.T) {
 	}
 
 	// Parse policy JSON
-	var policy map[string]interface{}
+	var policy map[string]any
 	if err := json.Unmarshal(meta.PolicyConfigJSON, &policy); err != nil {
 		t.Errorf("PolicyConfigJSON is not valid JSON: %v", err)
 	}

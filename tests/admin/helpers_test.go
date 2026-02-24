@@ -34,13 +34,13 @@ func FindFreePort(t *testing.T) int { return testutil.FindFreePort(t) }
 func DrainAndClose(resp *http.Response) { testutil.DrainAndClose(resp) }
 
 // DecodeJSON reads and decodes the JSON body of an HTTP response.
-func DecodeJSON(t *testing.T, resp *http.Response, v interface{}) {
+func DecodeJSON(t *testing.T, resp *http.Response, v any) {
 	testutil.DecodeJSON(t, resp, v)
 }
 
 // samplePolicyDocument returns a valid IAM policy JSON for testing.
 func samplePolicyDocument(bucket string) []byte {
-	return []byte(fmt.Sprintf(`{
+	return fmt.Appendf(nil, `{
 		"Version": "2012-10-17",
 		"Statement": [
 			{
@@ -49,5 +49,5 @@ func samplePolicyDocument(bucket string) []byte {
 				"Resource": ["arn:aws:s3:::%s/*"]
 			}
 		]
-	}`, bucket))
+	}`, bucket)
 }

@@ -93,9 +93,9 @@ func TestImport_WithPolicies(t *testing.T) {
 	policiesDir := filepath.Join(minioSys, "config", "iam", "policies", "test-policy")
 	require.NoError(t, os.MkdirAll(policiesDir, 0755))
 
-	policyDoc := map[string]interface{}{
+	policyDoc := map[string]any{
 		"Version": "2012-10-17",
-		"Statement": []map[string]interface{}{
+		"Statement": []map[string]any{
 			{
 				"Effect":   "Allow",
 				"Action":   []string{"s3:GetObject"},
@@ -259,9 +259,9 @@ func TestImport_CompleteSetup(t *testing.T) {
 	for _, policyName := range []string{"alpha-rw", "beta-rw"} {
 		policiesDir := filepath.Join(minioSys, "config", "iam", "policies", policyName)
 		require.NoError(t, os.MkdirAll(policiesDir, 0755))
-		policyDoc := map[string]interface{}{
+		policyDoc := map[string]any{
 			"Version": "2012-10-17",
-			"Statement": []map[string]interface{}{
+			"Statement": []map[string]any{
 				{
 					"Effect":   "Allow",
 					"Action":   []string{"s3:*"},

@@ -459,11 +459,7 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 		}
 
 		// Use the lexicographically greater of the two as the next marker
-		if lastObjectKey > lastPrefixKey {
-			nextMarker = lastObjectKey
-		} else {
-			nextMarker = lastPrefixKey
-		}
+		nextMarker = max(lastObjectKey, lastPrefixKey)
 	}
 
 	s.log.Debug("listInternal returning results",

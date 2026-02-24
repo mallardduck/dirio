@@ -10,7 +10,7 @@ import (
 // String Operators
 
 // evaluateStringEquals performs exact string matching
-func evaluateStringEquals(contextValue, conditionValue interface{}, ignoreCase bool) (bool, error) {
+func evaluateStringEquals(contextValue, conditionValue any, ignoreCase bool) (bool, error) {
 	ctxStr := toString(contextValue)
 	condStr := toString(conditionValue)
 
@@ -22,7 +22,7 @@ func evaluateStringEquals(contextValue, conditionValue interface{}, ignoreCase b
 
 // evaluateStringLike performs glob pattern matching
 // Supports * (any characters) and ? (single character)
-func evaluateStringLike(contextValue, conditionValue interface{}, negate bool) (bool, error) {
+func evaluateStringLike(contextValue, conditionValue any, negate bool) (bool, error) {
 	ctxStr := toString(contextValue)
 	pattern := toString(conditionValue)
 
@@ -68,7 +68,7 @@ func globToRegex(pattern string) string {
 // Numeric Operators
 
 // evaluateNumericEquals checks numeric equality
-func evaluateNumericEquals(contextValue, conditionValue interface{}) (bool, error) {
+func evaluateNumericEquals(contextValue, conditionValue any) (bool, error) {
 	ctxNum, err := toFloat64(contextValue)
 	if err != nil {
 		return false, err
@@ -83,7 +83,7 @@ func evaluateNumericEquals(contextValue, conditionValue interface{}) (bool, erro
 }
 
 // evaluateNumericLessThan checks if context value is less than condition value
-func evaluateNumericLessThan(contextValue, conditionValue interface{}, orEqual bool) (bool, error) {
+func evaluateNumericLessThan(contextValue, conditionValue any, orEqual bool) (bool, error) {
 	ctxNum, err := toFloat64(contextValue)
 	if err != nil {
 		return false, err
@@ -101,7 +101,7 @@ func evaluateNumericLessThan(contextValue, conditionValue interface{}, orEqual b
 }
 
 // evaluateNumericGreaterThan checks if context value is greater than condition value
-func evaluateNumericGreaterThan(contextValue, conditionValue interface{}, orEqual bool) (bool, error) {
+func evaluateNumericGreaterThan(contextValue, conditionValue any, orEqual bool) (bool, error) {
 	ctxNum, err := toFloat64(contextValue)
 	if err != nil {
 		return false, err
@@ -121,7 +121,7 @@ func evaluateNumericGreaterThan(contextValue, conditionValue interface{}, orEqua
 // Date Operators
 
 // evaluateDateEquals checks date equality
-func evaluateDateEquals(contextValue, conditionValue interface{}) (bool, error) {
+func evaluateDateEquals(contextValue, conditionValue any) (bool, error) {
 	ctxTime, err := toTime(contextValue)
 	if err != nil {
 		return false, err
@@ -136,7 +136,7 @@ func evaluateDateEquals(contextValue, conditionValue interface{}) (bool, error) 
 }
 
 // evaluateDateLessThan checks if context time is before condition time
-func evaluateDateLessThan(contextValue, conditionValue interface{}, orEqual bool) (bool, error) {
+func evaluateDateLessThan(contextValue, conditionValue any, orEqual bool) (bool, error) {
 	ctxTime, err := toTime(contextValue)
 	if err != nil {
 		return false, err
@@ -154,7 +154,7 @@ func evaluateDateLessThan(contextValue, conditionValue interface{}, orEqual bool
 }
 
 // evaluateDateGreaterThan checks if context time is after condition time
-func evaluateDateGreaterThan(contextValue, conditionValue interface{}, orEqual bool) (bool, error) {
+func evaluateDateGreaterThan(contextValue, conditionValue any, orEqual bool) (bool, error) {
 	ctxTime, err := toTime(contextValue)
 	if err != nil {
 		return false, err
@@ -174,7 +174,7 @@ func evaluateDateGreaterThan(contextValue, conditionValue interface{}, orEqual b
 // IP Address Operators
 
 // evaluateIpAddress checks if IP is in CIDR range
-func evaluateIpAddress(contextValue, conditionValue interface{}, negate bool) (bool, error) {
+func evaluateIpAddress(contextValue, conditionValue any, negate bool) (bool, error) {
 	ctxIP, err := toIP(contextValue)
 	if err != nil {
 		return false, err
@@ -207,7 +207,7 @@ func evaluateIpAddress(contextValue, conditionValue interface{}, negate bool) (b
 // Boolean Operator
 
 // evaluateBool checks boolean value matching
-func evaluateBool(contextValue, conditionValue interface{}) (bool, error) {
+func evaluateBool(contextValue, conditionValue any) (bool, error) {
 	ctxBool, err := toBool(contextValue)
 	if err != nil {
 		return false, err
@@ -224,7 +224,7 @@ func evaluateBool(contextValue, conditionValue interface{}) (bool, error) {
 // Null Operator
 
 // evaluateNull checks if a value exists or is null/empty
-func evaluateNull(contextValue, conditionValue interface{}) (bool, error) {
+func evaluateNull(contextValue, conditionValue any) (bool, error) {
 	shouldBeNull, err := toBool(conditionValue)
 	if err != nil {
 		return false, err

@@ -16,7 +16,7 @@ func TestListUsers_Empty(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var users map[string]interface{}
+	var users map[string]any
 	ts.DecryptAndDecodeJSON(t, resp, &users)
 	assert.Empty(t, users)
 }
@@ -35,7 +35,7 @@ func TestCreateUser_Success(t *testing.T) {
 
 	// Verify alice now appears in list-users
 	resp2 := ts.AdminRequest(t, http.MethodGet, "/list-users", nil)
-	var users map[string]interface{}
+	var users map[string]any
 	ts.DecryptAndDecodeJSON(t, resp2, &users)
 	assert.Contains(t, users, "alice")
 }
@@ -77,7 +77,7 @@ func TestGetUserInfo_Success(t *testing.T) {
 	resp2 := ts.AdminRequest(t, http.MethodGet, "/user-info?accessKey=bob", nil)
 	require.Equal(t, http.StatusOK, resp2.StatusCode)
 
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp2, &info)
 	assert.Equal(t, "bob", info["accessKey"])
 }
@@ -144,7 +144,7 @@ func TestSetUserStatus_Disable(t *testing.T) {
 	resp3 := ts.AdminRequest(t, http.MethodGet, "/user-info?accessKey=dave", nil)
 	require.Equal(t, http.StatusOK, resp3.StatusCode)
 
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp3, &info)
 	assert.Equal(t, "disabled", info["status"])
 }
@@ -165,7 +165,7 @@ func TestSetUserStatus_Enable(t *testing.T) {
 	resp3 := ts.AdminRequest(t, http.MethodGet, "/user-info?accessKey=eve", nil)
 	require.Equal(t, http.StatusOK, resp3.StatusCode)
 
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp3, &info)
 	assert.Equal(t, "enabled", info["status"])
 }
@@ -208,7 +208,7 @@ func TestListUsers_MultipleUsers(t *testing.T) {
 	resp := ts.AdminRequest(t, http.MethodGet, "/list-users", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var listed map[string]interface{}
+	var listed map[string]any
 	ts.DecryptAndDecodeJSON(t, resp, &listed)
 
 	for _, name := range users {

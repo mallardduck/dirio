@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -188,10 +189,8 @@ func groupIndexAdd(b *bbolt.Bucket, groupName string, userUUID uuid.UUID) error 
 	if v := b.Get(key); v != nil {
 		_ = json.Unmarshal(v, &names)
 	}
-	for _, n := range names {
-		if n == groupName {
-			return nil // already recorded
-		}
+	if slices.Contains(names, groupName) {
+		return nil // already recorded
 	}
 	names = append(names, groupName)
 	data, err := json.Marshal(names)

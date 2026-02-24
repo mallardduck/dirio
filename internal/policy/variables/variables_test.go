@@ -198,8 +198,8 @@ func TestContext_SubstituteInterface(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		input    interface{}
-		expected interface{}
+		input    any
+		expected any
 	}{
 		{
 			name:     "string",
@@ -213,7 +213,7 @@ func TestContext_SubstituteInterface(t *testing.T) {
 		},
 		{
 			name:     "interface slice",
-			input:    []interface{}{"${aws:username}/a", "${aws:username}/b"},
+			input:    []any{"${aws:username}/a", "${aws:username}/b"},
 			expected: []string{"alice/a", "alice/b"},
 		},
 	}

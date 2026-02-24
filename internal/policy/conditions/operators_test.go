@@ -11,8 +11,8 @@ import (
 func TestEvaluateStringEquals(t *testing.T) {
 	tests := []struct {
 		name         string
-		contextValue interface{}
-		condValue    interface{}
+		contextValue any
+		condValue    any
 		ignoreCase   bool
 		want         bool
 		wantErr      bool
@@ -71,8 +71,8 @@ func TestEvaluateStringEquals(t *testing.T) {
 func TestEvaluateStringLike(t *testing.T) {
 	tests := []struct {
 		name         string
-		contextValue interface{}
-		pattern      interface{}
+		contextValue any
+		pattern      any
 		negate       bool
 		want         bool
 		wantErr      bool
@@ -211,8 +211,8 @@ func TestGlobToRegex(t *testing.T) {
 func TestEvaluateNumericEquals(t *testing.T) {
 	tests := []struct {
 		name         string
-		contextValue interface{}
-		condValue    interface{}
+		contextValue any
+		condValue    any
 		want         bool
 		wantErr      bool
 	}{
@@ -265,8 +265,8 @@ func TestEvaluateNumericEquals(t *testing.T) {
 func TestEvaluateNumericLessThan(t *testing.T) {
 	tests := []struct {
 		name         string
-		contextValue interface{}
-		condValue    interface{}
+		contextValue any
+		condValue    any
 		orEqual      bool
 		want         bool
 	}{
@@ -324,8 +324,8 @@ func TestEvaluateNumericLessThan(t *testing.T) {
 func TestEvaluateNumericGreaterThan(t *testing.T) {
 	tests := []struct {
 		name         string
-		contextValue interface{}
-		condValue    interface{}
+		contextValue any
+		condValue    any
 		orEqual      bool
 		want         bool
 	}{
@@ -389,8 +389,8 @@ func TestEvaluateDateEquals(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		contextValue interface{}
-		condValue    interface{}
+		contextValue any
+		condValue    any
 		want         bool
 		wantErr      bool
 	}{
@@ -440,8 +440,8 @@ func TestEvaluateDateLessThan(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		contextValue interface{}
-		condValue    interface{}
+		contextValue any
+		condValue    any
 		orEqual      bool
 		want         bool
 	}{
@@ -495,8 +495,8 @@ func TestEvaluateDateGreaterThan(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		contextValue interface{}
-		condValue    interface{}
+		contextValue any
+		condValue    any
 		orEqual      bool
 		want         bool
 	}{
@@ -549,8 +549,8 @@ func TestEvaluateDateGreaterThan(t *testing.T) {
 func TestEvaluateIpAddress(t *testing.T) {
 	tests := []struct {
 		name         string
-		contextValue interface{}
-		cidr         interface{}
+		contextValue any
+		cidr         any
 		negate       bool
 		want         bool
 		wantErr      bool
@@ -683,8 +683,8 @@ func TestEvaluateIpAddress(t *testing.T) {
 func TestEvaluateBool(t *testing.T) {
 	tests := []struct {
 		name         string
-		contextValue interface{}
-		condValue    interface{}
+		contextValue any
+		condValue    any
 		want         bool
 		wantErr      bool
 	}{
@@ -739,8 +739,8 @@ func TestEvaluateBool(t *testing.T) {
 func TestEvaluateNull(t *testing.T) {
 	tests := []struct {
 		name         string
-		contextValue interface{}
-		shouldBeNull interface{}
+		contextValue any
+		shouldBeNull any
 		want         bool
 	}{
 		{

@@ -160,7 +160,7 @@ func TestEngine_UserSpecificPolicy(t *testing.T) {
 		Statement: []iam.Statement{
 			{
 				Effect:    "Allow",
-				Principal: map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/alice"},
+				Principal: map[string]any{"AWS": "arn:aws:iam::123456789012:user/alice"},
 				Action:    "s3:*",
 				Resource:  "arn:aws:s3:::alice-bucket/*",
 			},

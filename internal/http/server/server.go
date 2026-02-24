@@ -374,13 +374,11 @@ func (s *Server) gracefulShutdown() {
 		var wg sync.WaitGroup
 
 		if s.consoleServer != nil {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				if err := s.consoleServer.Shutdown(ctx); err != nil {
 					s.log.Error("console server shutdown error", "error", err)
 				}
-			}()
+			})
 		}
 
 		if err := s.httpServer.Shutdown(ctx); err != nil {

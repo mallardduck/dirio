@@ -18,7 +18,7 @@ import (
 // For Phase 3.1 MVP, we only handle:
 //   - "*" for public access (anonymous allowed)
 //   - Authenticated admin bypass (handled at engine level)
-func matchPrincipal(stmtPrincipal interface{}, reqPrincipal *Principal) bool {
+func matchPrincipal(stmtPrincipal any, reqPrincipal *Principal) bool {
 	if stmtPrincipal == nil {
 		// No principal specified - this is unusual, treat as no match
 		return false
@@ -34,7 +34,7 @@ func matchPrincipal(stmtPrincipal interface{}, reqPrincipal *Principal) bool {
 	}
 
 	// Handle map principal (e.g., {"AWS": "*"} or {"AWS": ["arn:..."]})
-	if m, ok := stmtPrincipal.(map[string]interface{}); ok {
+	if m, ok := stmtPrincipal.(map[string]any); ok {
 		if aws, exists := m["AWS"]; exists {
 			return matchAWSPrincipal(aws, reqPrincipal)
 		}
@@ -46,7 +46,7 @@ func matchPrincipal(stmtPrincipal interface{}, reqPrincipal *Principal) bool {
 }
 
 // matchAWSPrincipal handles the AWS portion of a principal map
-func matchAWSPrincipal(aws interface{}, reqPrincipal *Principal) bool {
+func matchAWSPrincipal(aws any, reqPrincipal *Principal) bool {
 	// Handle "*" for public access
 	if s, ok := aws.(string); ok {
 		if s == "*" {
@@ -57,7 +57,7 @@ func matchAWSPrincipal(aws interface{}, reqPrincipal *Principal) bool {
 	}
 
 	// Handle array of ARNs
-	if arr, ok := aws.([]interface{}); ok {
+	if arr, ok := aws.([]any); ok {
 		for _, item := range arr {
 			if s, ok := item.(string); ok {
 				if s == "*" {
@@ -114,7 +114,7 @@ func matchUserARN(arn string, reqPrincipal *Principal) bool {
 //   - "s3:*" - all S3 actions
 //   - "s3:Get*" - all S3 Get actions
 //   - ["s3:GetObject", "s3:PutObject"] - multiple actions
-func matchAction(stmtAction interface{}, reqAction string) bool {
+func matchAction(stmtAction any, reqAction string) bool {
 	if stmtAction == nil {
 		return false
 	}
@@ -125,7 +125,7 @@ func matchAction(stmtAction interface{}, reqAction string) bool {
 	}
 
 	// Handle array of actions
-	if arr, ok := stmtAction.([]interface{}); ok {
+	if arr, ok := stmtAction.([]any); ok {
 		for _, item := range arr {
 			if s, ok := item.(string); ok {
 				if matchSingleAction(s, reqAction) {
@@ -160,8 +160,8 @@ func matchSingleAction(pattern, reqAction string) bool {
 	}
 
 	// Handle prefix wildcards like "s3:*" or "s3:Get*"
-	if strings.HasSuffix(pattern, "*") {
-		prefix := strings.TrimSuffix(pattern, "*")
+	if before, ok := strings.CutSuffix(pattern, "*"); ok {
+		prefix := before
 		return strings.HasPrefix(reqAction, prefix)
 	}
 
@@ -174,7 +174,7 @@ func matchSingleAction(pattern, reqAction string) bool {
 // Variable substitution examples:
 //   - "arn:aws:s3:::bucket/${aws:username}/*" → "arn:aws:s3:::bucket/alice/*"
 //   - "arn:aws:s3:::bucket/${aws:userid}/*" → "arn:aws:s3:::bucket/550e8400-e29b-41d4-a716-446655440000/*"
-func matchResourceWithVariables(stmtResource interface{}, reqResource *Resource, varCtx *variables.Context) bool {
+func matchResourceWithVariables(stmtResource any, reqResource *Resource, varCtx *variables.Context) bool {
 	if varCtx == nil {
 		// No variable context, fall back to regular matching
 		return matchResource(stmtResource, reqResource)
@@ -201,7 +201,7 @@ func matchResourceWithVariables(stmtResource interface{}, reqResource *Resource,
 //   - "arn:aws:s3:::bucket/prefix/*" - objects with prefix
 //   - "*" - all resources
 //   - ["arn:...", "arn:..."] - multiple resources
-func matchResource(stmtResource interface{}, reqResource *Resource) bool {
+func matchResource(stmtResource any, reqResource *Resource) bool {
 	if stmtResource == nil {
 		return false
 	}
@@ -214,7 +214,7 @@ func matchResource(stmtResource interface{}, reqResource *Resource) bool {
 	}
 
 	// Handle array of resources
-	if arr, ok := stmtResource.([]interface{}); ok {
+	if arr, ok := stmtResource.([]any); ok {
 		for _, item := range arr {
 			if s, ok := item.(string); ok {
 				if matchSingleResource(s, reqARN) {
@@ -249,8 +249,8 @@ func matchSingleResource(pattern, reqARN string) bool {
 	}
 
 	// Handle suffix wildcards like "arn:aws:s3:::bucket/*"
-	if strings.HasSuffix(pattern, "*") {
-		prefix := strings.TrimSuffix(pattern, "*")
+	if before, ok := strings.CutSuffix(pattern, "*"); ok {
+		prefix := before
 		return strings.HasPrefix(reqARN, prefix)
 	}
 
@@ -262,7 +262,7 @@ func matchSingleResource(pattern, reqARN string) bool {
 
 // matchNotPrincipal checks if the request principal does NOT match the statement NotPrincipal.
 // This is the inverse of matchPrincipal - returns true when principal does NOT match.
-func matchNotPrincipal(stmtNotPrincipal interface{}, reqPrincipal *Principal) bool {
+func matchNotPrincipal(stmtNotPrincipal any, reqPrincipal *Principal) bool {
 	if stmtNotPrincipal == nil {
 		// No NotPrincipal specified - treat as match (don't exclude anyone)
 		return true
@@ -273,7 +273,7 @@ func matchNotPrincipal(stmtNotPrincipal interface{}, reqPrincipal *Principal) bo
 
 // matchNotAction checks if the request action does NOT match the statement NotAction.
 // This is the inverse of matchAction - returns true when action does NOT match.
-func matchNotAction(stmtNotAction interface{}, reqAction string) bool {
+func matchNotAction(stmtNotAction any, reqAction string) bool {
 	if stmtNotAction == nil {
 		// No NotAction specified - treat as match (don't exclude any action)
 		return true
@@ -284,7 +284,7 @@ func matchNotAction(stmtNotAction interface{}, reqAction string) bool {
 
 // matchNotResource checks if the request resource does NOT match the statement NotResource.
 // This is the inverse of matchResource - returns true when resource does NOT match.
-func matchNotResource(stmtNotResource interface{}, reqResource *Resource) bool {
+func matchNotResource(stmtNotResource any, reqResource *Resource) bool {
 	if stmtNotResource == nil {
 		// No NotResource specified - treat as match (don't exclude any resource)
 		return true
@@ -296,7 +296,7 @@ func matchNotResource(stmtNotResource interface{}, reqResource *Resource) bool {
 // matchNotResourceWithVariables checks if the request resource does NOT match the statement NotResource,
 // applying variable substitution if a variable context is provided.
 // This is the inverse of matchResourceWithVariables.
-func matchNotResourceWithVariables(stmtNotResource interface{}, reqResource *Resource, varCtx *variables.Context) bool {
+func matchNotResourceWithVariables(stmtNotResource any, reqResource *Resource, varCtx *variables.Context) bool {
 	if stmtNotResource == nil {
 		// No NotResource specified - treat as match (don't exclude any resource)
 		return true

@@ -21,7 +21,7 @@ func createUser(t *testing.T, ts *TestServer, accessKey string) {
 }
 
 // updateGroupMembers calls POST /update-group-members with the given body.
-func updateGroupMembers(t *testing.T, ts *TestServer, body map[string]interface{}) *http.Response {
+func updateGroupMembers(t *testing.T, ts *TestServer, body map[string]any) *http.Response {
 	t.Helper()
 	bodyBytes, err := json.Marshal(body)
 	require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestCreateGroup_ViaUpdateMembers(t *testing.T) {
 	ts := NewTestServer(t)
 	createUser(t, ts, "alice")
 
-	resp := updateGroupMembers(t, ts, map[string]interface{}{
+	resp := updateGroupMembers(t, ts, map[string]any{
 		"group":    "devs",
 		"members":  []string{"alice"},
 		"isRemove": false,
@@ -71,7 +71,7 @@ func TestGetGroupInfo_Success(t *testing.T) {
 	createUser(t, ts, "alice")
 
 	// Create group with a member
-	resp := updateGroupMembers(t, ts, map[string]interface{}{
+	resp := updateGroupMembers(t, ts, map[string]any{
 		"group":    "devs",
 		"members":  []string{"alice"},
 		"isRemove": false,
@@ -84,10 +84,10 @@ func TestGetGroupInfo_Success(t *testing.T) {
 	defer DrainAndClose(resp2)
 	require.Equal(t, http.StatusOK, resp2.StatusCode)
 
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp2, &info)
 	assert.Equal(t, "devs", info["name"])
-	members, ok := info["members"].([]interface{})
+	members, ok := info["members"].([]any)
 	require.True(t, ok, "members field should be a list")
 	assert.Len(t, members, 1)
 	assert.Equal(t, "alice", members[0])
@@ -118,7 +118,7 @@ func TestAddMembersToGroup_Success(t *testing.T) {
 	createUser(t, ts, "bob")
 
 	// Create group and add both users
-	resp := updateGroupMembers(t, ts, map[string]interface{}{
+	resp := updateGroupMembers(t, ts, map[string]any{
 		"group":    "engineers",
 		"members":  []string{"alice", "bob"},
 		"isRemove": false,
@@ -129,9 +129,9 @@ func TestAddMembersToGroup_Success(t *testing.T) {
 	// Verify group info shows both members
 	resp2 := ts.AdminRequest(t, http.MethodGet, "/group?group=engineers", nil)
 	defer DrainAndClose(resp2)
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp2, &info)
-	members := info["members"].([]interface{})
+	members := info["members"].([]any)
 	assert.Len(t, members, 2)
 }
 
@@ -140,7 +140,7 @@ func TestAddMembersToGroup_Success(t *testing.T) {
 func TestAddMembersToGroup_UserNotFound(t *testing.T) {
 	ts := NewTestServer(t)
 
-	resp := updateGroupMembers(t, ts, map[string]interface{}{
+	resp := updateGroupMembers(t, ts, map[string]any{
 		"group":    "devs",
 		"members":  []string{"ghost"},
 		"isRemove": false,
@@ -156,7 +156,7 @@ func TestRemoveMembersFromGroup_Success(t *testing.T) {
 	createUser(t, ts, "bob")
 
 	// Add both users
-	resp := updateGroupMembers(t, ts, map[string]interface{}{
+	resp := updateGroupMembers(t, ts, map[string]any{
 		"group":    "devs",
 		"members":  []string{"alice", "bob"},
 		"isRemove": false,
@@ -165,7 +165,7 @@ func TestRemoveMembersFromGroup_Success(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Remove alice
-	resp2 := updateGroupMembers(t, ts, map[string]interface{}{
+	resp2 := updateGroupMembers(t, ts, map[string]any{
 		"group":    "devs",
 		"members":  []string{"alice"},
 		"isRemove": true,
@@ -176,9 +176,9 @@ func TestRemoveMembersFromGroup_Success(t *testing.T) {
 	// Verify only bob remains
 	resp3 := ts.AdminRequest(t, http.MethodGet, "/group?group=devs", nil)
 	defer DrainAndClose(resp3)
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp3, &info)
-	members := info["members"].([]interface{})
+	members := info["members"].([]any)
 	assert.Len(t, members, 1)
 	assert.Equal(t, "bob", members[0])
 }
@@ -188,7 +188,7 @@ func TestSetGroupStatus_Disable(t *testing.T) {
 	ts := NewTestServer(t)
 
 	// Create the group first
-	resp := updateGroupMembers(t, ts, map[string]interface{}{
+	resp := updateGroupMembers(t, ts, map[string]any{
 		"group":    "ops",
 		"members":  []string{},
 		"isRemove": false,
@@ -204,7 +204,7 @@ func TestSetGroupStatus_Disable(t *testing.T) {
 	// Verify status changed
 	resp3 := ts.AdminRequest(t, http.MethodGet, "/group?group=ops", nil)
 	defer DrainAndClose(resp3)
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp3, &info)
 	assert.Equal(t, "off", info["status"])
 }
@@ -214,7 +214,7 @@ func TestSetGroupStatus_Enable(t *testing.T) {
 	ts := NewTestServer(t)
 
 	// Create the group
-	resp := updateGroupMembers(t, ts, map[string]interface{}{
+	resp := updateGroupMembers(t, ts, map[string]any{
 		"group":    "ops",
 		"members":  []string{},
 		"isRemove": false,
@@ -230,7 +230,7 @@ func TestSetGroupStatus_Enable(t *testing.T) {
 
 	resp3 := ts.AdminRequest(t, http.MethodGet, "/group?group=ops", nil)
 	defer DrainAndClose(resp3)
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp3, &info)
 	assert.Equal(t, "on", info["status"])
 }
@@ -249,7 +249,7 @@ func TestSetGroupStatus_InvalidStatus(t *testing.T) {
 	ts := NewTestServer(t)
 
 	// Create a group first
-	resp := updateGroupMembers(t, ts, map[string]interface{}{
+	resp := updateGroupMembers(t, ts, map[string]any{
 		"group":    "ops",
 		"members":  []string{},
 		"isRemove": false,
@@ -267,7 +267,7 @@ func TestAddMembersToGroup_Idempotent(t *testing.T) {
 	createUser(t, ts, "alice")
 
 	for range 2 {
-		resp := updateGroupMembers(t, ts, map[string]interface{}{
+		resp := updateGroupMembers(t, ts, map[string]any{
 			"group":    "devs",
 			"members":  []string{"alice"},
 			"isRemove": false,
@@ -279,8 +279,8 @@ func TestAddMembersToGroup_Idempotent(t *testing.T) {
 	// Alice should appear only once
 	resp := ts.AdminRequest(t, http.MethodGet, "/group?group=devs", nil)
 	defer DrainAndClose(resp)
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp, &info)
-	members := info["members"].([]interface{})
+	members := info["members"].([]any)
 	assert.Len(t, members, 1)
 }

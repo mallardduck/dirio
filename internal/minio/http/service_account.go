@@ -38,7 +38,7 @@ func (s *serviceAccountHTTPService) ListServiceAccounts(w nethttp.ResponseWriter
 	}
 
 	// MinIO returns an object with an "accounts" field
-	response := map[string]interface{}{
+	response := map[string]any{
 		"accounts": keys,
 	}
 
@@ -119,7 +119,7 @@ func (s *serviceAccountHTTPService) AddServiceAccount(w nethttp.ResponseWriter, 
 		return
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"accessKey":    sa.AccessKey,
 		"secretKey":    sa.SecretKey,
 		"sessionToken": "",
@@ -196,7 +196,7 @@ func (s *serviceAccountHTTPService) InfoServiceAccount(w nethttp.ResponseWriter,
 		return
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"accessKey":        sa.AccessKey,
 		"parentUserUUID":   sa.ParentUserUUID,
 		"policyMode":       sa.PolicyMode,

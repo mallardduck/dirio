@@ -114,10 +114,7 @@ func (cr *ChunkedReader) Read(p []byte) (int, error) {
 	}
 
 	// Read up to the remaining chunk size or buffer size
-	toRead := int64(len(p))
-	if toRead > cr.chunkSize {
-		toRead = cr.chunkSize
-	}
+	toRead := min(int64(len(p)), cr.chunkSize)
 
 	n, err := io.ReadFull(cr.reader, p[:toRead])
 	cr.chunkSize -= int64(n)
@@ -192,8 +189,8 @@ func (cr *ChunkedReader) readChunkHeader() error {
 	cr.currentChunkSig = ""
 	if len(parts) == 2 {
 		sigPart := strings.TrimSpace(parts[1])
-		if strings.HasPrefix(sigPart, "chunk-signature=") {
-			cr.currentChunkSig = strings.TrimPrefix(sigPart, "chunk-signature=")
+		if after, ok := strings.CutPrefix(sigPart, "chunk-signature="); ok {
+			cr.currentChunkSig = after
 		}
 	}
 

@@ -204,7 +204,7 @@ func ValidateCondition(conditions ConditionMap) error {
 		kvMap, ok := keyValues.(map[string]any)
 		if !ok {
 			// Try interface{} variant
-			kvMapInterface, ok := keyValues.(map[string]interface{})
+			kvMapInterface, ok := keyValues.(map[string]any)
 			if !ok {
 				return fmt.Errorf("condition operator %q must have map[string]any value, got %T", operator, keyValues)
 			}

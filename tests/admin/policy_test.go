@@ -15,7 +15,7 @@ func TestListPolicies_Empty(t *testing.T) {
 	resp := ts.AdminRequest(t, http.MethodGet, "/list-canned-policies", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var policies map[string]interface{}
+	var policies map[string]any
 	DecodeJSON(t, resp, &policies)
 	assert.Empty(t, policies)
 }
@@ -32,7 +32,7 @@ func TestCreatePolicy_Success(t *testing.T) {
 	resp2 := ts.AdminRequest(t, http.MethodGet, "/list-canned-policies", nil)
 	require.Equal(t, http.StatusOK, resp2.StatusCode)
 
-	var policies map[string]interface{}
+	var policies map[string]any
 	DecodeJSON(t, resp2, &policies)
 	assert.Contains(t, policies, "my-policy")
 }
@@ -82,7 +82,7 @@ func TestGetPolicyInfo_Success(t *testing.T) {
 	resp2 := ts.AdminRequest(t, http.MethodGet, "/info-canned-policy?name=info-policy", nil)
 	require.Equal(t, http.StatusOK, resp2.StatusCode)
 
-	var policy map[string]interface{}
+	var policy map[string]any
 	DecodeJSON(t, resp2, &policy)
 	assert.Equal(t, "info-policy", policy["name"])
 }
@@ -148,9 +148,9 @@ func TestSetPolicy_AttachToUser(t *testing.T) {
 	resp4 := ts.AdminRequest(t, http.MethodGet, "/user-info?accessKey=alice", nil)
 	require.Equal(t, http.StatusOK, resp4.StatusCode)
 
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp4, &info)
-	attachedPolicies, ok := info["attachedPolicies"].([]interface{})
+	attachedPolicies, ok := info["attachedPolicies"].([]any)
 	require.True(t, ok, "attachedPolicies should be an array")
 	assert.Contains(t, attachedPolicies, "alice-policy")
 }
@@ -217,9 +217,9 @@ func TestDetachPolicy_Success(t *testing.T) {
 	resp5 := ts.AdminRequest(t, http.MethodGet, "/user-info?accessKey=carla", nil)
 	require.Equal(t, http.StatusOK, resp5.StatusCode)
 
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp5, &info)
-	attachedPolicies, _ := info["attachedPolicies"].([]interface{})
+	attachedPolicies, _ := info["attachedPolicies"].([]any)
 	assert.NotContains(t, attachedPolicies, "carla-policy")
 }
 
@@ -248,9 +248,9 @@ func TestPolicyEntities_Success(t *testing.T) {
 	resp4 := ts.AdminRequest(t, http.MethodGet, "/policy-entities?policy=dean-policy", nil)
 	require.Equal(t, http.StatusOK, resp4.StatusCode)
 
-	var entities map[string]interface{}
+	var entities map[string]any
 	DecodeJSON(t, resp4, &entities)
-	userMappings, ok := entities["userMappings"].([]interface{})
+	userMappings, ok := entities["userMappings"].([]any)
 	require.True(t, ok)
 	assert.Contains(t, userMappings, "dean")
 }
@@ -291,9 +291,9 @@ func TestSetPolicy_Idempotent(t *testing.T) {
 	resp5 := ts.AdminRequest(t, http.MethodGet, "/user-info?accessKey=ellen", nil)
 	require.Equal(t, http.StatusOK, resp5.StatusCode)
 
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp5, &info)
-	attachedPolicies, ok := info["attachedPolicies"].([]interface{})
+	attachedPolicies, ok := info["attachedPolicies"].([]any)
 	require.True(t, ok)
 
 	count := 0

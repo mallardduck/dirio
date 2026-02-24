@@ -71,7 +71,7 @@ func (s *groupHTTPService) GetGroupInfo(w nethttp.ResponseWriter, r *nethttp.Req
 		return
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"name":      g.Name,
 		"members":   memberKeys,
 		"policies":  g.AttachedPolicies,

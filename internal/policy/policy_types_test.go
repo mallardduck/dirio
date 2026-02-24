@@ -42,7 +42,7 @@ func TestValidatePrincipal(t *testing.T) {
 		},
 		{
 			name:      "interface{} map variant",
-			principal: map[string]interface{}{"AWS": "*"},
+			principal: map[string]any{"AWS": "*"},
 			wantErr:   false,
 		},
 		{
@@ -120,7 +120,7 @@ func TestValidateAction(t *testing.T) {
 		},
 		{
 			name:    "action array (interface{})",
-			action:  []interface{}{"s3:GetObject", "s3:PutObject"},
+			action:  []any{"s3:GetObject", "s3:PutObject"},
 			wantErr: false,
 		},
 		{
@@ -287,7 +287,7 @@ func TestValidateCondition(t *testing.T) {
 		{
 			name: "valid with interface{} map",
 			conditions: map[string]any{
-				"StringEquals": map[string]interface{}{
+				"StringEquals": map[string]any{
 					"aws:username": "alice",
 				},
 			},
@@ -373,7 +373,7 @@ func TestNormalizeAction(t *testing.T) {
 		},
 		{
 			name:    "interface{} array",
-			action:  []interface{}{"s3:GetObject", "s3:PutObject"},
+			action:  []any{"s3:GetObject", "s3:PutObject"},
 			want:    []string{"s3:GetObject", "s3:PutObject"},
 			wantErr: false,
 		},

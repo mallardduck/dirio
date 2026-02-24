@@ -68,7 +68,7 @@ func setSAAttachedPolicies(t *testing.T, ts *TestServer, accessKey string, polic
 	data, err := os.ReadFile(saPath)
 	require.NoError(t, err, "SA file should exist at %s", saPath)
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	require.NoError(t, json.Unmarshal(data, &raw))
 
 	raw["attachedPolicies"] = policies
@@ -87,7 +87,7 @@ func setSAExpiresAt(t *testing.T, ts *TestServer, accessKey string, expiresAt ti
 	data, err := os.ReadFile(saPath)
 	require.NoError(t, err, "SA file should exist at %s", saPath)
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	require.NoError(t, json.Unmarshal(data, &raw))
 
 	raw["expiresAt"] = expiresAt.UTC().Format(time.RFC3339Nano)

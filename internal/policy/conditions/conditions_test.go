@@ -15,7 +15,7 @@ func TestEvaluator_Evaluate_EmptyConditions(t *testing.T) {
 	eval := NewEvaluator(ctx)
 
 	// Empty conditions should always pass
-	match, err := eval.Evaluate(map[string]interface{}{})
+	match, err := eval.Evaluate(map[string]any{})
 	if err != nil {
 		t.Errorf("Evaluate() error = %v, want nil", err)
 	}
@@ -30,8 +30,8 @@ func TestEvaluator_Evaluate_SingleOperator(t *testing.T) {
 	}
 	eval := NewEvaluator(ctx)
 
-	conditions := map[string]interface{}{
-		"StringEquals": map[string]interface{}{
+	conditions := map[string]any{
+		"StringEquals": map[string]any{
 			"aws:username": "alice",
 		},
 	}
@@ -54,11 +54,11 @@ func TestEvaluator_Evaluate_MultipleOperatorsAND(t *testing.T) {
 	eval := NewEvaluator(ctx)
 
 	// Both conditions must be true (AND logic)
-	conditions := map[string]interface{}{
-		"StringEquals": map[string]interface{}{
+	conditions := map[string]any{
+		"StringEquals": map[string]any{
 			"aws:username": "alice",
 		},
-		"IpAddress": map[string]interface{}{
+		"IpAddress": map[string]any{
 			"aws:SourceIp": "192.168.1.0/24",
 		},
 	}
@@ -72,11 +72,11 @@ func TestEvaluator_Evaluate_MultipleOperatorsAND(t *testing.T) {
 	}
 
 	// One condition fails - entire evaluation fails
-	conditions2 := map[string]interface{}{
-		"StringEquals": map[string]interface{}{
+	conditions2 := map[string]any{
+		"StringEquals": map[string]any{
 			"aws:username": "bob", // Different user
 		},
-		"IpAddress": map[string]interface{}{
+		"IpAddress": map[string]any{
 			"aws:SourceIp": "192.168.1.0/24",
 		},
 	}
@@ -98,9 +98,9 @@ func TestEvaluator_Evaluate_MultipleValuesOR(t *testing.T) {
 	eval := NewEvaluator(ctx)
 
 	// Multiple values - OR logic (any match succeeds)
-	conditions := map[string]interface{}{
-		"IpAddress": map[string]interface{}{
-			"aws:SourceIp": []interface{}{"192.168.1.0/24", "10.0.0.0/8"},
+	conditions := map[string]any{
+		"IpAddress": map[string]any{
+			"aws:SourceIp": []any{"192.168.1.0/24", "10.0.0.0/8"},
 		},
 	}
 
@@ -113,9 +113,9 @@ func TestEvaluator_Evaluate_MultipleValuesOR(t *testing.T) {
 	}
 
 	// No value matches
-	conditions2 := map[string]interface{}{
-		"IpAddress": map[string]interface{}{
-			"aws:SourceIp": []interface{}{"192.168.1.0/24", "172.16.0.0/12"},
+	conditions2 := map[string]any{
+		"IpAddress": map[string]any{
+			"aws:SourceIp": []any{"192.168.1.0/24", "172.16.0.0/12"},
 		},
 	}
 
@@ -143,8 +143,8 @@ func TestEvaluator_Evaluate_VariableSubstitution(t *testing.T) {
 	eval := NewEvaluator(ctx)
 
 	// Variable substitution in condition value
-	conditions := map[string]interface{}{
-		"StringEquals": map[string]interface{}{
+	conditions := map[string]any{
+		"StringEquals": map[string]any{
 			"s3:prefix": "${aws:username}/data/",
 		},
 	}
@@ -171,14 +171,14 @@ func TestEvaluator_Evaluate_ComplexRealWorld(t *testing.T) {
 	}
 	eval := NewEvaluator(ctx)
 
-	conditions := map[string]interface{}{
-		"StringEquals": map[string]interface{}{
+	conditions := map[string]any{
+		"StringEquals": map[string]any{
 			"aws:username": "alice",
 		},
-		"IpAddress": map[string]interface{}{
+		"IpAddress": map[string]any{
 			"aws:SourceIp": "192.168.1.0/24",
 		},
-		"DateGreaterThan": map[string]interface{}{
+		"DateGreaterThan": map[string]any{
 			"aws:CurrentTime": "2026-01-01T00:00:00Z",
 		},
 	}
@@ -221,8 +221,8 @@ func TestEvaluator_Evaluate_IPRestriction(t *testing.T) {
 			}
 			eval := NewEvaluator(ctx)
 
-			conditions := map[string]interface{}{
-				"IpAddress": map[string]interface{}{
+			conditions := map[string]any{
+				"IpAddress": map[string]any{
 					"aws:SourceIp": "192.168.1.0/24",
 				},
 			}
@@ -272,11 +272,11 @@ func TestEvaluator_Evaluate_TimeWindow(t *testing.T) {
 			}
 			eval := NewEvaluator(ctx)
 
-			conditions := map[string]interface{}{
-				"DateGreaterThan": map[string]interface{}{
+			conditions := map[string]any{
+				"DateGreaterThan": map[string]any{
 					"aws:CurrentTime": startTime.Format(time.RFC3339),
 				},
-				"DateLessThan": map[string]interface{}{
+				"DateLessThan": map[string]any{
 					"aws:CurrentTime": endTime.Format(time.RFC3339),
 				},
 			}
@@ -328,9 +328,9 @@ func TestEvaluator_Evaluate_UserAgentFilter(t *testing.T) {
 			}
 			eval := NewEvaluator(ctx)
 
-			conditions := map[string]interface{}{
-				"StringLike": map[string]interface{}{
-					"aws:UserAgent": []interface{}{"aws-cli/*", "Boto3/*", "MinIO*"},
+			conditions := map[string]any{
+				"StringLike": map[string]any{
+					"aws:UserAgent": []any{"aws-cli/*", "Boto3/*", "MinIO*"},
 				},
 			}
 
@@ -376,8 +376,8 @@ func TestEvaluator_Evaluate_ContentSizeLimit(t *testing.T) {
 			}
 			eval := NewEvaluator(ctx)
 
-			conditions := map[string]interface{}{
-				"NumericLessThanEquals": map[string]interface{}{
+			conditions := map[string]any{
+				"NumericLessThanEquals": map[string]any{
 					"s3:content-length": float64(10 * 1024 * 1024), // 10MB limit
 				},
 			}
@@ -427,8 +427,8 @@ func TestEvaluator_Evaluate_SecureTransport(t *testing.T) {
 			}
 			eval := NewEvaluator(ctx)
 
-			conditions := map[string]interface{}{
-				"Bool": map[string]interface{}{
+			conditions := map[string]any{
+				"Bool": map[string]any{
 					"aws:SecureTransport": tt.required,
 				},
 			}
@@ -449,8 +449,8 @@ func TestEvaluator_Evaluate_MissingContextValue(t *testing.T) {
 	ctx := &Context{}
 	eval := NewEvaluator(ctx)
 
-	conditions := map[string]interface{}{
-		"StringEquals": map[string]interface{}{
+	conditions := map[string]any{
+		"StringEquals": map[string]any{
 			"aws:username": "alice",
 		},
 	}
@@ -470,8 +470,8 @@ func TestEvaluator_Evaluate_UnknownOperator(t *testing.T) {
 	}
 	eval := NewEvaluator(ctx)
 
-	conditions := map[string]interface{}{
-		"UnknownOperator": map[string]interface{}{
+	conditions := map[string]any{
+		"UnknownOperator": map[string]any{
 			"aws:username": "alice",
 		},
 	}
@@ -490,7 +490,7 @@ func TestEvaluator_Evaluate_InvalidConditionFormat(t *testing.T) {
 	eval := NewEvaluator(ctx)
 
 	// Invalid format: operator value is not a map
-	conditions := map[string]interface{}{
+	conditions := map[string]any{
 		"StringEquals": "not a map",
 	}
 
@@ -522,7 +522,7 @@ func TestEvaluator_getContextValue(t *testing.T) {
 
 	tests := []struct {
 		key       string
-		wantValue interface{}
+		wantValue any
 		wantErr   bool
 	}{
 		{"aws:username", "alice", false},

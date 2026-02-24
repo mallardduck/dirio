@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -49,7 +50,7 @@ type Manager struct {
 
 	// usersIdx is the in-memory UUID presence set (populated from filenames at startup).
 	usersMu  sync.RWMutex
-	usersIdx map[uuid.UUID]interface{}
+	usersIdx map[uuid.UUID]any
 
 	// objMetaCache is a bounded in-memory cache for object metadata.
 	// Key: bucket + "\x00" + key. Capacity: 100k entries (~20 MB).
@@ -84,13 +85,13 @@ type BucketMetadata struct {
 	ReplicationConfigXML        string    `json:"replicationConfig,omitempty"`
 	BucketTargetsConfigJSON     string    `json:"bucketTargetsConfig,omitempty"`
 	BucketTargetsConfigMetaJSON string    `json:"bucketTargetsConfigMeta,omitempty"`
-	PolicyConfigUpdatedAt       time.Time `json:"policyConfigUpdatedAt,omitempty"`
-	ObjectLockConfigUpdatedAt   time.Time `json:"objectLockConfigUpdatedAt,omitempty"`
-	EncryptionConfigUpdatedAt   time.Time `json:"encryptionConfigUpdatedAt,omitempty"`
-	TaggingConfigUpdatedAt      time.Time `json:"taggingConfigUpdatedAt,omitempty"`
-	QuotaConfigUpdatedAt        time.Time `json:"quotaConfigUpdatedAt,omitempty"`
-	ReplicationConfigUpdatedAt  time.Time `json:"replicationConfigUpdatedAt,omitempty"`
-	VersioningConfigUpdatedAt   time.Time `json:"versioningConfigUpdatedAt,omitempty"`
+	PolicyConfigUpdatedAt       time.Time `json:"policyConfigUpdatedAt"`
+	ObjectLockConfigUpdatedAt   time.Time `json:"objectLockConfigUpdatedAt"`
+	EncryptionConfigUpdatedAt   time.Time `json:"encryptionConfigUpdatedAt"`
+	TaggingConfigUpdatedAt      time.Time `json:"taggingConfigUpdatedAt"`
+	QuotaConfigUpdatedAt        time.Time `json:"quotaConfigUpdatedAt"`
+	ReplicationConfigUpdatedAt  time.Time `json:"replicationConfigUpdatedAt"`
+	VersioningConfigUpdatedAt   time.Time `json:"versioningConfigUpdatedAt"`
 }
 
 // ObjectMetadata represents object metadata
@@ -147,7 +148,7 @@ func New(rootFS billy.Filesystem) (*Manager, error) {
 		rootFS:       rootFS,
 		metadataFS:   metadataFS,
 		db:           db,
-		usersIdx:     make(map[uuid.UUID]interface{}),
+		usersIdx:     make(map[uuid.UUID]any),
 		objMetaCache: lru.NewLRUCache[string, *ObjectMetadata](100_000),
 	}
 
@@ -1007,10 +1008,8 @@ func (m *Manager) AddUserToGroup(ctx context.Context, groupName string, userUid 
 		return err
 	}
 
-	for _, member := range g.Members {
-		if member == userUid {
-			return nil // already a member
-		}
+	if slices.Contains(g.Members, userUid) {
+		return nil // already a member
 	}
 
 	g.Members = append(g.Members, userUid)
@@ -1059,10 +1058,8 @@ func (m *Manager) AttachPolicyToGroup(ctx context.Context, groupName, policyName
 		return err
 	}
 
-	for _, p := range g.AttachedPolicies {
-		if p == policyName {
-			return nil // already attached
-		}
+	if slices.Contains(g.AttachedPolicies, policyName) {
+		return nil // already attached
 	}
 
 	g.AttachedPolicies = append(g.AttachedPolicies, policyName)

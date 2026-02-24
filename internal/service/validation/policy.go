@@ -70,7 +70,7 @@ func validateStatement(stmt *iam.Statement, index int) error {
 		if v == "" {
 			return svcerrors.NewValidationError(prefix+".Action", "action cannot be empty")
 		}
-	case []interface{}:
+	case []any:
 		if len(v) == 0 {
 			return svcerrors.NewValidationError(prefix+".Action", "action array cannot be empty")
 		}

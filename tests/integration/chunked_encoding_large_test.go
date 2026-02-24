@@ -30,10 +30,7 @@ func TestPutObject_LargeChunkedUpload(t *testing.T) {
 	var chunkedBody bytes.Buffer
 
 	for offset := 0; offset < len(originalData); offset += chunkSize {
-		end := offset + chunkSize
-		if end > len(originalData) {
-			end = len(originalData)
-		}
+		end := min(offset+chunkSize, len(originalData))
 		chunk := originalData[offset:end]
 
 		// Write chunk header: size;chunk-signature=xxx\r\n

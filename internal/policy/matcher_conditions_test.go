@@ -38,8 +38,8 @@ func TestEvaluateStatementWithConditions(t *testing.T) {
 				Principal: "*",
 				Action:    "s3:GetObject",
 				Resource:  "arn:aws:s3:::bucket/*",
-				Condition: map[string]interface{}{
-					"IpAddress": map[string]interface{}{
+				Condition: map[string]any{
+					"IpAddress": map[string]any{
 						"aws:SourceIp": "192.168.1.0/24",
 					},
 				},
@@ -60,8 +60,8 @@ func TestEvaluateStatementWithConditions(t *testing.T) {
 				Principal: "*",
 				Action:    "s3:GetObject",
 				Resource:  "arn:aws:s3:::bucket/*",
-				Condition: map[string]interface{}{
-					"IpAddress": map[string]interface{}{
+				Condition: map[string]any{
+					"IpAddress": map[string]any{
 						"aws:SourceIp": "192.168.1.0/24",
 					},
 				},
@@ -82,11 +82,11 @@ func TestEvaluateStatementWithConditions(t *testing.T) {
 				Principal: "*",
 				Action:    "s3:*",
 				Resource:  "*",
-				Condition: map[string]interface{}{
-					"DateGreaterThan": map[string]interface{}{
+				Condition: map[string]any{
+					"DateGreaterThan": map[string]any{
 						"aws:CurrentTime": "2026-01-01T00:00:00Z",
 					},
-					"DateLessThan": map[string]interface{}{
+					"DateLessThan": map[string]any{
 						"aws:CurrentTime": "2026-12-31T23:59:59Z",
 					},
 				},
@@ -107,8 +107,8 @@ func TestEvaluateStatementWithConditions(t *testing.T) {
 				Principal: "*",
 				Action:    "s3:*",
 				Resource:  "*",
-				Condition: map[string]interface{}{
-					"DateGreaterThan": map[string]interface{}{
+				Condition: map[string]any{
+					"DateGreaterThan": map[string]any{
 						"aws:CurrentTime": "2027-01-01T00:00:00Z",
 					},
 				},
@@ -129,9 +129,9 @@ func TestEvaluateStatementWithConditions(t *testing.T) {
 				Principal: "*",
 				Action:    "s3:*",
 				Resource:  "*",
-				Condition: map[string]interface{}{
-					"StringLike": map[string]interface{}{
-						"aws:UserAgent": []interface{}{"aws-cli/*", "Boto3/*"},
+				Condition: map[string]any{
+					"StringLike": map[string]any{
+						"aws:UserAgent": []any{"aws-cli/*", "Boto3/*"},
 					},
 				},
 			},
@@ -151,9 +151,9 @@ func TestEvaluateStatementWithConditions(t *testing.T) {
 				Principal: "*",
 				Action:    "s3:*",
 				Resource:  "*",
-				Condition: map[string]interface{}{
-					"StringLike": map[string]interface{}{
-						"aws:UserAgent": []interface{}{"aws-cli/*", "Boto3/*"},
+				Condition: map[string]any{
+					"StringLike": map[string]any{
+						"aws:UserAgent": []any{"aws-cli/*", "Boto3/*"},
 					},
 				},
 			},
@@ -173,8 +173,8 @@ func TestEvaluateStatementWithConditions(t *testing.T) {
 				Principal: "*",
 				Action:    "s3:PutObject",
 				Resource:  "*",
-				Condition: map[string]interface{}{
-					"NumericLessThanEquals": map[string]interface{}{
+				Condition: map[string]any{
+					"NumericLessThanEquals": map[string]any{
 						"s3:content-length": float64(10 * 1024 * 1024), // 10MB
 					},
 				},
@@ -195,8 +195,8 @@ func TestEvaluateStatementWithConditions(t *testing.T) {
 				Principal: "*",
 				Action:    "s3:PutObject",
 				Resource:  "*",
-				Condition: map[string]interface{}{
-					"NumericLessThanEquals": map[string]interface{}{
+				Condition: map[string]any{
+					"NumericLessThanEquals": map[string]any{
 						"s3:content-length": float64(10 * 1024 * 1024), // 10MB
 					},
 				},
@@ -217,8 +217,8 @@ func TestEvaluateStatementWithConditions(t *testing.T) {
 				Principal: "*",
 				Action:    "s3:*",
 				Resource:  "*",
-				Condition: map[string]interface{}{
-					"Bool": map[string]interface{}{
+				Condition: map[string]any{
+					"Bool": map[string]any{
 						"aws:SecureTransport": true,
 					},
 				},
@@ -240,8 +240,8 @@ func TestEvaluateStatementWithConditions(t *testing.T) {
 				Principal: "*",
 				Action:    "s3:*",
 				Resource:  "*",
-				Condition: map[string]interface{}{
-					"Bool": map[string]interface{}{
+				Condition: map[string]any{
+					"Bool": map[string]any{
 						"aws:SecureTransport": true,
 					},
 				},
@@ -263,8 +263,8 @@ func TestEvaluateStatementWithConditions(t *testing.T) {
 				Principal: "*",
 				Action:    "s3:*",
 				Resource:  "*",
-				Condition: map[string]interface{}{
-					"IpAddress": map[string]interface{}{
+				Condition: map[string]any{
+					"IpAddress": map[string]any{
 						"aws:SourceIp": "10.0.0.0/8",
 					},
 				},
@@ -285,8 +285,8 @@ func TestEvaluateStatementWithConditions(t *testing.T) {
 				Principal: "*",
 				Action:    "s3:*",
 				Resource:  "*",
-				Condition: map[string]interface{}{
-					"IpAddress": map[string]interface{}{
+				Condition: map[string]any{
+					"IpAddress": map[string]any{
 						"aws:SourceIp": "10.0.0.0/8",
 					},
 				},
@@ -307,11 +307,11 @@ func TestEvaluateStatementWithConditions(t *testing.T) {
 				Principal: "*",
 				Action:    "s3:*",
 				Resource:  "*",
-				Condition: map[string]interface{}{
-					"IpAddress": map[string]interface{}{
+				Condition: map[string]any{
+					"IpAddress": map[string]any{
 						"aws:SourceIp": "192.168.1.0/24",
 					},
-					"StringEquals": map[string]interface{}{
+					"StringEquals": map[string]any{
 						"aws:username": "alice",
 					},
 				},
@@ -332,11 +332,11 @@ func TestEvaluateStatementWithConditions(t *testing.T) {
 				Principal: "*",
 				Action:    "s3:*",
 				Resource:  "*",
-				Condition: map[string]interface{}{
-					"IpAddress": map[string]interface{}{
+				Condition: map[string]any{
+					"IpAddress": map[string]any{
 						"aws:SourceIp": "192.168.1.0/24",
 					},
-					"StringEquals": map[string]interface{}{
+					"StringEquals": map[string]any{
 						"aws:username": "bob",
 					},
 				},
@@ -357,8 +357,8 @@ func TestEvaluateStatementWithConditions(t *testing.T) {
 				Principal: "*",
 				Action:    "s3:*",
 				Resource:  "*",
-				Condition: map[string]interface{}{
-					"StringEquals": map[string]interface{}{
+				Condition: map[string]any{
+					"StringEquals": map[string]any{
 						"s3:prefix": "${aws:username}/",
 					},
 				},

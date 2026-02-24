@@ -168,10 +168,10 @@ type UserPolicyMapping struct {
 
 // PolicyFile represents MinIO's IAM policy file format
 type PolicyFile struct {
-	Version    int                    `json:"Version"`
-	Policy     map[string]interface{} `json:"Policy"` // The IAM policy document
-	CreateDate time.Time              `json:"CreateDate"`
-	UpdateDate time.Time              `json:"UpdateDate"`
+	Version    int            `json:"Version"`
+	Policy     map[string]any `json:"Policy"` // The IAM policy document
+	CreateDate time.Time      `json:"CreateDate"`
+	UpdateDate time.Time      `json:"UpdateDate"`
 }
 
 // ObjectMetadata represents MinIO's fs.json format

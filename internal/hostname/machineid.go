@@ -60,8 +60,8 @@ func readDarwinMachineID() string {
 	}
 
 	// Look for IOPlatformUUID in the output
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(output), "\n")
+	for line := range lines {
 		if strings.Contains(line, "IOPlatformUUID") {
 			// Extract UUID from line like: "IOPlatformUUID" = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
 			parts := strings.Split(line, "\"")
@@ -84,8 +84,8 @@ func readWindowsMachineID() string {
 	}
 
 	// Parse output like: "MachineGuid    REG_SZ    XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(output), "\n")
+	for line := range lines {
 		if strings.Contains(line, "MachineGuid") {
 			parts := strings.Fields(line)
 			if len(parts) >= 3 {

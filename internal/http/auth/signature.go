@@ -113,8 +113,8 @@ func ParseAuthorizationHeader(authHeader string) (*Credentials, error) {
 	creds := &Credentials{}
 
 	// Parse comma-separated parts
-	parts := strings.Split(authHeader, ",")
-	for _, part := range parts {
+	parts := strings.SplitSeq(authHeader, ",")
+	for part := range parts {
 		kv := strings.SplitN(part, "=", 2)
 		if len(kv) != 2 {
 			continue

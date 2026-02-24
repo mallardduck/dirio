@@ -57,12 +57,12 @@ type ServiceAccountInfo struct {
 }
 
 // WithAuthzDecision returns a new context with the authorization decision set
-func WithAuthzDecision(ctx context.Context, decision interface{}) context.Context {
+func WithAuthzDecision(ctx context.Context, decision any) context.Context {
 	return context.WithValue(ctx, AuthzDecisionKey, decision)
 }
 
 // GetAuthzDecision extracts the authorization decision from the context
-func GetAuthzDecision(ctx context.Context) interface{} {
+func GetAuthzDecision(ctx context.Context) any {
 	return ctx.Value(AuthzDecisionKey)
 }
 
@@ -94,7 +94,7 @@ func GetUser(ctx context.Context) (*iam.User, error) {
 
 // WithPreSignedUser adds a user authenticated via pre-signed URL to context
 // Also marks the request as pre-signed and stores expiration for auditing
-func WithPreSignedUser(ctx context.Context, user *iam.User, expiresAt interface{}) context.Context {
+func WithPreSignedUser(ctx context.Context, user *iam.User, expiresAt any) context.Context {
 	ctx = context.WithValue(ctx, RequestUserKey, user)
 	ctx = context.WithValue(ctx, IsPreSignedRequestKey, true)
 	ctx = context.WithValue(ctx, PreSignedExpiresAtKey, expiresAt)
@@ -110,7 +110,7 @@ func IsPreSignedRequest(ctx context.Context) bool {
 }
 
 // GetPreSignedExpiresAt returns the expiration time of the pre-signed URL
-func GetPreSignedExpiresAt(ctx context.Context) (interface{}, bool) {
+func GetPreSignedExpiresAt(ctx context.Context) (any, bool) {
 	if t := ctx.Value(PreSignedExpiresAtKey); t != nil {
 		return t, true
 	}

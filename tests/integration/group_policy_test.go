@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -69,17 +70,18 @@ func TestGroupPolicyInheritance(t *testing.T) {
 
 func updateGroupMembers(t *testing.T, ts *TestServer, groupName string, members []string, isRemove bool) {
 	// Need to fix the slice formatting for JSON
-	membersJSON := "["
+	var membersJSON strings.Builder
+	membersJSON.WriteString("[")
 	for i, m := range members {
-		membersJSON += fmt.Sprintf(`"%s"`, m)
+		membersJSON.WriteString(fmt.Sprintf(`"%s"`, m))
 		if i < len(members)-1 {
-			membersJSON += ","
+			membersJSON.WriteString(",")
 		}
 	}
-	membersJSON += "]"
+	membersJSON.WriteString("]")
 
 	body := fmt.Sprintf(`{"group": "%s", "members": %s, "isRemove": %v}`,
-		groupName, membersJSON, isRemove)
+		groupName, membersJSON.String(), isRemove)
 
 	url := ts.URL("/minio/admin/v3/update-group-members")
 	req, _ := http.NewRequest(http.MethodPost, url, bytes.NewBuffer([]byte(body)))

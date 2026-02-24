@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -215,7 +216,7 @@ func importPolicies(minioFS billy.Filesystem, policies map[string]*Policy) error
 		} else {
 			// Legacy MinIO 2019 format - policy.json IS the IAM policy document
 			// Just validate it's valid JSON by unmarshaling
-			var iamPolicy map[string]interface{}
+			var iamPolicy map[string]any
 			if err := json.Unmarshal(data, &iamPolicy); err != nil {
 				fmt.Printf("Warning: failed to parse policy %s: %v\n", policyName, err)
 				continue
@@ -540,13 +541,7 @@ func importGroupMemberships(minioFS billy.Filesystem, users map[string]*User) er
 				continue
 			}
 			for _, gp := range groupPolicies {
-				alreadyHas := false
-				for _, up := range user.AttachedPolicy {
-					if up == gp {
-						alreadyHas = true
-						break
-					}
-				}
+				alreadyHas := slices.Contains(user.AttachedPolicy, gp)
 				if !alreadyHas {
 					user.AttachedPolicy = append(user.AttachedPolicy, gp)
 				}
@@ -582,10 +577,5 @@ func isSpecialMinIODirectory(name string) bool {
 	specialDirs := []string{
 		"replication", // Contains replication stats (.stats files), not bucket data
 	}
-	for _, special := range specialDirs {
-		if name == special {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(specialDirs, name)
 }

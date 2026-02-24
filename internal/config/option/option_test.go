@@ -96,7 +96,7 @@ func TestGetEnv(t *testing.T) {
 func TestGetDefaultAsString(t *testing.T) {
 	tests := []struct {
 		name     string
-		value    interface{}
+		value    any
 		expected string
 	}{
 		{"string", "hello", "hello"},

@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -159,10 +160,8 @@ func (s *Service) AttachPolicy(ctx context.Context, userUID uuid.UUID, policyNam
 		return err
 	}
 
-	for _, p := range user.AttachedPolicies {
-		if p == policyName {
-			return nil // idempotent
-		}
+	if slices.Contains(user.AttachedPolicies, policyName) {
+		return nil // idempotent
 	}
 
 	user.AttachedPolicies = append(user.AttachedPolicies, policyName)

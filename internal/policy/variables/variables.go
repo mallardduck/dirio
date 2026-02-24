@@ -154,13 +154,13 @@ func (c *Context) SubstituteSlice(inputs []string) ([]string, error) {
 
 // SubstituteInterface handles substitution for interface{} values (string or []string)
 // This is useful for Resource and Action fields in policy statements which can be either type
-func (c *Context) SubstituteInterface(input interface{}) (interface{}, error) {
+func (c *Context) SubstituteInterface(input any) (any, error) {
 	switch v := input.(type) {
 	case string:
 		return c.Substitute(v)
 	case []string:
 		return c.SubstituteSlice(v)
-	case []interface{}:
+	case []any:
 		// Convert []interface{} to []string, substitute, and return
 		strs := make([]string, len(v))
 		for i, item := range v {

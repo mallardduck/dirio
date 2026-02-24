@@ -164,7 +164,7 @@ func (ts *TestServer) AdminRequest(t *testing.T, method, path string, body []byt
 
 // EncryptedAdminRequest JSON-marshals bodyData, encrypts it with the admin
 // secret key using madmin, and sends it as an admin API request.
-func (ts *TestServer) EncryptedAdminRequest(t *testing.T, method, path string, bodyData interface{}) *http.Response {
+func (ts *TestServer) EncryptedAdminRequest(t *testing.T, method, path string, bodyData any) *http.Response {
 	t.Helper()
 
 	jsonData, err := json.Marshal(bodyData)
@@ -217,7 +217,7 @@ func (ts *TestServer) SetBucketPolicy(t *testing.T, bucket, policyJSON string) {
 // ---------------------------------------------------------------------------
 
 // DecodeJSON reads and JSON-decodes the response body into v, then closes it.
-func DecodeJSON(t *testing.T, resp *http.Response, v interface{}) {
+func DecodeJSON(t *testing.T, resp *http.Response, v any) {
 	t.Helper()
 	defer resp.Body.Close()
 	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
@@ -226,7 +226,7 @@ func DecodeJSON(t *testing.T, resp *http.Response, v interface{}) {
 }
 
 // DecryptAndDecodeJSON decrypts a madmin-encrypted response body and JSON-decodes it into v.
-func (ts *TestServer) DecryptAndDecodeJSON(t *testing.T, resp *http.Response, v interface{}) {
+func (ts *TestServer) DecryptAndDecodeJSON(t *testing.T, resp *http.Response, v any) {
 	t.Helper()
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)

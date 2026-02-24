@@ -16,7 +16,7 @@ func TestWriteXMLResponse(t *testing.T) {
 	tests := []struct {
 		name           string
 		statusCode     int
-		data           interface{}
+		data           any
 		wantStatusCode int
 		wantHeader     string
 		wantContains   []string
@@ -82,7 +82,7 @@ func TestWriteXMLResponse_LargeResponse(t *testing.T) {
 	// Add enough buckets to create > 10MB response
 	// Each bucket with a reasonably long name should help reach the threshold
 	longName := strings.Repeat("a", 1000)
-	for i := 0; i < 15000; i++ {
+	for range 15000 {
 		buckets = append(buckets, s3types.Bucket{Name: longName})
 	}
 

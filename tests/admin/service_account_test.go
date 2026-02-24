@@ -16,9 +16,9 @@ func TestListServiceAccounts_Empty(t *testing.T) {
 	defer DrainAndClose(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var result map[string]interface{}
+	var result map[string]any
 	DecodeJSON(t, resp, &result)
-	accounts, ok := result["accounts"].([]interface{})
+	accounts, ok := result["accounts"].([]any)
 	require.True(t, ok, "response should have 'accounts' field")
 	assert.Empty(t, accounts)
 }
@@ -38,9 +38,9 @@ func TestAddServiceAccount_Success(t *testing.T) {
 	// Verify it appears in the list
 	resp2 := ts.AdminRequest(t, http.MethodGet, "/list-service-accounts", nil)
 	defer DrainAndClose(resp2)
-	var result map[string]interface{}
+	var result map[string]any
 	DecodeJSON(t, resp2, &result)
-	accounts := result["accounts"].([]interface{})
+	accounts := result["accounts"].([]any)
 	assert.Len(t, accounts, 1)
 	assert.Equal(t, "svcaccount1", accounts[0])
 }
@@ -102,9 +102,9 @@ func TestDeleteServiceAccount_Success(t *testing.T) {
 	// Verify it's gone
 	resp3 := ts.AdminRequest(t, http.MethodGet, "/list-service-accounts", nil)
 	defer DrainAndClose(resp3)
-	var result map[string]interface{}
+	var result map[string]any
 	DecodeJSON(t, resp3, &result)
-	accounts := result["accounts"].([]interface{})
+	accounts := result["accounts"].([]any)
 	assert.Empty(t, accounts)
 }
 
@@ -130,7 +130,7 @@ func TestInfoServiceAccount_Success(t *testing.T) {
 	defer DrainAndClose(resp2)
 	require.Equal(t, http.StatusOK, resp2.StatusCode)
 
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp2, &info)
 	assert.Equal(t, "svcaccount1", info["accessKey"])
 	assert.Equal(t, "on", info["status"])
@@ -173,7 +173,7 @@ func TestUpdateServiceAccount_Status(t *testing.T) {
 	// Verify status changed
 	resp3 := ts.AdminRequest(t, http.MethodGet, "/info-service-account?accessKey=svcaccount1", nil)
 	defer DrainAndClose(resp3)
-	var info map[string]interface{}
+	var info map[string]any
 	DecodeJSON(t, resp3, &info)
 	assert.Equal(t, "off", info["status"])
 }

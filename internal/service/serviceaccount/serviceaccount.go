@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -159,10 +160,8 @@ func (s *Service) AttachPolicy(ctx context.Context, accessKey, policyName string
 		return err
 	}
 
-	for _, p := range sa.AttachedPolicies {
-		if p == policyName {
-			return nil // already attached
-		}
+	if slices.Contains(sa.AttachedPolicies, policyName) {
+		return nil // already attached
 	}
 
 	sa.AttachedPolicies = append(sa.AttachedPolicies, policyName)

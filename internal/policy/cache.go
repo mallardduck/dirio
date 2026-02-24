@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"maps"
 	"sync"
 
 	"github.com/mallardduck/dirio/pkg/iam"
@@ -81,9 +82,7 @@ func (c *Cache) GetAllBucketPolicies() map[string]*iam.PolicyDocument {
 
 	// Return a copy to prevent external modification
 	result := make(map[string]*iam.PolicyDocument, len(c.bucketPolicies))
-	for k, v := range c.bucketPolicies {
-		result[k] = v
-	}
+	maps.Copy(result, c.bucketPolicies)
 	return result
 }
 

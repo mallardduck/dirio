@@ -51,7 +51,7 @@ func parseBucketMetadataBin(data []byte) (*BucketMetadata, error) {
 	meta := &BucketMetadata{}
 
 	// Read all map entries
-	for i := uint32(0); i < mapSize; i++ {
+	for i := range mapSize {
 		// Read field name
 		fieldName, err := reader.ReadString()
 		if err != nil {
