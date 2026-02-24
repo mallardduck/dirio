@@ -143,12 +143,27 @@ test_admin_policy_attach() {
     mc admin policy attach ${MC_ALIAS} ${TEST_POLICY} --user ${TEST_USER} > /dev/null 2>&1
 }
 
+test_admin_policy_detach() {
+    if [ "${SERVER_TYPE}" = "MINIO" ]; then
+        skip_test "Policy detach not supported in MinIO FS mode"
+    fi
+    mc admin policy detach ${MC_ALIAS} ${TEST_POLICY} --user ${TEST_USER} > /dev/null 2>&1
+}
+
 test_admin_policy_attached_to_user() {
     if [ "${SERVER_TYPE}" = "MINIO" ]; then
         skip_test "Policy attach not supported in MinIO FS mode"
     fi
     # Verify that the user-info shows the attached policy
     mc admin user info ${MC_ALIAS} ${TEST_USER} 2>/dev/null | grep -q "${TEST_POLICY}"
+}
+
+test_admin_policy_detached_from_user() {
+    if [ "${SERVER_TYPE}" = "MINIO" ]; then
+        skip_test "Policy attach not supported in MinIO FS mode"
+    fi
+    # Verify that the user-info shows the attached policy
+    ! mc admin user info ${MC_ALIAS} ${TEST_USER} 2>/dev/null | grep -q "${TEST_POLICY}"
 }
 
 test_admin_group_add() {
@@ -163,12 +178,32 @@ test_admin_group_info() {
     mc admin group info ${MC_ALIAS} ${TEST_GROUP} 2>/dev/null | grep -q "${TEST_USER}"
 }
 
+test_admin_group_remove_user() {
+      mc admin group remove ${MC_ALIAS} ${TEST_GROUP} ${TEST_USER} > /dev/null 2>&1
+      # Verify removed
+      if mc admin group info ${MC_ALIAS} ${TEST_GROUP} 2>/dev/null | grep -q "${TEST_USER}" > /dev/null 2>&1; then
+          echo "Group still has user in member list after removal"
+          return 1
+      fi
+      return 0
+}
+
 test_admin_user_disable() {
     mc admin user disable ${MC_ALIAS} ${TEST_USER} > /dev/null 2>&1
 }
 
 test_admin_user_enable() {
     mc admin user enable ${MC_ALIAS} ${TEST_USER} > /dev/null 2>&1
+}
+
+test_admin_group_remove() {
+    mc admin group remove ${MC_ALIAS} ${TEST_GROUP} > /dev/null 2>&1
+    # Verify removed
+    if mc admin group info ${MC_ALIAS} ${TEST_GROUP} > /dev/null 2>&1; then
+        echo "Group still exists after removal"
+        return 1
+    fi
+    return 0
 }
 
 test_admin_user_remove() {
@@ -189,6 +224,7 @@ test_admin_policy_remove() {
 # Run All Tests
 #------------------------------------------------------------------------------
 
+# First do creation/modify actions
 run_test "AdminUserAdd"              "user_management"   "exit_code" test_admin_user_add
 run_test "AdminUserList"             "user_management"   "exit_code" test_admin_user_list
 run_test "AdminUserInfo"             "user_management"   "exit_code" test_admin_user_info
@@ -201,9 +237,14 @@ run_test "AdminGroupAdd"             "group_management"  "exit_code" test_admin_
 run_test "AdminGroupList"            "group_management"  "exit_code" test_admin_group_list
 run_test "AdminGroupInfo"            "group_management"  "exit_code" test_admin_group_info
 run_test "AdminUserDisable"          "user_management"   "exit_code" test_admin_user_disable
+# Then undo them - but skip list/info actions
 run_test "AdminUserEnable"           "user_management"   "exit_code" test_admin_user_enable
-run_test "AdminUserRemove"           "user_management"   "exit_code" test_admin_user_remove
+run_test "AdminGroupRemoveUser"           "group_management"   "exit_code" test_admin_group_remove_user
+run_test "AdminGroupRemove"          "group_management"   "exit_code" test_admin_group_remove
+run_test "AdminPolicyDetach"           "policy_management" "exit_code" test_admin_policy_detach
+run_test "AdminPolicyDetachedFromUser" "policy_management" "exit_code" test_admin_policy_detached_from_user
 run_test "AdminPolicyRemove"         "policy_management" "exit_code" test_admin_policy_remove
+run_test "AdminUserRemove"           "user_management"   "exit_code" test_admin_user_remove
 
 # Output JSON results
 finalize_test_runner
