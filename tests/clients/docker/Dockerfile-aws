@@ -4,6 +4,7 @@ FROM amazon/aws-cli:2.15.0
 COPY lib/test_framework.sh ./lib/
 COPY lib/validators.sh ./lib/
 COPY scripts/awscli.sh ./
+RUN chmod +x awscli.sh
 
 # 2. Set bash as the entrypoint
 ENTRYPOINT ["/bin/bash"]

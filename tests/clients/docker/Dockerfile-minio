@@ -18,14 +18,15 @@ RUN adduser -D -h /home/mcuser mcuser
 WORKDIR /work
 RUN chown mcuser:mcuser /work
 
-# 5. Switch to the non-root user
-USER mcuser
-
-# 6. copy needed scripts
+# 5. Copy scripts and make them executable (must run as root before USER switch)
 COPY lib/test_framework.sh ./lib/
 COPY lib/validators.sh ./lib/
 COPY scripts/mc.sh ./
 COPY scripts/mc_admin.sh ./
+RUN chmod +x mc.sh mc_admin.sh
+
+# 6. Switch to the non-root user
+USER mcuser
 
 # 7. Set bash as the entrypoint
 ENTRYPOINT ["/bin/bash"]
