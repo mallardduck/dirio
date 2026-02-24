@@ -1,11 +1,11 @@
-package iam
+package http
 
 import (
 	"bytes"
 	"encoding/json"
 	"io"
 	"log/slog"
-	"net/http"
+	nethttp "net/http"
 
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 	"github.com/mallardduck/go-http-helpers/pkg/query"
@@ -25,11 +25,11 @@ type serviceAccountHTTPService struct {
 
 // ListServiceAccounts handles GET /minio/admin/v3/list-service-accounts
 // Returns a JSON array of service account access keys.
-func (s *serviceAccountHTTPService) ListServiceAccounts(w http.ResponseWriter, r *http.Request) {
+func (s *serviceAccountHTTPService) ListServiceAccounts(w nethttp.ResponseWriter, r *nethttp.Request) {
 	keys, err := s.serviceAccounts.List(r.Context())
 	if err != nil {
 		s.log.Error("Failed to list service accounts", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(nethttp.StatusInternalServerError)
 		return
 	}
 
@@ -51,11 +51,11 @@ func (s *serviceAccountHTTPService) ListServiceAccounts(w http.ResponseWriter, r
 // AddServiceAccount handles POST /minio/admin/v3/add-service-account
 // Request body is madmin-encrypted JSON: {"accessKey":"...","secretKey":"...","name":"...","parentUser":"..."}
 // Returns madmin-encrypted JSON: {"accessKey":"...","secretKey":"...","sessionToken":"","expiration":""}
-func (s *serviceAccountHTTPService) AddServiceAccount(w http.ResponseWriter, r *http.Request) {
+func (s *serviceAccountHTTPService) AddServiceAccount(w nethttp.ResponseWriter, r *nethttp.Request) {
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		s.log.Error("Failed to read request body", "error", err)
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(nethttp.StatusBadRequest)
 		return
 	}
 
@@ -63,7 +63,7 @@ func (s *serviceAccountHTTPService) AddServiceAccount(w http.ResponseWriter, r *
 	adminUser := auth.GetRequestUser(r.Context())
 	if adminUser == nil {
 		s.log.Error("No authenticated user in context")
-		w.WriteHeader(http.StatusUnauthorized)
+		w.WriteHeader(nethttp.StatusUnauthorized)
 		return
 	}
 
@@ -71,7 +71,7 @@ func (s *serviceAccountHTTPService) AddServiceAccount(w http.ResponseWriter, r *
 	decryptedData, err := madmin.DecryptData(adminUser.SecretKey, bytes.NewReader(bodyBytes))
 	if err != nil {
 		s.log.Error("Failed to decrypt request body", "error", err)
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(nethttp.StatusBadRequest)
 		return
 	}
 
@@ -84,13 +84,13 @@ func (s *serviceAccountHTTPService) AddServiceAccount(w http.ResponseWriter, r *
 	}
 	if err := json.Unmarshal(decryptedData, &body); err != nil {
 		s.log.Error("Failed to parse request body", "error", err)
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(nethttp.StatusBadRequest)
 		return
 	}
 
 	if body.AccessKey == "" {
 		s.log.Error("Missing accessKey in request body")
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(nethttp.StatusBadRequest)
 		return
 	}
 
@@ -108,14 +108,14 @@ func (s *serviceAccountHTTPService) AddServiceAccount(w http.ResponseWriter, r *
 	if err != nil {
 		s.log.Error("Failed to create service account", "error", err)
 		if svcerrors.IsAlreadyExists(err) {
-			w.WriteHeader(http.StatusConflict)
+			w.WriteHeader(nethttp.StatusConflict)
 			return
 		}
 		if svcerrors.IsValidation(err) {
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(nethttp.StatusBadRequest)
 			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(nethttp.StatusInternalServerError)
 		return
 	}
 
@@ -129,55 +129,55 @@ func (s *serviceAccountHTTPService) AddServiceAccount(w http.ResponseWriter, r *
 	responseJSON, err := jsonutil.Marshal(response)
 	if err != nil {
 		s.log.Error("Failed to marshal response", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(nethttp.StatusInternalServerError)
 		return
 	}
 
 	encrypted, err := madmin.EncryptData(adminUser.SecretKey, responseJSON)
 	if err != nil {
 		s.log.Error("Failed to encrypt response", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(nethttp.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set(headers.ContentType, "application/octet-stream")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(nethttp.StatusOK)
 	_, _ = w.Write(encrypted)
 }
 
 // DeleteServiceAccount handles POST /minio/admin/v3/delete-service-account?accessKey=...
-func (s *serviceAccountHTTPService) DeleteServiceAccount(w http.ResponseWriter, r *http.Request) {
+func (s *serviceAccountHTTPService) DeleteServiceAccount(w nethttp.ResponseWriter, r *nethttp.Request) {
 	accessKey := query.String(r, "accessKey", "")
 	if accessKey == "" {
 		s.log.Error("Missing accessKey parameter")
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(nethttp.StatusBadRequest)
 		return
 	}
 
 	if err := s.serviceAccounts.Delete(r.Context(), accessKey); err != nil {
 		s.log.Error("Failed to delete service account", "error", err, "accessKey", accessKey)
 		if svcerrors.IsNotFound(err) {
-			w.WriteHeader(http.StatusNotFound)
+			w.WriteHeader(nethttp.StatusNotFound)
 			return
 		}
 		if svcerrors.IsValidation(err) {
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(nethttp.StatusBadRequest)
 			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(nethttp.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(nethttp.StatusOK)
 }
 
 // InfoServiceAccount handles GET /minio/admin/v3/info-service-account?accessKey=...
 // Returns service account details.
-func (s *serviceAccountHTTPService) InfoServiceAccount(w http.ResponseWriter, r *http.Request) {
+func (s *serviceAccountHTTPService) InfoServiceAccount(w nethttp.ResponseWriter, r *nethttp.Request) {
 	accessKey := query.String(r, "accessKey", "")
 	if accessKey == "" {
 		s.log.Error("Missing accessKey parameter")
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(nethttp.StatusBadRequest)
 		return
 	}
 
@@ -185,14 +185,14 @@ func (s *serviceAccountHTTPService) InfoServiceAccount(w http.ResponseWriter, r 
 	if err != nil {
 		s.log.Error("Failed to get service account", "error", err, "accessKey", accessKey)
 		if svcerrors.IsNotFound(err) {
-			w.WriteHeader(http.StatusNotFound)
+			w.WriteHeader(nethttp.StatusNotFound)
 			return
 		}
 		if svcerrors.IsValidation(err) {
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(nethttp.StatusBadRequest)
 			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(nethttp.StatusInternalServerError)
 		return
 	}
 
@@ -216,18 +216,18 @@ func (s *serviceAccountHTTPService) InfoServiceAccount(w http.ResponseWriter, r 
 // UpdateServiceAccount handles POST /minio/admin/v3/update-service-account
 // Supports status updates and secret key rotation.
 // Body is madmin-encrypted JSON: {"newSecretKey":"...","newStatus":"on|off"}
-func (s *serviceAccountHTTPService) UpdateServiceAccount(w http.ResponseWriter, r *http.Request) {
+func (s *serviceAccountHTTPService) UpdateServiceAccount(w nethttp.ResponseWriter, r *nethttp.Request) {
 	accessKey := query.String(r, "accessKey", "")
 	if accessKey == "" {
 		s.log.Error("Missing accessKey parameter")
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(nethttp.StatusBadRequest)
 		return
 	}
 
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		s.log.Error("Failed to read request body", "error", err)
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(nethttp.StatusBadRequest)
 		return
 	}
 
@@ -238,14 +238,14 @@ func (s *serviceAccountHTTPService) UpdateServiceAccount(w http.ResponseWriter, 
 		adminUser := auth.GetRequestUser(r.Context())
 		if adminUser == nil {
 			s.log.Error("No authenticated user in context")
-			w.WriteHeader(http.StatusUnauthorized)
+			w.WriteHeader(nethttp.StatusUnauthorized)
 			return
 		}
 
 		decryptedData, err := madmin.DecryptData(adminUser.SecretKey, bytes.NewReader(bodyBytes))
 		if err != nil {
 			s.log.Error("Failed to decrypt request body", "error", err)
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(nethttp.StatusBadRequest)
 			return
 		}
 
@@ -255,7 +255,7 @@ func (s *serviceAccountHTTPService) UpdateServiceAccount(w http.ResponseWriter, 
 		}
 		if err := json.Unmarshal(decryptedData, &body); err != nil {
 			s.log.Error("Failed to parse request body", "error", err)
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(nethttp.StatusBadRequest)
 			return
 		}
 
@@ -266,7 +266,7 @@ func (s *serviceAccountHTTPService) UpdateServiceAccount(w http.ResponseWriter, 
 			iamStatus := statusStringToServiceAcct(body.NewStatus)
 			if iamStatus == "" {
 				s.log.Error("Invalid status value", "status", body.NewStatus)
-				w.WriteHeader(http.StatusBadRequest)
+				w.WriteHeader(nethttp.StatusBadRequest)
 				return
 			}
 			req.Status = &iamStatus
@@ -276,18 +276,18 @@ func (s *serviceAccountHTTPService) UpdateServiceAccount(w http.ResponseWriter, 
 	if _, err := s.serviceAccounts.Update(r.Context(), accessKey, &req); err != nil {
 		s.log.Error("Failed to update service account", "error", err, "accessKey", accessKey)
 		if svcerrors.IsNotFound(err) {
-			w.WriteHeader(http.StatusNotFound)
+			w.WriteHeader(nethttp.StatusNotFound)
 			return
 		}
 		if svcerrors.IsValidation(err) {
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(nethttp.StatusBadRequest)
 			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(nethttp.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(nethttp.StatusOK)
 }
 
 // statusStringToServiceAcct converts MinIO status strings to internal format.

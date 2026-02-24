@@ -1,11 +1,11 @@
-package iam
+package http
 
 import (
 	"bytes"
 	"encoding/json"
 	"io"
 	"log/slog"
-	"net/http"
+	nethttp "net/http"
 
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 	"github.com/mallardduck/go-http-helpers/pkg/query"
@@ -26,18 +26,18 @@ type userHTTPService struct {
 	log      *slog.Logger
 }
 
-func (s *userHTTPService) ListUsers(w http.ResponseWriter, r *http.Request) {
+func (s *userHTTPService) ListUsers(w nethttp.ResponseWriter, r *nethttp.Request) {
 	adminUser := auth.GetRequestUser(r.Context())
 	if adminUser == nil {
 		s.log.Error("No authenticated user in context")
-		w.WriteHeader(http.StatusUnauthorized)
+		w.WriteHeader(nethttp.StatusUnauthorized)
 		return
 	}
 
 	uids, err := s.users.List(r.Context())
 	if err != nil {
 		s.log.Error("Failed to list users", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(nethttp.StatusInternalServerError)
 		return
 	}
 
@@ -66,41 +66,41 @@ func (s *userHTTPService) ListUsers(w http.ResponseWriter, r *http.Request) {
 	encrypted, err := jsonutil.MarshalAndEncrypt(adminUser.SecretKey, result)
 	if err != nil {
 		s.log.Error("Failed to encrypt response", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(nethttp.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set(headers.ContentType, "application/octet-stream")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(nethttp.StatusOK)
 	_, _ = w.Write(encrypted)
 }
 
-func (s *userHTTPService) CreateUser(w http.ResponseWriter, r *http.Request) {
+func (s *userHTTPService) CreateUser(w nethttp.ResponseWriter, r *nethttp.Request) {
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		s.log.Error("Failed to read request body", "error", err)
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(nethttp.StatusBadRequest)
 		return
 	}
 
 	accessKey := query.String(r, "accessKey", "")
 	if accessKey == "" {
 		s.log.Error("Missing accessKey parameter")
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(nethttp.StatusBadRequest)
 		return
 	}
 
 	adminUser := auth.GetRequestUser(r.Context())
 	if adminUser == nil {
 		s.log.Error("No authenticated user in context")
-		w.WriteHeader(http.StatusUnauthorized)
+		w.WriteHeader(nethttp.StatusUnauthorized)
 		return
 	}
 
 	var body map[string]string
 	if err := jsonutil.DecryptAndUnmarshal(adminUser.SecretKey, bytes.NewReader(bodyBytes), &body); err != nil {
 		s.log.Error("Failed to parse request body as JSON", "error", err)
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(nethttp.StatusBadRequest)
 		return
 	}
 
@@ -131,22 +131,22 @@ func (s *userHTTPService) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.log.Error("Failed to create user", "error", err)
 		if svcerrors.IsAlreadyExists(err) {
-			w.WriteHeader(http.StatusConflict)
+			w.WriteHeader(nethttp.StatusConflict)
 			return
 		}
 		if svcerrors.IsValidation(err) {
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(nethttp.StatusBadRequest)
 			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(nethttp.StatusInternalServerError)
 		return
 	}
 
 	s.log.With("accessKey", accessKey).Info("User created successfully")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(nethttp.StatusOK)
 }
 
-func (s *userHTTPService) RemoveUser(w http.ResponseWriter, r *http.Request) {
+func (s *userHTTPService) RemoveUser(w nethttp.ResponseWriter, r *nethttp.Request) {
 	accessKey := query.String(r, "accessKey", "")
 
 	// Translate access key → UUID at the HTTP boundary.
@@ -164,34 +164,34 @@ func (s *userHTTPService) RemoveUser(w http.ResponseWriter, r *http.Request) {
 			}
 			data, _ := jsonutil.Marshal(errBody)
 			w.Header().Set(headers.ContentType, "application/json")
-			w.WriteHeader(http.StatusNotFound)
+			w.WriteHeader(nethttp.StatusNotFound)
 			_, _ = w.Write(data)
 			return
 		}
 		if svcerrors.IsValidation(err) {
 			// TODO potentially this should get a body response too.
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(nethttp.StatusBadRequest)
 			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(nethttp.StatusInternalServerError)
 		return
 	}
 
 	if err := s.users.Delete(r.Context(), u.UUID); err != nil {
 		s.log.Error("Failed to delete user", "error", err, "accessKey", accessKey)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(nethttp.StatusInternalServerError)
 		return
 	}
 
 	s.log.With("accessKey", accessKey).Info("User deleted successfully")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(nethttp.StatusOK)
 }
 
-func (s *userHTTPService) InfoUser(w http.ResponseWriter, r *http.Request) {
+func (s *userHTTPService) InfoUser(w nethttp.ResponseWriter, r *nethttp.Request) {
 	accessKey := query.String(r, "accessKey", "")
 	if accessKey == "" {
 		s.log.Error("Missing accessKey parameter")
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(nethttp.StatusBadRequest)
 		return
 	}
 
@@ -208,15 +208,15 @@ func (s *userHTTPService) InfoUser(w http.ResponseWriter, r *http.Request) {
 			}
 			data, _ := jsonutil.Marshal(errBody)
 			w.Header().Set(headers.ContentType, "application/json")
-			w.WriteHeader(http.StatusNotFound)
+			w.WriteHeader(nethttp.StatusNotFound)
 			_, _ = w.Write(data)
 			return
 		}
 		if svcerrors.IsValidation(err) {
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(nethttp.StatusBadRequest)
 			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(nethttp.StatusInternalServerError)
 		return
 	}
 
@@ -242,18 +242,18 @@ func (s *userHTTPService) InfoUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *userHTTPService) SetUserStatus(w http.ResponseWriter, r *http.Request) {
+func (s *userHTTPService) SetUserStatus(w nethttp.ResponseWriter, r *nethttp.Request) {
 	accessKey := query.String(r, "accessKey", "")
 	status := query.String(r, "status", "")
 
 	if accessKey == "" {
 		s.log.Error("Missing accessKey parameter")
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(nethttp.StatusBadRequest)
 		return
 	}
 	if status == "" {
 		s.log.Error("Missing status parameter")
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(nethttp.StatusBadRequest)
 		return
 	}
 
@@ -265,7 +265,7 @@ func (s *userHTTPService) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 		userStatus = iamPkg.UserStatusDisabled
 	default:
 		s.log.Error("Invalid status value", "status", status)
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(nethttp.StatusBadRequest)
 		return
 	}
 
@@ -274,31 +274,31 @@ func (s *userHTTPService) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		s.log.Error("Failed to find user", "error", err, "accessKey", accessKey)
 		if svcerrors.IsNotFound(err) {
-			w.WriteHeader(http.StatusNotFound)
+			w.WriteHeader(nethttp.StatusNotFound)
 			return
 		}
 		if svcerrors.IsValidation(err) {
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(nethttp.StatusBadRequest)
 			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(nethttp.StatusInternalServerError)
 		return
 	}
 
 	if _, err := s.users.Update(r.Context(), u.UUID, &user.UpdateUserRequest{Status: &userStatus}); err != nil {
 		s.log.Error("Failed to update user status", "error", err, "accessKey", accessKey)
 		if svcerrors.IsNotFound(err) {
-			w.WriteHeader(http.StatusNotFound)
+			w.WriteHeader(nethttp.StatusNotFound)
 			return
 		}
 		if svcerrors.IsValidation(err) {
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(nethttp.StatusBadRequest)
 			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(nethttp.StatusInternalServerError)
 		return
 	}
 
 	s.log.Info("User status updated successfully", "accessKey", accessKey, "status", userStatus)
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(nethttp.StatusOK)
 }
