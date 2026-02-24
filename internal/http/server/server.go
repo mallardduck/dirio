@@ -24,6 +24,7 @@ import (
 	"github.com/mallardduck/dirio/internal/http/api"
 	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/http/middleware"
+	miniomiddleware "github.com/mallardduck/dirio/internal/minio/middleware"
 	"github.com/mallardduck/dirio/internal/policy"
 
 	"github.com/mallardduck/dirio/internal/config/data"
@@ -217,6 +218,7 @@ func (s *Server) setupRoutes() {
 	s.router.Use(middleware.TraceID)
 	s.router.Use(middleware.RequestID)
 	s.router.Use(teapot.RouteContextMiddleware(s.router))
+	s.router.Use(miniomiddleware.CompatHeaders)
 	s.router.Use(loggingHttp.PrepareAccessLogMiddleware(s.log))
 
 	apiHandler := api.New(
