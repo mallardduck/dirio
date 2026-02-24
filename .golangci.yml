@@ -3,8 +3,6 @@ run:
   build-tags:
     - integration
   tests: true
-  skip-dirs:
-    - console/components
 linters:
   enable:
     - depguard
