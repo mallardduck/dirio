@@ -55,6 +55,7 @@ func Boto3ClientContainer(envMap map[string]string) testcontainers.ContainerRequ
 			KeepImage:  true, // Keep the image for reuse across tests
 		},
 		Env:        envMap,
+		Cmd:        []string{"-c", "python3 ./boto3cli.py"},
 		WaitingFor: wait.ForExit().WithExitTimeout(2 * time.Minute),
 	}
 }

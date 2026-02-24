@@ -73,8 +73,8 @@ try:
     probe_resp = requests.get(f"{endpoint}/healthz", timeout=5)
     print(f"GET /healthz -> HTTP {probe_resp.status_code}", file=sys.stderr)
 except Exception as e:
-    print(f"FATAL: Cannot reach {endpoint}: {e}", file=sys.stderr)
-    sys.exit(1)
+    print(f"WARNING: Cannot reach {endpoint}: {e}", file=sys.stderr)
+    print("Continuing to run tests (they will fail if server is unreachable)...", file=sys.stderr)
 
 #------------------------------------------------------------------------------
 # Test Functions
