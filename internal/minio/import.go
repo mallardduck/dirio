@@ -122,6 +122,7 @@ func importUsers(minioFS billy.Filesystem, users map[string]*User) error {
 				Status:    identity.Credentials.Status,
 				UpdatedAt: identity.UpdatedAt,
 			}
+			fmt.Printf("Found modern MinIO user: %s\n", username)
 		} else {
 			// Try legacy MinIO 2019 format
 			var legacyIdentity LegacyUserIdentity

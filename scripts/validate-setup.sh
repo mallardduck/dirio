@@ -350,7 +350,7 @@ test_user_auth() {
   # MULTIPOLICY=false when validating the live MinIO 2019 instance to
   # skip the delta test; leave it true (default) for DirIO or MinIO 2022.
 
-  # charlie → delta (should always work — charlie has alpha-rw in all setups)
+  # charlie → delta (should always work — charlie has delta-rw in all setups)
   if aws_as "charlie" "${CHARLIE_PASS}" s3api head-object \
       --bucket delta --key charlie-object.bin >/dev/null 2>&1; then
     pass "charlie: HeadObject delta/charlie-object.bin → allowed via delta-rw"
@@ -360,12 +360,12 @@ test_user_auth() {
 
   # charlie → alpha (requires multi-policy support)
   if [ "${MULTIPOLICY}" = "false" ]; then
-    skip "charlie (multi-policy): HeadObject delta/charlie-object.bin — MULTIPOLICY=false (required on 2019)"
+    skip "charlie (multi-policy): HeadObject alpha/alice-object.bin — MULTIPOLICY=false (required on 2019)"
   elif aws_as "charlie" "${CHARLIE_PASS}" s3api head-object \
-      --bucket delta --key charlie-object.bin >/dev/null 2>&1; then
-    pass "charlie (multi-policy): HeadObject delta/charlie-object.bin → allowed via delta-rw"
+      --bucket alpha --key alice-object.bin >/dev/null 2>&1; then
+    pass "charlie (multi-policy): HeadObject alpha/alice-object.bin → allowed via alpha-rw"
   else
-    fail "charlie (multi-policy): HeadObject delta/charlie-object.bin → denied (should be allowed via delta-rw)"
+    fail "charlie (multi-policy): HeadObject alpha/alice-object.bin → denied (should be allowed via alpha-rw)"
   fi
 
   if [[ "$SERVER_TYPE" == "MINIO" ]]; then

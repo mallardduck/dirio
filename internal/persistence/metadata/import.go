@@ -261,7 +261,7 @@ func (m *Manager) saveImportState(state *ImportState) error {
 // convertMinIOStatus maps MinIO user status strings ("enabled"/"disabled") to DirIO UserStatus ("on"/"off").
 // Any unrecognised value defaults to disabled for safety.
 func convertMinIOStatus(minioStatus string) iam.UserStatus {
-	if minioStatus == "enabled" {
+	if minioStatus == "enabled" || minioStatus == "on" {
 		return iam.UserStatusActive
 	}
 	return iam.UserStatusDisabled
