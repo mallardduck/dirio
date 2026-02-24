@@ -49,19 +49,29 @@ tasks:
   # ── Tests ──────────────────────────────────────────────────────────────────
 
   test:
-    desc: Run all tests (except client tests which are designed to fail)
+    desc: Run all tests (except client tests which require Docker)
     cmds:
-      - go test -v ./... -skip "TestAWSCLI|TestBoto3|TestMinIOMC"
+      - go test -v -race ./... -skip "TestAWSCLI|TestBoto3|TestMinIOMC|TestMCAdmin|TestSanityCheck"
 
   test-unit:
-    desc: Run unit tests only (excludes integration tests)
+    desc: Run unit tests only (excludes integration and client tests)
     cmds:
-      - go test -v ./internal/... ./pkg/...
+      - go test -v -race ./internal/... ./pkg/...
 
   test-integration:
     desc: Run integration tests only
     cmds:
-      - go test -v ./tests/integration/...
+      - go test -v -race ./tests/integration/...
+
+  test-admin:
+    desc: Run admin API tests only
+    cmds:
+      - go test -v -race ./tests/admin/...
+
+  test-console:
+    desc: Run console UI tests only
+    cmds:
+      - go test -v -race ./tests/console/...
 
   test-coverage:
     desc: Run tests with coverage and generate HTML report
@@ -70,9 +80,9 @@ tasks:
       - go tool cover -html=coverage.out -o coverage.html
 
   test-clients:
-    desc: Run client tests
+    desc: Run client tests (requires Docker)
     cmds:
-      - go test -v ./tests/clients/...
+      - go test -v -race ./tests/clients/...
 
   test-perf:
     desc: Run opt-in profiling tests (seeds 10k objects, writes pprof files to tests/perf/profiles/)
