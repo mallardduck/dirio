@@ -51,15 +51,13 @@ type URLBuilder interface {
 func New(
 	serviceFactory *service.ServicesFactory,
 	urlBuilder URLBuilder,
-	metadata *metadata.Manager,
-	policyEngine *policy.Engine,
 	adminKeys policy.AdminKeyChecker,
 ) *HTTPHandler {
 	return &HTTPHandler{
 		s3Service:    serviceFactory.S3(),
 		urlBuilder:   urlBuilder,
-		metadata:     metadata,
-		policyEngine: policyEngine,
+		metadata:     serviceFactory.Metadata(),
+		policyEngine: serviceFactory.PolicyEngine(),
 		adminKeys:    adminKeys,
 	}
 }

@@ -43,8 +43,6 @@ func New(
 		S3Handler: s3.New(
 			serviceFactory,
 			urlBuilder,
-			metadata,
-			policyEngine,
 			adminKeys,
 		),
 		IAMHandler: miniohttp.New(
