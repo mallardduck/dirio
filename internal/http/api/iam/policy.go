@@ -430,7 +430,7 @@ func (s policyHTTPService) PolicyEntitiesList(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var usersWithPolicy []string
+	usersWithPolicy := make([]string, 0)
 	for _, uid := range uids {
 		userEntity, err := s.users.Get(r.Context(), uid)
 		if err != nil {
@@ -452,7 +452,7 @@ func (s policyHTTPService) PolicyEntitiesList(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var groupsWithPolicy []string
+	groupsWithPolicy := make([]string, 0)
 	for _, name := range groupNames {
 		grp, err := s.groups.Get(r.Context(), name)
 		if err != nil {

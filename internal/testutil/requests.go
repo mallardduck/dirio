@@ -224,3 +224,20 @@ func DecodeJSON(t *testing.T, resp *http.Response, v interface{}) {
 		t.Fatalf("testutil: decode JSON response: %v", err)
 	}
 }
+
+// DecryptAndDecodeJSON decrypts a madmin-encrypted response body and JSON-decodes it into v.
+func (ts *TestServer) DecryptAndDecodeJSON(t *testing.T, resp *http.Response, v interface{}) {
+	t.Helper()
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("testutil: read encrypted response: %v", err)
+	}
+	decrypted, err := madmin.DecryptData(ts.SecretKey, bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("testutil: decrypt response: %v", err)
+	}
+	if err := json.Unmarshal(decrypted, v); err != nil {
+		t.Fatalf("testutil: decode decrypted JSON response: %v", err)
+	}
+}

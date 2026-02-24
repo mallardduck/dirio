@@ -13,9 +13,9 @@ import (
 
 // Bolt index bucket names.
 const (
-	boltBucketUsersByUsername  = "idx:users:by-username"
-	boltBucketUsersByAccessKey = "idx:users:by-access-key"
-	boltBucketGroupsByUserUUID = "idx:groups:by-user-uuid"
+	boltUsersByUsername     = "idx:users:by-username"
+	boltUsersByAccessKey    = "idx:users:by-access-key"
+	boltIAMGroupsByUserUUID = "idx:groups:by-user-uuid"
 )
 
 // openDB opens the bbolt database at dbPath and ensures the two index buckets exist.
@@ -27,13 +27,13 @@ func openDB(dbPath string) (*bbolt.DB, error) {
 	}
 
 	err = db.Update(func(tx *bbolt.Tx) error {
-		if _, err := tx.CreateBucketIfNotExists([]byte(boltBucketUsersByUsername)); err != nil {
+		if _, err := tx.CreateBucketIfNotExists([]byte(boltUsersByUsername)); err != nil {
 			return err
 		}
-		if _, err := tx.CreateBucketIfNotExists([]byte(boltBucketUsersByAccessKey)); err != nil {
+		if _, err := tx.CreateBucketIfNotExists([]byte(boltUsersByAccessKey)); err != nil {
 			return err
 		}
-		if _, err := tx.CreateBucketIfNotExists([]byte(boltBucketGroupsByUserUUID)); err != nil {
+		if _, err := tx.CreateBucketIfNotExists([]byte(boltIAMGroupsByUserUUID)); err != nil {
 			return err
 		}
 		return nil
@@ -62,8 +62,8 @@ func (m *Manager) reconcileIndexes(ctx context.Context) {
 	m.usersMu.RUnlock()
 
 	err := m.db.Update(func(tx *bbolt.Tx) error {
-		byUsername := tx.Bucket([]byte(boltBucketUsersByUsername))
-		byAccessKey := tx.Bucket([]byte(boltBucketUsersByAccessKey))
+		byUsername := tx.Bucket([]byte(boltUsersByUsername))
+		byAccessKey := tx.Bucket([]byte(boltUsersByAccessKey))
 
 		// Phase A – collect and remove stale entries.
 		stale := make([][]byte, 0)
@@ -151,7 +151,7 @@ func (m *Manager) reconcileIndexes(ctx context.Context) {
 	}
 
 	groupIndexErr := m.db.Update(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte(boltBucketGroupsByUserUUID))
+		b := tx.Bucket([]byte(boltIAMGroupsByUserUUID))
 
 		// Remove all existing entries first.
 		stale := make([][]byte, 0)
@@ -238,7 +238,7 @@ func (m *Manager) GetGroupNamesForUser(ctx context.Context, userUUID uuid.UUID) 
 
 	var names []string
 	err := m.db.View(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte(boltBucketGroupsByUserUUID))
+		b := tx.Bucket([]byte(boltIAMGroupsByUserUUID))
 		v := b.Get(userUUID[:])
 		if v == nil {
 			return nil
@@ -256,7 +256,7 @@ func (m *Manager) GetUserByUsername(ctx context.Context, username string) (*User
 
 	var userUID uuid.UUID
 	err := m.db.View(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte(boltBucketUsersByUsername))
+		b := tx.Bucket([]byte(boltUsersByUsername))
 		v := b.Get([]byte(username))
 		if v == nil {
 			return ErrUserNotFound
@@ -283,7 +283,7 @@ func (m *Manager) GetUserByAccessKey(ctx context.Context, accessKey string) (*Us
 
 	var userUID uuid.UUID
 	err := m.db.View(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte(boltBucketUsersByAccessKey))
+		b := tx.Bucket([]byte(boltUsersByAccessKey))
 		v := b.Get([]byte(accessKey))
 		if v == nil {
 			return ErrUserNotFound

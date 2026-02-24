@@ -386,8 +386,8 @@ func (m *Manager) CreateOrUpdateUser(ctx context.Context, user *User) error {
 
 	// Enforce uniqueness and update bolt indexes in a single transaction.
 	err := m.db.Update(func(tx *bbolt.Tx) error {
-		byUsername := tx.Bucket([]byte(boltBucketUsersByUsername))
-		byAccessKey := tx.Bucket([]byte(boltBucketUsersByAccessKey))
+		byUsername := tx.Bucket([]byte(boltUsersByUsername))
+		byAccessKey := tx.Bucket([]byte(boltUsersByAccessKey))
 
 		if v := byUsername.Get([]byte(user.Username)); v != nil {
 			uid, err := uuid.FromBytes(v)
@@ -467,8 +467,8 @@ func (m *Manager) UpdateUser(ctx context.Context, userUID uuid.UUID, updates *Us
 	// Sync bolt indexes when username or accessKey changed.
 	if usernameChanged || accessKeyChanged {
 		err = m.db.Update(func(tx *bbolt.Tx) error {
-			byUsername := tx.Bucket([]byte(boltBucketUsersByUsername))
-			byAccessKey := tx.Bucket([]byte(boltBucketUsersByAccessKey))
+			byUsername := tx.Bucket([]byte(boltUsersByUsername))
+			byAccessKey := tx.Bucket([]byte(boltUsersByAccessKey))
 			uidBytes := userUID[:]
 
 			if usernameChanged {
@@ -549,8 +549,8 @@ func (m *Manager) DeleteUser(ctx context.Context, userUID uuid.UUID) error {
 
 	if user != nil {
 		_ = m.db.Update(func(tx *bbolt.Tx) error {
-			byUsername := tx.Bucket([]byte(boltBucketUsersByUsername))
-			byAccessKey := tx.Bucket([]byte(boltBucketUsersByAccessKey))
+			byUsername := tx.Bucket([]byte(boltUsersByUsername))
+			byAccessKey := tx.Bucket([]byte(boltUsersByAccessKey))
 			_ = byUsername.Delete([]byte(user.Username))
 			_ = byAccessKey.Delete([]byte(user.AccessKey))
 			return nil
@@ -936,7 +936,7 @@ func (m *Manager) DeleteGroup(ctx context.Context, groupName string) error {
 
 	if g != nil && len(g.Members) > 0 {
 		_ = m.db.Update(func(tx *bbolt.Tx) error {
-			b := tx.Bucket([]byte(boltBucketGroupsByUserUUID))
+			b := tx.Bucket([]byte(boltIAMGroupsByUserUUID))
 			for _, memberUID := range g.Members {
 				_ = groupIndexRemove(b, groupName, memberUID)
 			}
@@ -1021,7 +1021,7 @@ func (m *Manager) AddUserToGroup(ctx context.Context, groupName string, userUid 
 	}
 
 	_ = m.db.Update(func(tx *bbolt.Tx) error {
-		return groupIndexAdd(tx.Bucket([]byte(boltBucketGroupsByUserUUID)), groupName, userUid)
+		return groupIndexAdd(tx.Bucket([]byte(boltIAMGroupsByUserUUID)), groupName, userUid)
 	})
 	return nil
 }
@@ -1047,7 +1047,7 @@ func (m *Manager) RemoveUserFromGroup(ctx context.Context, groupName string, use
 	}
 
 	_ = m.db.Update(func(tx *bbolt.Tx) error {
-		return groupIndexRemove(tx.Bucket([]byte(boltBucketGroupsByUserUUID)), groupName, userUid)
+		return groupIndexRemove(tx.Bucket([]byte(boltIAMGroupsByUserUUID)), groupName, userUid)
 	})
 	return nil
 }

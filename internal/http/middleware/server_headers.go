@@ -12,6 +12,7 @@ func SetDefaultHeadersMiddleware(next http.Handler) http.Handler {
 		// Set the default header. Use w.Header().Set() to ensure a single value.
 		w.Header().Set("Server", "DirIO-Server")
 		w.Header().Set("X-Dirio-Instance-Id", global.GlobalInstanceID().String())
+		w.Header().Set("X-Minio-Deployment-Id", global.GlobalInstanceID().String())
 
 		// Call the next handler in the chain
 		next.ServeHTTP(w, r)

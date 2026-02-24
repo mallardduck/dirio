@@ -9,10 +9,11 @@ import (
 
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 	"github.com/mallardduck/go-http-helpers/pkg/query"
-	"github.com/minio/madmin-go/v3"
 
+	"github.com/mallardduck/dirio/internal/global"
 	"github.com/mallardduck/dirio/internal/http/auth"
-
+	httpMiddleware "github.com/mallardduck/dirio/internal/http/middleware"
+	"github.com/mallardduck/dirio/internal/jsonutil"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
 	"github.com/mallardduck/dirio/internal/service/policy"
 	"github.com/mallardduck/dirio/internal/service/user"
@@ -26,6 +27,13 @@ type userHTTPService struct {
 }
 
 func (s *userHTTPService) ListUsers(w http.ResponseWriter, r *http.Request) {
+	adminUser := auth.GetRequestUser(r.Context())
+	if adminUser == nil {
+		s.log.Error("No authenticated user in context")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
 	uids, err := s.users.List(r.Context())
 	if err != nil {
 		s.log.Error("Failed to list users", "error", err)
@@ -33,20 +41,38 @@ func (s *userHTTPService) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// MinIO API expects access keys; translate UUID list to access key list.
-	accessKeys := make([]string, 0, len(uids))
+	// MinIO madmin ListUsers expects map[accessKey]UserInfo encrypted response.
+	result := make(map[string]interface{}, len(uids))
 	for _, uid := range uids {
 		u, err := s.users.Get(r.Context(), uid)
 		if err != nil {
 			continue
 		}
-		accessKeys = append(accessKeys, u.AccessKey)
+
+		groups := make([]string, 0)
+		if gs, err := s.users.GetGroups(r.Context(), uid); err != nil {
+			s.log.Error("Failed to list groups for user", "error", err)
+		} else {
+			groups = gs
+		}
+
+		result[u.AccessKey] = map[string]interface{}{
+			"status":    u.Status.MinioString(),
+			"memberOf":  groups,
+			"updatedAt": u.UpdatedAt,
+		}
 	}
 
-	w.Header().Set(headers.ContentType, "application/json")
-	if err := json.NewEncoder(w).Encode(accessKeys); err != nil {
-		s.log.Error("Failed to marshal response", "error", err)
+	encrypted, err := jsonutil.MarshalAndEncrypt(adminUser.SecretKey, result)
+	if err != nil {
+		s.log.Error("Failed to encrypt response", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
+
+	w.Header().Set(headers.ContentType, "application/octet-stream")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(encrypted)
 }
 
 func (s *userHTTPService) CreateUser(w http.ResponseWriter, r *http.Request) {
@@ -71,9 +97,9 @@ func (s *userHTTPService) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	decryptedData, err := madmin.DecryptData(adminUser.SecretKey, bytes.NewReader(bodyBytes))
-	if err != nil {
-		s.log.Error("Failed to decrypt request body", "error", err)
+	var body map[string]string
+	if err := jsonutil.DecryptAndUnmarshal(adminUser.SecretKey, bytes.NewReader(bodyBytes), &body); err != nil {
+		s.log.Error("Failed to parse request body as JSON", "error", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -83,17 +109,10 @@ func (s *userHTTPService) CreateUser(w http.ResponseWriter, r *http.Request) {
 		"request_query", r.URL.Query(),
 		"content_type", r.Header.Get("Content-Type"),
 		"content_length", r.ContentLength,
-		"body_length", len(decryptedData),
-		"body", string(decryptedData),
+		"body_length", len(bodyBytes),
+		"body", string(bodyBytes),
 		"headers", r.Header,
 	).Info("CreateUser request details")
-
-	var body map[string]string
-	if err := json.Unmarshal(decryptedData, &body); err != nil {
-		s.log.Error("Failed to parse request body as JSON", "error", err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
 
 	secretKey := body["secretKey"]
 	enabled := body["status"] == "enabled"
@@ -135,10 +154,22 @@ func (s *userHTTPService) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.log.Error("Failed to find user", "error", err, "accessKey", accessKey)
 		if svcerrors.IsNotFound(err) {
+			// MinIO 2022+ returns 404 with a JSON error body.
+			errBody := map[string]string{
+				"Code":      "XMinioAdminNoSuchUser",
+				"Message":   "The specified user does not exist. (Specified user does not exist)",
+				"Resource":  r.URL.Path,
+				"RequestId": httpMiddleware.GetRequestID(r.Context()),
+				"HostId":    global.GlobalInstanceID().String(),
+			}
+			data, _ := jsonutil.Marshal(errBody)
+			w.Header().Set(headers.ContentType, "application/json")
 			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write(data)
 			return
 		}
 		if svcerrors.IsValidation(err) {
+			// TODO potentially this should get a body response too.
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -179,11 +210,18 @@ func (s *userHTTPService) InfoUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	groups := make([]string, 0)
+	if gs, err := s.users.GetGroups(r.Context(), userEntity.UUID); err != nil {
+		s.log.Error("Failed to list groups for user", "error", err)
+	} else {
+		groups = gs
+	}
+
 	response := map[string]interface{}{
 		"accessKey":        userEntity.AccessKey,
-		"status":           userEntity.Status,
-		"policyName":       "",
-		"memberOf":         []string{},
+		"status":           userEntity.Status.MinioString(),
+		"policyName":       "", // TODO: figure out how they handle these
+		"memberOf":         groups,
 		"updatedAt":        userEntity.UpdatedAt,
 		"attachedPolicies": userEntity.AttachedPolicies,
 	}

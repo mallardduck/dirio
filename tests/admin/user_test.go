@@ -1,8 +1,6 @@
 package admin
 
 import (
-	"encoding/json"
-	"io"
 	"net/http"
 	"testing"
 
@@ -15,12 +13,11 @@ func TestListUsers_Empty(t *testing.T) {
 	ts := NewTestServer(t)
 
 	resp := ts.AdminRequest(t, http.MethodGet, "/list-users", nil)
-	defer DrainAndClose(resp)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var users []string
-	DecodeJSON(t, resp, &users)
+	var users map[string]interface{}
+	ts.DecryptAndDecodeJSON(t, resp, &users)
 	assert.Empty(t, users)
 }
 
@@ -38,8 +35,8 @@ func TestCreateUser_Success(t *testing.T) {
 
 	// Verify alice now appears in list-users
 	resp2 := ts.AdminRequest(t, http.MethodGet, "/list-users", nil)
-	var users []string
-	DecodeJSON(t, resp2, &users)
+	var users map[string]interface{}
+	ts.DecryptAndDecodeJSON(t, resp2, &users)
 	assert.Contains(t, users, "alice")
 }
 
@@ -211,10 +208,8 @@ func TestListUsers_MultipleUsers(t *testing.T) {
 	resp := ts.AdminRequest(t, http.MethodGet, "/list-users", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var listed []string
-	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	require.NoError(t, json.Unmarshal(body, &listed))
+	var listed map[string]interface{}
+	ts.DecryptAndDecodeJSON(t, resp, &listed)
 
 	for _, name := range users {
 		assert.Contains(t, listed, name)

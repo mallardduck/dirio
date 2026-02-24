@@ -26,9 +26,26 @@ MC_VERSION=$(mc --version 2>&1 | head -n1)
 init_test_runner "mc-admin" "$MC_VERSION"
 
 ENDPOINT="${DIRIO_ENDPOINT}"
-MC_ALIAS="dirio"
+MC_ALIAS="${MC_ALIAS:-dirio}"
+
+# Capture the stdout (JSON) into a variable
+# We keep stderr (2) directed to /dev/null to keep the console clean
+ALIAS_JSON=$(mc alias ls "${MC_ALIAS}" --json 2>/dev/null)
+EXIT_CODE=$?
+[[ $EXIT_CODE -eq 0 ]] && ALIAS_EXISTS=1 || ALIAS_EXISTS=0
+
+if [ "$ALIAS_EXISTS" -eq 1 ]; then
+    # Map to Environment Variables
+    export ENDPOINT=$(echo "$ALIAS_JSON" | jq -r .URL)
+    export DIRIO_ACCESS_KEY=$(echo "$ALIAS_JSON" | jq -r .accessKey)
+    export DIRIO_SECRET_KEY=$(echo "$ALIAS_JSON" | jq -r .secretKey)
+
+    echo "Config loaded for: ${MC_ALIAS}"
+fi
+
 
 echo "=== MinIO mc Admin Tests ===" >&2
+echo "Alias: ${MC_ALIAS}" >&2
 echo "Endpoint: ${ENDPOINT}" >&2
 echo "mc version: ${MC_VERSION}" >&2
 
@@ -41,10 +58,12 @@ fi
 echo "GET / -> HTTP ${PROBE_CODE}" >&2
 
 # Configure mc alias
-mc alias set ${MC_ALIAS} ${ENDPOINT} ${DIRIO_ACCESS_KEY} ${DIRIO_SECRET_KEY} --api S3v4 2>/dev/null
-if [ $? -ne 0 ]; then
-    echo "FATAL: Failed to configure mc alias" >&2
-    exit 1
+if [ "$ALIAS_EXISTS" -eq 0 ]; then
+  mc alias set ${MC_ALIAS} ${ENDPOINT} ${DIRIO_ACCESS_KEY} ${DIRIO_SECRET_KEY} --api S3v4 2>/dev/null
+  if [ $? -ne 0 ]; then
+      echo "FATAL: Failed to configure mc alias" >&2
+      exit 1
+  fi
 fi
 
 # Unique suffix to avoid key collisions across test runs

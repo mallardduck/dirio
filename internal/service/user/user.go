@@ -194,3 +194,7 @@ func (s *Service) DetachPolicy(ctx context.Context, userUID uuid.UUID, policyNam
 
 	return s.metadata.CreateOrUpdateUser(ctx, user)
 }
+
+func (s *Service) GetGroups(ctx context.Context, uid uuid.UUID) ([]string, error) {
+	return s.metadata.GetGroupNamesForUser(ctx, uid)
+}

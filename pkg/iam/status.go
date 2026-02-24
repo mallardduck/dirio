@@ -38,3 +38,11 @@ func (s UserStatus) IsActive() bool {
 func (s UserStatus) String() string {
 	return string(s)
 }
+
+func (s UserStatus) MinioString() string {
+	if s == UserStatusActive {
+		return "enabled"
+	}
+
+	return "disabled"
+}

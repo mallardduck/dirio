@@ -248,9 +248,16 @@ func setupAdminRoutes(r *teapot.Router, deps *adminRouteDeps) {
 	// User Management
 	r.GET("/list-users", deps.listUsers).Name("users.list")
 	r.PUT("/add-user", deps.addUser).Name("users.add")
-	r.POST("/remove-user", deps.removeUser).Name("users.remove")
+	r.DELETE("/remove-user", deps.removeUser).Name("users.remove")
 	r.GET("/user-info", deps.getUserInfo).Name("users.info")
-	r.POST("/set-user-status", deps.setUserStatus).Name("users.setstatus")
+	r.PUT("/set-user-status", deps.setUserStatus).Name("users.setstatus")
+
+	// Policy Management
+	r.GET("/list-canned-policies", deps.listCannedPolicies).Name("policies.list")
+	r.POST("/add-canned-policy", deps.addCannedPolicy).Name("policies.add")
+	r.PUT("/add-canned-policy", deps.addCannedPolicy).Name("policies.add")
+	r.POST("/remove-canned-policy", deps.deleteCannedPolicy).Name("policies.remove")
+	r.GET("/info-canned-policy", deps.getCannedPolicyInfo).Name("policies.info")
 
 	// Service Account Management (not yet implemented)
 	r.GET("/list-service-accounts", deps.listServiceAccounts).Name("serviceaccounts.list")
@@ -264,13 +271,6 @@ func setupAdminRoutes(r *teapot.Router, deps *adminRouteDeps) {
 	r.GET("/group", deps.getGroupInfo).Name("groups.info")
 	r.GET("/groups", deps.listGroups).Name("groups.list")
 	r.POST("/set-group-status", deps.setGroupStatus).Name("groups.setstatus")
-
-	// Policy Management
-	r.GET("/list-canned-policies", deps.listCannedPolicies).Name("policies.list")
-	r.POST("/add-canned-policy", deps.addCannedPolicy).Name("policies.add")
-	r.PUT("/add-canned-policy", deps.addCannedPolicy).Name("policies.add")
-	r.POST("/remove-canned-policy", deps.deleteCannedPolicy).Name("policies.remove")
-	r.GET("/info-canned-policy", deps.getCannedPolicyInfo).Name("policies.info")
 
 	// Policy Attachments
 	r.POST("/set-policy", deps.setPolicy).Name("policies.set") // deprecated: mc admin policy set
