@@ -21,7 +21,7 @@ func createUser(t *testing.T, ts *TestServer, accessKey string) {
 }
 
 // updateGroupMembers calls POST /update-group-members with the given body.
-func (ts *TestServer) updateGroupMembers(t *testing.T, body map[string]interface{}) *http.Response {
+func updateGroupMembers(t *testing.T, ts *TestServer, body map[string]interface{}) *http.Response {
 	t.Helper()
 	bodyBytes, err := json.Marshal(body)
 	require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestCreateGroup_ViaUpdateMembers(t *testing.T) {
 	ts := NewTestServer(t)
 	createUser(t, ts, "alice")
 
-	resp := ts.updateGroupMembers(t, map[string]interface{}{
+	resp := updateGroupMembers(t, ts, map[string]interface{}{
 		"group":    "devs",
 		"members":  []string{"alice"},
 		"isRemove": false,
@@ -71,7 +71,7 @@ func TestGetGroupInfo_Success(t *testing.T) {
 	createUser(t, ts, "alice")
 
 	// Create group with a member
-	resp := ts.updateGroupMembers(t, map[string]interface{}{
+	resp := updateGroupMembers(t, ts, map[string]interface{}{
 		"group":    "devs",
 		"members":  []string{"alice"},
 		"isRemove": false,
@@ -118,7 +118,7 @@ func TestAddMembersToGroup_Success(t *testing.T) {
 	createUser(t, ts, "bob")
 
 	// Create group and add both users
-	resp := ts.updateGroupMembers(t, map[string]interface{}{
+	resp := updateGroupMembers(t, ts, map[string]interface{}{
 		"group":    "engineers",
 		"members":  []string{"alice", "bob"},
 		"isRemove": false,
@@ -140,7 +140,7 @@ func TestAddMembersToGroup_Success(t *testing.T) {
 func TestAddMembersToGroup_UserNotFound(t *testing.T) {
 	ts := NewTestServer(t)
 
-	resp := ts.updateGroupMembers(t, map[string]interface{}{
+	resp := updateGroupMembers(t, ts, map[string]interface{}{
 		"group":    "devs",
 		"members":  []string{"ghost"},
 		"isRemove": false,
@@ -156,7 +156,7 @@ func TestRemoveMembersFromGroup_Success(t *testing.T) {
 	createUser(t, ts, "bob")
 
 	// Add both users
-	resp := ts.updateGroupMembers(t, map[string]interface{}{
+	resp := updateGroupMembers(t, ts, map[string]interface{}{
 		"group":    "devs",
 		"members":  []string{"alice", "bob"},
 		"isRemove": false,
@@ -165,7 +165,7 @@ func TestRemoveMembersFromGroup_Success(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Remove alice
-	resp2 := ts.updateGroupMembers(t, map[string]interface{}{
+	resp2 := updateGroupMembers(t, ts, map[string]interface{}{
 		"group":    "devs",
 		"members":  []string{"alice"},
 		"isRemove": true,
@@ -188,7 +188,7 @@ func TestSetGroupStatus_Disable(t *testing.T) {
 	ts := NewTestServer(t)
 
 	// Create the group first
-	resp := ts.updateGroupMembers(t, map[string]interface{}{
+	resp := updateGroupMembers(t, ts, map[string]interface{}{
 		"group":    "ops",
 		"members":  []string{},
 		"isRemove": false,
@@ -214,7 +214,7 @@ func TestSetGroupStatus_Enable(t *testing.T) {
 	ts := NewTestServer(t)
 
 	// Create the group
-	resp := ts.updateGroupMembers(t, map[string]interface{}{
+	resp := updateGroupMembers(t, ts, map[string]interface{}{
 		"group":    "ops",
 		"members":  []string{},
 		"isRemove": false,
@@ -249,7 +249,7 @@ func TestSetGroupStatus_InvalidStatus(t *testing.T) {
 	ts := NewTestServer(t)
 
 	// Create a group first
-	resp := ts.updateGroupMembers(t, map[string]interface{}{
+	resp := updateGroupMembers(t, ts, map[string]interface{}{
 		"group":    "ops",
 		"members":  []string{},
 		"isRemove": false,
@@ -267,7 +267,7 @@ func TestAddMembersToGroup_Idempotent(t *testing.T) {
 	createUser(t, ts, "alice")
 
 	for range 2 {
-		resp := ts.updateGroupMembers(t, map[string]interface{}{
+		resp := updateGroupMembers(t, ts, map[string]interface{}{
 			"group":    "devs",
 			"members":  []string{"alice"},
 			"isRemove": false,

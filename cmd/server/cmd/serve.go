@@ -87,7 +87,7 @@ func runServer(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Phase 1 — Starter init: MkdirAll, crypto, rootFS, DataConfig load/default.
-	s, err := startup.Init(dataDir)
+	starter, err := startup.Init(dataDir)
 	if err != nil {
 		return fmt.Errorf("failed to initialise data directory: %w", err)
 	}
@@ -119,7 +119,7 @@ func runServer(cmd *cobra.Command, _ []string) error {
 	// Phase 2 — Starter prepare: metadata manager, MinIO import, DataConfig
 	// finalisation, global InstanceID.  After this returns DataConfig is
 	// authoritative and MetadataManager is ready to hand to server.New.
-	if err := s.Prepare(
+	if err := starter.Prepare(
 		cmd.Context(),
 		settings.Region,
 		settings.AccessKey,
@@ -129,7 +129,7 @@ func runServer(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to prepare data directory: %w", err)
 	}
 
-	// Phase 3 — wire up the HTTP server using the Starter's finalised components.
+	// Phase 3 — wire up the HTTP server using the Starter'starter finalised components.
 	serverConfig := &server.Config{
 		DataDir:                     settings.DataDir,
 		Port:                        settings.Port,
@@ -141,11 +141,11 @@ func runServer(cmd *cobra.Command, _ []string) error {
 		MDNSMode:                    settings.MDNSMode,
 		CanonicalDomain:             settings.CanonicalDomain,
 		Debug:                       settings.Debug,
-		DataConfig:                  s.DataConfig,
+		DataConfig:                  starter.DataConfig,
 		CLICredentialsExplicitlySet: settings.CLICredentialsExplicitlySet,
 		ShutdownTimeout:             settings.ShutdownTimeout,
-		RootFS:                      s.RootFS(),
-		Metadata:                    s.MetadataManager(),
+		RootFS:                      starter.RootFS(),
+		Metadata:                    starter.MetadataManager(),
 	}
 
 	srv, err := server.New(serverConfig)

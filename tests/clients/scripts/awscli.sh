@@ -39,7 +39,6 @@ if [ "${PROBE_CODE}" = "000" ]; then
     echo "FATAL: Cannot reach server at ${ENDPOINT}" >&2
     exit 1
 fi
-echo "GET /healthz -> HTTP ${PROBE_CODE}" >&2
 
 #------------------------------------------------------------------------------
 # Test Functions

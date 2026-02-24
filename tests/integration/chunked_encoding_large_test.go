@@ -53,7 +53,7 @@ func TestPutObject_LargeChunkedUpload(t *testing.T) {
 	require.NoError(t, err)
 
 	// Sign request with streaming signature
-	ts.signStreamingRequest(req)
+	signStreamingRequest(ts, req)
 
 	// Send request
 	resp, err := http.DefaultClient.Do(req)

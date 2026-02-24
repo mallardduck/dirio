@@ -77,7 +77,7 @@ check_prereqs() {
 detect_server_type() {
   local headers
   # Get headers from a simple root request
-  headers=$(curl -s -I "${S3_ENDPOINT}/" 2>/dev/null) || headers=""
+  headers=$(curl -s -D - -o /dev/null "${S3_ENDPOINT}/" 2>/dev/null) || headers=""
 
   if echo "${headers}" | grep -qi "Server: MinIO"; then
     # Further refine MinIO version if possible
@@ -597,6 +597,12 @@ test_server_side_copies() {
   fi
 }
 
+check_prereqs
+
+# Sniff server
+DETECTED_INFO=$(detect_server_type)
+SERVER_TYPE=$(echo "$DETECTED_INFO" | head -n 1)
+
 # -----------------------
 # Main
 # -----------------------
@@ -604,19 +610,14 @@ echo "┌───────────────────────�
 echo "│  DirIO S3 Validation                         │"
 echo "└──────────────────────────────────────────────┘"
 echo ""
-echo "  Endpoint : ${S3_ENDPOINT}"
-echo "  Auth     : ${S3_ACCESS_KEY} / (secret)"
-echo "  Dataset  : ${DATASET}"
+echo "  Endpoint   : ${S3_ENDPOINT}"
+echo "  Auth       : ${S3_ACCESS_KEY} / (secret)"
+echo "  Server     : ${SERVER_TYPE}"
+echo "  Dataset    : ${DATASET}"
 echo "  Skip IAM   : ${SKIP_IAM}"
 echo "  Multipolicy: ${MULTIPOLICY} (set MULTIPOLICY=false for live MinIO 2019)"
 echo "  Charlie    : charliepass=${CHARLIE_PASS} (multi-policy: alpha-rw + delta-rw)"
 echo ""
-
-check_prereqs
-
-# Sniff server
-DETECTED_INFO=$(detect_server_type)
-SERVER_TYPE=$(echo "$DETECTED_INFO" | head -n 1)
 
 # Tests common to both datasets
 test_connectivity

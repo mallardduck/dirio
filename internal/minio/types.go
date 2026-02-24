@@ -144,6 +144,22 @@ type LegacyUserIdentity struct {
 	Status    string `json:"status"`
 }
 
+// GroupIdentity represents a MinIO group's identity.json
+// Path: config/iam/groups/<groupname>/identity.json
+type GroupIdentity struct {
+	Version int      `json:"version"`
+	Status  string   `json:"status"`
+	Members []string `json:"members"`
+}
+
+// GroupPolicyMapping represents a MinIO group's policy assignment
+// Path: config/iam/policydb/groups/<groupname>.json
+type GroupPolicyMapping struct {
+	Version   int        `json:"version"`
+	Policy    PolicyList `json:"policy"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+}
+
 // UserPolicyMapping represents MinIO's policydb user policy mapping
 type UserPolicyMapping struct {
 	Version   int        `json:"version"`

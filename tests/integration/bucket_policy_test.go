@@ -36,25 +36,6 @@ const publicReadListPolicy = `{
 	]
 }`
 
-// SetBucketPolicy sets a bucket policy using the S3 API
-func (ts *TestServer) SetBucketPolicy(t *testing.T, bucket, policy string) {
-	t.Helper()
-	body := []byte(policy)
-	req, err := http.NewRequest("PUT", ts.BucketURL(bucket)+"?policy", strings.NewReader(policy))
-	require.NoError(t, err)
-	req.ContentLength = int64(len(body))
-	ts.SignRequest(req, body)
-
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		t.Fatalf("Failed to set bucket policy on %s: status %d, body: %s", bucket, resp.StatusCode, respBody)
-	}
-}
-
 // AnonymousRequest makes an HTTP request without any authentication
 func AnonymousRequest(method, url string, body []byte) (*http.Response, error) {
 	var bodyReader io.Reader

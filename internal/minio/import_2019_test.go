@@ -52,7 +52,10 @@ func TestImport_MinIO2019_RealData(t *testing.T) {
 		assert.Equal(t, "charlie", charlie.AccessKey, "Charlie accessKey should be 'charlie'")
 		assert.Equal(t, "charliepass1234", charlie.SecretKey, "Charlie should have correct password")
 		assert.Equal(t, "enabled", charlie.Status, "Charlie should be enabled")
-		assert.Equal(t, []string{"alpha-rw", "delta-rw"}, charlie.AttachedPolicy, "Charlie should have both alpha-rw and delta-rw policies")
+		// MinIO 2019 only supports one direct policy per user (no group support in the 2019 mc).
+		// charlie gets delta-rw as his single direct policy; multi-policy via groups
+		// is exercised in the 2022 import test where the mc supports group management.
+		assert.Equal(t, []string{"delta-rw"}, charlie.AttachedPolicy, "Charlie should have delta-rw as his direct 2019 policy")
 
 		t.Logf("Users imported: %+v", result.Users)
 	})
@@ -78,7 +81,10 @@ func TestImport_MinIO2019_RealData(t *testing.T) {
 
 	// Verify buckets
 	t.Run("Buckets", func(t *testing.T) {
-		assert.Len(t, result.Buckets, 4, "Should have 4 buckets")
+		// At minimum the 4 core buckets must be present.
+		// SETUP_POLICY_TESTS=true creates additional policy-test buckets, so we
+		// don't assert an exact count here.
+		assert.GreaterOrEqual(t, len(result.Buckets), 4, "Should have at least 4 core buckets")
 
 		alpha, ok := result.Buckets["alpha"]
 		require.True(t, ok, "Should have alpha bucket")

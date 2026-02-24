@@ -67,6 +67,11 @@ func Import(minioFS billy.Filesystem) (*ImportResult, error) {
 		return nil, fmt.Errorf("failed to import user-policy mappings: %w", err)
 	}
 
+	// Expand group memberships into user policy lists
+	if err := importGroupMemberships(minioFS, result.Users); err != nil {
+		return nil, fmt.Errorf("failed to import group memberships: %w", err)
+	}
+
 	// Import buckets
 	if err := importBuckets(minioFS, result.Buckets); err != nil {
 		return nil, fmt.Errorf("failed to import buckets: %w", err)
@@ -452,6 +457,101 @@ func walkBucketMetadata(minioFS billy.Filesystem, currentPath, bucketName string
 			// Store the metadata with the object key
 			metadata[objectKey] = &objMeta
 			fmt.Printf("Imported metadata for %s/%s\n", bucketName, objectKey)
+		}
+	}
+
+	return nil
+}
+
+// importGroupMemberships reads MinIO group definitions and expands each group's
+// policy into the AttachedPolicy list of every member user.
+//
+// MinIO 2019 only supports one direct policy per user; groups are the native
+// mechanism for granting a user multiple policies. This function flattens that
+// indirection so DirIO's user model ends up with the full effective policy set.
+//
+// Paths read:
+//
+//	config/iam/groups/<name>/members.json  → {"version":1,"status":"enabled","members":[...]}
+//	config/iam/policydb/groups/<name>.json  → {"version":1,"policy":"<name>"}
+func importGroupMemberships(minioFS billy.Filesystem, users map[string]*User) error {
+	groupsDir := filepath.Join("config", "iam", "groups")
+
+	if _, err := minioFS.Stat(groupsDir); err != nil {
+		if isNotExist(err) {
+			return nil // No groups defined
+		}
+		return err
+	}
+
+	entries, err := minioFS.ReadDir(groupsDir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		groupUserDirName := entry.Name()
+
+		// Read group identity (members list)
+		identityPath := filepath.Join(groupsDir, groupUserDirName, "members.json")
+		identityData, err := util.ReadFile(minioFS, identityPath)
+		if err != nil {
+			fmt.Printf("Warning: failed to read group identity for %s: %v\n", groupUserDirName, err)
+			continue
+		}
+
+		var identity GroupIdentity
+		if err := json.Unmarshal(identityData, &identity); err != nil {
+			fmt.Printf("Warning: failed to parse group identity for %s: %v\n", groupUserDirName, err)
+			continue
+		}
+
+		if identity.Status != "enabled" || len(identity.Members) == 0 {
+			continue
+		}
+
+		// Read group's policy assignment from policydb
+		policyPath := filepath.Join("config", "iam", "policydb", "groups", groupUserDirName+".json")
+		policyData, err := util.ReadFile(minioFS, policyPath)
+		if err != nil {
+			fmt.Printf("Warning: failed to read policy mapping for group %s: %v\n", groupUserDirName, err)
+			continue
+		}
+
+		var mapping GroupPolicyMapping
+		if err := json.Unmarshal(policyData, &mapping); err != nil {
+			fmt.Printf("Warning: failed to parse policy mapping for group %s: %v\n", groupUserDirName, err)
+			continue
+		}
+
+		groupPolicies := []string(mapping.Policy)
+		if len(groupPolicies) == 0 {
+			continue
+		}
+
+		// Expand group policies to each member user
+		for _, member := range identity.Members {
+			user, exists := users[member]
+			if !exists {
+				continue
+			}
+			for _, gp := range groupPolicies {
+				alreadyHas := false
+				for _, up := range user.AttachedPolicy {
+					if up == gp {
+						alreadyHas = true
+						break
+					}
+				}
+				if !alreadyHas {
+					user.AttachedPolicy = append(user.AttachedPolicy, gp)
+				}
+			}
+			fmt.Printf("Expanded group '%s' → user %s gains policy(ies): %v\n", groupUserDirName, member, groupPolicies)
 		}
 	}
 

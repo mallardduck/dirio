@@ -17,7 +17,7 @@ import (
 )
 
 // signStreamingRequest signs a request with STREAMING-AWS4-HMAC-SHA256-PAYLOAD
-func (ts *TestServer) signStreamingRequest(req *http.Request) {
+func signStreamingRequest(ts *TestServer, req *http.Request) {
 	// Get current timestamp
 	timestamp := time.Now().UTC()
 
@@ -70,7 +70,7 @@ func TestPutObject_ChunkedEncoding(t *testing.T) {
 
 	req.Header.Set("Content-Type", "text/plain")
 	// Sign request with streaming signature
-	ts.signStreamingRequest(req)
+	signStreamingRequest(ts, req)
 
 	// Send request
 	resp, err := http.DefaultClient.Do(req)
@@ -124,7 +124,7 @@ func TestPutObject_MultipleChunks(t *testing.T) {
 	require.NoError(t, err)
 
 	req.Header.Set("Content-Type", "text/plain")
-	ts.signStreamingRequest(req)
+	signStreamingRequest(ts, req)
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -160,7 +160,7 @@ func TestPutObject_LargeChunkedData(t *testing.T) {
 	req, err := http.NewRequest("PUT", ts.ObjectURL("test-bucket", "large-chunk.txt"), strings.NewReader(chunkedBody))
 	require.NoError(t, err)
 
-	ts.signStreamingRequest(req)
+	signStreamingRequest(ts, req)
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -238,7 +238,7 @@ func TestPutObject_EmptyChunkedUpload(t *testing.T) {
 	req, err := http.NewRequest("PUT", ts.ObjectURL("test-bucket", "empty.txt"), strings.NewReader(chunkedBody))
 	require.NoError(t, err)
 
-	ts.signStreamingRequest(req)
+	signStreamingRequest(ts, req)
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)

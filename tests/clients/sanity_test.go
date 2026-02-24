@@ -164,7 +164,7 @@ func TestSanityCheck_FailingServer(t *testing.T) {
 		t.Parallel()
 
 		req := testcontainers.ContainerRequest{
-			Image: "python:3.12-slim",
+			Image: "python:3.13-alpine",
 			Env: map[string]string{
 				"DIRIO_ENDPOINT":   containerURL,
 				"DIRIO_ACCESS_KEY": testAccessKey,
@@ -234,7 +234,7 @@ func TestSanityCheck_DumbSuccessServer(t *testing.T) {
 		t.Parallel()
 
 		req := testcontainers.ContainerRequest{
-			Image: "python:3.12-slim",
+			Image: "python:3.13-alpine",
 			Env: map[string]string{
 				"DIRIO_ENDPOINT":   containerURL,
 				"DIRIO_ACCESS_KEY": testAccessKey,

@@ -440,7 +440,7 @@ func TestBoto3(t *testing.T) {
 
 	// Create Python container with boto3
 	req := testcontainers.ContainerRequest{
-		Image: "python:3.12-slim",
+		Image: "python:3.13-alpine",
 		Env: map[string]string{
 			"DIRIO_ENDPOINT":   server.Endpoint(),
 			"DIRIO_ACCESS_KEY": testAccessKey,

@@ -31,7 +31,7 @@ func TestImport_MinIO2022_RealData(t *testing.T) {
 
 	// Verify buckets
 	t.Run("Buckets", func(t *testing.T) {
-		assert.Len(t, result.Buckets, 3, "Should have 3 buckets (alpha, beta, gamma)")
+		assert.Len(t, result.Buckets, 4, "Should have 4 buckets (alpha, beta, gamma, delta)")
 
 		// Verify expected buckets exist
 		alpha, ok := result.Buckets["alpha"]
@@ -45,6 +45,10 @@ func TestImport_MinIO2022_RealData(t *testing.T) {
 		gamma, ok := result.Buckets["gamma"]
 		require.True(t, ok, "Should have gamma bucket")
 		assert.Equal(t, "gamma", gamma.Name)
+
+		delta, ok := result.Buckets["delta"]
+		require.True(t, ok, "Should have delta bucket")
+		assert.Equal(t, "delta", delta.Name)
 
 		// Verify 'replication' is NOT imported as a bucket
 		_, hasReplication := result.Buckets["replication"]
@@ -92,15 +96,13 @@ func TestImport_MinIO2022_RealData(t *testing.T) {
 		assert.Equal(t, "bob", bob.AccessKey)
 		assert.Equal(t, []string{"beta-rw"}, bob.AttachedPolicy, "Bob should have beta-rw policy")
 
-		// Test multi-policy user (charlie) if present
-		if charlie, ok := result.Users["charlie"]; ok {
-			assert.Equal(t, "charlie", charlie.AccessKey)
-			assert.Len(t, charlie.AttachedPolicy, 2, "Charlie should have 2 policies")
-			assert.Contains(t, charlie.AttachedPolicy, "alpha-rw", "Charlie should have alpha-rw policy")
-			assert.Contains(t, charlie.AttachedPolicy, "beta-rw", "Charlie should have beta-rw policy")
-		} else {
-			t.Log("Charlie user not found - multi-policy test skipped (re-run minio-import-2019-to-2022.sh with updated script)")
-		}
+		// charlie: delta-rw direct + alpha-rw via alpha-users group membership
+		charlie, ok := result.Users["charlie"]
+		require.True(t, ok, "Should have charlie user")
+		assert.Equal(t, "charlie", charlie.AccessKey)
+		assert.Len(t, charlie.AttachedPolicy, 2, "Charlie should have 2 policies (delta-rw direct + alpha-rw via group)")
+		assert.Contains(t, charlie.AttachedPolicy, "alpha-rw", "Charlie should have alpha-rw (via alpha-users group)")
+		assert.Contains(t, charlie.AttachedPolicy, "delta-rw", "Charlie should have delta-rw (direct)")
 	})
 }
 

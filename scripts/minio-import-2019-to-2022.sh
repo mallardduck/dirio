@@ -73,10 +73,11 @@ echo "🚀 Starting MinIO 2022 with imported 2019 data..."
 docker run -d \
   --name "${MINIO_CONTAINER}" \
   -p "${MINIO_PORT}:9000" \
+  -p "$((MINIO_PORT + 1)):$((MINIO_PORT + 1))" \
   -e MINIO_ROOT_USER="${MINIO_ROOT_USER}" \
   -e MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD}" \
   -v "${DEST_DATA_DIR}:/data" \
-  "${MINIO_IMAGE}" server /data
+  "${MINIO_IMAGE}" server /data --console-address ":$((MINIO_PORT + 1))"
 
 echo "⏳ Waiting for MinIO to migrate data and start (up to 30 seconds)..."
 sleep 10
@@ -197,12 +198,18 @@ docker run --rm --network host -e MC_HOST_minio2022 \
 docker run --rm --network host -e MC_HOST_minio2022 \
   "${MC_IMAGE}" admin policy set minio2022 beta-rw user="${BOB_USER}"
 
-# Attach MULTIPLE policies to charlie (testing multi-policy support)
-# NOTE: Multiple policies must be comma-separated in a single call
-# charlie gets alpha-rw + delta-rw (matching the 2019 data — NOT beta-rw)
-echo "🧪 Testing multi-policy attachment for user '${CHARLIE_USER}'..."
+# charlie gets delta-rw directly, and alpha-rw via group membership.
+# Using groups (the correct 2022 mechanism) rather than comma-separated policy set.
+echo "🔗 Attaching delta-rw directly to '${CHARLIE_USER}'..."
 docker run --rm --network host -e MC_HOST_minio2022 \
-  "${MC_IMAGE}" admin policy set minio2022 delta-rw,alpha-rw user="${CHARLIE_USER}"
+  "${MC_IMAGE}" admin policy set minio2022 delta-rw user="${CHARLIE_USER}"
+
+echo "👥 Creating alpha-users group → alpha-rw policy → ${CHARLIE_USER} member..."
+docker run --rm --network host -e MC_HOST_minio2022 \
+  "${MC_IMAGE}" admin group add minio2022 alpha-users "${CHARLIE_USER}"
+
+docker run --rm --network host -e MC_HOST_minio2022 \
+  "${MC_IMAGE}" admin policy set minio2022 alpha-rw group=alpha-users
 
 # -----------------------
 # Recreate public-read bucket policies
