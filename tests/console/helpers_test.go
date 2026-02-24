@@ -20,11 +20,6 @@ import (
 
 const consolePrefix = "/dirio/ui"
 
-const (
-	testAccessKey = testutil.DefaultAccessKey
-	testSecretKey = testutil.DefaultSecretKey
-)
-
 // TestServer extends testutil.TestServer with console-specific methods.
 // Embedding the pointer promotes all base methods (CreateBucket, SignRequest,
 // SetBucketPolicy, etc.) so console_test.go files need no changes.
