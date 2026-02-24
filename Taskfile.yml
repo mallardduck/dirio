@@ -41,10 +41,11 @@ tasks:
   # ── Clean ──────────────────────────────────────────────────────────────────
 
   clean:
-    desc: Clean build artifacts
+    desc: Remove all generated build artifacts, binaries, and test output
     cmds:
       - rm -f dirio dirio-client
-      - rm -rf data/ dist/
+      - rm -rf bin/ dist/
+      - rm -f coverage.out coverage.html
 
   # ── Tests ──────────────────────────────────────────────────────────────────
 
