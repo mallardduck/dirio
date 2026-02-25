@@ -146,9 +146,10 @@ func (s *Storage) PutObject(ctx context.Context, bucket, key string, content io.
 		}
 	}
 
-	// Create a temporary file in the same directory for atomic rename
-	// Use a generated name instead of TempFile to avoid path issues with scoped filesystems
-	tmpName := fmt.Sprintf(".tmp-%d", time.Now().UnixNano())
+	// Create a temporary file in the same directory for atomic rename.
+	// Use a UUID so concurrent writes to the same directory never collide on
+	// the temp file name (time.Now().UnixNano() is not safe under contention).
+	tmpName := fmt.Sprintf(".tmp-%s", uuid.New().String())
 	tmpPath := filepath.Join(dir, tmpName)
 	if dir == "." || dir == "" {
 		tmpPath = tmpName
@@ -197,6 +198,14 @@ func (s *Storage) PutObject(ctx context.Context, bucket, key string, content io.
 	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("context cancelled before finalizing: %w", err)
 	}
+
+	// Serialize the rename + metadata write per key.  On Windows, concurrent
+	// renames to the same destination path fail with "Access is denied" when
+	// two goroutines race on the same key; on all platforms this prevents torn
+	// metadata (last-write-wins for both file and metadata, atomically).
+	keyMu := s.getKeyMu(bucket, key)
+	keyMu.Lock()
+	defer keyMu.Unlock()
 
 	// Atomically rename the temp file to the final location
 	if err := bucketFS.Rename(tmpPath, objectPath); err != nil {

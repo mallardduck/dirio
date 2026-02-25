@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"sort"
+	"sync"
 
 	"github.com/go-git/go-billy/v5"
 
@@ -34,6 +35,11 @@ type Storage struct {
 	rootFS          billy.Filesystem
 	metadataManager *metadata.Manager
 	log             *slog.Logger
+	// keyMutexes provides per-key serialization for the atomic rename+metadata
+	// step of PutObject.  On Windows, concurrent renames to the same destination
+	// path race at the OS level; serializing only this fast final step keeps I/O
+	// fully parallel while preventing "Access is denied" failures.
+	keyMutexes sync.Map // map[string]*sync.Mutex
 }
 
 // New creates a new storage backend
@@ -336,6 +342,15 @@ func (s *Storage) walkDir(ctx context.Context, bucket, dir string, fn func(key s
 	}
 
 	return nil
+}
+
+// getKeyMu returns the per-key mutex for bucket+key, creating it on first use.
+// The mutex serializes the rename-and-metadata step inside PutObject so that
+// concurrent writes to the same key do not race at the OS level.
+func (s *Storage) getKeyMu(bucket, key string) *sync.Mutex {
+	k := bucket + "\x00" + key
+	v, _ := s.keyMutexes.LoadOrStore(k, &sync.Mutex{})
+	return v.(*sync.Mutex)
 }
 
 // isNotExist checks if an error is a "not exist" error
