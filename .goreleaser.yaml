@@ -8,6 +8,12 @@ project_name: dirio
 before:
   hooks:
     - go mod tidy
+    # Install templ CLI pinned to the version in go.mod.
+    - go install github.com/a-h/templ/cmd/templ@v0.3.977
+    # Download the Tailwind standalone binary for the current OS/arch.
+    - task download-tailwind
+    # Regenerate templ outputs and minify CSS from source.
+    - task build-ui
 
 builds:
   - id: server

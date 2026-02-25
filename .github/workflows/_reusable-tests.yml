@@ -273,3 +273,37 @@ jobs:
 
     - name: Test binary runs
       run: ./server --help || true
+
+  check-generated:
+    name: Check Generated Files
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: '1.26'
+        cache: true
+
+    - name: Install Task
+      uses: go-task/setup-task@v1
+
+    - name: Install templ
+      run: go install github.com/a-h/templ/cmd/templ@v0.3.977
+
+    - name: Download Tailwind
+      run: task download-tailwind
+
+    - name: Regenerate UI assets
+      run: task build-ui
+
+    - name: Check for drift
+      run: |
+        if ! git diff --exit-code; then
+          echo ""
+          echo "::error::Generated files are out of date. Run 'task build-ui' locally and commit the results."
+          exit 1
+        fi
