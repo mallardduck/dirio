@@ -28,17 +28,44 @@ type RouteDependencies struct {
 	Metadata     *metadata.Manager      // For ownership-based authorization
 	AdminKeys    policy.AdminKeyChecker // Live admin key source (auth.Authenticator)
 	APIHandler   *api.Handler
+	Health       *health.Handler
 	Debug        bool
 }
 
 // SetupRoutes configures all application routes on the provided router.
 // When deps is nil, routes are registered with nil handlers (for CLI route listing).
 func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
-	// Public routes (no auth required)
-	r.Func().GET("/favicon.ico", favicon.HandleFavicon).Name("favicon")
-	r.GET("/.internal/routes", teapot.NewListRoutesHandler(r, nil)).Name("debug.routes").Action("dirio:ListRoutes")
+	// /.dirio/* — DirIO-specific routes.
+	// Dot-prefix guarantees no collision with S3 bucket names (bucket names must
+	// start with a letter or digit per the S3 spec and AWS validation rules).
+	r.Func().GET("/.dirio/favicon.ico", favicon.HandleFavicon).Name("favicon")
+	r.GET("/.dirio/internal/routes", teapot.NewListRoutesHandler(r, nil)).Name("debug.routes").Action("dirio:ListRoutes")
 
-	r.Func().GET("/healthz", health.HandleHealth).Name("health").Action("dirio:Health")
+	// DirIO health endpoints (unauthenticated).
+	// These are under /.dirio/ so they never collide with user bucket names.
+	var hh *health.Handler
+	if deps != nil {
+		hh = deps.Health
+	}
+	ok200 := func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }
+	if hh == nil {
+		// Fallback when deps are nil (e.g. CLI route listing) — plain 200.
+		r.Func().GET("/.dirio/healthz", ok200).Name("health.legacy")
+		r.Func().GET("/.dirio/health", ok200).Name("health")
+		r.Func().GET("/.dirio/health/ready", ok200).Name("health.ready")
+		r.Func().GET("/.dirio/health/live", ok200).Name("health.live")
+		// MinIO-compatible health endpoints (mc uses these, no auth required).
+		r.Func().GET("/minio/health/live", ok200).Name("minio.health.live")
+		r.Func().GET("/minio/health/ready", ok200).Name("minio.health.ready")
+	} else {
+		r.Func().GET("/.dirio/healthz", hh.HandleLive).Name("health.legacy").Action("dirio:Health")
+		r.Func().GET("/.dirio/health", hh.HandleHealth).Name("health").Action("dirio:Health")
+		r.Func().GET("/.dirio/health/ready", hh.HandleReady).Name("health.ready").Action("dirio:HealthReady")
+		r.Func().GET("/.dirio/health/live", hh.HandleLive).Name("health.live").Action("dirio:HealthLive")
+		// MinIO-compatible health endpoints (mc uses these, no auth required).
+		r.Func().GET("/minio/health/live", hh.HandleLive).Name("minio.health.live").Action("dirio:HealthLive")
+		r.Func().GET("/minio/health/ready", hh.HandleReady).Name("minio.health.ready").Action("dirio:HealthReady")
+	}
 
 	// pprof profiling endpoints — only registered when --debug is set.
 	// Unauthenticated: debug mode is not intended for production use.

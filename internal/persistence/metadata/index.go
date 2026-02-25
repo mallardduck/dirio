@@ -305,3 +305,10 @@ func (m *Manager) GetUserByAccessKey(ctx context.Context, accessKey string) (*Us
 func (m *Manager) Close() error {
 	return m.db.Close()
 }
+
+// Ping performs a lightweight read-only transaction to verify the bbolt
+// database is open and responsive.  Returns non-nil if the DB is closed or
+// otherwise unavailable.
+func (m *Manager) Ping() error {
+	return m.db.View(func(_ *bbolt.Tx) error { return nil })
+}

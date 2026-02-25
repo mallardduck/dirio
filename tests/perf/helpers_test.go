@@ -101,7 +101,7 @@ func (ps *perfServer) waitReady(timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	client := &http.Client{Timeout: 200 * time.Millisecond}
 	for time.Now().Before(deadline) {
-		resp, err := client.Get(ps.baseURL + "/healthz")
+		resp, err := client.Get(ps.baseURL + "/minio/health/live")
 		if err == nil {
 			resp.Body.Close()
 			return true

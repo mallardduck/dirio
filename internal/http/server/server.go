@@ -24,6 +24,7 @@ import (
 	"github.com/mallardduck/dirio/internal/http/api"
 	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/http/middleware"
+	"github.com/mallardduck/dirio/internal/http/server/health"
 	miniomiddleware "github.com/mallardduck/dirio/internal/minio/middleware"
 	"github.com/mallardduck/dirio/internal/policy"
 
@@ -238,6 +239,7 @@ func (s *Server) setupRoutes() {
 		Metadata:     s.metadata,
 		AdminKeys:    s.auth,
 		APIHandler:   apiHandler,
+		Health:       health.New(s.metadata, s.config.RootFS),
 		Debug:        s.config.Debug,
 	}
 

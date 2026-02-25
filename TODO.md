@@ -412,9 +412,9 @@ Current status: **Phase 4.5 complete** — Phases 1–4.5 done; next up is Phase
 **Goal:** Give DirIO the instrumentation it needs to run reliably in production — visibility into what's happening, proof that it's healthy, and a lightweight audit trail out of the box.
 
 ### Health Checks
-- [ ] **Health endpoint** (`GET /health`) — returns 200 + JSON status; used by load balancers, Docker health checks, and basic monitoring
-- [ ] **Readiness probe** (`GET /health/ready`) — checks BoltDB is open and storage directory is accessible; returns 503 if not ready
-- [ ] **Liveness probe** (`GET /health/live`) — confirms the process is alive and not deadlocked; always 200 if reachable
+- [x] **Health endpoint** (`GET /health`) — returns 200 + JSON status; used by load balancers, Docker health checks, and basic monitoring
+- [x] **Readiness probe** (`GET /health/ready`) — checks BoltDB is open and storage directory is accessible; returns 503 if not ready
+- [x] **Liveness probe** (`GET /health/live`) — confirms the process is alive and not deadlocked; always 200 if reachable
 
 ### Metrics
 - [ ] **Prometheus metrics endpoint** (`GET /metrics`) — request count by method/status, error rate, latency histograms (p50/p95/p99), metadata cache hit ratio, active connections, BoltDB size
