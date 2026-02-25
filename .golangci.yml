@@ -5,6 +5,7 @@ run:
   tests: true
 linters:
   enable:
+    - cyclop
     - depguard
     - misspell
     - prealloc
@@ -19,6 +20,14 @@ linters:
     - exhaustive
     - nestif
   settings:
+    cyclop:
+      # The maximal code complexity to report.
+      # Default: 10
+      max-complexity: 42
+      # The maximal average package complexity.
+      # If it's higher than 0.0 (float) the check is enabled.
+      # Default: 0.0
+      package-average: 9.0
     gocritic:
       enabled-tags:
         - diagnostic

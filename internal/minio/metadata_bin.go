@@ -50,148 +50,18 @@ func parseBucketMetadataBin(data []byte) (*BucketMetadata, error) {
 
 	meta := &BucketMetadata{}
 
-	// Read all map entries
 	for i := range mapSize {
-		// Read field name
 		fieldName, err := reader.ReadString()
 		if err != nil {
 			return nil, fmt.Errorf("failed to read field name at index %d: %w", i, err)
 		}
 
-		// Read field value based on name
-		switch fieldName {
-		case "Name":
-			meta.Name, err = reader.ReadString()
-			if err != nil {
-				return nil, fmt.Errorf("failed to read Name: %w", err)
+		if fn, ok := bucketMetadataFields[fieldName]; ok {
+			if err := fn(meta, reader); err != nil {
+				return nil, err
 			}
-
-		case "Created":
-			meta.Created, err = reader.ReadTime()
-			if err != nil {
-				return nil, fmt.Errorf("failed to read Created: %w", err)
-			}
-
-		case "LockEnabled":
-			meta.LockEnabled, err = reader.ReadBool()
-			if err != nil {
-				return nil, fmt.Errorf("failed to read LockEnabled: %w", err)
-			}
-
-		case "PolicyConfigJSON":
-			meta.PolicyConfigJSON, err = reader.ReadBytes(nil)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read PolicyConfigJSON: %w", err)
-			}
-
-		case "NotificationConfigXML":
-			meta.NotificationConfigXML, err = reader.ReadBytes(nil)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read NotificationConfigXML: %w", err)
-			}
-
-		case "LifecycleConfigXML":
-			meta.LifecycleConfigXML, err = reader.ReadBytes(nil)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read LifecycleConfigXML: %w", err)
-			}
-
-		case "ObjectLockConfigXML":
-			meta.ObjectLockConfigXML, err = reader.ReadBytes(nil)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read ObjectLockConfigXML: %w", err)
-			}
-
-		case "VersioningConfigXML":
-			meta.VersioningConfigXML, err = reader.ReadBytes(nil)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read VersioningConfigXML: %w", err)
-			}
-
-		case "EncryptionConfigXML":
-			meta.EncryptionConfigXML, err = reader.ReadBytes(nil)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read EncryptionConfigXML: %w", err)
-			}
-
-		case "TaggingConfigXML":
-			meta.TaggingConfigXML, err = reader.ReadBytes(nil)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read TaggingConfigXML: %w", err)
-			}
-
-		case "QuotaConfigJSON":
-			meta.QuotaConfigJSON, err = reader.ReadBytes(nil)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read QuotaConfigJSON: %w", err)
-			}
-
-		case "ReplicationConfigXML":
-			meta.ReplicationConfigXML, err = reader.ReadBytes(nil)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read ReplicationConfigXML: %w", err)
-			}
-
-		case "BucketTargetsConfigJSON":
-			meta.BucketTargetsConfigJSON, err = reader.ReadBytes(nil)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read BucketTargetsConfigJSON: %w", err)
-			}
-
-		case "BucketTargetsConfigMetaJSON":
-			meta.BucketTargetsConfigMetaJSON, err = reader.ReadBytes(nil)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read BucketTargetsConfigMetaJSON: %w", err)
-			}
-
-		case "PolicyConfigUpdatedAt":
-			meta.PolicyConfigUpdatedAt, err = reader.ReadTime()
-			if err != nil {
-				return nil, fmt.Errorf("failed to read PolicyConfigUpdatedAt: %w", err)
-			}
-
-		case "ObjectLockConfigUpdatedAt":
-			meta.ObjectLockConfigUpdatedAt, err = reader.ReadTime()
-			if err != nil {
-				return nil, fmt.Errorf("failed to read ObjectLockConfigUpdatedAt: %w", err)
-			}
-
-		case "EncryptionConfigUpdatedAt":
-			meta.EncryptionConfigUpdatedAt, err = reader.ReadTime()
-			if err != nil {
-				return nil, fmt.Errorf("failed to read EncryptionConfigUpdatedAt: %w", err)
-			}
-
-		case "TaggingConfigUpdatedAt":
-			meta.TaggingConfigUpdatedAt, err = reader.ReadTime()
-			if err != nil {
-				return nil, fmt.Errorf("failed to read TaggingConfigUpdatedAt: %w", err)
-			}
-
-		case "QuotaConfigUpdatedAt":
-			meta.QuotaConfigUpdatedAt, err = reader.ReadTime()
-			if err != nil {
-				return nil, fmt.Errorf("failed to read QuotaConfigUpdatedAt: %w", err)
-			}
-
-		case "ReplicationConfigUpdatedAt":
-			meta.ReplicationConfigUpdatedAt, err = reader.ReadTime()
-			if err != nil {
-				return nil, fmt.Errorf("failed to read ReplicationConfigUpdatedAt: %w", err)
-			}
-
-		case "VersioningConfigUpdatedAt":
-			meta.VersioningConfigUpdatedAt, err = reader.ReadTime()
-			if err != nil {
-				return nil, fmt.Errorf("failed to read VersioningConfigUpdatedAt: %w", err)
-			}
-
-		default:
-			// Unknown field - skip it for forward compatibility
-			err = reader.Skip()
-			if err != nil {
-				return nil, fmt.Errorf("failed to skip unknown field %s: %w", fieldName, err)
-			}
+		} else if err := reader.Skip(); err != nil {
+			return nil, fmt.Errorf("failed to skip unknown field %s: %w", fieldName, err)
 		}
 	}
 

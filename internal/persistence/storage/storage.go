@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/go-git/go-billy/v5"
 
@@ -216,12 +215,10 @@ func (s *Storage) ListObjectsV2(ctx context.Context, bucket, prefix, continuatio
 
 // listInternal is the core listing implementation used by both V1 and V2
 func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, delimiter string, maxKeys int, fetchOwner bool) (InternalResult, error) {
-	// Check if context is already cancelled
 	if err := ctx.Err(); err != nil {
 		return InternalResult{}, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	// Check if bucket exists
 	if _, err := s.rootFS.Stat(bucket); err != nil {
 		if isNotExist(err) {
 			return InternalResult{}, ErrNoSuchBucket
@@ -229,93 +226,17 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 		return InternalResult{}, err
 	}
 
-	// Get bucket owner if fetchOwner is requested
-	// Per S3 behavior: Owner info is only included when explicitly requested via fetchOwner=true
-	// This is used by ListObjectsV2 but not ListObjects (V1 always omits owner)
 	var bucketOwner *s3types.Owner
 	if fetchOwner {
-		bucketMeta, err := s.metadataManager.GetBucketMetadata(ctx, bucket)
-		if err == nil && bucketMeta.Owner != nil {
-			ownerStr := bucketMeta.Owner.String()
-			displayName := ownerStr // Default to UUID string
-
-			// Look up the user's username for a more friendly display name
-			user, err := s.metadataManager.GetUser(ctx, *bucketMeta.Owner)
-			if err == nil && user != nil && user.Username != "" {
-				displayName = user.Username
-			}
-
-			bucketOwner = &s3types.Owner{
-				ID:          ownerStr,
-				DisplayName: displayName,
-			}
-		}
-		// If we can't get bucket metadataManager or owner is nil, that's ok - owner will be nil
+		bucketOwner = s.fetchBucketOwner(ctx, bucket)
 	}
 
-	// Collect all matching objects
-	var allEntries []objectEntry
-
-	// walked counts entries that have passed the prefix filter and are past startAt.
-	// Used for early walk termination when delimiter is not set.
-	var walked int
-
-	// Walk the bucket directory recursively
-	err := s.walkDir(ctx, bucket, "", func(key string, info fs.FileInfo) error {
-		// Check for context cancellation during walk
-		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("context cancelled during walk: %w", err)
-		}
-
-		// Apply prefix filter
-		if prefix != "" && !hasPrefix(key, prefix) {
-			return nil
-		}
-
-		// Early termination: when there is no delimiter (keys are not collapsed into
-		// common prefixes) and a maxKeys limit is set, stop as soon as we have
-		// collected maxKeys+1 entries past startAt. The extra entry lets listInternal
-		// detect truncation without walking the rest of the bucket.
-		if delimiter == "" && maxKeys > 0 {
-			if startAt == "" || key > startAt {
-				walked++
-				if walked > maxKeys+1 {
-					return errStopWalk
-				}
-			}
-		}
-
-		// Get object metadataManager
-		meta, err := s.metadataManager.GetObjectMetadata(ctx, bucket, key)
-		if err != nil {
-			// If no metadataManager, create basic metadataManager
-			meta = &metadata.ObjectMetadata{
-				ContentType:  "application/octet-stream",
-				Size:         info.Size(),
-				LastModified: info.ModTime(),
-			}
-		}
-
-		allEntries = append(allEntries, objectEntry{
-			key:  key,
-			info: info,
-			meta: meta,
-		})
-
-		return nil
-	})
-
-	if err != nil && !errors.Is(err, errStopWalk) {
+	allEntries, err := s.collectEntries(ctx, bucket, prefix, startAt, delimiter, maxKeys)
+	if err != nil {
 		return InternalResult{}, err
 	}
 
-	// Sort entries by key (S3 returns results in lexicographic order)
 	sortObjectEntries(allEntries)
-
-	// Process delimiter to create common prefixes
-	// Step 1: Group all entries into either objects or common prefixes
-	objects := make([]s3types.Object, 0, len(allEntries))
-	commonPrefixMap := make(map[string]bool)
 
 	s.log.Debug("listInternal processing",
 		"bucket", bucket,
@@ -324,156 +245,25 @@ func (s *Storage) listInternal(ctx context.Context, bucket, prefix, startAt, del
 		"startAt", startAt,
 		"entryCount", len(allEntries))
 
-	for _, entry := range allEntries {
-		// Handle delimiter logic first
-		if delimiter != "" {
-			// Find delimiter position after the prefix
-			keyAfterPrefix := entry.key
-			if prefix != "" {
-				keyAfterPrefix = entry.key[len(prefix):]
-			}
-
-			delimiterPos := strings.Index(keyAfterPrefix, delimiter)
-			s.log.Debug("checking entry for delimiter",
-				"key", entry.key,
-				"keyAfterPrefix", keyAfterPrefix,
-				"delimiter", delimiter,
-				"delimiterPos", delimiterPos)
-			if delimiterPos >= 0 {
-				// This key contains delimiter - add to common prefixes
-				commonPrefix := prefix + keyAfterPrefix[:delimiterPos+len(delimiter)]
-				s.log.Debug("adding to common prefixes",
-					"key", entry.key,
-					"commonPrefix", commonPrefix)
-				commonPrefixMap[commonPrefix] = true
-				continue
-			}
-		}
-
-		// Add as regular object (no delimiter found or no delimiter specified)
-		obj := s3types.Object{
-			Key:          entry.key,
-			Size:         entry.info.Size(),
-			LastModified: entry.info.ModTime(),
-			ETag:         entry.meta.ETag,
-			StorageClass: "STANDARD",
-		}
-
-		// Include owner if fetchOwner is true
-		if fetchOwner && bucketOwner != nil {
-			obj.Owner = bucketOwner
-		}
-
-		objects = append(objects, obj)
-	}
-
-	// Step 2: Filter objects by startAt marker
-	// Per S3 spec: skip objects not lexicographically greater than StartAfter
-	if startAt != "" {
-		filteredObjects := make([]s3types.Object, 0, len(objects))
-		for _, obj := range objects {
-			if obj.Key > startAt {
-				filteredObjects = append(filteredObjects, obj)
-			}
-		}
-		objects = filteredObjects
-	}
-
-	// Step 3: Convert common prefix map to sorted slice and filter by startAt
-	// Per S3 spec: CommonPrefixes is filtered out if not lexicographically greater than StartAfter
-	commonPrefixes := make([]s3types.CommonPrefix, 0, len(commonPrefixMap))
-	for prefixKey := range commonPrefixMap {
-		if startAt != "" && prefixKey <= startAt {
-			continue
-		}
-		commonPrefixes = append(commonPrefixes, s3types.CommonPrefix{
-			Prefix: prefixKey,
-		})
-	}
-	sortCommonPrefixes(commonPrefixes)
+	objects, commonPrefixMap := groupEntriesByDelimiter(allEntries, prefix, delimiter, fetchOwner, bucketOwner)
+	objects = filterObjectsByStartAt(objects, startAt)
+	commonPrefixes := filterAndSortCommonPrefixes(commonPrefixMap, startAt)
 
 	s.log.Debug("listInternal after grouping and filtering",
 		"objectCount", len(objects),
 		"commonPrefixCount", len(commonPrefixes),
 		"commonPrefixMapSize", len(commonPrefixMap))
 
-	// Step 4: Apply maxKeys limit across both objects and common prefixes
-	// Per S3 spec: "each common prefix counts as a single return when calculating the number of returns"
-	if maxKeys > 0 {
-		// Merge objects and prefixes into a single sorted list for limiting
-		type resultItem struct {
-			key      string
-			isPrefix bool
-			index    int // index in original slice
-		}
-
-		allItems := make([]resultItem, 0, len(objects)+len(commonPrefixes))
-		for i, obj := range objects {
-			allItems = append(allItems, resultItem{key: obj.Key, isPrefix: false, index: i})
-		}
-		for i, cp := range commonPrefixes {
-			allItems = append(allItems, resultItem{key: cp.Prefix, isPrefix: true, index: i})
-		}
-
-		// Sort by key to maintain lexicographic order
-		sort.Slice(allItems, func(i, j int) bool {
-			return allItems[i].key < allItems[j].key
-		})
-
-		// Limit to maxKeys items
-		if len(allItems) > maxKeys {
-			allItems = allItems[:maxKeys]
-
-			// Rebuild objects and commonPrefixes from limited set
-			newObjects := make([]s3types.Object, 0, maxKeys)
-			newCommonPrefixes := make([]s3types.CommonPrefix, 0, maxKeys)
-
-			for _, item := range allItems {
-				if item.isPrefix {
-					newCommonPrefixes = append(newCommonPrefixes, commonPrefixes[item.index])
-				} else {
-					newObjects = append(newObjects, objects[item.index])
-				}
-			}
-
-			objects = newObjects
-			commonPrefixes = newCommonPrefixes
-		}
-	}
-
-	// Determine if results are truncated
-	totalResults := len(objects) + len(commonPrefixes)
-	isTruncated := maxKeys > 0 && totalResults >= maxKeys
-
-	// Determine next marker (last key returned, could be object or prefix)
-	var nextMarker string
-	if isTruncated {
-		// Find the last item lexicographically (could be an object or common prefix)
-		lastObjectKey := ""
-		if len(objects) > 0 {
-			lastObjectKey = objects[len(objects)-1].Key
-		}
-		lastPrefixKey := ""
-		if len(commonPrefixes) > 0 {
-			lastPrefixKey = commonPrefixes[len(commonPrefixes)-1].Prefix
-		}
-
-		// Use the lexicographically greater of the two as the next marker
-		nextMarker = max(lastObjectKey, lastPrefixKey)
-	}
+	objects, commonPrefixes = applyMaxKeysLimit(objects, commonPrefixes, maxKeys)
+	result := buildListResult(objects, commonPrefixes, maxKeys)
 
 	s.log.Debug("listInternal returning results",
-		"objectCount", len(objects),
-		"commonPrefixCount", len(commonPrefixes),
-		"isTruncated", isTruncated,
-		"nextMarker", nextMarker)
+		"objectCount", len(result.Objects),
+		"commonPrefixCount", len(result.CommonPrefixes),
+		"isTruncated", result.IsTruncated,
+		"nextMarker", result.NextMarker)
 
-	return InternalResult{
-		Objects:        objects,
-		CommonPrefixes: commonPrefixes,
-		IsTruncated:    isTruncated,
-		NextMarker:     nextMarker,
-	}, nil
+	return result, nil
 }
 
 // Type aliases for clarity
