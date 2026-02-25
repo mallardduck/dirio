@@ -1,0 +1,275 @@
+name: Reusable – Test Suite
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: '1.26'
+        cache: true
+
+    - name: Install Task
+      uses: go-task/setup-task@v1
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Verify dependencies
+      run: go mod verify
+
+    - name: Run go vet
+      run: go vet ./...
+
+    - name: Run unit tests
+      run: |
+        set -o pipefail
+        task test-unit 2>&1 | tee test-output.txt
+
+    - name: Generate test summary
+      if: always()
+      run: |
+        echo "## Unit Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        PASS=$(grep -c "^--- PASS:" test-output.txt 2>/dev/null || echo 0)
+        FAIL=$(grep -c "^--- FAIL:" test-output.txt 2>/dev/null || echo 0)
+        SKIP=$(grep -c "^--- SKIP:" test-output.txt 2>/dev/null || echo 0)
+        if [ "$FAIL" -gt 0 ]; then
+          echo "❌ **$FAIL failed** | ✅ $PASS passed | ⏭️ $SKIP skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Failed Tests" >> $GITHUB_STEP_SUMMARY
+          grep "^--- FAIL:" test-output.txt | sed 's/^--- FAIL: /- ❌ /' >> $GITHUB_STEP_SUMMARY
+        elif [ "$PASS" -eq 0 ] && [ "$SKIP" -eq 0 ]; then
+          echo "⚠️ No tests found or output could not be parsed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ All $PASS tests passed$([ "$SKIP" -gt 0 ] && echo " | ⏭️ $SKIP skipped")" >> $GITHUB_STEP_SUMMARY
+        fi
+
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: '1.26'
+        cache: true
+
+    - name: Install Task
+      uses: go-task/setup-task@v1
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Run integration tests
+      run: |
+        set -o pipefail
+        task test-integration 2>&1 | tee test-output.txt
+
+    - name: Generate test summary
+      if: always()
+      run: |
+        echo "## Integration Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        PASS=$(grep -c "^--- PASS:" test-output.txt 2>/dev/null || echo 0)
+        FAIL=$(grep -c "^--- FAIL:" test-output.txt 2>/dev/null || echo 0)
+        SKIP=$(grep -c "^--- SKIP:" test-output.txt 2>/dev/null || echo 0)
+        if [ "$FAIL" -gt 0 ]; then
+          echo "❌ **$FAIL failed** | ✅ $PASS passed | ⏭️ $SKIP skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Failed Tests" >> $GITHUB_STEP_SUMMARY
+          grep "^--- FAIL:" test-output.txt | sed 's/^--- FAIL: /- ❌ /' >> $GITHUB_STEP_SUMMARY
+        elif [ "$PASS" -eq 0 ] && [ "$SKIP" -eq 0 ]; then
+          echo "⚠️ No tests found or output could not be parsed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ All $PASS tests passed$([ "$SKIP" -gt 0 ] && echo " | ⏭️ $SKIP skipped")" >> $GITHUB_STEP_SUMMARY
+        fi
+
+  test-admin:
+    name: Admin API Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: '1.26'
+        cache: true
+
+    - name: Install Task
+      uses: go-task/setup-task@v1
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Run admin tests
+      run: |
+        set -o pipefail
+        task test-admin 2>&1 | tee test-output.txt
+
+    - name: Generate test summary
+      if: always()
+      run: |
+        echo "## Admin API Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        PASS=$(grep -c "^--- PASS:" test-output.txt 2>/dev/null || echo 0)
+        FAIL=$(grep -c "^--- FAIL:" test-output.txt 2>/dev/null || echo 0)
+        SKIP=$(grep -c "^--- SKIP:" test-output.txt 2>/dev/null || echo 0)
+        if [ "$FAIL" -gt 0 ]; then
+          echo "❌ **$FAIL failed** | ✅ $PASS passed | ⏭️ $SKIP skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Failed Tests" >> $GITHUB_STEP_SUMMARY
+          grep "^--- FAIL:" test-output.txt | sed 's/^--- FAIL: /- ❌ /' >> $GITHUB_STEP_SUMMARY
+        elif [ "$PASS" -eq 0 ] && [ "$SKIP" -eq 0 ]; then
+          echo "⚠️ No tests found or output could not be parsed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ All $PASS tests passed$([ "$SKIP" -gt 0 ] && echo " | ⏭️ $SKIP skipped")" >> $GITHUB_STEP_SUMMARY
+        fi
+
+  test-console:
+    name: Console UI Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: '1.26'
+        cache: true
+
+    - name: Install Task
+      uses: go-task/setup-task@v1
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Run console tests
+      run: |
+        set -o pipefail
+        task test-console 2>&1 | tee test-output.txt
+
+    - name: Generate test summary
+      if: always()
+      run: |
+        echo "## Console UI Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        PASS=$(grep -c "^--- PASS:" test-output.txt 2>/dev/null || echo 0)
+        FAIL=$(grep -c "^--- FAIL:" test-output.txt 2>/dev/null || echo 0)
+        SKIP=$(grep -c "^--- SKIP:" test-output.txt 2>/dev/null || echo 0)
+        if [ "$FAIL" -gt 0 ]; then
+          echo "❌ **$FAIL failed** | ✅ $PASS passed | ⏭️ $SKIP skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Failed Tests" >> $GITHUB_STEP_SUMMARY
+          grep "^--- FAIL:" test-output.txt | sed 's/^--- FAIL: /- ❌ /' >> $GITHUB_STEP_SUMMARY
+        elif [ "$PASS" -eq 0 ] && [ "$SKIP" -eq 0 ]; then
+          echo "⚠️ No tests found or output could not be parsed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ All $PASS tests passed$([ "$SKIP" -gt 0 ] && echo " | ⏭️ $SKIP skipped")" >> $GITHUB_STEP_SUMMARY
+        fi
+
+  test-clients:
+    name: Client Tests (Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: '1.26'
+        cache: true
+
+    - name: Install Task
+      uses: go-task/setup-task@v1
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Run client tests
+      run: |
+        set -o pipefail
+        task test-clients 2>&1 | tee test-output.txt
+
+    - name: Generate test summary
+      if: always()
+      run: |
+        echo "## Client Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        PASS=$(grep -c "^--- PASS:" test-output.txt 2>/dev/null || echo 0)
+        FAIL=$(grep -c "^--- FAIL:" test-output.txt 2>/dev/null || echo 0)
+        SKIP=$(grep -c "^--- SKIP:" test-output.txt 2>/dev/null || echo 0)
+        if [ "$FAIL" -gt 0 ]; then
+          echo "❌ **$FAIL failed** | ✅ $PASS passed | ⏭️ $SKIP skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Failed Tests" >> $GITHUB_STEP_SUMMARY
+          grep "^--- FAIL:" test-output.txt | sed 's/^--- FAIL: /- ❌ /' >> $GITHUB_STEP_SUMMARY
+        elif [ "$PASS" -eq 0 ] && [ "$SKIP" -eq 0 ]; then
+          echo "⚠️ No tests found or output could not be parsed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ All $PASS tests passed$([ "$SKIP" -gt 0 ] && echo " | ⏭️ $SKIP skipped")" >> $GITHUB_STEP_SUMMARY
+        fi
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: '1.26'
+        cache: true
+
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v9
+      with:
+        version: latest
+        args: --timeout=5m
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: '1.26'
+        cache: true
+
+    - name: Build binary
+      run: go build -v ./cmd/server
+
+    - name: Test binary runs
+      run: ./server --help || true

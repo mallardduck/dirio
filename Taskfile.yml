@@ -139,13 +139,13 @@ tasks:
   docker-build:
     desc: Build Docker image
     cmds:
-      - docker build -t dirio:latest .
+      - docker build -f ./package/Dockerfile -t dirio:latest .
 
   docker-run:
     desc: Build and run with Docker
     deps: [docker-build]
     cmds:
-      - docker run -p 9000:9000 -v {{.PWD}}/data:/data dirio:latest
+      - docker run --rm -p 9000:9000 -v {{.PWD}}/data:/data dirio:latest
     vars:
       PWD:
         sh: pwd

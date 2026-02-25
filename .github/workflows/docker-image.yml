@@ -1,0 +1,51 @@
+name: Head Image
+
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # Compute image tags using the SHA of the commit that was actually tested.
+  # With workflow_run, github.sha points to the default branch HEAD at trigger
+  # time, not the tested commit — so we extract it explicitly here.
+  meta:
+    name: Compute Metadata
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    outputs:
+      tags:   ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
+      ref:    ${{ github.event.workflow_run.head_sha }}
+
+    steps:
+    - name: Extract short SHA
+      id: sha
+      run: echo "short=${SHA::7}" >> $GITHUB_OUTPUT
+      env:
+        SHA: ${{ github.event.workflow_run.head_sha }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ghcr.io/${{ github.repository }}
+        tags: |
+          type=raw,value=head
+          type=raw,value=sha-${{ steps.sha.outputs.short }}
+
+  docker:
+    name: Build & Push Head Image
+    needs: meta
+    uses: ./.github/workflows/_reusable-docker.yml
+    with:
+      ref:    ${{ needs.meta.outputs.ref }}
+      tags:   ${{ needs.meta.outputs.tags }}
+      labels: ${{ needs.meta.outputs.labels }}
+      push:   true
+    secrets: inherit

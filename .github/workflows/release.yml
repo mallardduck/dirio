@@ -7,15 +7,22 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
+  # ── Gate ─────────────────────────────────────────────────────────────────────
+  tests:
+    uses: ./.github/workflows/_reusable-tests.yml
+
+  # ── Binary release ────────────────────────────────────────────────────────────
   goreleaser:
     name: GoReleaser
     runs-on: ubuntu-latest
+    needs: tests
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -36,3 +43,36 @@ jobs:
         args: release --clean
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Container image release ───────────────────────────────────────────────────
+  # Metadata computation runs in parallel with goreleaser (both need only tests),
+  # but the actual docker push waits for goreleaser so the release is atomic.
+  meta:
+    name: Compute Image Metadata
+    runs-on: ubuntu-latest
+    needs: tests
+    outputs:
+      tags:   ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
+
+    steps:
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ghcr.io/${{ github.repository }}
+        tags: |
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+
+  docker:
+    name: Release Image
+    needs: [goreleaser, meta]
+    uses: ./.github/workflows/_reusable-docker.yml
+    with:
+      tags:   ${{ needs.meta.outputs.tags }}
+      labels: ${{ needs.meta.outputs.labels }}
+      push:   true
+    secrets: inherit
