@@ -5,67 +5,52 @@ import (
 	"net/http"
 	"net/http/pprof"
 
-	"github.com/mallardduck/go-http-helpers/pkg/headers"
+	"github.com/go-git/go-billy/v5"
 	"github.com/mallardduck/teapot-router/pkg/teapot"
-
-	"github.com/mallardduck/dirio/internal/http/server/health"
-
-	"github.com/mallardduck/dirio/internal/consts"
-	"github.com/mallardduck/dirio/internal/logging"
-	"github.com/mallardduck/dirio/internal/persistence/metadata"
 
 	"github.com/mallardduck/dirio/internal/http/api"
 	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/http/middleware"
+	httpresponse "github.com/mallardduck/dirio/internal/http/response"
 	"github.com/mallardduck/dirio/internal/http/server/favicon"
+	"github.com/mallardduck/dirio/internal/http/server/health"
+	miniohttp "github.com/mallardduck/dirio/internal/minio/http"
+
+	"github.com/mallardduck/dirio/internal/consts"
+	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/policy"
 )
 
-// RouteDependencies contains all dependencies needed for route handlers
+// RouteDependencies contains all dependencies needed for route handlers.
 type RouteDependencies struct {
 	Auth         *auth.Authenticator
 	PolicyEngine *policy.Engine
 	Metadata     *metadata.Manager      // For ownership-based authorization
 	AdminKeys    policy.AdminKeyChecker // Live admin key source (auth.Authenticator)
 	APIHandler   *api.Handler
-	Health       *health.Handler
+	RootFS       billy.Filesystem // For health probes
 	Debug        bool
 }
 
 // SetupRoutes configures all application routes on the provided router.
 // When deps is nil, routes are registered with nil handlers (for CLI route listing).
 func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
+	// Favicon must be at site the root for full compatability
+	r.Func().GET("/favicon.ico", favicon.HandleFavicon).Name("favicon")
 	// /.dirio/* — DirIO-specific routes.
 	// Dot-prefix guarantees no collision with S3 bucket names (bucket names must
 	// start with a letter or digit per the S3 spec and AWS validation rules).
-	r.Func().GET("/.dirio/favicon.ico", favicon.HandleFavicon).Name("favicon")
-	r.GET("/.dirio/internal/routes", teapot.NewListRoutesHandler(r, nil)).Name("debug.routes").Action("dirio:ListRoutes")
+	r.GET("/.dirio/routes", teapot.NewListRoutesHandler(r, nil)).Name("debug.routes").Action("dirio:ListRoutes")
 
 	// DirIO health endpoints (unauthenticated).
 	// These are under /.dirio/ so they never collide with user bucket names.
-	var hh *health.Handler
+	var healthMeta health.Pinger
+	var healthFS billy.Filesystem
 	if deps != nil {
-		hh = deps.Health
+		healthMeta = deps.Metadata
+		healthFS = deps.RootFS
 	}
-	ok200 := func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }
-	if hh == nil {
-		// Fallback when deps are nil (e.g. CLI route listing) — plain 200.
-		r.Func().GET("/.dirio/healthz", ok200).Name("health.legacy")
-		r.Func().GET("/.dirio/health", ok200).Name("health")
-		r.Func().GET("/.dirio/health/ready", ok200).Name("health.ready")
-		r.Func().GET("/.dirio/health/live", ok200).Name("health.live")
-		// MinIO-compatible health endpoints (mc uses these, no auth required).
-		r.Func().GET("/minio/health/live", ok200).Name("minio.health.live")
-		r.Func().GET("/minio/health/ready", ok200).Name("minio.health.ready")
-	} else {
-		r.Func().GET("/.dirio/healthz", hh.HandleLive).Name("health.legacy").Action("dirio:Health")
-		r.Func().GET("/.dirio/health", hh.HandleHealth).Name("health").Action("dirio:Health")
-		r.Func().GET("/.dirio/health/ready", hh.HandleReady).Name("health.ready").Action("dirio:HealthReady")
-		r.Func().GET("/.dirio/health/live", hh.HandleLive).Name("health.live").Action("dirio:HealthLive")
-		// MinIO-compatible health endpoints (mc uses these, no auth required).
-		r.Func().GET("/minio/health/live", hh.HandleLive).Name("minio.health.live").Action("dirio:HealthLive")
-		r.Func().GET("/minio/health/ready", hh.HandleReady).Name("minio.health.ready").Action("dirio:HealthReady")
-	}
+	health.RegisterRoutes(r, healthMeta, healthFS)
 
 	// pprof profiling endpoints — only registered when --debug is set.
 	// Unauthenticated: debug mode is not intended for production use.
@@ -85,46 +70,15 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 	}
 
 	// MinIO Admin API routes (authenticated)
-	var adminDeps *adminRouteDeps
+	var iamHandler *miniohttp.Handler
 	var adminMW []func(http.Handler) http.Handler
 	if deps != nil {
-		userHandler := deps.APIHandler.IAMHandler.UserResourceHandler()
-		policyHandler := deps.APIHandler.IAMHandler.PolicyResourceHandler()
-		groupHandler := deps.APIHandler.IAMHandler.GroupResourceHandler()
-		saHandler := deps.APIHandler.IAMHandler.ServiceAccountResourceHandler()
-
-		adminDeps = &adminRouteDeps{
-			listUsers:             userHandler.ListHandler,
-			addUser:               userHandler.AddHandler,
-			removeUser:            userHandler.RemoveHandler,
-			getUserInfo:           userHandler.InfoHandler,
-			setUserStatus:         userHandler.StatusHandler,
-			listServiceAccounts:   saHandler.ListHandler,
-			addServiceAccount:     saHandler.AddHandler,
-			deleteServiceAccount:  saHandler.DeleteHandler,
-			getServiceAccountInfo: saHandler.InfoHandler,
-			updateServiceAccount:  saHandler.UpdateHandler,
-			updateGroupMembers:    groupHandler.UpdateMembersHandler,
-			getGroupInfo:          groupHandler.InfoHandler,
-			listGroups:            groupHandler.ListHandler,
-			setGroupStatus:        groupHandler.StatusHandler,
-			listCannedPolicies:    policyHandler.ListHandler,
-			addCannedPolicy:       policyHandler.AddHandler,
-			deleteCannedPolicy:    policyHandler.RemoveHandler,
-			getCannedPolicyInfo:   policyHandler.InfoHandler,
-			setPolicy:             policyHandler.SetHandler,
-			attachPolicy:          policyHandler.SetHandler,
-			detachPolicy:          policyHandler.DetachHandler,
-			listPolicyEntities:    policyHandler.ListEntitiesHandler,
-			Info:                  RouteNotImplemented,
-			Health:                RouteNotImplemented,
-		}
-
+		iamHandler = deps.APIHandler.IAMHandler
 		adminMW = []func(http.Handler) http.Handler{deps.Auth.AuthMiddleware}
 	}
 	r.MiddlewareGroup(func(r *teapot.Router) {
 		r.NamedGroup("/minio/admin/v3", "admin", func(r *teapot.Router) {
-			setupAdminRoutes(r, adminDeps)
+			miniohttp.RegisterAdminRouter(r, iamHandler)
 		})
 	}, adminMW...)
 
@@ -144,22 +98,22 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 			getBucketPolicy:         bucket(deps.APIHandler.S3Handler.GetBucketPolicy),
 			putBucketPolicy:         bucket(deps.APIHandler.S3Handler.PutBucketPolicy),
 			delBucketPolicy:         bucket(deps.APIHandler.S3Handler.DeleteBucketPolicy),
-			getBucketVersioning:     RouteNotImplemented,
-			putBucketVersioning:     RouteNotImplemented,
-			getBucketACL:            RouteNotImplemented,
-			putBucketACL:            RouteNotImplemented,
-			getBucketCors:           RouteNotImplemented,
-			putBucketCors:           RouteNotImplemented,
-			listObjectVersions:      RouteNotImplemented,
-			listMultipartUploads:    RouteNotImplemented,
+			getBucketVersioning:     httpresponse.NotImplemented,
+			putBucketVersioning:     httpresponse.NotImplemented,
+			getBucketACL:            httpresponse.NotImplemented,
+			putBucketACL:            httpresponse.NotImplemented,
+			getBucketCors:           httpresponse.NotImplemented,
+			putBucketCors:           httpresponse.NotImplemented,
+			listObjectVersions:      httpresponse.NotImplemented,
+			listMultipartUploads:    httpresponse.NotImplemented,
 			deleteObjects:           bucket(deps.APIHandler.S3Handler.DeleteObjects),
 			headObject:              object(deps.APIHandler.S3Handler.HeadObject),
 			putObject:               object(deps.APIHandler.S3Handler.PutObject),
 			copyObject:              object(deps.APIHandler.S3Handler.CopyObject),
 			getObject:               object(deps.APIHandler.S3Handler.GetObject),
 			deleteObject:            object(deps.APIHandler.S3Handler.DeleteObject),
-			getObjectACL:            RouteNotImplemented,
-			putObjectACL:            RouteNotImplemented,
+			getObjectACL:            httpresponse.NotImplemented,
+			putObjectACL:            httpresponse.NotImplemented,
 			getObjectTagging:        object(deps.APIHandler.S3Handler.GetObjectTagging),
 			putObjectTagging:        object(deps.APIHandler.S3Handler.PutObjectTagging),
 			multipartCreate:         object(deps.APIHandler.S3Handler.CreateMultipartUpload),
@@ -232,85 +186,6 @@ func object(fn func(http.ResponseWriter, *http.Request, string, string)) http.Ha
 	return validated.ServeHTTP
 }
 
-type adminRouteDeps struct {
-	// User Management
-	listUsers     http.HandlerFunc
-	addUser       http.HandlerFunc
-	removeUser    http.HandlerFunc
-	getUserInfo   http.HandlerFunc
-	setUserStatus http.HandlerFunc
-	// Service Account Management (not yet implemented)
-	listServiceAccounts   http.HandlerFunc
-	addServiceAccount     http.HandlerFunc
-	deleteServiceAccount  http.HandlerFunc
-	getServiceAccountInfo http.HandlerFunc
-	updateServiceAccount  http.HandlerFunc
-	// Group Management (not yet implemented)
-	updateGroupMembers http.HandlerFunc
-	getGroupInfo       http.HandlerFunc
-	listGroups         http.HandlerFunc
-	setGroupStatus     http.HandlerFunc
-	// Policy Management
-	listCannedPolicies  http.HandlerFunc
-	addCannedPolicy     http.HandlerFunc
-	deleteCannedPolicy  http.HandlerFunc
-	getCannedPolicyInfo http.HandlerFunc
-	// Policy Attachments
-	setPolicy          http.HandlerFunc
-	attachPolicy       http.HandlerFunc
-	detachPolicy       http.HandlerFunc
-	listPolicyEntities http.HandlerFunc
-	// Server Info & Health (not yet implemented)
-	Info   http.HandlerFunc
-	Health http.HandlerFunc
-}
-
-// setupAdminRoutes registers MinIO Admin API routes within an already-prefixed group.
-func setupAdminRoutes(r *teapot.Router, deps *adminRouteDeps) {
-	// TODO: eventually this could be cleaned up maybe
-	if deps == nil {
-		deps = &adminRouteDeps{}
-	}
-
-	// User Management
-	r.GET("/list-users", deps.listUsers).Name("users.list")
-	r.PUT("/add-user", deps.addUser).Name("users.add")
-	r.DELETE("/remove-user", deps.removeUser).Name("users.remove")
-	r.GET("/user-info", deps.getUserInfo).Name("users.info")
-	r.PUT("/set-user-status", deps.setUserStatus).Name("users.setstatus")
-
-	// Policy Management
-	r.GET("/list-canned-policies", deps.listCannedPolicies).Name("policies.list")
-	r.POST("/add-canned-policy", deps.addCannedPolicy).Name("policies.add")
-	r.PUT("/add-canned-policy", deps.addCannedPolicy).Name("policies.add")
-	r.POST("/remove-canned-policy", deps.deleteCannedPolicy).Name("policies.remove")
-	r.GET("/info-canned-policy", deps.getCannedPolicyInfo).Name("policies.info")
-
-	// Service Account Management (not yet implemented)
-	r.GET("/list-service-accounts", deps.listServiceAccounts).Name("serviceaccounts.list")
-	r.POST("/add-service-account", deps.addServiceAccount).Name("serviceaccounts.add")
-	r.POST("/delete-service-account", deps.deleteServiceAccount).Name("serviceaccounts.delete")
-	r.GET("/info-service-account", deps.getServiceAccountInfo).Name("serviceaccounts.info")
-	r.POST("/update-service-account", deps.updateServiceAccount).Name("serviceaccounts.update")
-
-	// Group Management (not yet implemented)
-	r.POST("/update-group-members", deps.updateGroupMembers).Name("groups.updatemembers")
-	r.GET("/group", deps.getGroupInfo).Name("groups.info")
-	r.GET("/groups", deps.listGroups).Name("groups.list")
-	r.POST("/set-group-status", deps.setGroupStatus).Name("groups.setstatus")
-
-	// Policy Attachments
-	r.POST("/set-policy", deps.setPolicy).Name("policies.set") // deprecated: mc admin policy set
-	r.PUT("/set-user-or-group-policy", deps.setPolicy).Name("policies.set-user-or-group")
-	r.POST("/idp/builtin/policy/attach", deps.attachPolicy).Name("policies.attach")
-	r.POST("/idp/builtin/policy/detach", deps.detachPolicy).Name("policies.detach")
-	r.GET("/policy-entities", deps.listPolicyEntities).Name("policies.entities")
-
-	// Server Info & Health (not yet implemented)
-	r.GET("/info", deps.Info).Name("server.info")
-	r.GET("/health", deps.Health).Name("server.health")
-}
-
 type s3RouteDeps struct {
 	// Service
 	listBuckets http.HandlerFunc
@@ -359,7 +234,6 @@ type s3RouteDeps struct {
 // they become fallbacks when query-dispatched routes are added to the same
 // method+pattern via the router's auto-promotion logic.
 func setupS3Routes(r *teapot.Router, deps *s3RouteDeps) {
-	// TODO: eventually this could be cleaned up maybe
 	if deps == nil {
 		deps = &s3RouteDeps{}
 	}
@@ -402,15 +276,15 @@ func setupS3Routes(r *teapot.Router, deps *s3RouteDeps) {
 	// Bucket lifecycle configuration
 	// Note: Legacy GetBucketLifecycle/PutBucketLifecycle share the same path and query param
 	//       as the modern *Configuration variants; one route per method covers both.
-	r.Func().QueryGET("/{bucket}", RouteNotImplemented).Query("lifecycle").Name("bucket.get-lifecycle-configuration").Action("s3:GetBucketLifecycleConfiguration")
-	r.Func().QueryPUT("/{bucket}", RouteNotImplemented).Query("lifecycle").Name("bucket.put-lifecycle-configuration").Action("s3:PutBucketLifecycleConfiguration")
+	r.Func().QueryGET("/{bucket}", httpresponse.NotImplemented).Query("lifecycle").Name("bucket.get-lifecycle-configuration").Action("s3:GetBucketLifecycleConfiguration")
+	r.Func().QueryPUT("/{bucket}", httpresponse.NotImplemented).Query("lifecycle").Name("bucket.put-lifecycle-configuration").Action("s3:PutBucketLifecycleConfiguration")
 
 	// Public access block
-	r.Func().QueryGET("/{bucket}", RouteNotImplemented).Query("publicAccessBlock").Name("bucket.get-public-access-block").Action("s3:GetPublicAccessBlock")
-	r.Func().QueryPUT("/{bucket}", RouteNotImplemented).Query("publicAccessBlock").Name("bucket.put-public-access-block").Action("s3:PutPublicAccessBlock")
+	r.Func().QueryGET("/{bucket}", httpresponse.NotImplemented).Query("publicAccessBlock").Name("bucket.get-public-access-block").Action("s3:GetPublicAccessBlock")
+	r.Func().QueryPUT("/{bucket}", httpresponse.NotImplemented).Query("publicAccessBlock").Name("bucket.put-public-access-block").Action("s3:PutPublicAccessBlock")
 
 	// Object lock configuration
-	r.Func().QueryPUT("/{bucket}", RouteNotImplemented).Query("object-lock").Name("bucket.put-object-lock-configuration").Action("s3:PutObjectLockConfiguration")
+	r.Func().QueryPUT("/{bucket}", httpresponse.NotImplemented).Query("object-lock").Name("bucket.put-object-lock-configuration").Action("s3:PutObjectLockConfiguration")
 
 	// List object versions (for versioned buckets)
 	r.QueryGET("/{bucket}", deps.listObjectVersions).Query("versions").Name("buckets.versions").Action("s3:ListObjectVersions")
@@ -431,7 +305,7 @@ func setupS3Routes(r *teapot.Router, deps *s3RouteDeps) {
 	// presence distinguishes the copy variant.  The remaining QueryPUT routes
 	// below (acl, tagging, …) are added to this same dispatcher automatically.
 	// PUT /{bucket}/{key} dispatcher
-	// TODO(Phase 3.2 #4): Implement CopyObject handler (currently RouteNotImplemented)
+	// TODO(Phase 3.2 #4): Implement CopyObject handler (currently httpresponse.NotImplemented)
 	//   - Parse X-Amz-Copy-Source header (bucket/key format)
 	//   - Policy engine already supports dual permission checks (source read + dest write)
 	//   - Copy object metadata, content-type, and custom metadata
@@ -463,16 +337,4 @@ func setupS3Routes(r *teapot.Router, deps *s3RouteDeps) {
 	r.QueryPOST("/{bucket}/{key:.*}", deps.multipartComplete).Query("uploadId").Name("multipart.complete").Action("s3:CompleteMultipartUpload")
 	r.QueryDELETE("/{bucket}/{key:.*}", deps.multipartAbort).Query("uploadId").Name("multipart.abort").Action("s3:AbortMultipartUpload")
 	r.QueryGET("/{bucket}/{key:.*}", deps.multipartListParts).Query("uploadId").Name("multipart.list-parts").Action("s3:ListParts")
-}
-
-// RouteNotImplemented is a placeholder handler for routes that are registered
-// but not yet implemented (Admin API, S3 API, etc.).
-func RouteNotImplemented(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set(headers.ContentType, "application/json")
-	w.WriteHeader(http.StatusNotImplemented)
-	_, err := w.Write([]byte(`{"status":"error","error":"This operation is not yet implemented"}`))
-	if err != nil {
-		logging.Component("RouteNotImplemented handler").With("err", err).Warn("failed to write error response")
-		return
-	}
 }
