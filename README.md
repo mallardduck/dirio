@@ -49,22 +49,11 @@ aws --endpoint-url http://localhost:9000 s3 cp file.txt s3://test/
 
 See [QUICKSTART.md](QUICKSTART.md) for detailed setup.
 
-## Status
-
-**Current**: Phase 1 scaffold complete. Core operations implemented but untested.
-
-**Works**: Project structure, storage backend, MinIO import logic  
-**TODO**: Testing, auth (Signature V4), advanced features
-
-See [TODO.md](TODO.md) for the full roadmap.
-
-## Architecture
-
 ## Directory Layout
 
 ```
 /data/
-├── .metadata/              # DirIO metadata (JSON)
+├── .metadata/             # DirIO metadata (JSON)
 │   ├── users.json         # Credentials
 │   ├── policies.json      # Policy definitions  
 │   ├── buckets/           # Per-bucket config
@@ -79,10 +68,12 @@ Objects in `buckets/` are regular files. Nothing special.
 
 ## Supported Operations
 
-**Objects**: GET, PUT, HEAD, DELETE, LIST, COPY, Multipart Upload
-**Buckets**: CREATE, DELETE, HEAD, LIST, GetLocation, Policy (GET/PUT/DELETE)
-**Metadata**: Custom metadata, Object tagging
-**Advanced**: Presigned URLs, Range requests
+| Category | Operations |
+| -------- | ---------- |
+| Objects  | GET, PUT, HEAD, DELETE, LIST, COPY, Multipart Upload |
+| Buckets  | CREATE, DELETE, HEAD, LIST, GetLocation, Policy (GET/PUT/DELETE) |
+| Metadata | Custom metadata, Object tagging |
+| Advanced | Presigned URLs, Range requests |
 
 ## IAM & Authorization
 
@@ -115,8 +106,6 @@ See [docs/IAM-ARCHITECTURE.md](docs/IAM-ARCHITECTURE.md) for complete details.
 
 ## MinIO Migration
 
-## MinIO Migration
-
 Point DirIO at your existing MinIO data directory. It will:
 
 1. Find `.minio.sys/`
@@ -133,39 +122,9 @@ You can switch back to MinIO anytime. The `buckets/` directory is shared.
 - **Backup targets**: Use S3-compatible tools with local filesystem storage
 - **Development**: Test S3 integrations locally with real files
 
-## Development
+## Contributing & Development
 
-This project uses [go-task](https://taskfile.dev) instead of Make.
-
-```bash
-# Install go-task (once)
-go install github.com/go-task/task/v3/cmd/task@latest
-
-# Clone and build
-git clone https://github.com/mallardduck/dirio.git
-cd dirio
-task build
-
-# Run tests
-task test
-
-# Format code
-task fmt
-
-# List all available tasks
-task --list
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-## Project Structure
-
-- `cmd/server/` - Server binary entry point
-- `internal/api/` - S3 API handlers  
-- `internal/storage/` - Filesystem operations
-- `internal/metadata/` - Metadata + MinIO import
-- `internal/auth/` - Authentication (WIP)
-- `pkg/s3types/` - S3 types and errors
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [DEVELOPMENT.md](DEVELOPMENT.md) for project structure, build setup, and architecture notes.
 
 ## License
 

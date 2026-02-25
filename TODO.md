@@ -1,98 +1,8 @@
 # DirIO Development Roadmap
 
-Current status: **Phase 4.5 IN PROGRESS** — Performance optimizations shipped; stability & testing tasks remain
+Current status: **Phase 4.5 complete** — Phases 1–4.5 done; next up is Phase 5 (production readiness) and Phase 8 (extended console UI).
 
-## Recent Updates
-
-**February 23, 2026 - Phase 4.5 Performance Optimizations Complete:**
-- ✅ pprof endpoints added (gated on `--debug` flag) — `run-profile` Taskfile task
-- ✅ `scripts/seed-large-bucket.sh` — seeds 10k objects across 4 prefix patterns for profiling
-- ✅ `tests/perf/` — opt-in profiling tests (`//go:build perf`, `task test-perf`) using testcontainers for seeding; three tests: `TestPerfMetadataCaching`, `TestPerfListObjectsLargeBucket`, `TestPerfMemory`
-- ✅ **Metadata cache** — `github.com/phuslu/lru` sharded LRU (100k entries, ~20 MB cap) added to `metadata.Manager`; exact invalidation on all write/delete paths. Cache hit eliminates per-object file open + JSON decode.
-- ✅ **Early walk termination** — `listInternal` stops walking after `maxKeys+1` entries when `delimiter=""`. `full-scan-100` is now ~3× faster than `full-scan-1000` (proves early exit). Both dropped from ~450ms → ~1.5–4.5ms per call (~100–300× improvement).
-- ✅ **Memory leak check** — goroutine diff: net zero; live heap delta: ~2.5 KB after 200 rounds. No leaks detected.
-- ⏭️ **Sustained load test / memory profiling deferred** — existing perf data shows no active leaks. Multipart upload memory behaviour under sustained concurrent load is the remaining open question; deferred to a later phase alongside load testing infrastructure (wrk/hey/k6).
-
-**February 22, 2026 - Phase 4.4 Complete:**
-- ✅ `tests/console/` — 27 console stopgap tests: session auth (login/logout/protected routes), full S3 bucket policy editor, bucket ownership management, request simulator (single-action + effective permissions)
-
-**February 22, 2026 - Phase 4.4 Testing Complete (except console):**
-- ✅ `tests/integration/serviceaccount_policy_test.go` — SA delegation (inherit/override mode) and expiration integration tests
-- ✅ `tests/clients/scripts/mc_admin.sh` + `TestMCAdmin` — mc admin CLI testcontainer tests (user add/list/info, policy CRUD, group add, user disable/enable/remove)
-- ✅ `internal/persistence/metadata/import.go` — MinIO import now rebuilds bolt indexes after import so users are immediately visible
-- ✅ `tests/admin/helpers_test.go` — Added `Stop()` method and cancelable context to `NewTestServerWithDataDir` for clean BoltDB lock release
-
-**February 21, 2026 - SA Policy Inheritance (Eval-Time Resolution):**
-- ✅ `pkg/iam/serviceaccount.go` — Added `PolicyMode` type (`"inherit"` / `"override"`); replaced `ParentUser *string` with `ParentUserUUID *uuid.UUID` (stable across key rotation)
-- ✅ `internal/context/context.go` — Added `ServiceAccountInfo` struct + `WithServiceAccountInfo`/`GetServiceAccountInfo` context helpers
-- ✅ `internal/http/auth/auth.go` — Added `IsServiceAccount()` method for SA detection
-- ✅ `internal/http/auth/middleware.go` — Stores `ServiceAccountInfo` in context post-auth for non-admin users
-- ✅ `internal/persistence/metadata/metadata.go` — Added UUID→username in-memory index; `GetUserByUUID` is now O(1)
-- ✅ `internal/policy/resolver.go` (new) — `PolicyResolver` interface + `MetadataResolver` implementation
-- ✅ `internal/policy/types.go` — Added `IsServiceAccount`, `ParentUserUUID`, `PolicyMode` to `Principal`
-- ✅ `internal/policy/middleware.go` — Populates SA fields on `Principal` from context
-- ✅ `internal/policy/engine.go` — Added `resolver` field; `New()` takes `PolicyResolver`; step 3 (IAM eval) implemented with `resolveEffectivePolicyNames()` helper
-- ✅ `internal/http/server/server.go` — Wires `MetadataResolver` into `policy.New()`
-- ✅ `internal/service/serviceaccount/serviceaccount.go` — `Create()` resolves parent access key → UUID before persisting
-- ✅ `internal/service/serviceaccount/types.go` — Added `PolicyMode` to `CreateServiceAccountRequest`
-- ✅ `internal/http/api/iam/service_account.go` — `AddServiceAccount` passes `PolicyMode`; `InfoServiceAccount` returns `parentUserUUID` + `policyMode`
-
-**February 21, 2026 - Phase 4.3 Complete:**
-- ✅ `consoleapi/` — full interface seam: Users, Policies, Buckets, Ownership, Policy Observability + all request/response types
-- ✅ `console/auth/` — `AdminAuth` interface + HMAC-SHA256 signed cookie sessions (8-hour TTL)
-- ✅ `console/handlers/` — Login/Logout, Dashboard, Users, Policies, Buckets list, Bucket detail, Ownership transfer, Policy editor, Simulator; HTMX partial-swap support
-- ✅ `console/ui/` — templ components: layout, all list pages, bucket detail (policy + ownership), policy simulator
-- ✅ `console/static/` — Tailwind v4 CSS, htmx.min.js, DirIO logo; embedded via Go `embed`
-- ✅ `internal/console/adapter.go` — all methods wired: Users (5), Policies (6), Buckets (GetBucket/List/GetPolicy/SetPolicy), Ownership (GetBucketOwner/Transfer/GetObjectOwner), Observability (GetEffectivePermissions/SimulateRequest)
-- ✅ `internal/persistence/metadata` — added `SetBucketOwner` for ownership transfer
-- ✅ `internal/service/factory` — added `PolicyEngine()` accessor for simulator evaluation
-- ✅ `cmd/server/cmd/wire_console.go` + `wire_console_stub.go` — build tag wiring (`-tags noconsole` strips console entirely)
-- ✅ `--console` flag (default: true) and `--console-address` flag for optional separate port
-- ✅ Protected routes behind session middleware; public routes: `/login`, `/static/`
-
-**February 20, 2026 - Phase 4.2 Complete:**
-- ✅ **Admin Integration Test Suite** (`tests/admin/`, 37 tests) — New test area separate from S3 integration tests
-  - User CRUD, policy CRUD, attach/detach, policy-entities — all endpoints covered
-  - madmin encryption protocol tested end-to-end (EncryptData/DecryptData)
-- ✅ **MinIO IAM Import Tests** (`tests/admin/minio_import_test.go`) — End-to-end import verification
-  - Users, policies, mappings, disabled status, idempotent restart, post-import management
-- 🐛 **Bug Fix:** MinIO "enabled"/"disabled" status not converted to DirIO "on"/"off" on import
-- 🐛 **Bug Fix:** `AttachPolicy` silently accepted non-existent policy names — now returns 404
-- ✅ **UnsetPolicy HTTP endpoint** confirmed complete (`/idp/builtin/policy/detach`)
-
-**February 16, 2026 (19:46) - Phase 3.3 Status Update:**
-- ✅ **Client Compatibility Tests Confirmed:**
-  - AWS CLI: 21/23 passed (91%) - All core features working
-  - boto3: 22/23 passed (96%) - Excellent compatibility maintained
-  - MinIO mc: 20/23 passed (87%) - Core operations working, 1 known issue persists
-  - ⚠️ Known Issue: MinIO mc PreSignedURL_Upload still failing with content integrity mismatch
-  - 📊 Overall Status: 91% S3 compatibility across major clients
-- ✅ **Result Filtering Implementation Complete:**
-  - ListBuckets filtering by s3:GetBucketLocation permission
-  - ListObjects filtering by s3:GetObject permission
-  - Admin fast path optimization
-  - UUID-based ownership tracking
-  - Client tests implemented (25 tests, require alice/bob IAM users to activate)
-
-**February 16, 2026 - Policy Condition Evaluation Complete:**
-- ✅ **Policy Condition Evaluation:** Full implementation of all 6 operator categories (String, Numeric, Date, IP, Boolean, Null)
-  - ✅ IpAddress/NotIpAddress conditions with CIDR support
-  - ✅ StringEquals/StringLike with glob pattern matching
-  - ✅ DateLessThan/DateGreaterThan/DateEquals with ISO 8601 parsing
-  - ✅ NumericLessThan/NumericGreaterThan/NumericEquals with type coercion
-  - ✅ Bool and Null operators
-  - ✅ AWS IAM evaluation semantics (AND across operators, OR across values)
-  - ✅ Integration with policy matcher (fail-closed security)
-  - ✅ Comprehensive test coverage (26 tests across conditions package)
-- ✅ **User Lookup Optimization:** Added GetUserByUUID method to metadata manager for owner display name resolution
-- ✅ **Bug Fixes:** Owner DisplayName now shows username instead of UUID
-
-**February 16, 2026 - Phase 3.2 Complete:**
-- ✅ **Core S3 Features:** Multipart upload, pre-signed URLs, CopyObject, range requests, object tagging
-- ✅ **Test Framework:** Structured JSON output with content integrity validation (MD5 hashes)
-- ✅ **Client Compatibility:** AWS CLI (91%), boto3 (96%), MinIO mc (87%) - 23 canonical operations tested
-- ✅ **Bug Fixes:** ListObjectsV2 pagination & delimiter, chunked encoding, MinIO mc DELETE operations
-- 📁 **Known Issues:** See [bugs/](bugs/) for tracking (1 minor issue: MinIO mc PreSignedURL_Upload)
+> 📋 Completed work log: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## Phase 1: MVP Core ✅
 
@@ -175,8 +85,6 @@ Current status: **Phase 4.5 IN PROGRESS** — Performance optimizations shipped;
    - Status: ❌ FAILING in latest test run
    - Content integrity hash varies between runs, indicating data corruption during POST Policy upload
    - See [CLIENTS.md](CLIENTS.md) for details
-2. Object metadata caching strategy → Phase 3.5
-3. ETag calculation for multipart uploads → Phase 3.5
 
 ### Design Decisions (Deferred)
 - Virtual-hosted-style buckets (DNS/mDNS wildcard) → Phase N+
@@ -204,8 +112,6 @@ Current status: **Phase 4.5 IN PROGRESS** — Performance optimizations shipped;
 - ✅ **Anonymous requests** - Unauthenticated requests supported for public buckets
 - ✅ **Authorization middleware** - All S3 routes evaluated against policies
 - ✅ **Admin bypass** - Root credentials skip policy checks
-
-**Connection to Phase 5:** Policy engine will extend to IAM user/group policies.
 
 ### Phase 3.2 Features ✅ COMPLETE
 
@@ -309,16 +215,16 @@ Current status: **Phase 4.5 IN PROGRESS** — Performance optimizations shipped;
 
 ## Phase 4: Hybrid IAM & User Management
 
-**Goal:** Implement hybrid IAM combining S3-native authorization (COMPLETE) with MinIO-compatible admin API (IN PROGRESS) for multi-user scenarios.
+**Goal:** Implement hybrid IAM combining S3-native authorization (COMPLETE) with MinIO-compatible admin API (COMPLETE) for multi-user scenarios.
 
 **Architecture:** Hybrid approach combining best of S3 and MinIO (see [docs/IAM-ARCHITECTURE.md](docs/IAM-ARCHITECTURE.md))
 - **S3 API layer:** Bucket policies with S3 actions/resources, AWS-standard conditions/variables, UUID-based ownership ✅ COMPLETE
-- **MinIO Admin API layer:** User/policy CRUD operations via `mc admin` commands ⏳ IN PROGRESS
-- **Shared backend:** Unified IAM metadata in `.dirio/iam/` supporting both APIs ⏳ IN PROGRESS
+- **MinIO Admin API layer:** User/policy CRUD operations via `mc admin` commands ✅ COMPLETE
+- **Shared backend:** Unified IAM metadata in `.dirio/iam/` supporting both APIs ✅ COMPLETE
 
 **Target Compatibility:**
 - S3 API (bucket policies via AWS CLI, boto3, MinIO mc) - data plane authorization ✅
-- MinIO Admin API (`mc admin` for user/policy management) - control plane ⏳
+- MinIO Admin API (`mc admin` for user/policy management) - control plane ✅
 - AWS-like authorization (ownership, conditions, variables, result filtering) ✅
 - AWS IAM API (`aws iam` commands) ❌ Not supported by design
 - Terraform AWS provider ❌ Not supported (requires AWS IAM API)
@@ -501,64 +407,114 @@ Current status: **Phase 4.5 IN PROGRESS** — Performance optimizations shipped;
 - [x] Error handling audit across all API handlers
 - [ ] Load testing with large files and many small files
 
-## Phase 5: Production Readiness & Operations
+## Phase 5: Observability & Health
 
-### Monitoring & Health (Elevated - needed for production)
-- [ ] Health check endpoint
-- [ ] Metrics endpoint (Prometheus format)
-- [ ] Readiness vs liveness probes
+**Goal:** Give DirIO the instrumentation it needs to run reliably in production — visibility into what's happening, proof that it's healthy, and a lightweight audit trail out of the box.
 
-### Operational Tools
-- [ ] Graceful shutdown improvements (if needed)
-- [ ] Admin commands via CLI (minimal set, needs audit consideration)
+### Health Checks
+- [ ] **Health endpoint** (`GET /health`) — returns 200 + JSON status; used by load balancers, Docker health checks, and basic monitoring
+- [ ] **Readiness probe** (`GET /health/ready`) — checks BoltDB is open and storage directory is accessible; returns 503 if not ready
+- [ ] **Liveness probe** (`GET /health/live`) — confirms the process is alive and not deadlocked; always 200 if reachable
 
-### Deferred Operational Features
-- [ ] Log rotation for application logs (OS/container can handle)
-- [ ] HTTP Audit Logging (complex, lower value - see Phase 6)
-- [ ] Sustained load test (multipart upload memory under concurrent load) — deferred, needs wrk/hey/k6 infra
-- [ ] Test migration from actual MinIO instance
-- [ ] Test behind reverse proxy (nginx) with canonical domain
+### Metrics
+- [ ] **Prometheus metrics endpoint** (`GET /metrics`) — request count by method/status, error rate, latency histograms (p50/p95/p99), metadata cache hit ratio, active connections, BoltDB size
 
-### Configuration Management TODOs
-- [ ] **Add explicit config update command** - Allow updating data config values explicitly
-  - `dirio config set region us-west-2`
-  - `dirio config set compression.enabled true`
-  - Currently: must manually edit `.dirio/config.json` or re-import
-- [ ] **API rate limits** - Add to DataConfig for per-data-directory rate limiting
-- [ ] **Storage path configurations** - Consider if paths should be configurable per data directory
-- [ ] **Validation strategy** - Experiment with different approaches for invalid/missing configs (see inline TODO in `internal/dataconfig/dataconfig.go`)
-  - Option A: Fail fast (current)
-  - Option B: Merge with defaults
-  - Option C: Warn and use defaults
+### Structured Access Log
+- [ ] **Structured access log to stdout** — one JSON line per S3/admin/console request: timestamp, user (or `"anonymous"`), service (s3/admin/console), bucket, object, action, allow/deny decision, source IP, request ID, latency ms
+  - Always on, zero body capture, minimal allocations — suitable for direct ingestion by Loki, CloudWatch, Datadog, etc.
+  - Configurable format: `json` (default) or `logfmt` via `--log-format` flag
 
+## Phase 6: Full HTTP Audit Logging
 
-## Phase 6: Client CLI (Low Priority)
+**Goal:** Production-grade audit trail for compliance and debugging. Builds on the Phase 5 structured access log — this phase adds body capture, configurable verbosity levels, non-blocking I/O, and a UI to browse logs.
 
-- [ ] List buckets command
-- [ ] Upload/download commands
-- [ ] Sync command
-- [ ] Configuration management
-- [ ] IAM management commands (create-user, attach-policy, etc.)
+**Distinction from Phase 5 access log:** Phase 5 logs one line per request (who/what/allow-deny). This phase adds full request/response bodies, streaming to external destinations, and tooling to query the log.
 
-## Phase 7: Advanced Features & Audit Logging
+### Middleware
+- [ ] Non-blocking audit log writer with bounded queue (no request latency impact)
+- [ ] Log levels: `0`=off, `1`=access only (Phase 5 baseline), `2`=headers, `3`=headers + request body, `4`=headers + both bodies
+- [ ] Minimize allocations in hot path — avoid capturing body unless level ≥ 3
+- [ ] Configurable output destination: file, stdout, or HTTP endpoint (e.g. vector, fluentd)
+- [ ] Log rotation support (size-based and time-based)
 
-### HTTP Audit Logging
-- [ ] Design audit log middleware (streaming, queue-based)
-- [ ] Implement log levels (0=off, 1=headers, 2=headers+req body, 3=headers+both bodies)
-- [ ] Non-blocking audit log writer with queue
-- [ ] Minimize memory allocation in middleware
-- [ ] Audit log configuration (level, output destination)
-- [ ] Audit log rotation support
-- [ ] Document distinction: HTTP audit log vs full app audit log
+### Configuration
+- [ ] `audit.level` config key + `--audit-level` flag
+- [ ] `audit.output` config key (stdout / file path / HTTP endpoint)
+- [ ] `audit.max_body_bytes` — cap body capture size (default 4KB)
 
-## Phase 8: Web UI — Extended Features
+### Observability
+- [ ] Document the two-tier log model: Phase 5 access log (always on, lightweight) vs Phase 6 audit log (configurable, heavy)
 
-**Foundation built in Phase 4.3. This phase covers features beyond IAM stopgaps.**
+## Phase 7: Deployment & Operations
 
-- [ ] File browser (browse bucket contents, preview objects)
-- [ ] Upload interface (drag-and-drop, progress)
-- [ ] Audit log viewer (when Phase 7 audit logging is implemented)
-- [ ] (Note: UI actions will need audit logging separate from HTTP middleware)
+**Goal:** Validate and document DirIO in real deployment scenarios. Establish the dual-port mode as the recommended production topology, harden operational tooling, and confirm the MinIO migration path end-to-end.
+
+### Deployment Modes
+
+Both single-port and dual-port modes are supported and maintained. **Dual-port is the recommended production mode.**
+
+**Single-port mode** (current default): S3, admin API, and console all share one port, distinguished by path prefix. Simple to set up; useful for embedded/dev deployments. The trade-off is path-based muxing overhead and more complex routing rules.
+
+**Dual-port mode** (recommended for production): S3 data plane on a dedicated port (e.g. `:9000`), admin + console control plane on a separate port (e.g. `:9001`). Each service gets its own router with no path-prefix logic. Enables clean DNS separation (e.g. `s3.myserver.local` → `:9000`, `admin.myserver.local` → `:9001` via nginx or mDNS) and simplifies firewall rules — S3 traffic never touches the admin port.
+
+- [ ] **Document deployment modes** — write `docs/DEPLOYMENT.md` covering single-port vs dual-port, when to use each, example configs for both, and mDNS/DNS routing for dual-port
+- [ ] **nginx reference configs** — document `proxy_pass` examples for both modes: S3 path-routed on single port, and split-port with separate `server {}` blocks; include TLS termination, Host header preservation, and pre-signed URL considerations
+- [ ] **Docker Compose example** — single service, dual-port exposed, bind-mounted data directory; suitable as a quickstart template
+
+### Operational Validation
+- [ ] **End-to-end MinIO migration test** — export data from a real MinIO instance, import into DirIO, verify all objects, metadata, and IAM (users/policies/mappings) are intact
+- [ ] **Reverse proxy integration test** — run DirIO behind nginx in dual-port mode; verify `mc`, AWS CLI, and boto3 all work correctly including pre-signed URLs and chunked uploads
+- [ ] **Sustained load test** — multipart uploads under concurrent load using wrk/hey/k6; confirm no heap growth over time (builds on Phase 4.5 memory profiling baseline)
+
+### Configuration Tooling
+- [ ] **`dirio config set` subcommand** — update data config values without manually editing `.dirio/config.json` (e.g. `dirio config set region us-west-2`, `dirio config set compression.enabled true`); print current config via `dirio config show`
+
+## Phase 8: Web Console — Extended Features
+
+**Foundation built in Phase 4.3 (auth, IAM views, policy editor, simulator, ownership management). This phase covers the S3 data plane UI and IAM management forms — making DirIO fully operable without a terminal for day-to-day tasks.**
+
+### S3 Data Browser
+- [ ] **Bucket browser** — list objects with prefix navigation (folder-style), sortable by name/size/date
+- [ ] **Object detail** — view metadata, tags, owner, ETag; download button; copy pre-signed URL
+- [ ] **Upload interface** — drag-and-drop file upload with progress bar; multipart for large files; uses POST policy or pre-signed PUT
+- [ ] **Object actions** — delete object, copy object (within/across buckets), set tags
+
+### IAM Management Forms
+- [ ] **User CRUD forms** — create/edit/delete users directly in console (currently requires `mc admin`)
+- [ ] **Policy CRUD forms** — create/edit named policies with JSON editor + validation (currently requires `mc admin` or the raw policy editor)
+- [ ] **Service account management** — create/revoke service accounts, view expiry, manage policy mode
+- [ ] **Group management UI** — create groups, assign members, attach policies
+
+### Audit Log Viewer (depends on Phase 6)
+- [ ] Filterable log stream in console — filter by user, bucket, action, allow/deny, time range
+- [ ] Export filtered log to CSV/JSON
+
+## Phase 9: DirIO Client
+
+**Goal:** A first-party CLI client for DirIO that covers the operations no existing tool handles well — DirIO-specific features, scripting-friendly output, and a single binary that doesn't require `mc` or AWS CLI to be installed.
+
+**Design principle:** Don't replicate what `mc` and AWS CLI already do well. Focus on DirIO-specific operations and convenience wrappers that make scripting and automation easy. Standard S3 operations (upload/download/sync) are included because having them in one tool is practical, but they are not the primary motivation.
+
+### S3 Operations
+- [ ] `dirio ls [bucket[/prefix]]` — list buckets or objects; JSON and table output modes
+- [ ] `dirio cp <src> <dst>` — upload/download/copy; supports `s3://` URIs; multipart for large files
+- [ ] `dirio sync <src> <dst>` — sync local directory to/from bucket; `--delete` flag
+
+### DirIO-Specific Operations (no equivalent in `mc` or AWS CLI)
+- [ ] `dirio ownership get <bucket[/object]>` — show current owner
+- [ ] `dirio ownership transfer <bucket> <user>` — transfer bucket ownership
+- [ ] `dirio simulate <user> <bucket> <action>` — run the policy simulator from CLI; returns allow/deny + reason
+- [ ] `dirio sa create <parent-user> [--policy override] [--expires <duration>]` — create service account with policy mode
+- [ ] `dirio sa list [user]` — list service accounts
+
+### IAM Convenience (wraps `mc admin` equivalents for single-binary workflows)
+- [ ] `dirio iam user create/list/delete/enable/disable`
+- [ ] `dirio iam policy create/list/attach/detach`
+
+### Configuration & Auth
+- [ ] `dirio config init` — interactive setup for endpoint, credentials, and default bucket
+- [ ] Named profiles (similar to AWS CLI `~/.aws/credentials`)
+- [ ] Respect `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars for drop-in compatibility
 
 ## Phase N+: Any future work
 
@@ -579,14 +535,21 @@ Using "Core + Sidecar" approach:
 
 ## Documentation
 
-- [ ] API documentation
-- [ ] Migration guide from MinIO
-- [ ] Configuration guide (CLI/ENV/YAML)
-- [x] Client compatibility guide - See [CLIENTS.md](CLIENTS.md)
-- [x] IAM/Admin API design decision - See [IAM-ARCHITECTURE.md](docs/IAM-ARCHITECTURE.md)
-- [x] Console architecture - See [CONSOLE-ARCHITECTURE.md](docs/CONSOLE-ARCHITECTURE.md)
+Priority docs — these are the highest-value items for any external user of DirIO:
+
+- [ ] **Migration guide from MinIO** — extract the MinIO import section from README into `docs/MIGRATION.md`; expand with step-by-step walkthrough, data layout comparison, IAM import details, known differences, and a "what doesn't migrate" section. Designed to grow as the app matures.
+- [ ] **S3 API compliance status** — which operations are supported, which are intentionally omitted, known deviations from AWS S3 behavior; should reference CLIENTS.md
+- [ ] **Configuration guide** (CLI/ENV/YAML) — all flags, env vars, and config file keys in one place; data config vs app config distinction
+
+Reference docs (lower urgency):
+- [ ] API documentation (internal — endpoint list with request/response shapes)
 - [ ] mDNS setup and troubleshooting
-- [ ] Reverse proxy setup guide (nginx examples)
-- [ ] S3 API compliance status
+- [ ] Reverse proxy setup guide (nginx examples; will come out of Phase 7 deployment work)
 - [ ] Troubleshooting guide
 - [ ] Performance tuning guide
+
+Already complete:
+- [x] Client compatibility guide — [CLIENTS.md](CLIENTS.md)
+- [x] IAM/Admin API architecture — [docs/IAM-ARCHITECTURE.md](docs/IAM-ARCHITECTURE.md)
+- [x] Console architecture — [docs/CONSOLE-ARCHITECTURE.md](docs/CONSOLE-ARCHITECTURE.md)
+- [x] Completed work log — [docs/CHANGELOG.md](docs/CHANGELOG.md)
