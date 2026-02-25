@@ -78,14 +78,6 @@ Current status: **Phase 4.5 complete** — Phases 1–4.5 done; next up is Phase
 
 **Philosophy:** Data config travels with data and takes precedence; app config controls tool behavior locally.
 
-## Known Issues / Questions
-
-### Active Issues
-1. **MinIO mc PreSignedURL_Upload content mismatch** (Confirmed Feb 16, 2026 19:46)
-   - Status: ❌ FAILING in latest test run
-   - Content integrity hash varies between runs, indicating data corruption during POST Policy upload
-   - See [CLIENTS.md](CLIENTS.md) for details
-
 ### Design Decisions (Deferred)
 - Virtual-hosted-style buckets (DNS/mDNS wildcard) → Phase N+
 - App-level audit logging for Admin/Web UI → Phase 7
