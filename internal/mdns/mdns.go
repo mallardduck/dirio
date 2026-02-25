@@ -98,7 +98,7 @@ func (s *Service) Start(ctx context.Context) error {
 
 	// Add all services and store handles
 	handles := make([]dnssd.ServiceHandle, 0, len(configs))
-	for _, config := range configs {
+	for i, config := range configs {
 		service, err := dnssd.NewService(config)
 		if err != nil {
 			s.log.Error("failed to create service", "error", err, "config", config)
@@ -112,7 +112,7 @@ func (s *Service) Start(ctx context.Context) error {
 
 		handles = append(handles, handle)
 
-		s.log.Info("registered dnssd service",
+		s.log.InfoContext(ctx, fmt.Sprintf("registered dnssd service #%d", i),
 			"name", service.Name,
 			"type", service.Type,
 			"host", service.Host,
@@ -132,7 +132,7 @@ func (s *Service) Start(ctx context.Context) error {
 	// races with Stop() zeroing out s.ctx.
 	go s.run(childCtx)
 
-	s.log.Info("mdns service started",
+	s.log.Debug("mdns service started",
 		"service", s.config.ServiceName,
 		"hostname", hostnameStr+".local",
 		"port", s.config.Port)
@@ -142,7 +142,7 @@ func (s *Service) Start(ctx context.Context) error {
 
 // run starts the dnssd responder loop.
 func (s *Service) run(ctx context.Context) {
-	s.log.Debug("starting dnssd responder")
+	s.log.DebugContext(ctx, "starting dnssd responder")
 
 	err := s.responder.Respond(ctx)
 	if err != nil && ctx.Err() == nil {

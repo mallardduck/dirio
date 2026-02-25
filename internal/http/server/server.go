@@ -324,7 +324,7 @@ func (s *Server) Start(ctx context.Context) error {
 			return fmt.Errorf("failed to start mDNS service: %w", err)
 		}
 		s.mdns = mdnsSvc
-		s.log.Info("mdns service started", "host", mdnsSvc.GetAdvertisedHost())
+		s.log.InfoContext(ctx, "mdns service started", "host", mdnsSvc.GetAdvertisedHost())
 	}
 
 	// Watch .dirio/config.json for credential changes made by external commands
