@@ -35,7 +35,7 @@ type RouteDependencies struct {
 // SetupRoutes configures all application routes on the provided router.
 // When deps is nil, routes are registered with nil handlers (for CLI route listing).
 func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
-	// Favicon must be at site the root for full compatability
+	// Favicon must be at site the root for full compatibility
 	r.Func().GET("/favicon.ico", favicon.HandleFavicon).Name("favicon")
 	// /.dirio/* — DirIO-specific routes.
 	// Dot-prefix guarantees no collision with S3 bucket names (bucket names must

@@ -60,7 +60,7 @@ func TestConcurrentReads(t *testing.T) {
 	wg.Wait()
 
 	for i, err := range errs {
-		assert.NoError(t, err, "goroutine %d had an error", i)
+		require.NoError(t, err, "goroutine %d had an error", i)
 	}
 	for i, body := range bodies {
 		assert.Equal(t, content, body, "goroutine %d got wrong content", i)
@@ -101,7 +101,8 @@ func TestConcurrentWritesDifferentKeys(t *testing.T) {
 				return
 			}
 			defer resp.Body.Close()
-			io.Copy(io.Discard, resp.Body) //nolint:errcheck
+			//nolint:errcheck // body drained to allow connection reuse; copy error is unactionable
+			io.Copy(io.Discard, resp.Body)
 
 			if resp.StatusCode == http.StatusOK {
 				successCount.Add(1)
@@ -124,10 +125,10 @@ func TestConcurrentWritesDifferentKeys(t *testing.T) {
 		ts.SignRequest(req, nil)
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "GET %s", key)
 		b, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		assert.Equal(t, expected, string(b), "content mismatch for %s", key)
 	}
 }
@@ -167,7 +168,8 @@ func TestConcurrentWritesSameKey(t *testing.T) {
 				return
 			}
 			defer resp.Body.Close()
-			io.Copy(io.Discard, resp.Body) //nolint:errcheck
+			//nolint:errcheck // body drained to allow connection reuse; copy error is unactionable
+			io.Copy(io.Discard, resp.Body)
 
 			if resp.StatusCode == http.StatusOK {
 				successCount.Add(1)
@@ -229,7 +231,8 @@ func TestConcurrentBucketCreation(t *testing.T) {
 				return
 			}
 			defer resp.Body.Close()
-			io.Copy(io.Discard, resp.Body) //nolint:errcheck
+			//nolint:errcheck // body drained to allow connection reuse; copy error is unactionable
+			io.Copy(io.Discard, resp.Body)
 			statuses[idx] = resp.StatusCode
 		}(i)
 	}
@@ -314,7 +317,8 @@ func TestConcurrentMixedReadWrite(t *testing.T) {
 				readErrors.Add(1)
 			}
 			if resp != nil {
-				io.Copy(io.Discard, resp.Body) //nolint:errcheck
+				//nolint:errcheck // body drained to allow connection reuse; copy error is unactionable
+				io.Copy(io.Discard, resp.Body)
 				resp.Body.Close()
 			}
 		}(i)
@@ -350,7 +354,8 @@ func TestConcurrentDeleteAndRead(t *testing.T) {
 			return
 		}
 		defer resp.Body.Close()
-		io.Copy(io.Discard, resp.Body) //nolint:errcheck
+		//nolint:errcheck // body drained to allow connection reuse; copy error is unactionable
+		io.Copy(io.Discard, resp.Body)
 		if resp.StatusCode != http.StatusNoContent {
 			t.Errorf("DELETE: unexpected status %d", resp.StatusCode)
 		}
@@ -370,7 +375,8 @@ func TestConcurrentDeleteAndRead(t *testing.T) {
 				return
 			}
 			defer resp.Body.Close()
-			io.Copy(io.Discard, resp.Body) //nolint:errcheck
+			//nolint:errcheck // body drained to allow connection reuse; copy error is unactionable
+			io.Copy(io.Discard, resp.Body)
 			// Only 200 or 404 are valid; anything else is a bug.
 			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
 				unexpectedStatus.Add(1)
@@ -432,7 +438,8 @@ func TestConcurrentListAndPut(t *testing.T) {
 				return
 			}
 			defer resp.Body.Close()
-			io.Copy(io.Discard, resp.Body) //nolint:errcheck
+			//nolint:errcheck // body drained to allow connection reuse; copy error is unactionable
+			io.Copy(io.Discard, resp.Body)
 			if resp.StatusCode != http.StatusOK {
 				listErrors.Add(1)
 				t.Errorf("LIST during concurrent PUT: unexpected status %d", resp.StatusCode)
@@ -468,11 +475,13 @@ func TestConcurrentMultipartUploads(t *testing.T) {
 			req, _ := http.NewRequest(http.MethodPost, initiateURL, http.NoBody)
 			ts.SignRequest(req, nil)
 			resp, err := http.DefaultClient.Do(req)
-			if err != nil || resp.StatusCode != http.StatusOK {
-				t.Errorf("upload %d: initiate failed: err=%v status=%d", idx, err, resp.StatusCode)
-				if resp != nil {
-					resp.Body.Close()
-				}
+			if err != nil {
+				t.Errorf("upload %d: initiate failed: err=%v", idx, err)
+				return
+			}
+			if resp.StatusCode != http.StatusOK {
+				t.Errorf("upload %d: initiate failed: status=%d", idx, resp.StatusCode)
+				resp.Body.Close()
 				return
 			}
 			body, _ := io.ReadAll(resp.Body)
@@ -494,11 +503,13 @@ func TestConcurrentMultipartUploads(t *testing.T) {
 			partReq.ContentLength = int64(len(partBody))
 			ts.SignRequest(partReq, partBody)
 			partResp, err := http.DefaultClient.Do(partReq)
-			if err != nil || partResp.StatusCode != http.StatusOK {
-				t.Errorf("upload %d: part 1 failed: err=%v status=%d", idx, err, partResp.StatusCode)
-				if partResp != nil {
-					partResp.Body.Close()
-				}
+			if err != nil {
+				t.Errorf("upload %d: part 1 failed: err=%v", idx, err)
+				return
+			}
+			if partResp.StatusCode != http.StatusOK {
+				t.Errorf("upload %d: part 1 failed: status=%d", idx, partResp.StatusCode)
+				partResp.Body.Close()
 				return
 			}
 			etag := partResp.Header.Get("ETag")
@@ -512,11 +523,13 @@ func TestConcurrentMultipartUploads(t *testing.T) {
 			completeReq.ContentLength = int64(len(completeBody))
 			ts.SignRequest(completeReq, completeBody)
 			completeResp, err := http.DefaultClient.Do(completeReq)
-			if err != nil || completeResp.StatusCode != http.StatusOK {
-				t.Errorf("upload %d: complete failed: err=%v status=%d", idx, err, completeResp.StatusCode)
-				if completeResp != nil {
-					completeResp.Body.Close()
-				}
+			if err != nil {
+				t.Errorf("upload %d: complete failed: err=%v", idx, err)
+				return
+			}
+			if completeResp.StatusCode != http.StatusOK {
+				t.Errorf("upload %d: complete failed: status=%d", idx, completeResp.StatusCode)
+				completeResp.Body.Close()
 				return
 			}
 			completeResp.Body.Close()
@@ -545,13 +558,13 @@ func TestConcurrentMultipartUploads(t *testing.T) {
 // for simple single-value extractions in test helpers.
 func extractXMLValue(xml, tag string) string {
 	open := "<" + tag + ">"
-	close := "</" + tag + ">"
+	closeTag := "</" + tag + ">"
 	start := strings.Index(xml, open)
 	if start == -1 {
 		return ""
 	}
 	start += len(open)
-	end := strings.Index(xml[start:], close)
+	end := strings.Index(xml[start:], closeTag)
 	if end == -1 {
 		return ""
 	}

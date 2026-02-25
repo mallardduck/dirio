@@ -61,7 +61,7 @@ func TestLargeObjectIntegrity(t *testing.T) {
 	downloaded, err := io.ReadAll(getResp.Body)
 	require.NoError(t, err)
 
-	assert.Equal(t, size, len(downloaded), "downloaded size mismatch")
+	assert.Len(t, downloaded, size, "downloaded size mismatch")
 	assert.Equal(t, wantMD5, md5hex(downloaded), "content integrity check failed")
 }
 
@@ -116,7 +116,7 @@ func TestLargeObjectRangeReads(t *testing.T) {
 			require.NoError(t, err)
 
 			want := data[tc.start : tc.end+1]
-			assert.Equal(t, len(want), len(got), "range %s: length mismatch", tc.name)
+			assert.Len(t, got, len(want), "range %s: length mismatch", tc.name)
 			assert.Equal(t, md5hex(want), md5hex(got), "range %s: content mismatch", tc.name)
 		})
 	}
@@ -220,7 +220,7 @@ func TestMultipartUploadLargeObject(t *testing.T) {
 	downloaded, err := io.ReadAll(getResp.Body)
 	require.NoError(t, err)
 
-	assert.Equal(t, totalSize, len(downloaded), "assembled object size mismatch")
+	assert.Len(t, downloaded, totalSize, "assembled object size mismatch")
 	assert.Equal(t, md5hex(payload), md5hex(downloaded), "assembled content integrity check failed")
 }
 
@@ -303,7 +303,7 @@ func TestManySmallObjectsUploadAndList(t *testing.T) {
 		require.NotEmpty(t, continuationToken, "IsTruncated=true but no NextContinuationToken")
 	}
 
-	assert.Equal(t, objectCount, len(seen), "listed object count mismatch")
+	assert.Len(t, seen, objectCount, "listed object count mismatch")
 	for key, wantETag := range wantETags {
 		gotETag, ok := seen[key]
 		assert.True(t, ok, "object %s missing from listing", key)
@@ -448,7 +448,7 @@ func TestMixedLargeAndSmallObjects(t *testing.T) {
 		key  string
 		hash string
 	}
-	var all []uploaded
+	all := make([]uploaded, 0, smallCount+largeCount)
 
 	// Upload small objects.
 	for i := range smallCount {
@@ -502,7 +502,7 @@ func TestMixedLargeAndSmallObjects(t *testing.T) {
 
 	var result listBucketResult
 	require.NoError(t, xml.Unmarshal(listBody, &result))
-	assert.Equal(t, smallCount+largeCount, len(result.Contents), "listed object count mismatch")
+	assert.Len(t, result.Contents, smallCount+largeCount, "listed object count mismatch")
 
 	// Spot-check: download 3 large objects and verify content hash.
 	for i := range min(3, largeCount) {

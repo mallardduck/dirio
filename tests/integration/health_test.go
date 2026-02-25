@@ -140,7 +140,7 @@ func TestHealthEndpointNoAuthRequired(t *testing.T) {
 	}
 	for _, ep := range endpoints {
 		t.Run(strings.TrimPrefix(ep, "/"), func(t *testing.T) {
-			req, err := http.NewRequest(http.MethodGet, ts.URL(ep), nil)
+			req, err := http.NewRequest(http.MethodGet, ts.URL(ep), http.NoBody)
 			require.NoError(t, err)
 
 			resp, err := http.DefaultClient.Do(req)
