@@ -416,28 +416,7 @@ Current status: **Phase 4.5 complete** — Phases 1–4.5 done; next up is Phase
   - Always on, zero body capture, minimal allocations — suitable for direct ingestion by Loki, CloudWatch, Datadog, etc.
   - Configurable format: `json` (default) or `logfmt` via `--log-format` flag
 
-## Phase 6: Full HTTP Audit Logging
-
-**Goal:** Production-grade audit trail for compliance and debugging. Builds on the Phase 5 structured access log — this phase adds body capture, configurable verbosity levels, non-blocking I/O, and a UI to browse logs.
-
-**Distinction from Phase 5 access log:** Phase 5 logs one line per request (who/what/allow-deny). This phase adds full request/response bodies, streaming to external destinations, and tooling to query the log.
-
-### Middleware
-- [ ] Non-blocking audit log writer with bounded queue (no request latency impact)
-- [ ] Log levels: `0`=off, `1`=access only (Phase 5 baseline), `2`=headers, `3`=headers + request body, `4`=headers + both bodies
-- [ ] Minimize allocations in hot path — avoid capturing body unless level ≥ 3
-- [ ] Configurable output destination: file, stdout, or HTTP endpoint (e.g. vector, fluentd)
-- [ ] Log rotation support (size-based and time-based)
-
-### Configuration
-- [ ] `audit.level` config key + `--audit-level` flag
-- [ ] `audit.output` config key (stdout / file path / HTTP endpoint)
-- [ ] `audit.max_body_bytes` — cap body capture size (default 4KB)
-
-### Observability
-- [ ] Document the two-tier log model: Phase 5 access log (always on, lightweight) vs Phase 6 audit log (configurable, heavy)
-
-## Phase 7: Deployment & Operations
+## Phase 6: Deployment & Operations
 
 **Goal:** Validate and document DirIO in real deployment scenarios. Establish the dual-port mode as the recommended production topology, harden operational tooling, and confirm the MinIO migration path end-to-end.
 
@@ -461,7 +440,7 @@ Both single-port and dual-port modes are supported and maintained. **Dual-port i
 ### Configuration Tooling
 - [ ] **`dirio config set` subcommand** — update data config values without manually editing `.dirio/config.json` (e.g. `dirio config set region us-west-2`, `dirio config set compression.enabled true`); print current config via `dirio config show`
 
-## Phase 8: Web Console — Extended Features
+## Phase 7: Web Console — Extended Features
 
 **Foundation built in Phase 4.3 (auth, IAM views, policy editor, simulator, ownership management). This phase covers the S3 data plane UI and IAM management forms — making DirIO fully operable without a terminal for day-to-day tasks.**
 
@@ -481,7 +460,7 @@ Both single-port and dual-port modes are supported and maintained. **Dual-port i
 - [ ] Filterable log stream in console — filter by user, bucket, action, allow/deny, time range
 - [ ] Export filtered log to CSV/JSON
 
-## Phase 9: DirIO Client
+## Phase 8: DirIO Client
 
 **Goal:** A first-party CLI client for DirIO that covers the operations no existing tool handles well — DirIO-specific features, scripting-friendly output, and a single binary that doesn't require `mc` or AWS CLI to be installed.
 
@@ -507,6 +486,27 @@ Both single-port and dual-port modes are supported and maintained. **Dual-port i
 - [ ] `dirio config init` — interactive setup for endpoint, credentials, and default bucket
 - [ ] Named profiles (similar to AWS CLI `~/.aws/credentials`)
 - [ ] Respect `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars for drop-in compatibility
+
+## Phase 9: Full HTTP Audit Logging
+
+**Goal:** Production-grade audit trail for compliance and debugging. Builds on the Phase 5 structured access log — this phase adds body capture, configurable verbosity levels, non-blocking I/O, and a UI to browse logs.
+
+**Distinction from Phase 5 access log:** Phase 5 logs one line per request (who/what/allow-deny). This phase adds full request/response bodies, streaming to external destinations, and tooling to query the log.
+
+### Middleware
+- [ ] Non-blocking audit log writer with bounded queue (no request latency impact)
+- [ ] Log levels: `0`=off, `1`=access only (Phase 5 baseline), `2`=headers, `3`=headers + request body, `4`=headers + both bodies
+- [ ] Minimize allocations in hot path — avoid capturing body unless level ≥ 3
+- [ ] Configurable output destination: file, stdout, or HTTP endpoint (e.g. vector, fluentd)
+- [ ] Log rotation support (size-based and time-based)
+
+### Configuration
+- [ ] `audit.level` config key + `--audit-level` flag
+- [ ] `audit.output` config key (stdout / file path / HTTP endpoint)
+- [ ] `audit.max_body_bytes` — cap body capture size (default 4KB)
+
+### Observability
+- [ ] Document the two-tier log model: Phase 5 access log (always on, lightweight) vs Phase 6 audit log (configurable, heavy)
 
 ## Phase N+: Any future work
 
