@@ -409,7 +409,7 @@ Current status: **Phase 4.5 complete** — Phases 1–4.5 done; next up is Phase
 - [x] **Liveness probe** (`GET /health/live`) — confirms the process is alive and not deadlocked; always 200 if reachable
 
 ### Metrics
-- [ ] **Prometheus metrics endpoint** (`GET /metrics`) — request count by method/status, error rate, latency histograms (p50/p95/p99), metadata cache hit ratio, active connections, BoltDB size
+- [x] **Prometheus metrics endpoint** (`GET /metrics`) — request count by method/status, error rate, latency histograms (p50/p95/p99), metadata cache hit ratio, active connections, BoltDB size
 
 ### Structured Access Log
 - [ ] **Structured access log to stdout** — one JSON line per S3/admin/console request: timestamp, user (or `"anonymous"`), service (s3/admin/console), bucket, object, action, allow/deny decision, source IP, request ID, latency ms

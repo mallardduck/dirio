@@ -34,6 +34,9 @@ import (
 	"github.com/mallardduck/dirio/internal/mdns"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/persistence/storage"
+	"github.com/mallardduck/dirio/internal/telemetry"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // Config holds server configuration.
@@ -71,6 +74,10 @@ type Config struct {
 	// Both fields are required; server.New does not construct them itself.
 	RootFS   billy.Filesystem
 	Metadata *metadata.Manager
+
+	// Telemetry is the OTel provider.  When non-nil the server registers the
+	// Prometheus metrics endpoint and adds the otelhttp middleware.
+	Telemetry *telemetry.Provider
 }
 
 // Server represents the S3-compatible HTTP server.
@@ -82,6 +89,7 @@ type Server struct {
 	auth         *auth.Authenticator
 	policyEngine *policy.Engine
 	mdns         *mdns.Service
+	telemetry    *telemetry.Provider
 	log          *slog.Logger
 
 	// consoleRouter is the optional web admin console router.
@@ -201,7 +209,24 @@ func New(config *Config) (*Server, error) {
 		metadata:     metaMgr,
 		auth:         authenticator,
 		policyEngine: policyEngine,
+		telemetry:    config.Telemetry,
 		log:          log,
+	}
+
+	// Register metadata observable instruments once both the provider and
+	// the metadata manager are ready.
+	if config.Telemetry != nil {
+		if err := config.Telemetry.RegisterMetadataObservers(func() telemetry.MetadataStats {
+			gets, misses, entries, dbBytes := metaMgr.MetricsSnapshot()
+			return telemetry.MetadataStats{
+				CacheGets:    gets,
+				CacheMisses:  misses,
+				CacheEntries: entries,
+				DBSizeBytes:  dbBytes,
+			}
+		}); err != nil {
+			log.Warn("failed to register metadata telemetry observers", "error", err)
+		}
 	}
 
 	srv.setupRoutes()
@@ -223,6 +248,14 @@ func (s *Server) setupRoutes() {
 	s.router.Use(miniomiddleware.CompatHeaders)
 	s.router.Use(loggingHttp.PrepareAccessLogMiddleware(s.log))
 
+	// OTel HTTP instrumentation — records http.server.request.duration histogram
+	// and http.server.active_requests gauge automatically.
+	if s.telemetry != nil {
+		s.router.Use(otelhttp.NewMiddleware("dirio.server",
+			otelhttp.WithMeterProvider(s.telemetry.MeterProvider()),
+		))
+	}
+
 	apiHandler := api.New(
 		s.storage,
 		s.metadata,
@@ -240,6 +273,7 @@ func (s *Server) setupRoutes() {
 		APIHandler:   apiHandler,
 		RootFS:       s.config.RootFS,
 		Debug:        s.config.Debug,
+		Telemetry:    s.telemetry,
 	}
 
 	SetupRoutes(s.router, deps)

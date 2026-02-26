@@ -77,3 +77,16 @@ var (
 	// before connections are forcefully closed.
 	ShutdownTimeout = option.NewOption("shutdown-timeout", 30)
 )
+
+// Telemetry / OTLP configuration options
+var (
+	// OTLPMetricsEnabled controls whether metrics are pushed to an OTLP endpoint.
+	OTLPMetricsEnabled = option.NewOption("otlp-metrics-enabled", false)
+
+	// OTLPMetricsEndpoint is the base URL of the OTLP HTTP metrics receiver.
+	// e.g. "http://localhost:4318"
+	OTLPMetricsEndpoint = option.NewOption("otlp-metrics-endpoint", "http://localhost:4318")
+
+	// OTLPMetricsInterval is the push interval in seconds.
+	OTLPMetricsInterval = option.NewOption("otlp-metrics-interval", 30)
+)

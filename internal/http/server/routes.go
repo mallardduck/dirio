@@ -14,11 +14,13 @@ import (
 	httpresponse "github.com/mallardduck/dirio/internal/http/response"
 	"github.com/mallardduck/dirio/internal/http/server/favicon"
 	"github.com/mallardduck/dirio/internal/http/server/health"
+	"github.com/mallardduck/dirio/internal/http/server/metrics"
 	miniohttp "github.com/mallardduck/dirio/internal/minio/http"
 
 	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/policy"
+	"github.com/mallardduck/dirio/internal/telemetry"
 )
 
 // RouteDependencies contains all dependencies needed for route handlers.
@@ -30,6 +32,7 @@ type RouteDependencies struct {
 	APIHandler   *api.Handler
 	RootFS       billy.Filesystem // For health probes
 	Debug        bool
+	Telemetry    *telemetry.Provider // For /.dirio/metrics
 }
 
 // SetupRoutes configures all application routes on the provided router.
@@ -40,7 +43,18 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 	// /.dirio/* — DirIO-specific routes.
 	// Dot-prefix guarantees no collision with S3 bucket names (bucket names must
 	// start with a letter or digit per the S3 spec and AWS validation rules).
-	r.GET("/.dirio/routes", teapot.NewListRoutesHandler(r, nil)).Name("debug.routes").Action("dirio:ListRoutes")
+	r.GET(
+		"/.dirio/routes",
+		teapot.NewListRoutesHandler(r, &teapot.ListRoutesOptions{
+			BaseURLFunc: func(r *http.Request) string {
+				scheme := "https"
+				if r.TLS == nil {
+					scheme = "http"
+				}
+				return scheme + "://" + r.Host
+			},
+		}),
+	).Name("debug.routes").Action("dirio:ListRoutes")
 
 	// DirIO health endpoints (unauthenticated).
 	// These are under /.dirio/ so they never collide with user bucket names.
@@ -51,6 +65,13 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 		healthFS = deps.RootFS
 	}
 	health.RegisterRoutes(r, healthMeta, healthFS)
+
+	// DirIO metrics endpoint — serves Prometheus-format OTel metrics (unauthenticated).
+	var telProvider *telemetry.Provider
+	if deps != nil {
+		telProvider = deps.Telemetry
+	}
+	metrics.RegisterRoutes(r, telProvider)
 
 	// pprof profiling endpoints — only registered when --debug is set.
 	// Unauthenticated: debug mode is not intended for production use.

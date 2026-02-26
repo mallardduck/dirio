@@ -55,6 +55,11 @@ type Settings struct {
 
 	// Lifecycle settings
 	ShutdownTimeout time.Duration
+
+	// Telemetry / OTLP settings
+	OTLPMetricsEnabled  bool
+	OTLPMetricsEndpoint string
+	OTLPMetricsInterval time.Duration
 }
 
 // Validate checks that the configured settings are valid
@@ -149,6 +154,11 @@ func LoadConfig(flags *pflag.FlagSet, v *viper.Viper) (*Settings, error) {
 
 		// Lifecycle settings
 		ShutdownTimeout: time.Duration(resolver.GetInt(ShutdownTimeout)) * time.Second,
+
+		// Telemetry / OTLP settings
+		OTLPMetricsEnabled:  resolver.GetBool(OTLPMetricsEnabled),
+		OTLPMetricsEndpoint: resolver.Get(OTLPMetricsEndpoint),
+		OTLPMetricsInterval: time.Duration(resolver.GetInt(OTLPMetricsInterval)) * time.Second,
 	}
 
 	// Debug flag overrides log level

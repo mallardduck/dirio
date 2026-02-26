@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -1305,4 +1306,18 @@ func (m *Manager) GetAllBucketPolicies(ctx context.Context) (map[string]*PolicyD
 	}
 
 	return policies, nil
+}
+
+// MetricsSnapshot returns a point-in-time snapshot of metadata subsystem
+// statistics for telemetry instrumentation.
+func (m *Manager) MetricsSnapshot() (gets, misses, entries uint64, dbBytes int64) {
+	s := m.objMetaCache.Stats()
+	gets = s.GetCalls
+	misses = s.Misses
+	entries = s.EntriesCount
+
+	if info, err := os.Stat(m.db.Path()); err == nil {
+		dbBytes = info.Size()
+	}
+	return
 }

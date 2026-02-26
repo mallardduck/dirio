@@ -10,6 +10,7 @@ import (
 	"github.com/mallardduck/dirio/internal/http/server"
 	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/startup"
+	"github.com/mallardduck/dirio/internal/telemetry"
 )
 
 var serveCmd = &cobra.Command{
@@ -57,6 +58,11 @@ func init() {
 	// Lifecycle flags
 	serveCmd.Flags().Int(config.ShutdownTimeout.GetFlagKey(), 30, "Graceful shutdown timeout in seconds")
 
+	// Telemetry / OTLP flags
+	serveCmd.Flags().Bool(config.OTLPMetricsEnabled.GetFlagKey(), false, "Push metrics to an OTLP endpoint")
+	serveCmd.Flags().String(config.OTLPMetricsEndpoint.GetFlagKey(), config.OTLPMetricsEndpoint.GetDefaultAsString(), "OTLP HTTP endpoint base URL (e.g. http://localhost:4318)")
+	serveCmd.Flags().Int(config.OTLPMetricsInterval.GetFlagKey(), 30, "OTLP metrics push interval in seconds")
+
 	// Bind flags to viper for config file support
 	_ = viper.BindPFlag(config.DataDir.GetViperKey(), serveCmd.Flags().Lookup(config.DataDir.GetFlagKey()))
 	_ = viper.BindPFlag(config.Port.GetViperKey(), serveCmd.Flags().Lookup(config.Port.GetFlagKey()))
@@ -75,6 +81,9 @@ func init() {
 	_ = viper.BindPFlag(config.ConsoleEnabled.GetViperKey(), serveCmd.Flags().Lookup(config.ConsoleEnabled.GetFlagKey()))
 	_ = viper.BindPFlag(config.ConsolePort.GetViperKey(), serveCmd.Flags().Lookup(config.ConsolePort.GetFlagKey()))
 	_ = viper.BindPFlag(config.ShutdownTimeout.GetViperKey(), serveCmd.Flags().Lookup(config.ShutdownTimeout.GetFlagKey()))
+	_ = viper.BindPFlag(config.OTLPMetricsEnabled.GetViperKey(), serveCmd.Flags().Lookup(config.OTLPMetricsEnabled.GetFlagKey()))
+	_ = viper.BindPFlag(config.OTLPMetricsEndpoint.GetViperKey(), serveCmd.Flags().Lookup(config.OTLPMetricsEndpoint.GetFlagKey()))
+	_ = viper.BindPFlag(config.OTLPMetricsInterval.GetViperKey(), serveCmd.Flags().Lookup(config.OTLPMetricsInterval.GetFlagKey()))
 }
 
 func runServer(cmd *cobra.Command, _ []string) error {
@@ -129,7 +138,18 @@ func runServer(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to prepare data directory: %w", err)
 	}
 
-	// Phase 3 — wire up the HTTP server using the Starter'starter finalised components.
+	// Phase 3 — initialise telemetry (Prometheus pull + optional OTLP push).
+	telCfg := telemetry.Config{
+		OTLPEnabled:  settings.OTLPMetricsEnabled,
+		OTLPEndpoint: settings.OTLPMetricsEndpoint,
+		OTLPInterval: settings.OTLPMetricsInterval,
+	}
+	telProvider, err := telemetry.Setup(cmd.Context(), telCfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialise telemetry: %w", err)
+	}
+
+	// Phase 4 — wire up the HTTP server using the Starter's finalised components.
 	serverConfig := &server.Config{
 		DataDir:                     settings.DataDir,
 		Port:                        settings.Port,
@@ -146,6 +166,7 @@ func runServer(cmd *cobra.Command, _ []string) error {
 		ShutdownTimeout:             settings.ShutdownTimeout,
 		RootFS:                      starter.RootFS(),
 		Metadata:                    starter.MetadataManager(),
+		Telemetry:                   telProvider,
 	}
 
 	srv, err := server.New(serverConfig)
@@ -159,6 +180,11 @@ func runServer(cmd *cobra.Command, _ []string) error {
 
 	if err := srv.Start(cmd.Context()); err != nil {
 		return fmt.Errorf("server error: %w", err)
+	}
+
+	// Flush and close telemetry exporters after the server stops.
+	if err := telProvider.Shutdown(cmd.Context()); err != nil {
+		log.Warn("telemetry shutdown error", "error", err)
 	}
 
 	return nil
