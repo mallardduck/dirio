@@ -23,7 +23,7 @@ type Config struct {
 // This should be called once at application startup.
 func Setup(cfg Config) {
 	if cfg.Output == nil {
-		cfg.Output = os.Stderr
+		cfg.Output = os.Stdout
 	}
 
 	level := parseLevel(cfg.Level)

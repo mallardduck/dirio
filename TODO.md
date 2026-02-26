@@ -382,37 +382,37 @@ Current status: **Phase 4.5 complete** — Phases 1–4.5 done; next up is Phase
 ## Phase 4.5: Stability & Performance
 
 ### Browser Upload Support
-- [x] **POST Policy Uploads** - Browser-based form uploads
-  - [x] Parse POST policy documents
-  - [x] Validate policy signature and expiration
-  - [x] Support multipart/form-data uploads
-  - [x] HTML form upload examples (`examples/post-policy/index.html`)
-  - [x] MinIO `mc share upload` compatibility
+- ✅ **POST Policy Uploads** - Browser-based form uploads
+  - ✅ Parse POST policy documents
+  - ✅ Validate policy signature and expiration
+  - ✅ Support multipart/form-data uploads
+  - ✅ HTML form upload examples (`examples/post-policy/index.html`)
+  - ✅ MinIO `mc share upload` compatibility
 
 ### Performance Optimization
-- [x] Metadata caching strategy — `phuslu/lru` sharded LRU in `metadata.Manager`; ~100–300× list speedup
-- [x] Optimize ListObjects for large buckets — early walk termination in `listInternal` (stops at `maxKeys+1`)
-- [x] Memory profiling and leak detection — no goroutine leaks, no heap growth under sustained load
+- ✅ Metadata caching strategy — `phuslu/lru` sharded LRU in `metadata.Manager`; ~100–300× list speedup
+- ✅ Optimize ListObjects for large buckets — early walk termination in `listInternal` (stops at `maxKeys+1`)
+- ✅ Memory profiling and leak detection — no goroutine leaks, no heap growth under sustained load
 
 ### Stability & Testing
-- [x] Concurrent access testing
-- [x] Error handling audit across all API handlers
-- [x] Load testing with large files and many small files
+- ✅ Concurrent access testing
+- ✅ Error handling audit across all API handlers
+- ✅ Load testing with large files and many small files
 
 ## Phase 5: Observability & Health
 
 **Goal:** Give DirIO the instrumentation it needs to run reliably in production — visibility into what's happening, proof that it's healthy, and a lightweight audit trail out of the box.
 
 ### Health Checks
-- [x] **Health endpoint** (`GET /health`) — returns 200 + JSON status; used by load balancers, Docker health checks, and basic monitoring
-- [x] **Readiness probe** (`GET /health/ready`) — checks BoltDB is open and storage directory is accessible; returns 503 if not ready
-- [x] **Liveness probe** (`GET /health/live`) — confirms the process is alive and not deadlocked; always 200 if reachable
+- ✅ **Health endpoint** (`GET /health`) — returns 200 + JSON status; used by load balancers, Docker health checks, and basic monitoring
+- ✅ **Readiness probe** (`GET /health/ready`) — checks BoltDB is open and storage directory is accessible; returns 503 if not ready
+- ✅ **Liveness probe** (`GET /health/live`) — confirms the process is alive and not deadlocked; always 200 if reachable
 
 ### Metrics
-- [x] **Prometheus metrics endpoint** (`GET /metrics`) — request count by method/status, error rate, latency histograms (p50/p95/p99), metadata cache hit ratio, active connections, BoltDB size
+- ✅ **Prometheus metrics endpoint** (`GET /metrics`) — request count by method/status, error rate, latency histograms (p50/p95/p99), metadata cache hit ratio, active connections, BoltDB size
 
 ### Structured Access Log
-- [ ] **Structured access log to stdout** — one JSON line per S3/admin/console request: timestamp, user (or `"anonymous"`), service (s3/admin/console), bucket, object, action, allow/deny decision, source IP, request ID, latency ms
+- ✅ **Structured access log to stdout** — one JSON line per S3/admin/console request: timestamp, user (or `"anonymous"`), service (s3/admin/console), bucket, object, action, allow/deny decision, source IP, request ID, latency ms
   - Always on, zero body capture, minimal allocations — suitable for direct ingestion by Loki, CloudWatch, Datadog, etc.
   - Configurable format: `json` (default) or `logfmt` via `--log-format` flag
 
@@ -538,7 +538,7 @@ Reference docs (lower urgency):
 - [ ] mDNS setup and troubleshooting
 - [ ] Reverse proxy setup guide (nginx examples; will come out of Phase 7 deployment work)
 - [ ] Troubleshooting guide
-- [ ] Performance tuning guide
+- [ ] Performance tuning guide`
 
 Already complete:
 - [x] Client compatibility guide — [CLIENTS.md](CLIENTS.md)

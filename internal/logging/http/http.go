@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/mallardduck/teapot-router/pkg/teapot"
@@ -19,10 +20,18 @@ const (
 	logDataKey contextKey = "logData"
 )
 
-// LogMetadata is a mutable metadata container for logging
+// LogMetadata is a mutable metadata container shared between the access log
+// middleware and the inner middleware/handlers via a pointer in context.
+// Inner layers write to it; the access log reads it after the request finishes.
 type LogMetadata struct {
 	Action string
-	Custom map[string]string
+	// User is the authenticated principal (username or access key) or "anonymous".
+	// Written by the auth middleware; empty for unauthenticated internal endpoints.
+	User string
+	// AuthzDecision is "allow" or "deny", written by the authorization middleware.
+	// Empty for routes that bypass authorization (health, metrics, etc.).
+	AuthzDecision string
+	Custom        map[string]string
 }
 
 func GetLogData(ctx context.Context) (*LogMetadata, bool) {
@@ -79,38 +88,59 @@ func PrepareAccessLogMiddleware(serverLogger *slog.Logger) func(next http.Handle
 			// Use context-aware logging (automatically includes trace_id)
 			log := logging.WithContext(serverLogger, r.Context())
 
+			action := teapot.GetAction(r)
+			if action == "" {
+				action = data.Action
+			}
+
 			// Build log attributes
 			attrs := []any{
-				"route_name", teapot.GetRouteName(r),
-				"route_action", teapot.GetAction(r),
 				"method", r.Method,
-				"host", r.URL.Host,
 				"path", r.URL.Path,
 				"status", wrapped.statusCode,
 				"remote", r.RemoteAddr,
-				"req_time", start.Format(time.RFC3339Nano),
-				"resp_time", end.Format(time.RFC3339Nano),
 				"duration_ms", duration.Milliseconds(),
 			}
 
-			// Add query parameters if present
+			// Service classification — omit for internal routes with no action.
+			if service := serviceFromAction(action); service != "" {
+				attrs = append(attrs, "service", service)
+			}
+
+			// User identity — written by auth middleware; omit for internal endpoints.
+			if data.User != "" {
+				attrs = append(attrs, "user", data.User)
+			}
+
+			// S3 resource context.
+			if bucket := teapot.URLParam(r, "bucket"); bucket != "" {
+				attrs = append(attrs, "bucket", bucket)
+			}
+			if object := teapot.URLParam(r, "key"); object != "" {
+				attrs = append(attrs, "object", object)
+			}
+
+			// Authorization decision — written by authz middleware; omit for bypass routes.
+			if data.AuthzDecision != "" {
+				attrs = append(attrs, "authz_decision", data.AuthzDecision)
+			}
+
+			// Route metadata.
+			if action != "" {
+				attrs = append(attrs, "action", action)
+			}
+			attrs = append(attrs,
+				"route_name", teapot.GetRouteName(r),
+				"req_time", start.Format(time.RFC3339Nano),
+				"resp_time", end.Format(time.RFC3339Nano),
+			)
+
+			// Optional extras.
 			if r.URL.RawQuery != "" {
 				attrs = append(attrs, "query", r.URL.RawQuery)
 			}
-
-			// Add fragment if present
-			if r.URL.Fragment != "" {
-				attrs = append(attrs, "fragment", r.URL.Fragment)
-			}
-
-			// Add ETag from response headers if present (useful for debugging)
 			if etag := wrapped.Header().Get("ETag"); etag != "" {
 				attrs = append(attrs, "etag", etag)
-			}
-
-			// Add operation name if present
-			if data.Action != "" {
-				attrs = append(attrs, "operation", data.Action)
 			}
 			if len(data.Custom) > 0 {
 				attrs = append(attrs, "extra", data.Custom)
@@ -119,4 +149,11 @@ func PrepareAccessLogMiddleware(serverLogger *slog.Logger) func(next http.Handle
 			log.Info("http request handled", attrs...)
 		})
 	}
+}
+
+// serviceFromAction extracts the service prefix from a route action string.
+// e.g. "s3:GetObject" → "s3", "dirio:Health" → "dirio", "" → "".
+func serviceFromAction(action string) string {
+	service, _, _ := strings.Cut(action, ":")
+	return service
 }

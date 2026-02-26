@@ -87,6 +87,7 @@ USER dirio
 EXPOSE 9000
 
 ENV DATA_DIR=/data \
-    PORT=9000
+    PORT=9000 \
+    DIRIO_LOG_FORMAT=json
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

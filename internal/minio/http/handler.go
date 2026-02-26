@@ -91,42 +91,30 @@ type userHandler struct {
 	StatusHandler nethttp.HandlerFunc
 }
 
+func requestWithAction(r *nethttp.Request, actionName string) *nethttp.Request {
+	ctx := r.Context()
+	if data, ok := loggingHttp.GetLogData(ctx); ok {
+		data.Action = actionName
+	}
+	return r.WithContext(ctx)
+}
+
 func (h *Handler) UserResourceHandler() userHandler {
 	return userHandler{
 		ListHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.ListUsers"
-			}
-			h.UserHTTPService().ListUsers(w, r)
+			h.UserHTTPService().ListUsers(w, requestWithAction(r, "minio.v3.ListUsers"))
 		},
 		AddHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.AddUser"
-			}
-			h.UserHTTPService().CreateUser(w, r)
+			h.UserHTTPService().CreateUser(w, requestWithAction(r, "minio.v3.AddUser"))
 		},
 		RemoveHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.RemoveUser"
-			}
-			h.UserHTTPService().RemoveUser(w, r)
+			h.UserHTTPService().RemoveUser(w, requestWithAction(r, "minio.v3.RemoveUser"))
 		},
 		InfoHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.UserInfo"
-			}
-			h.UserHTTPService().InfoUser(w, r)
+			h.UserHTTPService().InfoUser(w, requestWithAction(r, "minio.v3.UserInfo"))
 		},
 		StatusHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.SetUserStatus"
-			}
-			h.UserHTTPService().SetUserStatus(w, r)
+			h.UserHTTPService().SetUserStatus(w, requestWithAction(r, "minio.v3.SetUserStatus"))
 		},
 	}
 }
@@ -141,32 +129,16 @@ type groupHandler struct {
 func (h *Handler) GroupResourceHandler() groupHandler {
 	return groupHandler{
 		ListHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.ListGroups"
-			}
-			h.GroupHTTPService().ListGroups(w, r)
+			h.GroupHTTPService().ListGroups(w, requestWithAction(r, "minio.v3.ListGroups"))
 		},
 		InfoHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.GetGroupInfo"
-			}
-			h.GroupHTTPService().GetGroupInfo(w, r)
+			h.GroupHTTPService().GetGroupInfo(w, requestWithAction(r, "minio.v3.GetGroupInfo"))
 		},
 		UpdateMembersHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.UpdateGroupMembers"
-			}
-			h.GroupHTTPService().UpdateGroupMembers(w, r)
+			h.GroupHTTPService().UpdateGroupMembers(w, requestWithAction(r, "minio.v3.UpdateGroupMembers"))
 		},
 		StatusHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.SetGroupStatus"
-			}
-			h.GroupHTTPService().SetGroupStatus(w, r)
+			h.GroupHTTPService().SetGroupStatus(w, requestWithAction(r, "minio.v3.SetGroupStatus"))
 		},
 	}
 }
@@ -182,39 +154,19 @@ type serviceAccountHandler struct {
 func (h *Handler) ServiceAccountResourceHandler() serviceAccountHandler {
 	return serviceAccountHandler{
 		ListHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.ListServiceAccounts"
-			}
-			h.ServiceAccountHTTPService().ListServiceAccounts(w, r)
+			h.ServiceAccountHTTPService().ListServiceAccounts(w, requestWithAction(r, "minio.v3.ListServiceAccounts"))
 		},
 		AddHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.AddServiceAccount"
-			}
-			h.ServiceAccountHTTPService().AddServiceAccount(w, r)
+			h.ServiceAccountHTTPService().AddServiceAccount(w, requestWithAction(r, "minio.v3.AddServiceAccount"))
 		},
 		DeleteHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.DeleteServiceAccount"
-			}
-			h.ServiceAccountHTTPService().DeleteServiceAccount(w, r)
+			h.ServiceAccountHTTPService().DeleteServiceAccount(w, requestWithAction(r, "minio.v3.DeleteServiceAccount"))
 		},
 		InfoHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.InfoServiceAccount"
-			}
-			h.ServiceAccountHTTPService().InfoServiceAccount(w, r)
+			h.ServiceAccountHTTPService().InfoServiceAccount(w, requestWithAction(r, "minio.v3.InfoServiceAccount"))
 		},
 		UpdateHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.UpdateServiceAccount"
-			}
-			h.ServiceAccountHTTPService().UpdateServiceAccount(w, r)
+			h.ServiceAccountHTTPService().UpdateServiceAccount(w, requestWithAction(r, "minio.v3.UpdateServiceAccount"))
 		},
 	}
 }
@@ -232,53 +184,25 @@ type policyHandler struct {
 func (h *Handler) PolicyResourceHandler() policyHandler {
 	return policyHandler{
 		ListHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.ListCannedPolicies"
-			}
-			h.PolicyHTTPService().ListCannedPolicies(w, r)
+			h.PolicyHTTPService().ListCannedPolicies(w, requestWithAction(r, "minio.v3.ListCannedPolicies"))
 		},
 		AddHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.AddCannedPolicy"
-			}
-			h.PolicyHTTPService().AddCannedPolicy(w, r)
+			h.PolicyHTTPService().AddCannedPolicy(w, requestWithAction(r, "minio.v3.AddCannedPolicy"))
 		},
 		RemoveHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.RemoveCannedPolicy"
-			}
-			h.PolicyHTTPService().RemoveCannedPolicy(w, r)
+			h.PolicyHTTPService().RemoveCannedPolicy(w, requestWithAction(r, "minio.v3.RemoveCannedPolicy"))
 		},
 		InfoHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.InfoCannedPolicy"
-			}
-			h.PolicyHTTPService().InfoCannedPolicy(w, r)
+			h.PolicyHTTPService().InfoCannedPolicy(w, requestWithAction(r, "minio.v3.InfoCannedPolicy"))
 		},
 		SetHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.SetPolicy"
-			}
-			h.PolicyHTTPService().SetPolicy(w, r)
+			h.PolicyHTTPService().SetPolicy(w, requestWithAction(r, "minio.v3.SetPolicy"))
 		},
 		DetachHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.DetachPolicy"
-			}
-			h.PolicyHTTPService().DetachPolicy(w, r)
+			h.PolicyHTTPService().DetachPolicy(w, requestWithAction(r, "minio.v3.DetachPolicy"))
 		},
 		ListEntitiesHandler: func(w nethttp.ResponseWriter, r *nethttp.Request) {
-			ctx := r.Context()
-			if data, ok := loggingHttp.GetLogData(ctx); ok {
-				data.Action = "minio.v3.PolicyEntitiesList"
-			}
-			h.PolicyHTTPService().PolicyEntitiesList(w, r)
+			h.PolicyHTTPService().PolicyEntitiesList(w, requestWithAction(r, "minio.v3.PolicyEntitiesList"))
 		},
 	}
 }

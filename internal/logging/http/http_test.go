@@ -115,7 +115,7 @@ func TestPrepareAccessLogMiddleware(t *testing.T) {
 		}
 	})
 
-	t.Run("logs operation when Action is set", func(t *testing.T) {
+	t.Run("logs action when Action is set", func(t *testing.T) {
 		var logBuf bytes.Buffer
 		logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
 
@@ -138,13 +138,13 @@ func TestPrepareAccessLogMiddleware(t *testing.T) {
 			t.Fatalf("failed to parse log output: %v", err)
 		}
 
-		// Verify operation is logged
-		operation, ok := logEntry["operation"].(string)
+		// Verify action is logged
+		action, ok := logEntry["action"].(string)
 		if !ok {
-			t.Fatalf("expected operation to be present as string, got %v", logEntry["operation"])
+			t.Fatalf("expected action to be present as string, got %v", logEntry["action"])
 		}
-		if operation != "ListBuckets" {
-			t.Errorf("expected operation 'ListBuckets', got %q", operation)
+		if action != "ListBuckets" {
+			t.Errorf("expected action 'ListBuckets', got %q", action)
 		}
 	})
 

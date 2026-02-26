@@ -11,7 +11,9 @@ import (
 	contextInt "github.com/mallardduck/dirio/internal/context"
 	"github.com/mallardduck/dirio/internal/http/middleware"
 	httpresponse "github.com/mallardduck/dirio/internal/http/response"
+	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
+	"github.com/mallardduck/dirio/pkg/iam"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
@@ -26,11 +28,29 @@ func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {
 		if a.handlePostPolicyAuth(w, r, next) {
 			return
 		}
-		// No authentication credentials - mark as anonymous
-		// Authorization middleware will decide based on bucket policies
+		// No authentication credentials - mark as anonymous.
+		// Authorization middleware will decide based on bucket policies.
+		setLogUser(r, "anonymous")
 		ctx := contextInt.WithAnonymousRequest(r.Context())
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// setLogUser writes the principal identifier into the access log metadata so
+// the outer PrepareAccessLogMiddleware can include it in the log line.
+func setLogUser(r *http.Request, user string) {
+	if logData, ok := loggingHttp.GetLogData(r.Context()); ok {
+		logData.User = user
+	}
+}
+
+// userIdentifier returns the most human-readable identifier for a user.
+// Prefers Username; falls back to AccessKey for service accounts and admins.
+func userIdentifier(u *iam.User) string {
+	if u.Username != "" {
+		return u.Username
+	}
+	return u.AccessKey
 }
 
 // withSAContext enriches ctx with service-account info when the user is a non-admin SA.
@@ -83,6 +103,7 @@ func (a *Authenticator) handleHeaderAuth(w http.ResponseWriter, r *http.Request,
 		writeAuthError(w, r, err, "encountered error authenticating request")
 		return true
 	}
+	setLogUser(r, userIdentifier(user))
 	ctx := contextInt.WithUser(r.Context(), user)
 	ctx = a.withSAContext(ctx, user.AccessKey)
 	next.ServeHTTP(w, r.WithContext(ctx))
@@ -100,6 +121,7 @@ func (a *Authenticator) handlePresignedAuth(w http.ResponseWriter, r *http.Reque
 		writeAuthError(w, r, err, "encountered error authenticating pre-signed URL request")
 		return true
 	}
+	setLogUser(r, userIdentifier(user))
 	ctx := contextInt.WithPreSignedUser(r.Context(), user, expiresAt)
 	ctx = a.withSAContext(ctx, user.AccessKey)
 	next.ServeHTTP(w, r.WithContext(ctx))
@@ -117,6 +139,7 @@ func (a *Authenticator) handlePostPolicyAuth(w http.ResponseWriter, r *http.Requ
 		writeAuthError(w, r, err, "encountered error authenticating POST policy request")
 		return true
 	}
+	setLogUser(r, userIdentifier(user))
 	ctx := contextInt.WithPostPolicyRequest(r.Context(), user, form.PolicyBase64)
 	ctx = a.withSAContext(ctx, user.AccessKey)
 	next.ServeHTTP(w, r.WithContext(ctx))

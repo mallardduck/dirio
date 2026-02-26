@@ -14,6 +14,7 @@ import (
 	"github.com/mallardduck/dirio/internal/context"
 	httpresponse "github.com/mallardduck/dirio/internal/http/response"
 	"github.com/mallardduck/dirio/internal/logging"
+	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/policy/variables"
 	"github.com/mallardduck/dirio/pkg/s3types"
@@ -92,6 +93,7 @@ func AuthorizationMiddleware(config *AuthorizationConfig) func(http.Handler) htt
 			if principal.IsAdmin {
 				authzLogger.With("action", routeAction, "user", user.AccessKey).
 					Debug("admin bypass - skipping authorization")
+				setLogAuthz(r, "allow")
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -128,6 +130,7 @@ func AuthorizationMiddleware(config *AuthorizationConfig) func(http.Handler) htt
 					config.Metadata,
 				)
 				if !decision.IsAllowed() {
+					setLogAuthz(r, "deny")
 					writeAccessDenied(w, r)
 					return
 				}
@@ -167,6 +170,7 @@ func AuthorizationMiddleware(config *AuthorizationConfig) func(http.Handler) htt
 						"decision", decision.String(),
 					).Debug("access denied")
 
+					setLogAuthz(r, "deny")
 					writeAccessDenied(w, r)
 					return
 				}
@@ -177,6 +181,7 @@ func AuthorizationMiddleware(config *AuthorizationConfig) func(http.Handler) htt
 			}
 
 			// Authorization passed - proceed to handler
+			setLogAuthz(r, "allow")
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -373,6 +378,14 @@ func fetchOwnership(ctx stdcontext.Context, metadataMgr *metadata.Manager, bucke
 	}
 
 	return bucketOwnerUUID, objectOwnerUUID
+}
+
+// setLogAuthz writes the authorization decision into the access log metadata so
+// PrepareAccessLogMiddleware can include it in the log line.
+func setLogAuthz(r *http.Request, decision string) {
+	if logData, ok := loggingHttp.GetLogData(r.Context()); ok {
+		logData.AuthzDecision = decision
+	}
 }
 
 // writeAccessDenied writes an S3 AccessDenied error response
