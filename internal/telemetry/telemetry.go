@@ -41,16 +41,13 @@ type MetadataStats struct {
 
 // Provider wraps the OTel MeterProvider and exposes the Prometheus HTTP handler.
 type Provider struct {
-	mp             *sdkmetric.MeterProvider
-	prometheusHTTP http.Handler
+	mp *sdkmetric.MeterProvider
+	// PrometheusHTTP is the HTTP handler that serves Prometheus-format metrics.
+	PrometheusHTTP http.Handler
 }
 
 // MeterProvider returns the underlying OTel MeterProvider.
 func (p *Provider) MeterProvider() metric.MeterProvider { return p.mp }
-
-// PrometheusHandler returns the HTTP handler that serves Prometheus-format metrics.
-// Mount this at /.dirio/metrics.
-func (p *Provider) PrometheusHandler() http.Handler { return p.prometheusHTTP }
 
 // Shutdown flushes and closes all exporters.  Call during graceful shutdown.
 func (p *Provider) Shutdown(ctx context.Context) error { return p.mp.Shutdown(ctx) }
@@ -115,7 +112,7 @@ func Setup(ctx context.Context, cfg Config) (*Provider, error) {
 
 	return &Provider{
 		mp: mp,
-		prometheusHTTP: promhttp.HandlerFor(reg, promhttp.HandlerOpts{
+		PrometheusHTTP: promhttp.HandlerFor(reg, promhttp.HandlerOpts{
 			EnableOpenMetrics: true,
 		}),
 	}, nil

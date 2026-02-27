@@ -21,6 +21,12 @@ import (
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 	"github.com/mallardduck/teapot-router/pkg/urlbuilder"
 
+	"github.com/mallardduck/dirio/internal/service"
+
+	"github.com/mallardduck/dirio/internal/http/server/health"
+	"github.com/mallardduck/dirio/internal/http/server/metrics"
+	"github.com/mallardduck/dirio/internal/http/server/prof"
+
 	"github.com/mallardduck/dirio/internal/http/api"
 	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/http/middleware"
@@ -157,46 +163,17 @@ func New(config *Config) (*Server, error) {
 	}
 
 	// Initialize authenticator with appropriate credentials.
-	var authenticator *auth.Authenticator
-
-	dataCredsConfigured := config.DataConfig != nil && config.DataConfig.Credentials.IsConfigured()
-
-	switch {
-	case dataCredsConfigured && config.CLICredentialsExplicitlySet:
-		// Both data config credentials and explicit CLI credentials present — dual admin mode.
-		log.Info("Configured dual admin access",
-			"cli_admin", config.AccessKey,
-			"data_admin", config.DataConfig.Credentials.AccessKey)
-		authenticator = auth.New(metaMgr, config.AccessKey, config.SecretKey)
-		authenticator = authenticator.WithAlternativeRoot(
-			config.DataConfig.Credentials.AccessKey,
-			config.DataConfig.Credentials.SecretKey,
-		)
-	case dataCredsConfigured:
-		// Data config credentials configured, no explicit CLI override — data config admin only.
-		log.Info("Using data config admin credentials",
-			"data_admin", config.DataConfig.Credentials.AccessKey)
-		authenticator = auth.New(metaMgr,
-			config.DataConfig.Credentials.AccessKey,
-			config.DataConfig.Credentials.SecretKey,
-		)
-	default:
-		// No configured data credentials — fall back to CLI/env credentials.
-		if !config.CLICredentialsExplicitlySet {
-			// TODO: eventually we should stop doing this since default credentials are risky
-			log.Warn("No admin credentials configured — using defaults. Run \"dirio init\" to set up admin credentials.",
-				"admin", config.AccessKey)
-		}
-		authenticator = auth.New(metaMgr, config.AccessKey, config.SecretKey)
-	}
+	authenticator := Authenticator(metaMgr, config)
 
 	// Initialize policy engine with IAM policy resolver.
 	resolver := policy.NewMetadataResolver(metaMgr)
 	policyEngine := policy.New(resolver)
 
 	// Load all bucket policies from metadata at startup.
+	// TODO: consider refactor of this metadata init code & get a real context into here
 	bucketPolicies, err := metaMgr.GetAllBucketPolicies(context.Background())
 	if err != nil {
+		// TODO potentially this should be a hard failure
 		log.Warn("failed to load bucket policies", "error", err)
 	} else if len(bucketPolicies) > 0 {
 		policyEngine.LoadBucketPolicies(context.Background(), bucketPolicies)
@@ -256,12 +233,11 @@ func (s *Server) setupRoutes() {
 		))
 	}
 
+	serviceFactory := service.NewServiceFactory(s.storage, s.metadata, s.policyEngine)
 	apiHandler := api.New(
-		s.storage,
-		s.metadata,
+		serviceFactory,
 		s.auth,
 		urlbuilder.New(s.config.CanonicalDomain),
-		s.policyEngine,
 		s.auth,
 	)
 
@@ -274,6 +250,12 @@ func (s *Server) setupRoutes() {
 		RootFS:       s.config.RootFS,
 		Debug:        s.config.Debug,
 		Telemetry:    s.telemetry,
+
+		// New things
+		Health:  health.New(s.metadata, s.config.RootFS),
+		Metrics: metrics.New(s.telemetry),
+		//Minio:   minio.New(s.auth, serviceFactory),
+		Pprof: prof.New(),
 	}
 
 	SetupRoutes(s.router, deps)

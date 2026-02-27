@@ -3,10 +3,13 @@ package server
 import (
 	"io"
 	"net/http"
-	"net/http/pprof"
 
 	"github.com/go-git/go-billy/v5"
 	"github.com/mallardduck/teapot-router/pkg/teapot"
+
+	miniohttp "github.com/mallardduck/dirio/internal/minio/http"
+
+	"github.com/mallardduck/dirio/internal/http/server/prof"
 
 	"github.com/mallardduck/dirio/internal/http/api"
 	"github.com/mallardduck/dirio/internal/http/auth"
@@ -15,7 +18,6 @@ import (
 	"github.com/mallardduck/dirio/internal/http/server/favicon"
 	"github.com/mallardduck/dirio/internal/http/server/health"
 	"github.com/mallardduck/dirio/internal/http/server/metrics"
-	miniohttp "github.com/mallardduck/dirio/internal/minio/http"
 
 	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
@@ -25,6 +27,7 @@ import (
 
 // RouteDependencies contains all dependencies needed for route handlers.
 type RouteDependencies struct {
+	// Original Deps
 	Auth         *auth.Authenticator
 	PolicyEngine *policy.Engine
 	Metadata     *metadata.Manager      // For ownership-based authorization
@@ -33,6 +36,12 @@ type RouteDependencies struct {
 	RootFS       billy.Filesystem // For health probes
 	Debug        bool
 	Telemetry    *telemetry.Provider // For /.dirio/metrics
+
+	// Modern Deps
+	Health  health.RouteHandlers
+	Metrics metrics.RouteHandlers
+	//Minio   minio.RouteHandlers
+	Pprof prof.RouteHandlers
 }
 
 // SetupRoutes configures all application routes on the provided router.
@@ -58,37 +67,14 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 
 	// DirIO health endpoints (unauthenticated).
 	// These are under /.dirio/ so they never collide with user bucket names.
-	var healthMeta health.Pinger
-	var healthFS billy.Filesystem
-	if deps != nil {
-		healthMeta = deps.Metadata
-		healthFS = deps.RootFS
-	}
-	health.RegisterRoutes(r, healthMeta, healthFS)
+	health.RegisterRoutes(r, deps.Health)
 
 	// DirIO metrics endpoint — serves Prometheus-format OTel metrics (unauthenticated).
-	var telProvider *telemetry.Provider
-	if deps != nil {
-		telProvider = deps.Telemetry
-	}
-	metrics.RegisterRoutes(r, telProvider)
+	metrics.RegisterRoutes(r, deps.Metrics)
 
 	// pprof profiling endpoints — only registered when --debug is set.
 	// Unauthenticated: debug mode is not intended for production use.
-	if deps != nil && deps.Debug {
-		r.Func().GET("/debug/pprof/", pprof.Index)
-		r.Func().GET("/debug/pprof/cmdline", pprof.Cmdline)
-		r.Func().GET("/debug/pprof/profile", pprof.Profile)
-		r.Func().GET("/debug/pprof/symbol", pprof.Symbol)
-		r.Func().POST("/debug/pprof/symbol", pprof.Symbol)
-		r.Func().GET("/debug/pprof/trace", pprof.Trace)
-		r.Func().GET("/debug/pprof/goroutine", pprof.Handler("goroutine").ServeHTTP)
-		r.Func().GET("/debug/pprof/heap", pprof.Handler("heap").ServeHTTP)
-		r.Func().GET("/debug/pprof/allocs", pprof.Handler("allocs").ServeHTTP)
-		r.Func().GET("/debug/pprof/block", pprof.Handler("block").ServeHTTP)
-		r.Func().GET("/debug/pprof/mutex", pprof.Handler("mutex").ServeHTTP)
-		r.Func().GET("/debug/pprof/threadcreate", pprof.Handler("threadcreate").ServeHTTP)
-	}
+	prof.RegisterRoutes(r, deps.Pprof)
 
 	// MinIO Admin API routes (authenticated)
 	var iamHandler *miniohttp.Handler

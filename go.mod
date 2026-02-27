@@ -13,7 +13,7 @@ require (
 	github.com/go-git/go-billy/v5 v5.7.0
 	github.com/google/uuid v1.6.0
 	github.com/mallardduck/go-http-helpers v0.1.0
-	github.com/mallardduck/teapot-router v0.14.0
+	github.com/mallardduck/teapot-router v0.14.2
 	github.com/minio/madmin-go/v3 v3.0.110
 	github.com/phuslu/lru v1.0.18
 	github.com/prometheus/client_golang v1.23.2

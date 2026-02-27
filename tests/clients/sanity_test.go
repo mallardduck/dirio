@@ -123,7 +123,6 @@ func runClientTest(t *testing.T, testName string, req testcontainers.ContainerRe
 // This proves our tests aren't just passing unconditionally.
 func TestSanityCheck_FailingServer(t *testing.T) {
 	t.Parallel()
-
 	externalPort := findAvailablePort(t)
 	mockServer, containerURL := createMockServer(externalPort, mockServerFailing)
 	defer mockServer.Close()
@@ -181,7 +180,6 @@ func TestSanityCheck_FailingServer(t *testing.T) {
 // This catches false positives where tests pass just because status code is 200.
 func TestSanityCheck_DumbSuccessServer(t *testing.T) {
 	t.Parallel()
-
 	externalPort := findAvailablePort(t)
 	mockServer, containerURL := createMockServer(externalPort, mockServerDumbSuccess)
 	defer mockServer.Close()

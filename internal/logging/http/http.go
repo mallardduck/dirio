@@ -35,13 +35,30 @@ type LogMetadata struct {
 }
 
 func GetLogData(ctx context.Context) (*LogMetadata, bool) {
-	var metadata *LogMetadata
-	var ok bool
-	if metadata, ok = ctx.Value(logDataKey).(*LogMetadata); !ok {
+	metadata, ok := ctx.Value(logDataKey).(*LogMetadata)
+	if !ok {
 		return nil, false
 	}
 
 	return metadata, true
+}
+
+func SetLogData(ctx context.Context, in LogMetadata) {
+	metadata, ok := ctx.Value(logDataKey).(*LogMetadata)
+	if ok {
+		if in.Action != "" {
+			metadata.Action = in.Action
+		}
+		if in.User != "" {
+			metadata.User = in.User
+		}
+		if in.AuthzDecision != "" {
+			metadata.AuthzDecision = in.AuthzDecision
+		}
+		if len(in.Custom) > 0 {
+			metadata.Custom = in.Custom
+		}
+	}
 }
 
 // responseWriter wraps http.ResponseWriter to capture status code

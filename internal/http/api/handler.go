@@ -7,8 +7,6 @@ import (
 	"github.com/mallardduck/dirio/internal/http/auth"
 	httpresponse "github.com/mallardduck/dirio/internal/http/response"
 	miniohttp "github.com/mallardduck/dirio/internal/minio/http"
-	"github.com/mallardduck/dirio/internal/persistence/metadata"
-	"github.com/mallardduck/dirio/internal/persistence/storage"
 	"github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/service"
 )
@@ -29,14 +27,11 @@ type URLBuilder interface {
 
 // New creates a new DirIO API handler
 func New(
-	diskStorage *storage.Storage,
-	metadataManager *metadata.Manager,
+	serviceFactory *service.ServicesFactory,
 	authHandler *auth.Authenticator,
 	urlBuilder URLBuilder,
-	policyEngine *policy.Engine,
 	adminKeys policy.AdminKeyChecker,
 ) *Handler {
-	serviceFactory := service.NewServiceFactory(diskStorage, metadataManager, policyEngine)
 	return &Handler{
 		authHandler:    authHandler,
 		serviceFactory: serviceFactory,

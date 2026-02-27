@@ -121,8 +121,8 @@ github.com/magiconair/properties v1.8.10 h1:s31yESBquKXCV9a/ScB3ESkOjUYYv+X0rg8S
 github.com/magiconair/properties v1.8.10/go.mod h1:Dhd985XPs7jluiymwWYZ0G4Z61jb3vdS329zhj2hYo0=
 github.com/mallardduck/go-http-helpers v0.1.0 h1:jRDoVnPahYuOOsX7nS0S9YAWkC9R6RFvDSfIck828yk=
 github.com/mallardduck/go-http-helpers v0.1.0/go.mod h1:eO0jzR/8OqxIeLGgeRCTYRB5Q8yHH+pndXwQYJH2LVg=
-github.com/mallardduck/teapot-router v0.14.0 h1:X7tmkybIS+PTjVOZcfKZVqGK7iRInWUF7jt3tUn6ntw=
-github.com/mallardduck/teapot-router v0.14.0/go.mod h1:eDvmnDnUToo8yas+sM0LLwu53nE4xmWo1Q/uNVK68GU=
+github.com/mallardduck/teapot-router v0.14.2 h1:3YzAJeLWu8LR8Jlr3f7Up7LHQh9pMHlEUXOKagJw8YU=
+github.com/mallardduck/teapot-router v0.14.2/go.mod h1:eDvmnDnUToo8yas+sM0LLwu53nE4xmWo1Q/uNVK68GU=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/mattn/go-runewidth v0.0.20 h1:WcT52H91ZUAwy8+HUkdM3THM6gXqXuLJi9O3rjcQQaQ=

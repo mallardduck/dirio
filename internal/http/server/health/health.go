@@ -13,6 +13,8 @@ type Pinger interface {
 	Ping() error
 }
 
+var _ RouteHandlers = (*Handler)(nil)
+
 // Handler implements the /health, /health/ready, and /health/live endpoints.
 type Handler struct {
 	metadata  Pinger
@@ -29,7 +31,7 @@ func New(metadata Pinger, rootFS billy.Filesystem) *Handler {
 	}
 }
 
-// componentStatus is one component inside the health response.
+// componentStatus is one part inside the health response.
 type componentStatus struct {
 	Status string `json:"status"`
 	Error  string `json:"error,omitempty"`
@@ -43,65 +45,71 @@ type healthResponse struct {
 }
 
 // HandleHealth returns a JSON summary of all component statuses.
-// HTTP 200 when everything is healthy; 503 when one or more components are degraded.
-func (h *Handler) HandleHealth(w http.ResponseWriter, r *http.Request) {
-	dbErr := h.metadata.Ping()
-	storageErr := h.checkStorage()
+// HTTP 200 when everything is healthy; 503 when one or more parts are degraded.
+func (h *Handler) HandleHealth() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		dbErr := h.metadata.Ping()
+		storageErr := h.checkStorage()
 
-	components := make(map[string]componentStatus, 2)
-	healthy := true
+		components := make(map[string]componentStatus, 2)
+		healthy := true
 
-	if dbErr != nil {
-		components["metadata_db"] = componentStatus{Status: "error", Error: dbErr.Error()}
-		healthy = false
-	} else {
-		components["metadata_db"] = componentStatus{Status: "ok"}
-	}
+		if dbErr != nil {
+			components["metadata_db"] = componentStatus{Status: "error", Error: dbErr.Error()}
+			healthy = false
+		} else {
+			components["metadata_db"] = componentStatus{Status: "ok"}
+		}
 
-	if storageErr != nil {
-		components["storage"] = componentStatus{Status: "error", Error: storageErr.Error()}
-		healthy = false
-	} else {
-		components["storage"] = componentStatus{Status: "ok"}
-	}
+		if storageErr != nil {
+			components["storage"] = componentStatus{Status: "error", Error: storageErr.Error()}
+			healthy = false
+		} else {
+			components["storage"] = componentStatus{Status: "ok"}
+		}
 
-	status := "ok"
-	code := http.StatusOK
-	if !healthy {
-		status = "degraded"
-		code = http.StatusServiceUnavailable
-	}
+		status := "ok"
+		code := http.StatusOK
+		if !healthy {
+			status = "degraded"
+			code = http.StatusServiceUnavailable
+		}
 
-	resp := healthResponse{
-		Status:     status,
-		Uptime:     time.Since(h.startTime).Round(time.Second).String(),
-		Components: components,
-	}
+		resp := healthResponse{
+			Status:     status,
+			Uptime:     time.Since(h.startTime).Round(time.Second).String(),
+			Components: components,
+		}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(resp)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		_ = json.NewEncoder(w).Encode(resp)
+	})
 }
 
 // HandleReady is a readiness probe: 200 when BoltDB and storage are accessible,
 // 503 otherwise.  Used by load balancers and orchestrators to gate traffic.
-func (h *Handler) HandleReady(w http.ResponseWriter, r *http.Request) {
-	if err := h.metadata.Ping(); err != nil {
-		http.Error(w, "metadata db unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	if err := h.checkStorage(); err != nil {
-		http.Error(w, "storage unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
+func (h *Handler) HandleReady() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := h.metadata.Ping(); err != nil {
+			http.Error(w, "metadata db unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if err := h.checkStorage(); err != nil {
+			http.Error(w, "storage unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
 }
 
 // HandleLive is a liveness probe: always 200 if the process is reachable and
 // not deadlocked.  Kept as /healthz alias for backwards compatibility with
 // Docker health checks and the performance test wait loop.
-func (h *Handler) HandleLive(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
+func (h *Handler) HandleLive() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 }
 
 // checkStorage attempts a directory read on the root filesystem to confirm it
