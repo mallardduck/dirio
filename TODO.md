@@ -426,8 +426,12 @@ Both single-port and dual-port modes are supported and maintained. **Dual-port i
 
 **Single-port mode** (current default): S3, admin API, and console all share one port, distinguished by path prefix. Simple to set up; useful for embedded/dev deployments. The trade-off is path-based muxing overhead and more complex routing rules.
 
-**Dual-port mode** (recommended for production): S3 data plane on a dedicated port (e.g. `:9000`), admin + console control plane on a separate port (e.g. `:9001`). Each service gets its own router with no path-prefix logic. Enables clean DNS separation (e.g. `s3.myserver.local` → `:9000`, `admin.myserver.local` → `:9001` via nginx or mDNS) and simplifies firewall rules — S3 traffic never touches the admin port.
+**Dual-port mode** (recommended for production): S3 data plane on a dedicated port (e.g. `:9000`), admin + console control plane on a separate port (e.g. `:9010`). Each service gets its own router with no path-prefix logic. Enables clean DNS separation (e.g. `s3.myserver.local` → `:9000`, `admin.myserver.local` → `:9010` via nginx or mDNS) and simplifies firewall rules — S3 traffic never touches the admin port.
 
+- [ ] **Switch default Admin port to 9010** — helps future-proof for if/when we want TLS ports
+- [ ] **mDNS Dual-port mode** — ensure mDNS services register for both ports and services
+
+### Docs and Enablement
 - [ ] **Document deployment modes** — write `docs/DEPLOYMENT.md` covering single-port vs dual-port, when to use each, example configs for both, and mDNS/DNS routing for dual-port
 - [ ] **nginx reference configs** — document `proxy_pass` examples for both modes: S3 path-routed on single port, and split-port with separate `server {}` blocks; include TLS termination, Host header preservation, and pre-signed URL considerations
 - [ ] **Docker Compose example** — single service, dual-port exposed, bind-mounted data directory; suitable as a quickstart template
