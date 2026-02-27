@@ -428,8 +428,8 @@ Both single-port and dual-port modes are supported and maintained. **Dual-port i
 
 **Dual-port mode** (recommended for production): S3 data plane on a dedicated port (e.g. `:9000`), admin + console control plane on a separate port (e.g. `:9010`). Each service gets its own router with no path-prefix logic. Enables clean DNS separation (e.g. `s3.myserver.local` → `:9000`, `admin.myserver.local` → `:9010` via nginx or mDNS) and simplifies firewall rules — S3 traffic never touches the admin port.
 
-- [ ] **Switch default Admin port to 9010** — helps future-proof for if/when we want TLS ports
-- [ ] **mDNS Dual-port mode** — ensure mDNS services register for both ports and services
+- ✅ **Switch default Admin port to 9010** — helps future-proof for if/when we want TLS ports
+- ✅ **mDNS Dual-port mode** — ensure mDNS services register for both ports and services
 
 ### Docs and Enablement
 - [ ] **Document deployment modes** — write `docs/DEPLOYMENT.md` covering single-port vs dual-port, when to use each, example configs for both, and mDNS/DNS routing for dual-port

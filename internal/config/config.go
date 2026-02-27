@@ -50,8 +50,9 @@ type Settings struct {
 	CLIRegionExplicitlySet bool
 
 	// Console settings
-	ConsoleEnabled bool
-	ConsolePort    int
+	ConsoleEnabled       bool
+	ConsoleDedicatedPort bool
+	ConsolePort          int
 
 	// Lifecycle settings
 	ShutdownTimeout time.Duration
@@ -149,8 +150,9 @@ func LoadConfig(flags *pflag.FlagSet, v *viper.Viper) (*Settings, error) {
 		CLIRegionExplicitlySet: resolver.WasExplicitlySet(Region),
 
 		// Console settings
-		ConsoleEnabled: resolver.GetBool(ConsoleEnabled),
-		ConsolePort:    resolver.GetInt(ConsolePort),
+		ConsoleEnabled:       resolver.GetBool(ConsoleEnabled),
+		ConsoleDedicatedPort: resolver.GetBool(ConsoleDedicatedPort),
+		ConsolePort:          resolver.GetInt(ConsolePort),
 
 		// Lifecycle settings
 		ShutdownTimeout: time.Duration(resolver.GetInt(ShutdownTimeout)) * time.Second,

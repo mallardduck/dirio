@@ -65,10 +65,14 @@ var (
 	// ConsoleEnabled controls whether the embedded web admin console is served
 	ConsoleEnabled = option.NewOption("console", true)
 
-	// ConsolePort is the optional separate port for the console.
-	// When 0 (default), the console is mounted at /dirio/ui/ on the main port.
-	// When set (e.g. 9001), the console gets its own listener on that port.
-	ConsolePort = option.NewOption("console-port", 0)
+	// ConsoleDedicatedPort controls whether the admin console and control plane
+	// are served on their own port (dual-port mode) or share the main S3 port
+	// (single-port mode). Default false = single-port mode.
+	ConsoleDedicatedPort = option.NewOption("console-dedicated-port", false)
+
+	// ConsolePort is the port used for the admin console and control plane when
+	// ConsoleDedicatedPort is true. Has no effect in single-port mode.
+	ConsolePort = option.NewOption("console-port", 9010)
 )
 
 // Lifecycle configuration options

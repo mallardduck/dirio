@@ -328,9 +328,16 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// Start mDNS service if enabled.
 	if s.config.MDNSEnabled {
+		// In dual-port mode advertise the admin/console port separately so that
+		// mDNS clients can discover both the S3 data plane and the control plane.
+		adminPort := s.consolePort
+		if s.consoleSamePort() {
+			adminPort = 0 // single-port mode: no separate admin advertisement
+		}
 		mdnsSvc, err := mdns.New(&mdns.Config{
 			ServiceName: s.config.MDNSName,
 			Port:        s.config.Port,
+			AdminPort:   adminPort,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create mDNS service: %w", err)

@@ -31,8 +31,13 @@ type Config struct {
 	// ServiceName is the mDNS service name (e.g., "dirio-s3")
 	ServiceName string
 
-	// Port is the HTTP port number
+	// Port is the S3 data-plane HTTP port number
 	Port int
+
+	// AdminPort is the admin/console control-plane port (dual-port mode).
+	// When non-zero and different from Port, additional mDNS service records
+	// are registered for the admin control plane on this port.
+	AdminPort int
 
 	// HTTPSPort is the HTTPS port (optional)
 	HTTPSPort int
@@ -212,7 +217,7 @@ func (s *Service) createServiceConfigs(nodeHostname string) []dnssd.Config {
 	}
 
 	configs := []dnssd.Config{
-		// S3 service
+		// S3 data-plane service
 		{
 			Name:   s.config.ServiceName,
 			Type:   "_s3._tcp",
@@ -221,7 +226,7 @@ func (s *Service) createServiceConfigs(nodeHostname string) []dnssd.Config {
 			Port:   baseConfig.Port,
 			Text:   baseConfig.Text,
 		},
-		// HTTP service
+		// S3 HTTP service
 		{
 			Name:   s.config.ServiceName + " HTTP",
 			Type:   "_http._tcp",
@@ -230,6 +235,18 @@ func (s *Service) createServiceConfigs(nodeHostname string) []dnssd.Config {
 			Port:   baseConfig.Port,
 			Text:   baseConfig.Text,
 		},
+	}
+
+	// In dual-port mode register the admin/console control plane on its own port.
+	if s.config.AdminPort > 0 && s.config.AdminPort != s.config.Port {
+		configs = append(configs, dnssd.Config{
+			Name:   s.config.ServiceName + " Admin",
+			Type:   "_http._tcp",
+			Domain: "local",
+			Host:   baseConfig.Host,
+			Port:   s.config.AdminPort,
+			Text:   baseConfig.Text,
+		})
 	}
 
 	// Add HTTPS if configured

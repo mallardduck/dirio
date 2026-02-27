@@ -17,7 +17,11 @@ import (
 // setupConsole wires the admin console into the server when the noconsole build
 // tag is NOT set (the default). It creates the adapter, builds the console
 // handler, and registers it with the server.
-func setupConsole(srv *server.Server, enabled bool, port int) {
+//
+// When dedicatedPort is false the console is mounted at /dirio/ui/ on the main
+// S3 port (single-port mode). When true it is served on its own listener at
+// port (dual-port mode).
+func setupConsole(srv *server.Server, enabled bool, dedicatedPort bool, port int) {
 	if !enabled {
 		return
 	}
@@ -26,7 +30,11 @@ func setupConsole(srv *server.Server, enabled bool, port int) {
 	adapter := consolewire.NewAdapter(factory)
 	handler := console.New(adapter, srv.Router(), newConsoleAdminAuth(srv.Auth()))
 
-	srv.SetConsole(handler, port)
+	effectivePort := 0
+	if dedicatedPort {
+		effectivePort = port
+	}
+	srv.SetConsole(handler, effectivePort)
 }
 
 // consoleAdminAuth adapts internal/http/auth.Authenticator to the console's

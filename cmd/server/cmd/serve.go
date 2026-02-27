@@ -53,7 +53,8 @@ func init() {
 
 	// Console flags
 	serveCmd.Flags().Bool(config.ConsoleEnabled.GetFlagKey(), true, "Enable the embedded web admin console (default: true; use --console=false to disable)")
-	serveCmd.Flags().Int(config.ConsolePort.GetFlagKey(), 0, "Optional separate port for the console (e.g. 9001); defaults to main port at /dirio/ui/")
+	serveCmd.Flags().Bool(config.ConsoleDedicatedPort.GetFlagKey(), false, "Serve the admin console on its own port (dual-port mode); when false the console shares the main S3 port")
+	serveCmd.Flags().Int(config.ConsolePort.GetFlagKey(), 9010, "Port for the admin console and control plane when --console-dedicated-port is enabled (default: 9010)")
 
 	// Lifecycle flags
 	serveCmd.Flags().Int(config.ShutdownTimeout.GetFlagKey(), 30, "Graceful shutdown timeout in seconds")
@@ -79,6 +80,7 @@ func init() {
 	_ = viper.BindPFlag(config.MDNSMode.GetViperKey(), serveCmd.Flags().Lookup(config.MDNSMode.GetFlagKey()))
 	_ = viper.BindPFlag(config.CanonicalDomain.GetViperKey(), serveCmd.Flags().Lookup(config.CanonicalDomain.GetFlagKey()))
 	_ = viper.BindPFlag(config.ConsoleEnabled.GetViperKey(), serveCmd.Flags().Lookup(config.ConsoleEnabled.GetFlagKey()))
+	_ = viper.BindPFlag(config.ConsoleDedicatedPort.GetViperKey(), serveCmd.Flags().Lookup(config.ConsoleDedicatedPort.GetFlagKey()))
 	_ = viper.BindPFlag(config.ConsolePort.GetViperKey(), serveCmd.Flags().Lookup(config.ConsolePort.GetFlagKey()))
 	_ = viper.BindPFlag(config.ShutdownTimeout.GetViperKey(), serveCmd.Flags().Lookup(config.ShutdownTimeout.GetFlagKey()))
 	_ = viper.BindPFlag(config.OTLPMetricsEnabled.GetViperKey(), serveCmd.Flags().Lookup(config.OTLPMetricsEnabled.GetFlagKey()))
@@ -174,7 +176,7 @@ func runServer(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to create server: %w", err)
 	}
 
-	setupConsole(srv, settings.ConsoleEnabled, settings.ConsolePort)
+	setupConsole(srv, settings.ConsoleEnabled, settings.ConsoleDedicatedPort, settings.ConsolePort)
 
 	log.Info("starting server", "port", settings.Port, "data_dir", settings.DataDir)
 
