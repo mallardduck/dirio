@@ -6,7 +6,6 @@ import (
 	"github.com/mallardduck/dirio/internal/http/api/s3"
 	"github.com/mallardduck/dirio/internal/http/auth"
 	httpresponse "github.com/mallardduck/dirio/internal/http/response"
-	miniohttp "github.com/mallardduck/dirio/internal/minio/http"
 	"github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/service"
 )
@@ -16,7 +15,6 @@ type Handler struct {
 	authHandler    *auth.Authenticator
 	serviceFactory *service.ServicesFactory
 	S3Handler      *s3.HTTPHandler
-	IAMHandler     *miniohttp.Handler
 }
 
 // URLBuilder defines the interface for generating URLs in S3 API responses
@@ -39,9 +37,6 @@ func New(
 			serviceFactory,
 			urlBuilder,
 			adminKeys,
-		),
-		IAMHandler: miniohttp.New(
-			serviceFactory,
 		),
 	}
 }

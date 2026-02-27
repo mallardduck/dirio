@@ -21,6 +21,8 @@ import (
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 	"github.com/mallardduck/teapot-router/pkg/urlbuilder"
 
+	minioHTTP "github.com/mallardduck/dirio/internal/minio/http"
+
 	"github.com/mallardduck/dirio/internal/service"
 
 	"github.com/mallardduck/dirio/internal/http/server/health"
@@ -147,7 +149,7 @@ func (s *Server) SetConsole(h *teapot.Router, port int) {
 
 // New creates a new Server from a fully-prepared Config.
 //
-// The Config must carry RootFS and Metadata from the Starter — server.New no
+// The Config must carry RootFS and metadata from the Starter — server.New no
 // longer constructs those itself, ensuring MinIO import and DataConfig
 // finalisation have already completed before the HTTP layer is wired up.
 func New(config *Config) (*Server, error) {
@@ -241,21 +243,18 @@ func (s *Server) setupRoutes() {
 		s.auth,
 	)
 
-	deps := &RouteDependencies{
-		Auth:         s.auth,
-		PolicyEngine: s.policyEngine,
-		Metadata:     s.metadata,
-		AdminKeys:    s.auth,
+	deps := RouteDependencies{
+		auth:         s.auth,
+		policyEngine: s.policyEngine,
+		metadata:     s.metadata,
+		adminKeys:    s.auth,
 		APIHandler:   apiHandler,
-		RootFS:       s.config.RootFS,
-		Debug:        s.config.Debug,
-		Telemetry:    s.telemetry,
 
 		// New things
 		Health:  health.New(s.metadata, s.config.RootFS),
 		Metrics: metrics.New(s.telemetry),
-		//Minio:   minio.New(s.auth, serviceFactory),
-		Pprof: prof.New(),
+		Minio:   minioHTTP.New(s.auth, serviceFactory),
+		Pprof:   prof.New(),
 	}
 
 	SetupRoutes(s.router, deps)

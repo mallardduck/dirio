@@ -6,6 +6,7 @@ import (
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 	"github.com/spf13/cobra"
 
+	cliRoutes "github.com/mallardduck/dirio/internal/cli/routes"
 	"github.com/mallardduck/dirio/internal/http/server"
 )
 
@@ -29,7 +30,16 @@ func init() {
 func runRoutes(cmd *cobra.Command, args []string) error {
 	// Create router and setup routes WITHOUT starting server
 	r := teapot.New()
-	server.SetupRoutes(r, nil)
+
+	stubHandler := cliRoutes.StubHandler{}
+	deps := server.RouteDependencies{
+		Health:  stubHandler,
+		Metrics: stubHandler,
+		Minio:   stubHandler,
+		Pprof:   stubHandler,
+	}
+
+	server.SetupRoutes(r, deps)
 
 	// Get all routes
 	routes := r.Routes()

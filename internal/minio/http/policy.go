@@ -18,14 +18,14 @@ import (
 	"github.com/mallardduck/dirio/pkg/iam"
 )
 
-type policyHTTPService struct {
+type PolicyHTTPService struct {
 	users    *user.Service
 	groups   *group.Service
 	policies *policy.Service
 	log      *slog.Logger
 }
 
-func (s policyHTTPService) AddCannedPolicy(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s PolicyHTTPService) AddCannedPolicy(w nethttp.ResponseWriter, r *nethttp.Request) {
 	// Get policy name from query parameter (MinIO API format)
 	policyName := query.String(r, "name", "")
 	if policyName == "" {
@@ -78,7 +78,7 @@ func (s policyHTTPService) AddCannedPolicy(w nethttp.ResponseWriter, r *nethttp.
 	w.WriteHeader(nethttp.StatusOK)
 }
 
-func (s policyHTTPService) ListCannedPolicies(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s PolicyHTTPService) ListCannedPolicies(w nethttp.ResponseWriter, r *nethttp.Request) {
 	policies, err := s.policies.List(r.Context())
 	if err != nil {
 		s.log.Error("Failed to list policies", "error", err)
@@ -100,7 +100,7 @@ func (s policyHTTPService) ListCannedPolicies(w nethttp.ResponseWriter, r *netht
 	}
 }
 
-func (s policyHTTPService) RemoveCannedPolicy(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s PolicyHTTPService) RemoveCannedPolicy(w nethttp.ResponseWriter, r *nethttp.Request) {
 	policyName := query.String(r, "name", "")
 	if policyName == "" {
 		s.log.Error("Missing policy name in query parameter")
@@ -128,7 +128,7 @@ func (s policyHTTPService) RemoveCannedPolicy(w nethttp.ResponseWriter, r *netht
 	w.WriteHeader(nethttp.StatusOK)
 }
 
-func (s policyHTTPService) InfoCannedPolicy(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s PolicyHTTPService) InfoCannedPolicy(w nethttp.ResponseWriter, r *nethttp.Request) {
 	policyName := query.String(r, "name", "")
 	if policyName == "" {
 		s.log.Error("Missing policy name in query parameter")
@@ -166,7 +166,7 @@ func (s policyHTTPService) InfoCannedPolicy(w nethttp.ResponseWriter, r *nethttp
 	}
 }
 
-func (s policyHTTPService) SetPolicy(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s PolicyHTTPService) SetPolicy(w nethttp.ResponseWriter, r *nethttp.Request) {
 	// SetPolicy attaches/detaches a policy to/from a user
 	// Supports both old and new MinIO admin API parameter formats:
 	// Old: ?policyName=X&userOrGroup=Y&isGroup=false
@@ -252,7 +252,7 @@ func (s policyHTTPService) SetPolicy(w nethttp.ResponseWriter, r *nethttp.Reques
 	}
 }
 
-func (s policyHTTPService) DetachPolicy(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s PolicyHTTPService) DetachPolicy(w nethttp.ResponseWriter, r *nethttp.Request) {
 	policyName, userOrGroup, isGroup, ok := s.parsePolicyAssocParams(w, r)
 	if !ok {
 		return
@@ -330,7 +330,7 @@ func (s policyHTTPService) DetachPolicy(w nethttp.ResponseWriter, r *nethttp.Req
 	}
 }
 
-func (s policyHTTPService) PolicyEntitiesList(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s PolicyHTTPService) PolicyEntitiesList(w nethttp.ResponseWriter, r *nethttp.Request) {
 	policyName := query.String(r, "policy", "")
 	if policyName == "" {
 		s.log.Error("Missing policy name in query parameter")
@@ -399,7 +399,7 @@ func (s policyHTTPService) PolicyEntitiesList(w nethttp.ResponseWriter, r *netht
 // parsePolicyAssocParams extracts policy association parameters from the request.
 // It handles both the new encrypted-body format (application/octet-stream) and
 // the legacy query-parameter format, writing an HTTP error and returning false on failure.
-func (s policyHTTPService) parsePolicyAssocParams(w nethttp.ResponseWriter, r *nethttp.Request) (policyName, userOrGroup string, isGroup, ok bool) {
+func (s PolicyHTTPService) parsePolicyAssocParams(w nethttp.ResponseWriter, r *nethttp.Request) (policyName, userOrGroup string, isGroup, ok bool) {
 	if r.Header.Get(headers.ContentType) != "application/octet-stream" || r.ContentLength <= 0 {
 		s.log.Debug("Parsed query parameters", "policy", query.String(r, "policyName", ""), "userOrGroup", query.String(r, "userOrGroup", ""))
 		return query.String(r, "policyName", ""),

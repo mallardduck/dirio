@@ -20,13 +20,13 @@ import (
 	iamPkg "github.com/mallardduck/dirio/pkg/iam"
 )
 
-type userHTTPService struct {
+type UserHTTPService struct {
 	users    *user.Service
 	policies *policy.Service
 	log      *slog.Logger
 }
 
-func (s *userHTTPService) ListUsers(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s *UserHTTPService) ListUsers(w nethttp.ResponseWriter, r *nethttp.Request) {
 	adminUser := auth.GetRequestUser(r.Context())
 	if adminUser == nil {
 		s.log.Error("No authenticated user in context")
@@ -75,7 +75,7 @@ func (s *userHTTPService) ListUsers(w nethttp.ResponseWriter, r *nethttp.Request
 	_, _ = w.Write(encrypted)
 }
 
-func (s *userHTTPService) CreateUser(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s *UserHTTPService) CreateUser(w nethttp.ResponseWriter, r *nethttp.Request) {
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		s.log.Error("Failed to read request body", "error", err)
@@ -146,7 +146,7 @@ func (s *userHTTPService) CreateUser(w nethttp.ResponseWriter, r *nethttp.Reques
 	w.WriteHeader(nethttp.StatusOK)
 }
 
-func (s *userHTTPService) RemoveUser(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s *UserHTTPService) RemoveUser(w nethttp.ResponseWriter, r *nethttp.Request) {
 	accessKey := query.String(r, "accessKey", "")
 
 	// Translate access key → UUID at the HTTP boundary.
@@ -187,7 +187,7 @@ func (s *userHTTPService) RemoveUser(w nethttp.ResponseWriter, r *nethttp.Reques
 	w.WriteHeader(nethttp.StatusOK)
 }
 
-func (s *userHTTPService) InfoUser(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s *UserHTTPService) InfoUser(w nethttp.ResponseWriter, r *nethttp.Request) {
 	accessKey := query.String(r, "accessKey", "")
 	if accessKey == "" {
 		s.log.Error("Missing accessKey parameter")
@@ -242,7 +242,7 @@ func (s *userHTTPService) InfoUser(w nethttp.ResponseWriter, r *nethttp.Request)
 	}
 }
 
-func (s *userHTTPService) SetUserStatus(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s *UserHTTPService) SetUserStatus(w nethttp.ResponseWriter, r *nethttp.Request) {
 	accessKey := query.String(r, "accessKey", "")
 	status := query.String(r, "status", "")
 

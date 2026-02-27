@@ -4,10 +4,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/go-git/go-billy/v5"
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 
-	miniohttp "github.com/mallardduck/dirio/internal/minio/http"
+	minioHTTP "github.com/mallardduck/dirio/internal/minio/http"
 
 	"github.com/mallardduck/dirio/internal/http/server/prof"
 
@@ -22,31 +21,27 @@ import (
 	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/policy"
-	"github.com/mallardduck/dirio/internal/telemetry"
 )
 
 // RouteDependencies contains all dependencies needed for route handlers.
 type RouteDependencies struct {
 	// Original Deps
-	Auth         *auth.Authenticator
-	PolicyEngine *policy.Engine
-	Metadata     *metadata.Manager      // For ownership-based authorization
-	AdminKeys    policy.AdminKeyChecker // Live admin key source (auth.Authenticator)
+	auth         *auth.Authenticator
+	policyEngine *policy.Engine
+	metadata     *metadata.Manager      // For ownership-based authorization
+	adminKeys    policy.AdminKeyChecker // Live admin key source (auth.Authenticator)
 	APIHandler   *api.Handler
-	RootFS       billy.Filesystem // For health probes
-	Debug        bool
-	Telemetry    *telemetry.Provider // For /.dirio/metrics
 
 	// Modern Deps
 	Health  health.RouteHandlers
 	Metrics metrics.RouteHandlers
-	//Minio   minio.RouteHandlers
-	Pprof prof.RouteHandlers
+	Minio   minioHTTP.RouteHandlers
+	Pprof   prof.RouteHandlers
 }
 
 // SetupRoutes configures all application routes on the provided router.
 // When deps is nil, routes are registered with nil handlers (for CLI route listing).
-func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
+func SetupRoutes(r *teapot.Router, deps RouteDependencies) {
 	// Favicon must be at site the root for full compatibility
 	r.Func().GET("/favicon.ico", favicon.HandleFavicon).Name("favicon")
 	// /.dirio/* — DirIO-specific routes.
@@ -77,22 +72,12 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 	prof.RegisterRoutes(r, deps.Pprof)
 
 	// MinIO Admin API routes (authenticated)
-	var iamHandler *miniohttp.Handler
-	var adminMW []func(http.Handler) http.Handler
-	if deps != nil {
-		iamHandler = deps.APIHandler.IAMHandler
-		adminMW = []func(http.Handler) http.Handler{deps.Auth.AuthMiddleware}
-	}
-	r.MiddlewareGroup(func(r *teapot.Router) {
-		r.NamedGroup("/minio/admin/v3", "admin", func(r *teapot.Router) {
-			miniohttp.RegisterAdminRouter(r, iamHandler)
-		})
-	}, adminMW...)
+	minioHTTP.RegisterRouter(r, deps.Minio)
 
 	// S3 API routes (authenticated + chunked encoding)
 	var s3Deps *s3RouteDeps
 	var s3MW []func(http.Handler) http.Handler
-	if deps != nil {
+	if deps.APIHandler != nil && deps.APIHandler.S3Handler != nil {
 		s3Deps = &s3RouteDeps{
 			listBuckets:             deps.APIHandler.S3Handler.ListBuckets,
 			headBucket:              bucket(deps.APIHandler.S3Handler.HeadBucket),
@@ -133,13 +118,13 @@ func SetupRoutes(r *teapot.Router, deps *RouteDependencies) {
 
 		// Build authorization middleware config
 		authzConfig := &policy.AuthorizationConfig{
-			Engine:    deps.PolicyEngine,
-			Metadata:  deps.Metadata,
-			AdminKeys: deps.AdminKeys,
+			Engine:    deps.policyEngine,
+			Metadata:  deps.metadata,
+			AdminKeys: deps.adminKeys,
 		}
 
 		s3MW = []func(http.Handler) http.Handler{
-			deps.Auth.AuthMiddleware,
+			deps.auth.AuthMiddleware,
 			policy.AuthorizationMiddleware(authzConfig),
 			middleware.ChunkedEncoding(func(r io.Reader) io.Reader {
 				return auth.NewChunkedReader(r)

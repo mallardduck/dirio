@@ -176,7 +176,7 @@ func (h *HTTPHandler) PutObject(w http.ResponseWriter, r *http.Request, bucket, 
 	// Extract S3-standard metadata headers
 	// ✅ FIXED(Phase 3.2 #9): Custom metadata keys now normalized to lowercase
 	//   - Go's HTTP package canonicalizes headers to Title-Case
-	//   - boto3 and other clients expect lowercase keys in Metadata dict
+	//   - boto3 and other clients expect lowercase keys in metadata dict
 	//   - Solution: Normalize all metadata keys to lowercase for consistent retrieval
 	//   - This matches behavior of other S3-compatible systems
 	metadataHeaders := []string{

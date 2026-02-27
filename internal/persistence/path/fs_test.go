@@ -292,10 +292,10 @@ func TestNewMetadataFS(t *testing.T) {
 	metadataPath := filepath.Join(tmpDir, MetadataDir)
 	info, err := os.Stat(metadataPath)
 	if err != nil {
-		t.Fatalf("Metadata directory not created: %v", err)
+		t.Fatalf("metadata directory not created: %v", err)
 	}
 	if !info.IsDir() {
-		t.Fatal("Metadata path is not a directory")
+		t.Fatal("metadata path is not a directory")
 	}
 
 	// Verify we can write to the metadata filesystem
@@ -308,7 +308,7 @@ func TestNewMetadataFS(t *testing.T) {
 	// Verify file is in metadata directory
 	testPath := filepath.Join(metadataPath, "test.json")
 	if _, err := os.Stat(testPath); err != nil {
-		t.Errorf("Metadata file not created: %v", err)
+		t.Errorf("metadata file not created: %v", err)
 	}
 }
 

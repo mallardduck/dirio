@@ -85,7 +85,7 @@ func TestMinIOImport_CreatesMetadataFiles(t *testing.T) {
 		}
 		if !info.IsDir() && filepath.Ext(path) == ".json" {
 			relPath, _ := filepath.Rel(tmpDir, path)
-			t.Logf("  Metadata file: %s", relPath)
+			t.Logf("  metadata file: %s", relPath)
 			fileCount++
 		}
 		return nil

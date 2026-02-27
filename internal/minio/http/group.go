@@ -14,14 +14,14 @@ import (
 	iamPkg "github.com/mallardduck/dirio/pkg/iam"
 )
 
-type groupHTTPService struct {
+type GroupHTTPService struct {
 	groups *group.Service
 	log    *slog.Logger
 }
 
 // ListGroups handles GET /minio/admin/v3/groups
 // Returns a JSON array of group names.
-func (s *groupHTTPService) ListGroups(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s *GroupHTTPService) ListGroups(w nethttp.ResponseWriter, r *nethttp.Request) {
 	names, err := s.groups.List(r.Context())
 	if err != nil {
 		s.log.Error("Failed to list groups", "error", err)
@@ -41,7 +41,7 @@ func (s *groupHTTPService) ListGroups(w nethttp.ResponseWriter, r *nethttp.Reque
 
 // GetGroupInfo handles GET /minio/admin/v3/group?name=...
 // Returns group info including members (as access keys) and attached policies.
-func (s *groupHTTPService) GetGroupInfo(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s *GroupHTTPService) GetGroupInfo(w nethttp.ResponseWriter, r *nethttp.Request) {
 	name := query.String(r, "group", "")
 	if name == "" {
 		s.log.Error("Missing group parameter")
@@ -91,7 +91,7 @@ func (s *groupHTTPService) GetGroupInfo(w nethttp.ResponseWriter, r *nethttp.Req
 // Members are access key strings; they are resolved to UUIDs internally.
 // When isRemove=false: creates group if not exists, adds members.
 // When isRemove=true: removes members from group.
-func (s *groupHTTPService) UpdateGroupMembers(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s *GroupHTTPService) UpdateGroupMembers(w nethttp.ResponseWriter, r *nethttp.Request) {
 	var body struct {
 		Group    string   `json:"group"`
 		Members  []string `json:"members"`
@@ -127,7 +127,7 @@ func (s *groupHTTPService) UpdateGroupMembers(w nethttp.ResponseWriter, r *netht
 
 // removeGroupMembers removes each member from the group by access key.
 // Writes an HTTP error and returns false on first failure.
-func (s *groupHTTPService) removeGroupMembers(w nethttp.ResponseWriter, ctx context.Context, groupName string, members []string) bool {
+func (s *GroupHTTPService) removeGroupMembers(w nethttp.ResponseWriter, ctx context.Context, groupName string, members []string) bool {
 	for _, accessKey := range members {
 		if err := s.groups.RemoveMemberByAccessKey(ctx, groupName, accessKey); err != nil {
 			s.log.Error("Failed to remove member from group", "error", err, "group", groupName, "accessKey", accessKey)
@@ -144,7 +144,7 @@ func (s *groupHTTPService) removeGroupMembers(w nethttp.ResponseWriter, ctx cont
 
 // ensureGroupAndAddMembers creates the group if needed, then adds each member by access key.
 // Writes an HTTP error and returns false on first failure.
-func (s *groupHTTPService) ensureGroupAndAddMembers(w nethttp.ResponseWriter, ctx context.Context, groupName string, members []string) bool {
+func (s *GroupHTTPService) ensureGroupAndAddMembers(w nethttp.ResponseWriter, ctx context.Context, groupName string, members []string) bool {
 	_, err := s.groups.Get(ctx, groupName)
 	if svcerrors.IsNotFound(err) {
 		if _, createErr := s.groups.Create(ctx, &group.CreateGroupRequest{Name: groupName}); createErr != nil {
@@ -175,7 +175,7 @@ func (s *groupHTTPService) ensureGroupAndAddMembers(w nethttp.ResponseWriter, ct
 }
 
 // SetGroupStatus handles POST /minio/admin/v3/set-group-status?group=...&status=enabled|disabled
-func (s *groupHTTPService) SetGroupStatus(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s *GroupHTTPService) SetGroupStatus(w nethttp.ResponseWriter, r *nethttp.Request) {
 	name := query.String(r, "group", "")
 	status := query.String(r, "status", "")
 

@@ -18,14 +18,14 @@ import (
 	iamPkg "github.com/mallardduck/dirio/pkg/iam"
 )
 
-type serviceAccountHTTPService struct {
+type ServiceAccountHTTPService struct {
 	serviceAccounts *serviceaccount.Service
 	log             *slog.Logger
 }
 
 // ListServiceAccounts handles GET /minio/admin/v3/list-service-accounts
 // Returns a JSON array of service account access keys.
-func (s *serviceAccountHTTPService) ListServiceAccounts(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s *ServiceAccountHTTPService) ListServiceAccounts(w nethttp.ResponseWriter, r *nethttp.Request) {
 	keys, err := s.serviceAccounts.List(r.Context())
 	if err != nil {
 		s.log.Error("Failed to list service accounts", "error", err)
@@ -51,7 +51,7 @@ func (s *serviceAccountHTTPService) ListServiceAccounts(w nethttp.ResponseWriter
 // AddServiceAccount handles POST /minio/admin/v3/add-service-account
 // Request body is madmin-encrypted JSON: {"accessKey":"...","secretKey":"...","name":"...","parentUser":"..."}
 // Returns madmin-encrypted JSON: {"accessKey":"...","secretKey":"...","sessionToken":"","expiration":""}
-func (s *serviceAccountHTTPService) AddServiceAccount(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s *ServiceAccountHTTPService) AddServiceAccount(w nethttp.ResponseWriter, r *nethttp.Request) {
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		s.log.Error("Failed to read request body", "error", err)
@@ -146,7 +146,7 @@ func (s *serviceAccountHTTPService) AddServiceAccount(w nethttp.ResponseWriter, 
 }
 
 // DeleteServiceAccount handles POST /minio/admin/v3/delete-service-account?accessKey=...
-func (s *serviceAccountHTTPService) DeleteServiceAccount(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s *ServiceAccountHTTPService) DeleteServiceAccount(w nethttp.ResponseWriter, r *nethttp.Request) {
 	accessKey := query.String(r, "accessKey", "")
 	if accessKey == "" {
 		s.log.Error("Missing accessKey parameter")
@@ -173,7 +173,7 @@ func (s *serviceAccountHTTPService) DeleteServiceAccount(w nethttp.ResponseWrite
 
 // InfoServiceAccount handles GET /minio/admin/v3/info-service-account?accessKey=...
 // Returns service account details.
-func (s *serviceAccountHTTPService) InfoServiceAccount(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s *ServiceAccountHTTPService) InfoServiceAccount(w nethttp.ResponseWriter, r *nethttp.Request) {
 	accessKey := query.String(r, "accessKey", "")
 	if accessKey == "" {
 		s.log.Error("Missing accessKey parameter")
@@ -216,7 +216,7 @@ func (s *serviceAccountHTTPService) InfoServiceAccount(w nethttp.ResponseWriter,
 // UpdateServiceAccount handles POST /minio/admin/v3/update-service-account
 // Supports status updates and secret key rotation.
 // Body is madmin-encrypted JSON: {"newSecretKey":"...","newStatus":"on|off"}
-func (s *serviceAccountHTTPService) UpdateServiceAccount(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (s *ServiceAccountHTTPService) UpdateServiceAccount(w nethttp.ResponseWriter, r *nethttp.Request) {
 	accessKey := query.String(r, "accessKey", "")
 	if accessKey == "" {
 		s.log.Error("Missing accessKey parameter")
@@ -255,7 +255,7 @@ func (s *serviceAccountHTTPService) UpdateServiceAccount(w nethttp.ResponseWrite
 
 // parseUpdateBody decrypts and parses the UpdateServiceAccount request body.
 // Returns the populated request and true on success; writes an HTTP error and returns false on failure.
-func (s *serviceAccountHTTPService) parseUpdateBody(w nethttp.ResponseWriter, r *nethttp.Request, bodyBytes []byte) (*serviceaccount.UpdateServiceAccountRequest, bool) {
+func (s *ServiceAccountHTTPService) parseUpdateBody(w nethttp.ResponseWriter, r *nethttp.Request, bodyBytes []byte) (*serviceaccount.UpdateServiceAccountRequest, bool) {
 	var req serviceaccount.UpdateServiceAccountRequest
 	if len(bodyBytes) == 0 {
 		return &req, true
