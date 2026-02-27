@@ -21,7 +21,7 @@ import (
 // When dedicatedPort is false the console is mounted at /dirio/ui/ on the main
 // S3 port (single-port mode). When true it is served on its own listener at
 // port (dual-port mode).
-func setupConsole(srv *server.Server, enabled bool, dedicatedPort bool, port int) {
+func setupConsole(srv *server.Server, enabled, dedicatedPort bool, port int) {
 	if !enabled {
 		return
 	}

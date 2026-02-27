@@ -32,14 +32,14 @@ type Handler struct {
 	serviceAccountHTTP *ServiceAccountHTTPService
 }
 
-func New(auth *auth.Authenticator, serviceFactory *service.ServicesFactory) *Handler {
+func New(authenticator *auth.Authenticator, serviceFactory *service.ServicesFactory) *Handler {
 	userService := serviceFactory.User()
 	policyService := serviceFactory.Policy()
 	groupService := serviceFactory.Group()
 	saService := serviceFactory.ServiceAccount()
 
 	return &Handler{
-		middlewares:    []func(http.Handler) http.Handler{auth.AuthMiddleware},
+		middlewares:    []func(http.Handler) http.Handler{authenticator.AuthMiddleware},
 		user:           userService,
 		policy:         policyService,
 		groupSvc:       groupService,

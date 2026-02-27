@@ -3,8 +3,9 @@ package metrics
 import (
 	"net/http"
 
-	"github.com/mallardduck/dirio/internal/telemetry"
 	"github.com/mallardduck/teapot-router/pkg/teapot"
+
+	"github.com/mallardduck/dirio/internal/telemetry"
 )
 
 var _ RouteHandlers = (*Handler)(nil)

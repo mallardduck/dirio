@@ -3,11 +3,12 @@ package routes
 import (
 	"net/http"
 
+	"github.com/mallardduck/teapot-router/pkg/teapot"
+
 	"github.com/mallardduck/dirio/internal/http/server/health"
 	"github.com/mallardduck/dirio/internal/http/server/metrics"
 	"github.com/mallardduck/dirio/internal/http/server/prof"
 	minioHTTP "github.com/mallardduck/dirio/internal/minio/http"
-	"github.com/mallardduck/teapot-router/pkg/teapot"
 )
 
 var _ health.RouteHandlers = (*StubHandler)(nil)
