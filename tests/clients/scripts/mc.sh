@@ -27,7 +27,7 @@ MC_VERSION=$(mc --version 2>&1 | sed -n '1p')
 init_test_runner "mc" "$MC_VERSION"
 
 # Test configuration
-BUCKET="mc-test-bucket-$(date +%s)"
+BUCKET="mc-test-bucket-$(date +%s)-$(head -c4 /dev/urandom | od -An -tx1 | tr -d ' \n')"
 ENDPOINT="${DIRIO_ENDPOINT}"
 MC_ALIAS="dirio"
 
