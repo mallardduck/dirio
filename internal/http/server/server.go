@@ -253,7 +253,7 @@ func (s *Server) setupRoutes() {
 		// New things
 		Health:  health.New(s.metadata, s.config.RootFS),
 		Metrics: metrics.New(s.telemetry),
-		Minio:   minioHTTP.New(s.auth, serviceFactory),
+		Minio:   minioHTTP.New(serviceFactory),
 		Pprof:   prof.New(),
 	}
 

@@ -8,8 +8,6 @@ import (
 // When h is nil, routes are registered with nil handlers (for CLI route listing).
 func RegisterRouter(r *teapot.Router, h RouteHandlers) {
 	r.NamedGroup("/minio/admin/v3", "admin", func(r *teapot.Router) {
-		r.Use(h.Middlewares()...)
-
 		// User Management
 		r.GET("/list-users", h.HandleListUsers()).Name("users.list")
 		r.PUT("/add-user", h.HandleAddUser()).Name("users.add")

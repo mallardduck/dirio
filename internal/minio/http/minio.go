@@ -7,8 +7,6 @@ import (
 
 	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 
-	"github.com/mallardduck/dirio/internal/http/auth"
-
 	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/service"
 	"github.com/mallardduck/dirio/internal/service/group"
@@ -19,7 +17,6 @@ import (
 
 // Handler handles MinIO Admin API v3 IAM requests
 type Handler struct {
-	middlewares    []func(http.Handler) http.Handler
 	user           *user.Service
 	policy         *policy.Service
 	groupSvc       *group.Service
@@ -32,14 +29,13 @@ type Handler struct {
 	serviceAccountHTTP *ServiceAccountHTTPService
 }
 
-func New(authenticator *auth.Authenticator, serviceFactory *service.ServicesFactory) *Handler {
+func New(serviceFactory *service.ServicesFactory) *Handler {
 	userService := serviceFactory.User()
 	policyService := serviceFactory.Policy()
 	groupService := serviceFactory.Group()
 	saService := serviceFactory.ServiceAccount()
 
 	return &Handler{
-		middlewares:    []func(http.Handler) http.Handler{authenticator.AuthMiddleware},
 		user:           userService,
 		policy:         policyService,
 		groupSvc:       groupService,
@@ -64,10 +60,6 @@ func New(authenticator *auth.Authenticator, serviceFactory *service.ServicesFact
 			log:             logging.Component("service-account-http-service"),
 		},
 	}
-}
-
-func (h *Handler) Middlewares() []func(http.Handler) http.Handler {
-	return h.middlewares
 }
 
 var (

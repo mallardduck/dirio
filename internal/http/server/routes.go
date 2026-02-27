@@ -71,9 +71,6 @@ func SetupRoutes(r *teapot.Router, deps RouteDependencies) {
 	// Unauthenticated: debug mode is not intended for production use.
 	prof.RegisterRoutes(r, deps.Pprof)
 
-	// MinIO Admin API routes (authenticated)
-	minioHTTP.RegisterRouter(r, deps.Minio)
-
 	// S3 API routes (authenticated + chunked encoding)
 	var s3Deps *s3RouteDeps
 	var s3MW []func(http.Handler) http.Handler
@@ -132,6 +129,10 @@ func SetupRoutes(r *teapot.Router, deps RouteDependencies) {
 		}
 	}
 	r.MiddlewareGroup(func(r *teapot.Router) {
+		// MinIO Admin API routes (authenticated)
+		minioHTTP.RegisterRouter(r, deps.Minio)
+
+		// Setup the S3 API routes
 		setupS3Routes(r, s3Deps)
 	}, s3MW...)
 

@@ -39,7 +39,6 @@ type UserHandlers interface {
 }
 
 type RouteHandlers interface {
-	Middlewares() []func(http.Handler) http.Handler
 	CannedPolicyHandlers
 	GroupHandlers
 	HealthHandlers
