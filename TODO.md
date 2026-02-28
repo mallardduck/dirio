@@ -521,11 +521,66 @@ Using "Core + Sidecar" approach:
 2. **The Management API (Port 9001)**: Put `datausageinfo`, `health`, and `user-management` here. This separates **Data Plane** (S3) from **Control Plane** (Admin).
 
 ### Virtual-Hosted-Style Buckets (Future)
-- [ ] Support `bucket.domain.com` style addressing
-- [ ] Subdomain routing logic
-- [ ] Update URL generation for virtual-hosted style
-- [ ] DNS/mDNS considerations for wildcard subdomains
-- [ ] Document virtual-hosted-style bucket support and configuration
+
+**Architecture:** Path-style and virtual-hosted-style are **not mutually exclusive modes** — both are active simultaneously, like two doors to the same handlers. The router exposes the same S3 handler registrations twice:
+
+- **Path-style routes** (current): `/{bucket}/{key}` — bucket extracted from path
+- **Virtual-hosted-style routes**: `{bucket}.{canonical-domain}/{key}` — bucket extracted from the subdomain, same handlers
+
+Handlers are written once and receive the same inputs regardless of which route matched. `CanonicalDomain` (already in config) is the pivot — without it configured, only path-style routes are registered and the current behavior is unchanged.
+
+**Items:**
+- [ ] Register all S3 routes a second time on a virtual-hosted pattern using `CanonicalDomain`
+- [ ] Update URL generation helpers to emit virtual-hosted-style URLs when `CanonicalDomain` is set (pre-signed URLs, `Location` headers, CopyObject source)
+- [ ] DNS: virtual-hosted style requires a real DNS wildcard or reverse proxy — mDNS covers the S3/admin endpoints only; document this clearly
+- [ ] Document both styles in `docs/DEPLOYMENT.md`
+
+**Note:** Virtual-hosted routing is a hard prerequisite for S3 Static Website Hosting (see below). Both share the subdomain route registration pattern and the same DNS/proxy requirement.
+
+### S3 Static Website Hosting (Future — depends on Virtual-Hosted Routing)
+
+**Goal:** Support hosting static websites directly from DirIO buckets, compatible with the AWS S3 website endpoint model.
+
+**Architecture constraint:** AWS's website endpoint design (`bucket.s3-website-region.amazonaws.com`) uses a *different hostname* from the S3 API endpoint (`bucket.s3.amazonaws.com`) specifically to cleanly separate web serving from S3 API traffic. DirIO must respect this split. Website serving is **not available in path-mode** — there is no non-ambiguous way to distinguish website traffic from S3 API traffic without a distinct hostname. Storing website config works in path-mode; serving does not.
+
+#### Sub-phase W1: Website Configuration API (no routing dependency)
+
+These are standard S3 control-plane operations. Can be implemented independently of subdomain routing — they simply store/retrieve configuration. The serving engine is a separate concern.
+
+- [ ] `PutBucketWebsite` — store website config: IndexDocument, ErrorDocument, RoutingRules, RedirectAllRequestsTo
+- [ ] `GetBucketWebsite` — retrieve current website config
+- [ ] `DeleteBucketWebsite` — remove website config
+- [ ] Storage schema: `.dirio/buckets/{bucket}-website.json`
+- [ ] Console UI: website configuration tab on bucket detail page (view/edit index/error document keys, routing rules)
+- [ ] Integration tests for website config CRUD
+
+#### Sub-phase W2: Website Serving Engine (depends on virtual-hosted routing)
+
+The actual HTTP serving layer. Behavior is fundamentally different from the S3 API.
+
+**Architecture:** A third router instance — a subdomain router using `{bucket}.s3-website.{canonical-domain}/{key}` patterns — running on its own dedicated listener (e.g. `:9080`). Only website-specific routes are registered on it (GET/HEAD, index doc, error doc, redirects). The `s3-website.` subdomain delineates website traffic from regular S3 virtual-hosted traffic; they never share a listener or a route table.
+
+- [ ] Dedicated website listener (`:9080` default, configurable via `--website-address`) with `{bucket}.s3-website.{canonical-domain}` subdomain route registration
+- [ ] Index document serving — map directory/trailing-slash requests to `{prefix}{IndexDocument}` (e.g. `index.html`)
+- [ ] Error document serving — serve `ErrorDocument` key on 404/403 instead of S3 XML errors; fall back to generic HTML if not configured
+- [ ] `RedirectAllRequestsTo` — redirect entire bucket to another host/protocol
+- [ ] `RoutingRules` evaluation — prefix/condition-based redirect rules with HTTP redirect codes
+- [ ] HTML error responses throughout (no S3 XML on the website endpoint)
+- [ ] Public-only access model — website endpoint ignores auth; if bucket isn't publicly readable, serve 403 HTML
+- [ ] Only GET/HEAD methods (no S3 API operations on the website endpoint)
+- [ ] Correct `Content-Type` inference from object metadata / key extension
+- [ ] Access log entries tagged with `service: "website"` (distinguishable from S3 API logs)
+- [ ] Prometheus metrics for website requests separate from S3 metrics
+
+#### Sub-phase W3: Routing, Discovery & Configuration
+
+- [ ] `--website-address` flag / `website.address` config key for the website port (default `:9080`, `""` = disabled)
+- [ ] mDNS is intentionally out of scope for website hosting — mDNS serves as zeroconfig discovery for the S3 and admin endpoints only; website subdomain routing requires real DNS or a reverse proxy, which users are expected to bring
+  - Home/local: dnsmasq or coredns with a wildcard A record pointing to DirIO's website port
+  - Production: standard DNS wildcard `*.s3-website.yourdomain.com → website port`
+  - nginx/Caddy/Traefik: wildcard `server_name *.s3-website.yourdomain.com`, extract bucket from `$host`, `proxy_pass` to website port
+- [ ] Document: path-mode limitation (config API works; serving requires subdomain routing)
+- [ ] `docs/WEBSITE.md` — setup guide covering DNS/proxy options, nginx reference config, and known differences from AWS
 
 ---
 
