@@ -39,7 +39,7 @@ Run `task --list` to see all available tasks.
 **Code:**
 - Follow standard Go conventions
 - Keep functions small
-- No global state
+- Avoid global state
 - Pass dependencies explicitly
 
 **Tests:**
@@ -69,11 +69,8 @@ Check [TODO.md](TODO.md) for tasks.
 
 **Bigger projects:**
 - Implement missing S3 operations
-- Add authentication (Phase 2)
 - Optimize performance
-- Add metrics/monitoring
-
-## Testing
+- Improve metrics/monitoring
 
 ## Testing
 

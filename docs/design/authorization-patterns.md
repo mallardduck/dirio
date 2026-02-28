@@ -674,7 +674,7 @@ assert.Equal([]string{"public-bucket", "user-a-bucket", "private-bucket"}, bucke
 
 - [action-permission-mapping.md](action-permission-mapping.md) - S3 action to IAM permission translation
 - [policy-engine-implementation.md](policy-engine-implementation.md) - Core policy engine design
-- [TODO.md](../TODO.md) - Conditional Auth Middleware section (Phase 3)
+- [TODO.md](../../TODO.md) - Conditional Auth Middleware section (Phase 3)
 
 ---
 

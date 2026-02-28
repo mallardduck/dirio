@@ -219,7 +219,7 @@ All three clients exhibit the same failures, confirming these are DirIO bugs:
 4. **Multipart Upload** - Returns 405 Method Not Allowed (AWS CLI/boto3 only; mc works)
 5. **Object Tagging** - Corrupts object content with XML tags
 
-See [CLIENTS.md](../../CLIENTS.md) for detailed compatibility matrix and bug tracking.
+See [CLIENTS.md](../../docs/CLIENTS.md) for detailed compatibility matrix and bug tracking.
 
 ## Sanity Tests
 

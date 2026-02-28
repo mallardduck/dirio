@@ -113,10 +113,10 @@ data/
 
 ## Next Steps
 
-- See [DEPLOYMENT.md](DEPLOYMENT.md) for production setup
-- See [FAQ.md](FAQ.md) for common questions  
+- See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for production setup
+- See [FAQ.md](docs/FAQ.md) for common questions  
 - See [TODO.md](TODO.md) for current status
-- See [DESIGN.md](DESIGN.md) for architecture
+- See [DESIGN.md](docs/DESIGN.md) for architecture
 
 ## Troubleshooting
 
@@ -143,7 +143,7 @@ chmod -R 755 data/
 
 ## Help
 
-- Read [FAQ.md](FAQ.md)
+- Read [FAQ.md](docs/FAQ.md)
 - Check [TODO.md](TODO.md) for known issues
 - Open an issue on GitHub
 

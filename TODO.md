@@ -64,7 +64,7 @@ Current status: **Phase 4.5 complete** — Phases 1–4.5 done; next up is Phase
 - ✅ S3 Compatibility Matrix created
 - ✅ Automated test suite with JSON output and content integrity validation
 
-**📊 Detailed Results:** See [CLIENTS.md](CLIENTS.md) for complete compatibility matrix
+**📊 Detailed Results:** See [CLIENTS.md](docs/CLIENTS.md) for complete compatibility matrix
 
 ## Phase 2.75: Configuration Architecture ✅
 
@@ -86,7 +86,7 @@ Current status: **Phase 4.5 complete** — Phases 1–4.5 done; next up is Phase
 
 ## Phase 3: Essential S3 Features
 
-**📊 For detailed client compatibility status, see [CLIENTS.md](CLIENTS.md)**
+**📊 For detailed client compatibility status, see [CLIENTS.md](docs/CLIENTS.md)**
 
 **Prioritize based on Phase 2.5 findings:**
 
@@ -209,7 +209,7 @@ Current status: **Phase 4.5 complete** — Phases 1–4.5 done; next up is Phase
 
 **Goal:** Implement hybrid IAM combining S3-native authorization (COMPLETE) with MinIO-compatible admin API (COMPLETE) for multi-user scenarios.
 
-**Architecture:** Hybrid approach combining best of S3 and MinIO (see [docs/IAM-ARCHITECTURE.md](docs/IAM-ARCHITECTURE.md))
+**Architecture:** Hybrid approach combining best of S3 and MinIO (see [docs/IAM-ARCHITECTURE.md](docs/design/IAM-ARCHITECTURE.md))
 - **S3 API layer:** Bucket policies with S3 actions/resources, AWS-standard conditions/variables, UUID-based ownership ✅ COMPLETE
 - **MinIO Admin API layer:** User/policy CRUD operations via `mc admin` commands ✅ COMPLETE
 - **Shared backend:** Unified IAM metadata in `.dirio/iam/` supporting both APIs ✅ COMPLETE
@@ -298,7 +298,7 @@ Current status: **Phase 4.5 complete** — Phases 1–4.5 done; next up is Phase
 
 **Goal:** Build an embedded admin console into the DirIO server as the primary interface for DirIO-specific hybrid IAM features that `mc` and S3 clients cannot reach.
 
-**Architecture:** See [docs/CONSOLE-ARCHITECTURE.md](docs/CONSOLE-ARCHITECTURE.md) for full design.
+**Architecture:** See [docs/CONSOLE-ARCHITECTURE.md](docs/design/CONSOLE-ARCHITECTURE.md) for full design.
 
 **Key decisions:**
 - `consoleapi/` package defines the interface seam — the only coupling point between console and server
@@ -545,7 +545,7 @@ Reference docs (lower urgency):
 - [ ] Performance tuning guide`
 
 Already complete:
-- [x] Client compatibility guide — [CLIENTS.md](CLIENTS.md)
-- [x] IAM/Admin API architecture — [docs/IAM-ARCHITECTURE.md](docs/IAM-ARCHITECTURE.md)
-- [x] Console architecture — [docs/CONSOLE-ARCHITECTURE.md](docs/CONSOLE-ARCHITECTURE.md)
+- [x] Client compatibility guide — [CLIENTS.md](docs/CLIENTS.md)
+- [x] IAM/Admin API architecture — [docs/IAM-ARCHITECTURE.md](docs/design/IAM-ARCHITECTURE.md)
+- [x] Console architecture — [docs/CONSOLE-ARCHITECTURE.md](docs/design/CONSOLE-ARCHITECTURE.md)
 - [x] Completed work log — [docs/CHANGELOG.md](docs/CHANGELOG.md)

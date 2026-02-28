@@ -102,7 +102,7 @@ DirIO uses a **hybrid IAM approach** combining the best of S3 and MinIO:
 - ❌ AWS IAM API (`aws iam` - explicitly not supported)
 - ❌ Terraform AWS provider (requires AWS IAM API)
 
-See [docs/IAM-ARCHITECTURE.md](docs/IAM-ARCHITECTURE.md) for complete details.
+See [docs/IAM-ARCHITECTURE.md](docs/design/IAM-ARCHITECTURE.md) for complete details.
 
 ## MinIO Migration
 
@@ -124,7 +124,7 @@ You can switch back to MinIO anytime. The `buckets/` directory is shared.
 
 ## Contributing & Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [DEVELOPMENT.md](DEVELOPMENT.md) for project structure, build setup, and architecture notes.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [DEVELOPMENT.md](docs/DEVELOPMENT.md) for project structure, build setup, and architecture notes.
 
 ## License
 

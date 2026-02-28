@@ -4,7 +4,7 @@
 
 **Current phase: 4.5 complete.** Phases 1–4.5 are done. Next up: Phase 5 (observability & health) and Phase 8 (extended console UI).
 
-See [TODO.md](TODO.md) for the full roadmap and [docs/CHANGELOG.md](docs/CHANGELOG.md) for completed work.
+See [TODO.md](../TODO.md) for the full roadmap and [docs/CHANGELOG.md](docs/CHANGELOG.md) for completed work.
 
 ## Tooling
 
@@ -33,7 +33,7 @@ task --list
 ./dirio-server --data-dir /path/to/data --port 9000
 ```
 
-See [docs/configuration.md](docs/configuration.md) for all CLI flags, env vars, and config file options.
+See [docs/configuration.md](dev/configuration.md) for all CLI flags, env vars, and config file options.
 
 ## Project Structure
 
@@ -69,7 +69,7 @@ pkg/
 - **Build tag `noconsole`** strips the web console entirely: `go build -tags noconsole`.
 - **`consoleapi/`** is the only coupling point between the console and the rest of the server — the console package is designed to be extractable.
 
-See [docs/IAM-ARCHITECTURE.md](docs/IAM-ARCHITECTURE.md) and [docs/CONSOLE-ARCHITECTURE.md](docs/CONSOLE-ARCHITECTURE.md) for deeper dives.
+See [docs/IAM-ARCHITECTURE.md](design/IAM-ARCHITECTURE.md) and [docs/CONSOLE-ARCHITECTURE.md](design/CONSOLE-ARCHITECTURE.md) for deeper dives.
 
 ## Testing
 

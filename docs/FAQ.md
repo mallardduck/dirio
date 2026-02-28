@@ -89,27 +89,22 @@ Then stores it in `.metadata/` as JSON. Your original `.minio.sys/` stays intact
 
 Yes. Just stop DirIO and start MinIO again. Your buckets and objects are unchanged.
 
-The `.metadata/` directory won't interfere with MinIO.
+The `.dirio/` directory won't interfere with MinIO, and DirIO will not modify `.minio.sys/`.
 
 ## Features
 
 ### What S3 operations are supported?
 
-**Phase 1 (MVP)**:
 - Object: GET, PUT, HEAD, DELETE, LIST
 - Bucket: CREATE, DELETE, HEAD, LIST, GetLocation
-
-**Phase 2+** (planned):
 - Multipart uploads
 - Pre-signed URLs
 - Range requests
-- More bucket operations
+- Most bucket operations
 
 ### Does it support bucket policies?
 
-Basic support. You can import MinIO policies, and DirIO will store them. Enforcement is Phase 2 work.
-
-Public-read buckets will work eventually.
+Basic support. For MinIO style policies and S3 policies.
 
 ### Does it support versioning?
 
@@ -121,7 +116,7 @@ Not built-in. Use filesystem-level encryption (LUKS, ZFS encryption, etc.) if yo
 
 ### Does it have a web UI?
 
-Not yet. Phase 6, low priority. Use AWS CLI or other S3 clients for now.
+A minimal one. Use Minio `mc`, AWS CLI or other S3 clients for now.
 
 ## Performance
 
@@ -219,7 +214,7 @@ Increase timeouts:
 
 ### How can I contribute?
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
 
 Short version:
 1. Fork the repo
@@ -229,7 +224,7 @@ Short version:
 
 ### Where should I start?
 
-Check [TODO.md](TODO.md) for tasks. Good first issues:
+Check [TODO.md](../TODO.md) for tasks. Good first issues:
 - Adding tests for existing code
 - Implementing missing S3 operations
 - Improving error messages
@@ -273,7 +268,7 @@ Basic logging to stdout. No access logs yet (Phase 4).
 
 ### What's the roadmap?
 
-See [TODO.md](TODO.md) for detailed roadmap.
+See [TODO.md](../TODO.md) for detailed roadmap.
 
 Summary:
 - Phase 1: MVP (current)
