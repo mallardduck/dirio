@@ -432,39 +432,17 @@ Both single-port and dual-port modes are supported and maintained. **Dual-port i
 - ✅ **mDNS Dual-port mode** — ensure mDNS services register for both ports and services
 
 ### Docs and Enablement
-- [ ] **Document deployment modes** — write `docs/DEPLOYMENT.md` covering single-port vs dual-port, when to use each, example configs for both, and mDNS/DNS routing for dual-port
-- [ ] **nginx reference configs** — document `proxy_pass` examples for both modes: S3 path-routed on single port, and split-port with separate `server {}` blocks; include TLS termination, Host header preservation, and pre-signed URL considerations
-- [ ] **Docker Compose example** — single service, dual-port exposed, bind-mounted data directory; suitable as a quickstart template
+- [x] **Document deployment modes** — write `docs/DEPLOYMENT.md` covering single-port vs dual-port, when to use each, example configs for both, and mDNS/DNS routing for dual-port
+- [x] **nginx reference configs** — document `proxy_pass` examples for both modes: S3 path-routed on single port, and split-port with separate `server {}` blocks; include TLS termination, Host header preservation, and pre-signed URL considerations (in DEPLOYMENT for now)
+- [x] **Docker Compose example** — single service, dual-port exposed, bind-mounted data directory; suitable as a quickstart template (in DEPLOYMENT for now)
 
 ### Operational Validation
-- [ ] **End-to-end MinIO migration test** — export data from a real MinIO instance, import into DirIO, verify all objects, metadata, and IAM (users/policies/mappings) are intact
 - [ ] **Reverse proxy integration test** — run DirIO behind nginx in dual-port mode; verify `mc`, AWS CLI, and boto3 all work correctly including pre-signed URLs and chunked uploads
-- [ ] **Sustained load test** — multipart uploads under concurrent load using wrk/hey/k6; confirm no heap growth over time (builds on Phase 4.5 memory profiling baseline)
 
 ### Configuration Tooling
 - [ ] **`dirio config set` subcommand** — update data config values without manually editing `.dirio/config.json` (e.g. `dirio config set region us-west-2`, `dirio config set compression.enabled true`); print current config via `dirio config show`
 
-## Phase 7: Web Console — Extended Features
-
-**Foundation built in Phase 4.3 (auth, IAM views, policy editor, simulator, ownership management). This phase covers the S3 data plane UI and IAM management forms — making DirIO fully operable without a terminal for day-to-day tasks.**
-
-### S3 Data Browser
-- [ ] **Bucket browser** — list objects with prefix navigation (folder-style), sortable by name/size/date
-- [ ] **Object detail** — view metadata, tags, owner, ETag; download button; copy pre-signed URL
-- [ ] **Upload interface** — drag-and-drop file upload with progress bar; multipart for large files; uses POST policy or pre-signed PUT
-- [ ] **Object actions** — delete object, copy object (within/across buckets), set tags
-
-### IAM Management Forms
-- [ ] **User CRUD forms** — create/edit/delete users directly in console (currently requires `mc admin`)
-- [ ] **Policy CRUD forms** — create/edit named policies with JSON editor + validation (currently requires `mc admin` or the raw policy editor)
-- [ ] **Service account management** — create/revoke service accounts, view expiry, manage policy mode
-- [ ] **Group management UI** — create groups, assign members, attach policies
-
-### Audit Log Viewer (depends on Phase 6)
-- [ ] Filterable log stream in console — filter by user, bucket, action, allow/deny, time range
-- [ ] Export filtered log to CSV/JSON
-
-## Phase 8: DirIO Client
+## Phase 7: DirIO Client
 
 **Goal:** A first-party CLI client for DirIO that covers the operations no existing tool handles well — DirIO-specific features, scripting-friendly output, and a single binary that doesn't require `mc` or AWS CLI to be installed.
 
@@ -491,34 +469,27 @@ Both single-port and dual-port modes are supported and maintained. **Dual-port i
 - [ ] Named profiles (similar to AWS CLI `~/.aws/credentials`)
 - [ ] Respect `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars for drop-in compatibility
 
-## Phase 9: Full HTTP Audit Logging
+## Phase 8: Web Console — Extended Features
 
-**Goal:** Production-grade audit trail for compliance and debugging. Builds on the Phase 5 structured access log — this phase adds body capture, configurable verbosity levels, non-blocking I/O, and a UI to browse logs.
+**Foundation built in Phase 4.3 (auth, IAM views, policy editor, simulator, ownership management). This phase covers the S3 data plane UI and IAM management forms — making DirIO fully operable without a terminal for day-to-day tasks.**
 
-**Distinction from Phase 5 access log:** Phase 5 logs one line per request (who/what/allow-deny). This phase adds full request/response bodies, streaming to external destinations, and tooling to query the log.
+### S3 Data Browser
+- [ ] **Bucket browser** — list objects with prefix navigation (folder-style), sortable by name/size/date
+- [ ] **Object detail** — view metadata, tags, owner, ETag; download button; copy pre-signed URL
+- [ ] **Upload interface** — drag-and-drop file upload with progress bar; multipart for large files; uses POST policy or pre-signed PUT
+- [ ] **Object actions** — delete object, copy object (within/across buckets), set tags
 
-### Middleware
-- [ ] Non-blocking audit log writer with bounded queue (no request latency impact)
-- [ ] Log levels: `0`=off, `1`=access only (Phase 5 baseline), `2`=headers, `3`=headers + request body, `4`=headers + both bodies
-- [ ] Minimize allocations in hot path — avoid capturing body unless level ≥ 3
-- [ ] Configurable output destination: file, stdout, or HTTP endpoint (e.g. vector, fluentd)
-- [ ] Log rotation support (size-based and time-based)
+### IAM Management Forms
+- [ ] **User CRUD forms** — create/edit/delete users directly in console (currently requires `mc admin`)
+- [ ] **Policy CRUD forms** — create/edit named policies with JSON editor + validation (currently requires `mc admin` or the raw policy editor)
+- [ ] **Service account management** — create/revoke service accounts, view expiry, manage policy mode
+- [ ] **Group management UI** — create groups, assign members, attach policies
 
-### Configuration
-- [ ] `audit.level` config key + `--audit-level` flag
-- [ ] `audit.output` config key (stdout / file path / HTTP endpoint)
-- [ ] `audit.max_body_bytes` — cap body capture size (default 4KB)
+### Audit Log Viewer (depends on Phase 6)
+- [ ] Filterable log stream in console — filter by user, bucket, action, allow/deny, time range
+- [ ] Export filtered log to CSV/JSON
 
-### Observability
-- [ ] Document the two-tier log model: Phase 5 access log (always on, lightweight) vs Phase 6 audit log (configurable, heavy)
-
-## Phase N+: Any future work
-
-### Optional Minio Compatibility Layer
-Using "Core + Sidecar" approach:
-
-1. **The Core (Port 9000)**: Keep this 100% strictly S3 compatible. No custom headers, no weird endpoints. This ensures rclone, boto3, and cyberduck never get confused.
-2. **The Management API (Port 9001)**: Put `datausageinfo`, `health`, and `user-management` here. This separates **Data Plane** (S3) from **Control Plane** (Admin).
+## Phase 9: Ensure vHost and Path-style buckets are both supported correctly (Plus Website buckets)
 
 ### Virtual-Hosted-Style Buckets (Future)
 
@@ -581,6 +552,41 @@ The actual HTTP serving layer. Behavior is fundamentally different from the S3 A
   - nginx/Caddy/Traefik: wildcard `server_name *.s3-website.yourdomain.com`, extract bucket from `$host`, `proxy_pass` to website port
 - [ ] Document: path-mode limitation (config API works; serving requires subdomain routing)
 - [ ] `docs/WEBSITE.md` — setup guide covering DNS/proxy options, nginx reference config, and known differences from AWS
+
+## Phase 10: Full HTTP Audit Logging
+
+**Goal:** Production-grade audit trail for compliance and debugging. Builds on the Phase 5 structured access log — this phase adds body capture, configurable verbosity levels, non-blocking I/O, and a UI to browse logs.
+
+**Distinction from Phase 5 access log:** Phase 5 logs one line per request (who/what/allow-deny). This phase adds full request/response bodies, streaming to external destinations, and tooling to query the log.
+
+### Middleware
+- [ ] Non-blocking audit log writer with bounded queue (no request latency impact)
+- [ ] Log levels: `0`=off, `1`=access only (Phase 5 baseline), `2`=headers, `3`=headers + request body, `4`=headers + both bodies
+- [ ] Minimize allocations in hot path — avoid capturing body unless level ≥ 3
+- [ ] Configurable output destination: file, stdout, or HTTP endpoint (e.g. vector, fluentd)
+- [ ] Log rotation support (size-based and time-based)
+
+### Configuration
+- [ ] `audit.level` config key + `--audit-level` flag
+- [ ] `audit.output` config key (stdout / file path / HTTP endpoint)
+- [ ] `audit.max_body_bytes` — cap body capture size (default 4KB)
+
+### Observability
+- [ ] Document the two-tier log model: Phase 5 access log (always on, lightweight) vs Phase 6 audit log (configurable, heavy)
+
+## Phase 11: Stability and Performance Enhancements
+
+### Operational Validation
+- [ ] **End-to-end MinIO migration test** — export data from a real MinIO instance, import into DirIO, verify all objects, metadata, and IAM (users/policies/mappings) are intact
+- [ ] **Sustained load test** — multipart uploads under a concurrent load using wrk/hey/k6; confirm no heap growth over time (builds on Phase 4.5 memory profiling baseline)
+
+## Phase N+: Any future work
+
+### Optional Minio Compatibility Layer
+Using "Core + Sidecar" approach:
+
+1. **The Core (Port 9000)**: Keep this 100% strictly S3 compatible. No custom headers, no weird endpoints. This ensures rclone, boto3, and cyberduck never get confused.
+2. **The Management API (Port 9001)**: Put `datausageinfo`, `health`, and `user-management` here. This separates **Data Plane** (S3) from **Control Plane** (Admin).
 
 ---
 

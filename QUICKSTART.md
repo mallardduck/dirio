@@ -21,8 +21,6 @@ DirIO is now running on http://localhost:9000
 
 ## Test with AWS CLI
 
-## Test with AWS CLI
-
 ```bash
 # Configure (one time)
 aws configure set aws_access_key_id minioadmin
@@ -48,8 +46,6 @@ cat downloaded.txt  # Should print "Hello DirIO"
 Your file is now at: `data/buckets/test/test.txt`
 
 Check it: `cat data/buckets/test/test.txt`
-
-## Run with Docker
 
 ## Run with Docker
 
@@ -117,8 +113,6 @@ data/
 - See [FAQ.md](docs/FAQ.md) for common questions  
 - See [TODO.md](TODO.md) for current status
 - See [DESIGN.md](docs/DESIGN.md) for architecture
-
-## Troubleshooting
 
 ## Troubleshooting
 
