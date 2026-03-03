@@ -41,7 +41,6 @@ func init() {
 	rootCmd.AddCommand(credentialsCmd)
 	credentialsCmd.AddCommand(credentialsSetCmd)
 
-	credentialsSetCmd.Flags().StringP(config.DataDir.GetFlagKey(), "d", config.DataDir.GetDefaultAsString(), "Path to data directory")
 	credentialsSetCmd.Flags().String(config.AccessKey.GetFlagKey(), "", "New admin access key (optional)")
 	credentialsSetCmd.Flags().String(config.SecretKey.GetFlagKey(), "", "New admin secret key (optional)")
 }

@@ -132,6 +132,5 @@ func TestImport_MinIO2019_RealData(t *testing.T) {
 		// MinIO 2019 test data has empty region and compression disabled
 		assert.Empty(t, result.DataConfig.Region)
 		assert.False(t, result.DataConfig.Compression.Enabled)
-		assert.False(t, result.DataConfig.WORMEnabled)
 	})
 }

@@ -35,7 +35,6 @@ Examples:
 func init() {
 	rootCmd.AddCommand(initCmd)
 
-	initCmd.Flags().StringP(config.DataDir.GetFlagKey(), "d", config.DataDir.GetDefaultAsString(), "Path to data directory")
 	initCmd.Flags().String(config.AccessKey.GetFlagKey(), "", "Admin access key (optional)")
 	initCmd.Flags().String(config.SecretKey.GetFlagKey(), "", "Admin secret key (optional)")
 }

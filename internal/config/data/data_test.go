@@ -17,7 +17,6 @@ func TestDefaultDataConfig(t *testing.T) {
 	assert.False(t, config.Credentials.IsConfigured())
 	assert.Equal(t, "us-east-1", config.Region)
 	assert.False(t, config.Compression.Enabled)
-	assert.False(t, config.WORMEnabled)
 	assert.NotZero(t, config.CreatedAt)
 	assert.NotZero(t, config.UpdatedAt)
 
@@ -104,8 +103,6 @@ func TestSaveAndLoadDataConfig(t *testing.T) {
 	original := DefaultDataConfig()
 	original.Region = "us-west-2"
 	original.Compression.Enabled = true
-	original.WORMEnabled = true
-
 	// Save it
 	err := SaveDataConfig(fs, original)
 	require.NoError(t, err)
@@ -123,7 +120,6 @@ func TestSaveAndLoadDataConfig(t *testing.T) {
 	assert.Equal(t, original.Credentials.SecretKey, loaded.Credentials.SecretKey)
 	assert.Equal(t, original.Region, loaded.Region)
 	assert.Equal(t, original.Compression.Enabled, loaded.Compression.Enabled)
-	assert.Equal(t, original.WORMEnabled, loaded.WORMEnabled)
 }
 
 func TestDataConfigExists(t *testing.T) {

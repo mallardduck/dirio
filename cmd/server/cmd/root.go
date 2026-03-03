@@ -1,15 +1,14 @@
 package cmd
 
 import (
-	"log"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-)
 
-var cfgFile string
+	"github.com/mallardduck/dirio/internal/config"
+)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -35,41 +34,15 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Persistent flags available to all commands
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.dirio/config.yaml)")
+	rootCmd.PersistentFlags().StringP(config.DataDir.GetFlagKey(), "d", config.DataDir.GetDefaultAsString(), "Path to data directory")
+	_ = viper.BindPFlag(config.DataDir.GetViperKey(), rootCmd.PersistentFlags().Lookup(config.DataDir.GetFlagKey()))
 }
 
-// initConfig reads in config file and ENV variables if set.
+// initConfig wires up ENV variable support for all flags.
+// Server configuration comes from CLI flags and DIRIO_* env vars only —
+// there is no YAML config file for the server binary.
 func initConfig() {
-	if cfgFile != "" {
-		// Use config file from the flag
-		viper.SetConfigFile(cfgFile)
-	} else {
-		// Find home directory
-		home, err := os.UserHomeDir()
-		if err != nil {
-			log.Printf("Warning: could not find home directory: %v", err)
-		} else {
-			// Search for config in home directory
-			viper.AddConfigPath(home + "/.dirio")
-		}
-
-		// Also search in /etc/dirio
-		viper.AddConfigPath("/etc/dirio")
-
-		// Search in current directory
-		viper.AddConfigPath(".")
-
-		viper.SetConfigName("config")
-		viper.SetConfigType("yaml")
-	}
-
-	// Environment variables
 	viper.SetEnvPrefix("DIRIO")
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 	viper.AutomaticEnv()
-
-	// Read config file if it exists
-	if err := viper.ReadInConfig(); err == nil {
-		log.Printf("Using config file: %s", viper.ConfigFileUsed())
-	}
 }

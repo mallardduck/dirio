@@ -57,13 +57,6 @@ func init() {
 	rootCmd.AddCommand(keyCmd)
 	keyCmd.AddCommand(keyGenerateCmd)
 	keyCmd.AddCommand(keyRotateCmd)
-
-	// rotate needs the data directory to find the keyring file.
-	keyRotateCmd.Flags().StringP(
-		config.DataDir.GetFlagKey(), "d",
-		config.DataDir.GetDefaultAsString(),
-		"Path to data directory (must match the running server)",
-	)
 }
 
 func runKeyGenerate(_ *cobra.Command, _ []string) error {

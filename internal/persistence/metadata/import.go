@@ -196,10 +196,9 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (bool, error) {
 		if err := data.SaveDataConfig(m.rootFS, result.DataConfig); err != nil {
 			return false, fmt.Errorf("failed to save data config: %w", err)
 		}
-		fmt.Printf("Saved data config (region=%s, compression=%v, worm=%v)\n",
+		fmt.Printf("Saved data config (region=%s, compression=%v)\n",
 			result.DataConfig.Region,
-			result.DataConfig.Compression.Enabled,
-			result.DataConfig.WORMEnabled)
+			result.DataConfig.Compression.Enabled)
 	}
 
 	// Rebuild in-memory UUID index and bolt indexes so that users imported above

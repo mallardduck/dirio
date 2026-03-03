@@ -225,7 +225,6 @@ func (s *Starter) Prepare(ctx context.Context, region, accessKey, secretKey stri
 		log.Info("initialised new data directory",
 			"region", region,
 			"compression", s.DataConfig.Compression.Enabled,
-			"worm", s.DataConfig.WORMEnabled,
 		)
 	}
 

@@ -106,11 +106,8 @@ func convertConfig2019(minioConfig Config2019) *configdata.ConfigData {
 		config.Compression.MIMETypes = minioConfig.Compress.MIMETypes
 	}
 
-	// WORM mode
-	config.WORMEnabled = strings.ToLower(minioConfig.WORM) == "on"
-
-	fmt.Printf("Imported MinIO 2019 config: region=%s, worm=%v, compression=%v\n",
-		config.Region, config.WORMEnabled, config.Compression.Enabled)
+	fmt.Printf("Imported MinIO 2019 config: region=%s, compression=%v\n",
+		config.Region, config.Compression.Enabled)
 
 	return config
 }

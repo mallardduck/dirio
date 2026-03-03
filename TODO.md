@@ -436,11 +436,8 @@ Both single-port and dual-port modes are supported and maintained. **Dual-port i
 - [x] **nginx reference configs** — document `proxy_pass` examples for both modes: S3 path-routed on single port, and split-port with separate `server {}` blocks; include TLS termination, Host header preservation, and pre-signed URL considerations (in DEPLOYMENT for now)
 - [x] **Docker Compose example** — single service, dual-port exposed, bind-mounted data directory; suitable as a quickstart template (in DEPLOYMENT for now)
 
-### Operational Validation
-- [ ] **Reverse proxy integration test** — run DirIO behind nginx in dual-port mode; verify `mc`, AWS CLI, and boto3 all work correctly including pre-signed URLs and chunked uploads
-
 ### Configuration Tooling
-- [ ] **`dirio config set` subcommand** — update data config values without manually editing `.dirio/config.json` (e.g. `dirio config set region us-west-2`, `dirio config set compression.enabled true`); print current config via `dirio config show`
+- [x] **`dirio config {get|set} <config key> <value: when set>` subcommand** — update data config values without manually editing `.dirio/config.json` (e.g. `dirio config set region us-west-2`, `dirio config set compression.enabled true`); print current config via `dirio config show`
 
 ## Phase 7: DirIO Client
 
@@ -579,6 +576,7 @@ The actual HTTP serving layer. Behavior is fundamentally different from the S3 A
 ### Operational Validation
 - [ ] **End-to-end MinIO migration test** — export data from a real MinIO instance, import into DirIO, verify all objects, metadata, and IAM (users/policies/mappings) are intact
 - [ ] **Sustained load test** — multipart uploads under a concurrent load using wrk/hey/k6; confirm no heap growth over time (builds on Phase 4.5 memory profiling baseline)
+- [ ] **Reverse proxy integration test** — run DirIO behind nginx in dual-port mode; verify `mc`, AWS CLI, and boto3 all work correctly including pre-signed URLs and chunked uploads
 
 ## Phase N+: Any future work
 

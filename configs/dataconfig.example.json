@@ -19,7 +19,6 @@
       "application/json"
     ]
   },
-  "wormEnabled": false,
   "storageClass": {
     "standard": "",
     "rrs": ""

@@ -35,9 +35,6 @@ type ConfigData struct {
 	// Compression settings control how data is stored
 	Compression CompressionConfig `json:"compression"`
 
-	// WORM (Write-Once-Read-Many) mode enforces immutability
-	WORMEnabled bool `json:"wormEnabled"`
-
 	// StorageClass defines storage tier configuration
 	StorageClass StorageClassConfig `json:"storageClass"`
 
@@ -103,7 +100,6 @@ func DefaultDataConfig() *ConfigData {
 			Extensions:      []string{".txt", ".log", ".csv", ".json"},
 			MIMETypes:       []string{"text/*", "application/json"},
 		},
-		WORMEnabled: false,
 		StorageClass: StorageClassConfig{
 			Standard: "",
 			RRS:      "",

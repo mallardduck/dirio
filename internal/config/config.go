@@ -184,7 +184,6 @@ func LoadConfig(flags *pflag.FlagSet, v *viper.Viper) (*Settings, error) {
 // loadDataConfig attempts to load data config from .dirio/config.json
 // If it exists, it populates settings.ConfigData
 func loadDataConfig(settings *Settings) error {
-	// TODO identify if we need flags here at all
 	// Create filesystem for data directory
 	fs := osfs.New(settings.DataDir)
 
@@ -204,7 +203,6 @@ func loadDataConfig(settings *Settings) error {
 	slog.Info("Loaded data config from .dirio/config.json",
 		"region", dc.Region,
 		"compression", dc.Compression.Enabled,
-		"worm", dc.WORMEnabled,
 		"data_admin", dc.Credentials.AccessKey)
 
 	// Warn if CLI region differs from data config region
@@ -212,7 +210,7 @@ func loadDataConfig(settings *Settings) error {
 		slog.Warn("CLI region flag ignored - data config takes precedence",
 			"cli_region", settings.Region,
 			"data_config_region", dc.Region,
-			"hint", "To update region, edit .dirio/config.json or use 'dirio config set region <value>' (not yet implemented)")
+			"hint", "To update region use: dirio config set region <value>")
 	}
 
 	// Note: We do NOT warn about credentials - both CLI and data config credentials coexist

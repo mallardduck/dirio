@@ -32,7 +32,6 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 
 	// Server flags - using the option definitions for flag keys
-	serveCmd.Flags().StringP(config.DataDir.GetFlagKey(), "d", config.DataDir.GetDefaultAsString(), "Path to data directory")
 	serveCmd.Flags().IntP(config.Port.GetFlagKey(), "p", 9000, "Server port")
 	serveCmd.Flags().String(config.Region.GetFlagKey(), config.Region.GetDefaultAsString(), "AWS-style region (ignored if data config exists)")
 	serveCmd.Flags().String(config.AccessKey.GetFlagKey(), config.AccessKey.GetDefaultAsString(), "Root access key")
@@ -65,7 +64,6 @@ func init() {
 	serveCmd.Flags().Int(config.OTLPMetricsInterval.GetFlagKey(), 30, "OTLP metrics push interval in seconds")
 
 	// Bind flags to viper for config file support
-	_ = viper.BindPFlag(config.DataDir.GetViperKey(), serveCmd.Flags().Lookup(config.DataDir.GetFlagKey()))
 	_ = viper.BindPFlag(config.Port.GetViperKey(), serveCmd.Flags().Lookup(config.Port.GetFlagKey()))
 	_ = viper.BindPFlag(config.Region.GetViperKey(), serveCmd.Flags().Lookup(config.Region.GetFlagKey()))
 	_ = viper.BindPFlag(config.AccessKey.GetViperKey(), serveCmd.Flags().Lookup(config.AccessKey.GetFlagKey()))
