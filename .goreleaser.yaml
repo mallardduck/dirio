@@ -38,7 +38,7 @@ builds:
 
   - id: client
     main: ./cmd/client
-    binary: dirio-client
+    binary: dio
     env:
       - CGO_ENABLED=0
     goos:

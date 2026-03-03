@@ -439,32 +439,35 @@ Both single-port and dual-port modes are supported and maintained. **Dual-port i
 ### Configuration Tooling
 - [x] **`dirio config {get|set} <config key> <value: when set>` subcommand** — update data config values without manually editing `.dirio/config.json` (e.g. `dirio config set region us-west-2`, `dirio config set compression.enabled true`); print current config via `dirio config show`
 
-## Phase 7: DirIO Client
+## Phase 7: DirIO Client - DIO
 
 **Goal:** A first-party CLI client for DirIO that covers the operations no existing tool handles well — DirIO-specific features, scripting-friendly output, and a single binary that doesn't require `mc` or AWS CLI to be installed.
 
 **Design principle:** Don't replicate what `mc` and AWS CLI already do well. Focus on DirIO-specific operations and convenience wrappers that make scripting and automation easy. Standard S3 operations (upload/download/sync) are included because having them in one tool is practical, but they are not the primary motivation.
 
-### S3 Operations
-- [ ] `dirio ls [bucket[/prefix]]` — list buckets or objects; JSON and table output modes
-- [ ] `dirio cp <src> <dst>` — upload/download/copy; supports `s3://` URIs; multipart for large files
-- [ ] `dirio sync <src> <dst>` — sync local directory to/from bucket; `--delete` flag
-
-### DirIO-Specific Operations (no equivalent in `mc` or AWS CLI)
-- [ ] `dirio ownership get <bucket[/object]>` — show current owner
-- [ ] `dirio ownership transfer <bucket> <user>` — transfer bucket ownership
-- [ ] `dirio simulate <user> <bucket> <action>` — run the policy simulator from CLI; returns allow/deny + reason
-- [ ] `dirio sa create <parent-user> [--policy override] [--expires <duration>]` — create service account with policy mode
-- [ ] `dirio sa list [user]` — list service accounts
-
-### IAM Convenience (wraps `mc admin` equivalents for single-binary workflows)
-- [ ] `dirio iam user create/list/delete/enable/disable`
-- [ ] `dirio iam policy create/list/attach/detach`
+**UX Enhancements:** For Standard S3 operations `dio` should improve on `mc` and AWS CLI by providing more intuitive defaults, better error messages, and a consistent CLI experience. Focus on a "beautiful" TUI experience.
 
 ### Configuration & Auth
-- [ ] `dirio config init` — interactive setup for endpoint, credentials, and default bucket
+- [ ] Use cobra+viper integration for CLI config values via `~/.dirio/config.json`
+- [ ] `dio config init` — interactive setup for endpoint, credentials, and default bucket
 - [ ] Named profiles (similar to AWS CLI `~/.aws/credentials`)
 - [ ] Respect `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars for drop-in compatibility
+
+### S3 Operations
+- [ ] `dio ls [bucket[/prefix]]` — list buckets or objects; JSON and table output modes
+- [ ] `dio cp <src> <dst>` — upload/download/copy; supports `s3://` URIs; multipart for large files
+- [ ] `dio sync <src> <dst>` — sync local directory to/from bucket; `--delete` flag
+
+### DirIO-Specific Operations (no equivalent in `mc` or AWS CLI)
+- [ ] `dio ownership get <bucket[/object]>` — show current owner
+- [ ] `dio ownership transfer <bucket> <user>` — transfer bucket ownership
+- [ ] `dio simulate <user> <bucket> <action>` — run the policy simulator from CLI; returns allow/deny + reason
+- [ ] `dio sa create <parent-user> [--policy override] [--expires <duration>]` — create service account with policy mode
+- [ ] `dio sa list [user]` — list service accounts
+
+### IAM Convenience (wraps `mc admin` equivalents for single-binary workflows)
+- [ ] `dio iam user create/list/delete/enable/disable`
+- [ ] `dio iam policy create/list/attach/detach`
 
 ## Phase 8: Web Console — Extended Features
 
