@@ -447,27 +447,49 @@ Both single-port and dual-port modes are supported and maintained. **Dual-port i
 
 **UX Enhancements:** For Standard S3 operations `dio` should improve on `mc` and AWS CLI by providing more intuitive defaults, better error messages, and a consistent CLI experience. Focus on a "beautiful" TUI experience.
 
-### Configuration & Auth
-- [ ] Use cobra+viper integration for CLI config values via `~/.dirio/config.json`
-- [ ] `dio config init` — interactive setup for endpoint, credentials, and default bucket
-- [ ] Named profiles (similar to AWS CLI `~/.aws/credentials`)
-- [ ] Respect `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars for drop-in compatibility
+**Design docs:** [DIO-CLIENT-ARCHITECTURE.md](docs/design/DIO-CLIENT-ARCHITECTURE.md) · [DIRIO-API.md](docs/design/DIRIO-API.md)
 
-### S3 Operations
-- [ ] `dio ls [bucket[/prefix]]` — list buckets or objects; JSON and table output modes
-- [ ] `dio cp <src> <dst>` — upload/download/copy; supports `s3://` URIs; multipart for large files
-- [ ] `dio sync <src> <dst>` — sync local directory to/from bucket; `--delete` flag
+### Phase 7.0 — DirIO API Foundation (server-side prerequisite)
 
-### DirIO-Specific Operations (no equivalent in `mc` or AWS CLI)
-- [ ] `dio ownership get <bucket[/object]>` — show current owner
-- [ ] `dio ownership transfer <bucket> <user>` — transfer bucket ownership
-- [ ] `dio simulate <user> <bucket> <action>` — run the policy simulator from CLI; returns allow/deny + reason
-- [ ] `dio sa create <parent-user> [--policy override] [--expires <duration>]` — create service account with policy mode
-- [ ] `dio sa list [user]` — list service accounts
+The `dio` ownership and simulation commands require HTTP endpoints that do not yet exist. This phase adds them to the server, independent of the console.
 
-### IAM Convenience (wraps `mc admin` equivalents for single-binary workflows)
-- [ ] `dio iam user create/list/delete/enable/disable`
-- [ ] `dio iam policy create/list/attach/detach`
+- [ ] `internal/http/server/dirioapi/` package — `RegisterRoutes`, `RouteHandlers`, handlers
+- [ ] Wire into `server.SetupRoutes` unconditionally (not gated by `--console` or `noconsole`)
+- [ ] `GET /.dirio/api/v1/buckets/{bucket}/owner` — get bucket owner
+- [ ] `PUT /.dirio/api/v1/buckets/{bucket}/owner` — transfer ownership (admin only)
+- [ ] `GET /.dirio/api/v1/buckets/{bucket}/objects/{key}` — get object owner
+- [ ] `POST /.dirio/api/v1/simulate` — policy simulation
+- [ ] `GET /.dirio/api/v1/buckets/{bucket}/permissions/{accessKey}` — effective permissions matrix
+- [ ] Integration tests in `tests/dirioapi/`
+
+### Phase 7.1 — Client Foundation
+
+- [ ] `cmd/client/main.go` wired to cobra root
+- [ ] `internal/dioclient/profile/` — load/save `~/.dirio/client.yaml`, profile selection, env var override; path parser (`[profile/]bucket[/key]`)
+- [ ] `internal/dioclient/render/` — TTY detection, output mode (TUI/plain/JSON), table + JSON renderers
+- [ ] `dio config init` — interactive `huh` form; writes `~/.dirio/client.yaml`
+- [ ] `dio config show` / `dio config profiles`
+- [ ] `dio ls [[profile/]bucket[/prefix]]` — bucket list and object list with TUI table
+- [ ] Respect `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_ENDPOINT_URL` env vars
+
+### Phase 7.2 — S3 Operations
+
+- [ ] `dio cp <src> <dst>` — upload/download/server-side copy; multipart above 8 MB; progress bar
+- [ ] `dio sync <src> <dst>` — sync local directory to/from bucket; `--delete`; `--dry-run`
+
+### Phase 7.3 — DirIO-Specific (requires Phase 7.0)
+
+- [ ] `internal/dioclient/dirioapi/` — HTTP client wrapper for `/.dirio/api/v1/`
+- [ ] `dio ownership get [profile/]bucket[/object]` — calls `GET /.dirio/api/v1/buckets/{bucket}/owner`
+- [ ] `dio ownership transfer [profile/]bucket <user>` — calls `PUT /.dirio/api/v1/buckets/{bucket}/owner`
+- [ ] `dio simulate <user> [profile/]bucket <action>` — calls `POST /.dirio/api/v1/simulate`
+- [ ] `dio simulate --all-actions` — calls `GET /.dirio/api/v1/buckets/{bucket}/permissions/{accessKey}`
+
+### Phase 7.4 — IAM & Service Accounts
+
+- [ ] `dio sa create/list/info/update/rm` — calls `/minio/admin/v3/` service account endpoints
+- [ ] `dio iam user create/list/info/delete/enable/disable`
+- [ ] `dio iam policy create/list/info/delete/attach/detach`
 
 ## Phase 8: Web Console — Extended Features
 

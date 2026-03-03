@@ -60,7 +60,8 @@ The client is a separate binary with its own `go` entry point. It may import `co
 
 ### DirIO-Specific API
 - HTTP calls to the MinIO Admin API (`/minio/admin/v3/*`) for IAM operations — same endpoints `mc admin` uses
-- HTTP calls to DirIO-specific console API endpoints for ownership, simulation, etc. (served at `/.dirio/`)
+- HTTP calls to `/.dirio/api/v1/*` for ownership management and policy observability — see [DIRIO-API.md](DIRIO-API.md)
+- `internal/dioclient/dirioapi/` — thin HTTP client wrapper for `/.dirio/api/v1/`; never imports console or server internals
 
 ---
 
@@ -310,9 +311,14 @@ Interactive tables (`bubbles/table`) support keyboard navigation (arrow keys, `/
 
 ## Implementation Phasing
 
-The client is a new binary — all work here is additive and has no risk to the server.
+The client is a new binary — all work here is additive and has no risk to the server. Phase 7.0 is a server-side prerequisite that must land before Phase 7.3 client work begins.
 
-### Phase 7.1 — Foundation
+### Phase 7.0 — DirIO API Foundation (server-side prerequisite)
+- `internal/http/server/dirioapi/` package — ownership + policy observability endpoints
+- Registered unconditionally in `SetupRoutes`; not gated by `--console` or `noconsole`
+- See [DIRIO-API.md](DIRIO-API.md) for the full endpoint specification
+
+### Phase 7.1 — Client Foundation
 - `cmd/client/main.go` wired to cobra root
 - `internal/dioclient/profile/` — load/save `~/.dirio/client.yaml`, profile selection, env var override
 - `internal/dioclient/render/` — output mode detection, table + JSON renderers
@@ -324,12 +330,13 @@ The client is a new binary — all work here is additive and has no risk to the 
 - `dio sync` — directory sync with `--delete` and `--dry-run`
 
 ### Phase 7.3 — DirIO-Specific
-- `dio ownership get` / `dio ownership transfer`
-- `dio simulate` (single action + `--all-actions` matrix)
+- `internal/dioclient/dirioapi/` — HTTP client for `/.dirio/api/v1/` (requires Phase 7.0)
+- `dio ownership get` / `dio ownership transfer` — calls ownership endpoints
+- `dio simulate` — calls simulate endpoint; `--all-actions` calls effective-permissions endpoint
 
 ### Phase 7.4 — IAM & Service Accounts
-- `dio sa create/list/info/update/rm`
-- `dio iam user *` and `dio iam policy *`
+- `dio sa create/list/info/update/rm` — calls `/minio/admin/v3/` service account endpoints
+- `dio iam user *` and `dio iam policy *` — calls `/minio/admin/v3/` IAM endpoints
 
 ---
 
