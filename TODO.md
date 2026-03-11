@@ -613,6 +613,81 @@ Using "Core + Sidecar" approach:
 
 ---
 
+## V2: Hybrid Storage & Erasure Coding
+
+> **Status:** Planning / Future Work. See [docs/design/STORAGE-ARCHITECTURE.md](docs/design/STORAGE-ARCHITECTURE.md) for the full spec.
+
+**Philosophy:** For most users the answer is to use ZFS, BTRFS, or hardware RAID and let the filesystem handle durability — DirIO doesn't need to. Sidecar EC is opt-in and intended only for environments where a capable filesystem isn't available (mismatched external drives, locked-down NAS firmware, NTFS/APFS/ext4 JBODs).
+
+**Key constraint:** The data file on primary disk is always a complete, intact, human-readable copy of the object. No stripe splitting. `ls` and `cat` always work. Zero lock-in.
+
+### V2 Milestone 1 — StorageCoordinator Interface
+
+- [ ] `internal/storage/coordinator.go` — `StorageCoordinator` interface abstracting physical data/parity layout from the S3 API layer
+- [ ] Driver registry: select driver based on config (`native_passthrough` | `sidecar_ec` | `standard`)
+- [ ] **Native Pass-through driver** — wraps existing `os` calls; no parity overhead; recommended when ZFS/BTRFS/RAID is in use
+- [ ] **Standard driver** — existing single-disk behavior; no redundancy
+- [ ] Wire `StorageCoordinator` into PUT/GET handlers; no behaviour change for `standard` driver
+
+### V2 Milestone 2 — Sidecar EC Write Path
+
+- [ ] `internal/storage/sidecar/` package — Sidecar EC driver
+- [ ] `klauspost/reedsolomon` dependency (pure Go, no Cgo)
+- [ ] Write path: `TeeReader` fork — one branch to data dir, other to RS encoder; parallel parity flush via `errgroup`
+- [ ] Parity shard naming: `<key>.p1`, `<key>.p2`, … under `<parity_dir>/.dirio/<bucket>/`
+- [ ] Parity manifest sidecar JSON: records k+m values, shard count, algorithm version (enables safe reconfig later)
+- [ ] PUT returns only after data write **and** all parity writes confirm success
+- [ ] Config schema (per deployment, opt-in):
+  ```yaml
+  storage:
+    driver: sidecar_ec
+    data_dir: /mnt/disk_main
+    parity_dirs:
+      - /mnt/disk_parity_1
+      - /mnt/disk_parity_2
+    ec:
+      parity_shards: 2        # N in 1+N
+      checksum: highwayhash   # sha256 | highwayhash
+  ```
+
+### V2 Milestone 3 — Degraded Read + In-Memory Reconstruction
+
+- [ ] Read path: checksum verify on open; on mismatch or missing file, load parity shards
+- [ ] RS decode in-memory; serve reconstructed data to client
+- [ ] Optional heal-to-disk after successful reconstruction (configurable)
+- [ ] Checksums stored in `.metadata/` (authoritative); xattrs written as supplementary hint where supported
+
+### V2 Milestone 4 — Background Scrubber
+
+- [ ] Background goroutine crawling data tier on configurable schedule
+- [ ] Per-object checksum verify → reconstruct from parity on mismatch → heal to disk on success → mark degraded on failure
+- [ ] IO throttle (`io_limit_mbps`) to avoid starving foreground requests
+- [ ] Config:
+  ```yaml
+  storage:
+    scrubber:
+      enabled: true
+      interval: 24h
+      io_limit_mbps: 50
+  ```
+- [ ] Prometheus metrics: scrub runs, objects verified, healed, degraded
+
+### V2 Milestone 5 — Parity Manifest + Config Versioning
+
+- [ ] Parity manifest per object: `<key>.ec.json` adjacent to parity shards
+- [ ] Manifest records algorithm version, k+m config, shard paths — enables reconstruction even if global config changes
+- [ ] Console UI: degraded object indicator, scrubber status page
+- [ ] `dirio fsck` subcommand — on-demand scrub / integrity report
+
+### V2 Tradeoffs (document clearly)
+
+- **Write amplification:** `1+2` writes ~3× the data. Benchmark before deploying on constrained hardware.
+- **No read throughput gain:** Data file is always complete. No striped-read performance benefit (unlike RAID-0/5).
+- **Multipart:** Reassembled before parity calculation. Parity computed on complete object only.
+- **Not a backup:** Protects against bit-rot and single-disk failure. Does not protect against accidental deletion, ransomware, or whole-node loss.
+
+---
+
 ## Documentation
 
 Priority docs — these are the highest-value items for any external user of DirIO:

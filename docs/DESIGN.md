@@ -48,9 +48,14 @@ DirIO is one Go binary. No Redis, no PostgreSQL, no external services. Just:
 ### We Will Not Support
 
 - **Distributed mode**: Use actual S3 or MinIO if you need clustering
-- **Replication**: Use filesystem-level tools (rsync, ZFS send/recv, etc.)
 - **Versioning**: Keep it simple; this is Phase N work if ever
 - **Advanced IAM**: Basic access keys and bucket policies only
+
+### Durability — Filesystem First, Sidecar EC as Fallback
+
+The preferred durability path is to use a filesystem that handles it natively — ZFS, BTRFS, or hardware RAID. DirIO doesn't need to replicate what ZFS already does better.
+
+For environments where that isn't possible (ext4/XFS JBODs, NTFS, locked-down NAS firmware), a **Sidecar EC driver** is planned for V2. It generates parity shards on separate disks using Reed-Solomon coding via `klauspost/reedsolomon` (pure Go). The data file on the primary disk always remains a complete, intact copy of the object — no stripe splitting, no lock-in. See [docs/design/STORAGE-ARCHITECTURE.md](design/STORAGE-ARCHITECTURE.md) for the V2 spec.
 
 ### We Will Not Optimize For
 
