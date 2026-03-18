@@ -235,12 +235,11 @@ func (s *Server) setupRoutes() {
 		))
 	}
 
-	serviceFactory := service.NewServiceFactory(s.storage, s.metadata, s.policyEngine)
+	serviceFactory := service.NewServiceFactory(s.storage, s.metadata, s.policyEngine, s.auth)
 	apiHandler := api.New(
 		serviceFactory,
 		s.auth,
 		urlbuilder.New(s.config.CanonicalDomain),
-		s.auth,
 	)
 
 	deps := RouteDependencies{

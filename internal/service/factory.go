@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/persistence/storage"
 	policyEngine "github.com/mallardduck/dirio/internal/policy"
@@ -16,6 +17,7 @@ type ServicesFactory struct {
 	diskStorage     *storage.Storage
 	metadataManager *metadata.Manager
 	policyEngine    *policyEngine.Engine
+	authenticator   *auth.Authenticator
 
 	// The actual services
 	userService           *user.Service
@@ -26,12 +28,18 @@ type ServicesFactory struct {
 }
 
 // NewServiceFactory creates a new service factory with dependency injection
-func NewServiceFactory(diskStorage *storage.Storage, metadataManager *metadata.Manager, engine *policyEngine.Engine) *ServicesFactory {
+func NewServiceFactory(
+	diskStorage *storage.Storage,
+	metadataManager *metadata.Manager,
+	engine *policyEngine.Engine,
+	authenticator *auth.Authenticator,
+) *ServicesFactory {
 	return &ServicesFactory{
 		diskStorage:           diskStorage,
 		metadataManager:       metadataManager,
 		policyEngine:          engine,
-		userService:           user.NewService(metadataManager),
+		authenticator:         authenticator,
+		userService:           user.NewService(metadataManager, authenticator),
 		policyService:         policy.NewService(metadataManager),
 		s3Service:             s3.NewService(diskStorage, metadataManager, engine),
 		groupService:          group.NewService(metadataManager),
@@ -62,6 +70,11 @@ func (f *ServicesFactory) Metadata() *metadata.Manager {
 // PolicyEngine returns the policy evaluation engine.
 func (f *ServicesFactory) PolicyEngine() *policyEngine.Engine {
 	return f.policyEngine
+}
+
+// Authenticator returns the authenticator service
+func (f *ServicesFactory) Authenticator() *auth.Authenticator {
+	return f.authenticator
 }
 
 // Group returns the group service

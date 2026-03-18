@@ -112,43 +112,47 @@ templ userRow(u *consoleapi.User) {
 		<td class="px-4 py-3 text-dirio-muted text-xs">{ u.UpdatedAt.Format("2006-01-02") }</td>
 		<td class="px-4 py-3 text-right">
 			<div class="flex items-center justify-end gap-2">
-				<form
-					hx-post={ PageURL("/users/" + u.UUID + "/status") }
-					hx-target="#users-section"
-					hx-swap="outerHTML"
-				>
-					<button
-						type="submit"
-						class="text-xs text-dirio-teal hover:underline"
+				if u.UUID == consoleapi.AdminUserUUID {
+					<span class="text-xs text-dirio-muted italic">System Account</span>
+				} else {
+					<form
+						hx-post={ PageURL("/users/" + u.UUID + "/status") }
+						hx-target="#users-section"
+						hx-swap="outerHTML"
 					>
-						if u.Status == "on" {
-							Disable
-						} else {
-							Enable
-						}
-					</button>
-				</form>
-				@RevealSecret(RevealSecretProps{
-					AccessKey: u.AccessKey,
-					FetchURL:  string(PageURL("/users/" + u.UUID + "/secret")),
-				})
-				<button
-					class="text-xs text-dirio-teal hover:underline"
-					onclick={ UserUpdateSecretClick(u) }
-				>
-					Rotate Secret
-				</button>
-				<form
-					hx-post={ PageURL("/users/" + u.UUID + "/delete") }
-					hx-target="#users-section"
-					hx-swap="outerHTML"
-					hx-confirm={ "Are you sure you want to delete user " + u.AccessKey + "?" }
-				>
+						<button
+							type="submit"
+							class="text-xs text-dirio-teal hover:underline"
+						>
+							if u.Status == "on" {
+								Disable
+							} else {
+								Enable
+							}
+						</button>
+					</form>
+					@RevealSecret(RevealSecretProps{
+						AccessKey: u.AccessKey,
+						FetchURL:  string(PageURL("/users/" + u.UUID + "/secret")),
+					})
 					<button
-						type="submit"
-						class="text-xs text-dirio-coral hover:underline"
-					>Delete</button>
-				</form>
+						class="text-xs text-dirio-teal hover:underline"
+						onclick={ UserUpdateSecretClick(u) }
+					>
+						Rotate Secret
+					</button>
+					<form
+						hx-post={ PageURL("/users/" + u.UUID + "/delete") }
+						hx-target="#users-section"
+						hx-swap="outerHTML"
+						hx-confirm={ "Are you sure you want to delete user " + u.AccessKey + "?" }
+					>
+						<button
+							type="submit"
+							class="text-xs text-dirio-coral hover:underline"
+						>Delete</button>
+					</form>
+				}
 			</div>
 		</td>
 	</tr>

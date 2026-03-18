@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,6 +34,7 @@ func (s *Service) Create(ctx context.Context, req *CreateServiceAccountRequest) 
 	}
 
 	// Check uniqueness across users and service accounts
+	// TODO what about overlap with Admin accounts?
 	if _, err := s.metadata.GetUserByAccessKey(ctx, req.AccessKey); err == nil {
 		return nil, svcerrors.ErrServiceAccountAlreadyExists
 	}
@@ -42,9 +42,12 @@ func (s *Service) Create(ctx context.Context, req *CreateServiceAccountRequest) 
 		return nil, svcerrors.ErrServiceAccountAlreadyExists
 	}
 
-	// Resolve parent user access key → UUID for stable cross-key-rotation identity.
+	// Resolve parent user → UUID.
+	// ParentUserUUID takes precedence.
 	var parentUserUUID *uuid.UUID
-	if req.ParentUser != nil && *req.ParentUser != "" {
+	if req.ParentUserUUID != nil {
+		parentUserUUID = req.ParentUserUUID
+	} else if req.ParentUser != nil && *req.ParentUser != "" {
 		parentUser, err := s.metadata.GetUserByAccessKey(ctx, *req.ParentUser)
 		if err != nil {
 			return nil, fmt.Errorf("parent user %q not found: %w", *req.ParentUser, err)
@@ -52,21 +55,17 @@ func (s *Service) Create(ctx context.Context, req *CreateServiceAccountRequest) 
 		parentUserUUID = &parentUser.UUID
 	}
 
-	now := time.Now()
-	sa := &iam.ServiceAccount{
-		Version:          iam.ServiceAccountMetadataVersion,
-		UUID:             uuid.New(),
-		AccessKey:        req.AccessKey,
-		SecretKey:        req.SecretKey,
-		Username:         req.AccessKey,
-		ParentUserUUID:   parentUserUUID,
-		PolicyMode:       req.PolicyMode,
-		Status:           iam.ServiceAcctStatusActive,
-		AttachedPolicies: []string{},
-		CreatedAt:        now,
-		UpdatedAt:        now,
-		ExpiresAt:        req.ExpiresAt,
-	}
+	sa := iam.NewServiceAccount(
+		uuid.New(),
+		req.AccessKey,
+		req.SecretKey,
+		req.AccessKey,
+		parentUserUUID,
+		req.PolicyMode,
+		iam.ServiceAcctStatusActive,
+		req.EmbeddedPolicyJSON,
+		req.ExpiresAt,
+	)
 
 	if err := s.metadata.CreateServiceAccount(ctx, sa); err != nil {
 		return nil, err
@@ -136,6 +135,10 @@ func (s *Service) Update(ctx context.Context, accessKey string, req *UpdateServi
 		sa.ExpiresAt = *req.ExpiresAt
 	}
 
+	if req.EmbeddedPolicyJSON != nil {
+		sa.EmbeddedPolicyJSON = *req.EmbeddedPolicyJSON
+	}
+
 	sa.UpdatedAt = time.Now()
 
 	if err := s.metadata.SaveServiceAccount(ctx, sa); err != nil {
@@ -143,51 +146,6 @@ func (s *Service) Update(ctx context.Context, accessKey string, req *UpdateServi
 	}
 
 	return sa, nil
-}
-
-// AttachPolicy attaches a policy to a service account (idempotent)
-func (s *Service) AttachPolicy(ctx context.Context, accessKey, policyName string) error {
-	sa, err := s.Get(ctx, accessKey)
-	if err != nil {
-		return err
-	}
-
-	// Verify the policy exists
-	if _, err := s.metadata.GetPolicy(ctx, policyName); err != nil {
-		if errors.Is(err, metadata.ErrPolicyNotFound) {
-			return svcerrors.ErrPolicyNotFound
-		}
-		return err
-	}
-
-	if slices.Contains(sa.AttachedPolicies, policyName) {
-		return nil // already attached
-	}
-
-	sa.AttachedPolicies = append(sa.AttachedPolicies, policyName)
-	sa.UpdatedAt = time.Now()
-
-	return s.metadata.SaveServiceAccount(ctx, sa)
-}
-
-// DetachPolicy detaches a policy from a service account
-func (s *Service) DetachPolicy(ctx context.Context, accessKey, policyName string) error {
-	sa, err := s.Get(ctx, accessKey)
-	if err != nil {
-		return err
-	}
-
-	filtered := make([]string, 0, len(sa.AttachedPolicies))
-	for _, p := range sa.AttachedPolicies {
-		if p != policyName {
-			filtered = append(filtered, p)
-		}
-	}
-
-	sa.AttachedPolicies = filtered
-	sa.UpdatedAt = time.Now()
-
-	return s.metadata.SaveServiceAccount(ctx, sa)
 }
 
 // SetStatus enables or disables a service account

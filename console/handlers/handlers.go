@@ -419,9 +419,11 @@ func (h *Handler) ServiceAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	users, _ := h.api.ListUsers(r.Context())
+	policies, _ := h.api.ListPolicies(r.Context())
 	data := ui.ServiceAccountsPageData{
 		ServiceAccounts: sas,
 		Users:           users,
+		Policies:        policies,
 	}
 	if isHTMX(r) {
 		render(w, r, ui.ServiceAccountsTable(sas))
@@ -431,7 +433,7 @@ func (h *Handler) ServiceAccounts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ServiceAccountCreate(w http.ResponseWriter, r *http.Request) {
-	parentUser := r.FormValue("parentUser")
+	parentUserUUID := r.FormValue("parentUserUUID")
 	policyMode := r.FormValue("policyMode")
 	expiryStr := r.FormValue("expiry")
 	var expiry *time.Time
@@ -441,16 +443,23 @@ func (h *Handler) ServiceAccountCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	sa, err := h.api.CreateServiceAccount(r.Context(), consoleapi.CreateServiceAccountRequest{
-		ParentUser: parentUser,
-		PolicyMode: policyMode,
-		ExpiresAt:  expiry,
-	})
+	req := consoleapi.CreateServiceAccountRequest{
+		ParentUserUUID: parentUserUUID,
+		PolicyMode:     policyMode,
+		ExpiresAt:      expiry,
+	}
+	if policyMode == "override" {
+		req.EmbeddedPolicyJSON = r.FormValue("embeddedPolicyJSON")
+	}
+
+	sa, err := h.api.CreateServiceAccount(r.Context(), req)
 	sas, _ := h.api.ListServiceAccounts(r.Context())
 	users, _ := h.api.ListUsers(r.Context())
+	policies, _ := h.api.ListPolicies(r.Context())
 	data := ui.ServiceAccountsPageData{
 		ServiceAccounts: sas,
 		Users:           users,
+		Policies:        policies,
 		NewSA:           sa,
 	}
 	if err != nil {

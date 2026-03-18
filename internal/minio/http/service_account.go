@@ -197,14 +197,14 @@ func (s *ServiceAccountHTTPService) InfoServiceAccount(w nethttp.ResponseWriter,
 	}
 
 	response := map[string]any{
-		"accessKey":        sa.AccessKey,
-		"parentUserUUID":   sa.ParentUserUUID,
-		"policyMode":       sa.PolicyMode,
-		"status":           sa.Status,
-		"attachedPolicies": sa.AttachedPolicies,
-		"createdAt":        sa.CreatedAt,
-		"updatedAt":        sa.UpdatedAt,
-		"expiration":       sa.ExpiresAt,
+		"accessKey":      sa.AccessKey,
+		"parentUserUUID": sa.ParentUserUUID,
+		"policyMode":     sa.PolicyMode,
+		"status":         sa.Status,
+		"sessionPolicy":  sa.EmbeddedPolicyJSON, // inline policy JSON (override mode only)
+		"createdAt":      sa.CreatedAt,
+		"updatedAt":      sa.UpdatedAt,
+		"expiration":     sa.ExpiresAt,
 	}
 
 	w.Header().Set(headers.ContentType, "application/json")

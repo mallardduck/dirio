@@ -56,16 +56,41 @@ func (s ServiceAcctStatus) String() string {
 
 // ServiceAccount represents a long-lived or temporary credential scoped to an application or service
 type ServiceAccount struct {
-	Version          string            `json:"version"`                    // DirIO metadata version
-	UUID             uuid.UUID         `json:"uuid"`                       // Stable identifier
-	AccessKey        string            `json:"accessKey"`                  // Credential access key
-	SecretKey        string            `json:"secretKey"`                  // Credential secret key
-	Username         string            `json:"username"`                   // Display name
-	ParentUserUUID   *uuid.UUID        `json:"parentUserUUID,omitempty"`   // Optional parent user UUID (stable across key rotation)
-	PolicyMode       PolicyMode        `json:"policyMode,omitempty"`       // "inherit" (default) or "override"
-	Status           ServiceAcctStatus `json:"status"`                     // Account status (on/off)
-	AttachedPolicies []string          `json:"attachedPolicies,omitempty"` // Names of attached IAM policies
-	CreatedAt        time.Time         `json:"createdAt"`
-	UpdatedAt        time.Time         `json:"updatedAt"`
-	ExpiresAt        *time.Time        `json:"expiresAt,omitempty"` // Optional expiration time
+	Version            string            `json:"version"`                      // DirIO metadata version
+	UUID               uuid.UUID         `json:"uuid"`                         // Stable identifier
+	AccessKey          string            `json:"accessKey"`                    // Credential access key
+	SecretKey          string            `json:"secretKey"`                    // Credential secret key
+	Username           string            `json:"username"`                     // Display name
+	ParentUserUUID     *uuid.UUID        `json:"parentUserUUID,omitempty"`     // Optional parent user UUID (stable across key rotation)
+	PolicyMode         PolicyMode        `json:"policyMode,omitempty"`         // "inherit" (default) or "override"
+	Status             ServiceAcctStatus `json:"status"`                       // Account status (on/off)
+	EmbeddedPolicyJSON string            `json:"embeddedPolicyJSON,omitempty"` // Raw IAM policy JSON; evaluated directly in override mode
+	CreatedAt          time.Time         `json:"createdAt"`
+	UpdatedAt          time.Time         `json:"updatedAt"`
+	ExpiresAt          *time.Time        `json:"expiresAt,omitempty"` // Optional expiration time
+}
+
+func NewServiceAccount(
+	uuid uuid.UUID,
+	accessKey, secretKey, username string,
+	parentUserUUID *uuid.UUID,
+	policyMode PolicyMode,
+	status ServiceAcctStatus,
+	policyJSON string,
+	expiresAt *time.Time,
+) *ServiceAccount {
+	return &ServiceAccount{
+		Version:            ServiceAccountMetadataVersion,
+		UUID:               uuid,
+		AccessKey:          accessKey,
+		SecretKey:          secretKey,
+		Username:           username,
+		ParentUserUUID:     parentUserUUID,
+		PolicyMode:         policyMode,
+		Status:             status,
+		EmbeddedPolicyJSON: policyJSON,
+		ExpiresAt:          expiresAt,
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
+	}
 }

@@ -6,7 +6,6 @@ import (
 	"github.com/mallardduck/dirio/internal/http/api/s3"
 	"github.com/mallardduck/dirio/internal/http/auth"
 	httpresponse "github.com/mallardduck/dirio/internal/http/response"
-	"github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/service"
 )
 
@@ -28,7 +27,6 @@ func New(
 	serviceFactory *service.ServicesFactory,
 	authHandler *auth.Authenticator,
 	urlBuilder URLBuilder,
-	adminKeys policy.AdminKeyChecker,
 ) *Handler {
 	return &Handler{
 		authHandler:    authHandler,
@@ -36,7 +34,7 @@ func New(
 		S3Handler: s3.New(
 			serviceFactory,
 			urlBuilder,
-			adminKeys,
+			authHandler,
 		),
 	}
 }

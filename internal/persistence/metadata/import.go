@@ -277,48 +277,33 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (bool, error) {
 		}
 
 		// If the service account had an embedded session policy, save it as a
-		// named policy and use PolicyModeOverride so the SA is restricted to it
-		// rather than inheriting the full parent-user policy set.
+		// Embed the session policy JSON directly on the SA (no ghost named policies).
 		policyMode := iam.PolicyModeInherit
-		var attachedPolicies []string
+		embeddedPolicyJSON := ""
 		if minioSA.SessionPolicyJSON != "" {
+			// Validate it parses before committing to override mode.
 			var sessionDoc PolicyDocument
 			if err := jsonutil.Unmarshal([]byte(minioSA.SessionPolicyJSON), &sessionDoc); err != nil {
 				fmt.Printf("Warning: failed to parse session policy for %s: %v; falling back to inherit\n",
 					minioSA.AccessKey, err)
 			} else {
-				sessionPolicyName := "_import_sa_" + minioSA.AccessKey
-				sessionPolicy := &Policy{
-					Version:        iam.PolicyMetadataVersion,
-					Name:           sessionPolicyName,
-					PolicyDocument: &sessionDoc,
-					CreateDate:     now,
-					UpdateDate:     now,
-				}
-				if err := m.SavePolicy(ctx, sessionPolicy); err != nil {
-					fmt.Printf("Warning: failed to save session policy for %s: %v; falling back to inherit\n",
-						minioSA.AccessKey, err)
-				} else {
-					policyMode = iam.PolicyModeOverride
-					attachedPolicies = []string{sessionPolicyName}
-				}
+				policyMode = iam.PolicyModeOverride
+				embeddedPolicyJSON = minioSA.SessionPolicyJSON
 			}
 		}
 
-		sa := &ServiceAccount{
-			Version:          iam.ServiceAccountMetadataVersion,
-			UUID:             uuid.New(),
-			AccessKey:        minioSA.AccessKey,
-			SecretKey:        minioSA.SecretKey,
-			Username:         minioSA.AccessKey, // use accessKey as display name
-			ParentUserUUID:   parentUUID,
-			PolicyMode:       policyMode,
-			AttachedPolicies: attachedPolicies,
-			Status:           convertMinIOSAStatus(minioSA.Status),
-			CreatedAt:        now,
-			UpdatedAt:        updatedAt,
-			ExpiresAt:        expiresAt,
-		}
+		sa := iam.NewServiceAccount(
+			uuid.New(),
+			minioSA.AccessKey,
+			minioSA.SecretKey,
+			minioSA.AccessKey, // use accessKey as display name
+			parentUUID,
+			policyMode,
+			convertMinIOSAStatus(minioSA.Status),
+			embeddedPolicyJSON,
+			expiresAt,
+		)
+		sa.UpdatedAt = updatedAt
 		if err := m.CreateServiceAccount(ctx, sa); err != nil {
 			fmt.Printf("Warning: failed to save service account %s: %v\n", minioSA.AccessKey, err)
 			continue

@@ -52,8 +52,9 @@ const (
 // ServiceAccountInfo holds service account metadata used by the policy engine
 // to resolve effective IAM policies at evaluation time.
 type ServiceAccountInfo struct {
-	ParentUserUUID *uuid.UUID     // UUID of the parent user (nil if no parent)
-	PolicyMode     iam.PolicyMode // "inherit" or "override" (empty = inherit)
+	ParentUserUUID     *uuid.UUID     // UUID of the parent user (nil if no parent)
+	PolicyMode         iam.PolicyMode // "inherit" or "override" (empty = inherit)
+	EmbeddedPolicyJSON string         // raw IAM policy JSON; used directly in override mode
 }
 
 // WithAuthzDecision returns a new context with the authorization decision set

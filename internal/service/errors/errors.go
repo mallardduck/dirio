@@ -9,6 +9,7 @@ import (
 var (
 	ErrUserNotFound      = errors.New("user not found")
 	ErrUserAlreadyExists = errors.New("user already exists")
+	ErrUserIsSystemAdmin = errors.New("system admin account cannot be modified")
 	ErrInvalidAccessKey  = errors.New("invalid access key")
 	ErrInvalidSecretKey  = errors.New("invalid secret key")
 	ErrInvalidStatus     = errors.New("invalid status")

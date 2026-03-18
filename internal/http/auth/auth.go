@@ -47,6 +47,43 @@ func New(metadataManager *metadata.Manager, rootAccessKey, rootSecretKey string)
 	}
 }
 
+func (a *Authenticator) RootUser() *metadata.User {
+	// Snapshot root credentials to minimise lock contention.
+	a.mu.RLock()
+	rootAK, rootSK := a.rootAccessKey, a.rootSecretKey
+	a.mu.RUnlock()
+
+	return &metadata.User{
+		Version:   iam.UserMetadataVersion,
+		UUID:      iam.AdminUserUUID, // AdminUserUUID - stable across key rotation
+		Username:  "admin",
+		AccessKey: rootAK,
+		SecretKey: rootSK,
+		Status:    iam.UserStatusActive,
+	}
+}
+
+func (a *Authenticator) AltRootUser() *metadata.User {
+	// Snapshot root credentials to minimise lock contention.
+	a.mu.RLock()
+	altAK, altSK := a.altRootAccessKey, a.altRootSecretKey
+	a.mu.RUnlock()
+
+	status := iam.UserStatusDisabled
+	if altAK != "" && altSK != "" {
+		status = iam.UserStatusActive
+	}
+
+	return &metadata.User{
+		Version:   iam.UserMetadataVersion,
+		UUID:      iam.AdminUserUUID, // AdminUserUUID - same UUID for both admins
+		Username:  "admin",
+		AccessKey: altAK,
+		SecretKey: altSK,
+		Status:    status,
+	}
+}
+
 // WithAlternativeRoot adds alternative root credentials (e.g., from data config)
 // This allows both CLI admin and data config admin to coexist
 func (a *Authenticator) WithAlternativeRoot(accessKey, secretKey string) *Authenticator {
@@ -129,30 +166,17 @@ func (a *Authenticator) ValidateCredentials(ctx context.Context, accessKey, secr
 func (a *Authenticator) GetUserForAccessKey(ctx context.Context, accessKey string) (*metadata.User, error) {
 	// Snapshot root credentials to minimise lock contention.
 	a.mu.RLock()
-	rootAK, rootSK := a.rootAccessKey, a.rootSecretKey
-	altAK, altSK := a.altRootAccessKey, a.altRootSecretKey
+	rootAK, altAK := a.rootAccessKey, a.altRootAccessKey
 	a.mu.RUnlock()
 
 	// Check primary root (CLI admin)
 	if accessKey == rootAK {
-		return &metadata.User{
-			UUID:      iam.AdminUserUUID, // AdminUserUUID - stable across key rotation
-			Username:  "admin",
-			AccessKey: rootAK,
-			SecretKey: rootSK,
-			Status:    iam.UserStatusActive,
-		}, nil
+		return a.RootUser(), nil
 	}
 
 	// Check alternative root (data config admin)
 	if altAK != "" && accessKey == altAK {
-		return &metadata.User{
-			UUID:      iam.AdminUserUUID, // AdminUserUUID - same UUID for both admins
-			Username:  "admin",
-			AccessKey: altAK,
-			SecretKey: altSK,
-			Status:    iam.UserStatusActive,
-		}, nil
+		return a.AltRootUser(), nil
 	}
 
 	// Efficient single-user lookup
@@ -177,14 +201,13 @@ func (a *Authenticator) GetUserForAccessKey(ctx context.Context, accessKey strin
 		// Convert service account to a User representation for the auth pipeline.
 		// ServiceAcctStatus and UserStatus share the same underlying values ("on"/"off").
 		return &metadata.User{
-			Version:          sa.Version,
-			UUID:             sa.UUID,
-			Username:         sa.Username,
-			AccessKey:        sa.AccessKey,
-			SecretKey:        sa.SecretKey,
-			Status:           iam.UserStatus(sa.Status),
-			UpdatedAt:        sa.UpdatedAt,
-			AttachedPolicies: sa.AttachedPolicies,
+			Version:   sa.Version,
+			UUID:      sa.UUID,
+			Username:  sa.Username,
+			AccessKey: sa.AccessKey,
+			SecretKey: sa.SecretKey,
+			Status:    iam.UserStatus(sa.Status),
+			UpdatedAt: sa.UpdatedAt,
 		}, nil
 	}
 

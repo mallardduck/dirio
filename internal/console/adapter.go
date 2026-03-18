@@ -29,6 +29,13 @@ import (
 // ErrNotImplemented is returned for API methods not yet backed by the service layer.
 var ErrNotImplemented = errors.New("not implemented")
 
+// AdminKeysProvider exposes the current root access keys so the console can
+// include the admin account in user listings without coupling to the auth package.
+type AdminKeysProvider interface {
+	PrimaryRootAccessKey() string
+	AltRootAccessKey() string
+}
+
 // commonS3Actions is the set of S3 permissions evaluated by GetEffectivePermissions.
 var commonS3Actions = []string{
 	"s3:GetObject",
@@ -55,6 +62,10 @@ func NewAdapter(services *service.ServicesFactory) *Adapter {
 	return &Adapter{services: services}
 }
 
+func (a *Adapter) adminKeys() AdminKeysProvider {
+	return a.services.Authenticator()
+}
+
 // --- Users -------------------------------------------------------------------
 
 func (a *Adapter) ListUsers(ctx context.Context) ([]*consoleapi.User, error) {
@@ -63,7 +74,29 @@ func (a *Adapter) ListUsers(ctx context.Context) ([]*consoleapi.User, error) {
 		return nil, err
 	}
 
-	users := make([]*consoleapi.User, 0, len(uids))
+	users := make([]*consoleapi.User, 0, len(uids)+2)
+
+	// Prepend the admin account(s) — they live in config, not the metadata store.
+	if akp := a.adminKeys(); akp != nil {
+		adminUUID := iam.AdminUserUUID.String()
+		if pk := akp.PrimaryRootAccessKey(); pk != "" {
+			users = append(users, &consoleapi.User{
+				UUID:      adminUUID,
+				AccessKey: pk,
+				Username:  "admin",
+				Status:    "on",
+			})
+		}
+		if ak := akp.AltRootAccessKey(); ak != "" && ak != akp.PrimaryRootAccessKey() {
+			users = append(users, &consoleapi.User{
+				UUID:      adminUUID,
+				AccessKey: ak,
+				Username:  "admin (alt)",
+				Status:    "on",
+			})
+		}
+	}
+
 	for _, uid := range uids {
 		u, err := a.services.User().Get(ctx, uid)
 		if err != nil {
@@ -467,9 +500,13 @@ func (a *Adapter) GetServiceAccountSecret(ctx context.Context, uuidStr string) (
 }
 
 func (a *Adapter) CreateServiceAccount(ctx context.Context, req consoleapi.CreateServiceAccountRequest) (*consoleapi.ServiceAccount, error) {
-	var parentUser *string
-	if req.ParentUser != "" {
-		parentUser = &req.ParentUser
+	var parentUserUUID *uuid.UUID
+	if req.ParentUserUUID != "" {
+		uid, err := uuid.Parse(req.ParentUserUUID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid parent user UUID: %w", err)
+		}
+		parentUserUUID = &uid
 	}
 
 	if req.AccessKey == "" {
@@ -482,16 +519,21 @@ func (a *Adapter) CreateServiceAccount(ctx context.Context, req consoleapi.Creat
 	}
 
 	sa, err := a.services.ServiceAccount().Create(ctx, &svcsacct.CreateServiceAccountRequest{
-		AccessKey:  req.AccessKey,
-		SecretKey:  req.SecretKey,
-		ParentUser: parentUser,
-		PolicyMode: iam.PolicyMode(req.PolicyMode),
-		ExpiresAt:  req.ExpiresAt,
+		AccessKey:          req.AccessKey,
+		SecretKey:          req.SecretKey,
+		ParentUserUUID:     parentUserUUID,
+		PolicyMode:         iam.PolicyMode(req.PolicyMode),
+		EmbeddedPolicyJSON: req.EmbeddedPolicyJSON,
+		ExpiresAt:          req.ExpiresAt,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return iamServiceAccountToConsole(ctx, a.services, sa), nil
+	// Expose the secret key once at creation time so the UI can display it.
+	// iamServiceAccountToConsole intentionally omits SecretKey for list/get operations.
+	result := iamServiceAccountToConsole(ctx, a.services, sa)
+	result.SecretKey = sa.SecretKey
+	return result, nil
 }
 
 func (a *Adapter) DeleteServiceAccount(ctx context.Context, uuidStr string) error {
@@ -517,8 +559,9 @@ func (a *Adapter) UpdateServiceAccount(ctx context.Context, uuidStr string, req 
 	}
 
 	updated, err := a.services.ServiceAccount().Update(ctx, sa.AccessKey, &svcsacct.UpdateServiceAccountRequest{
-		SecretKey: req.SecretKey,
-		ExpiresAt: req.ExpiresAt,
+		SecretKey:          req.SecretKey,
+		EmbeddedPolicyJSON: req.EmbeddedPolicyJSON,
+		ExpiresAt:          req.ExpiresAt,
 	})
 	if err != nil {
 		return nil, err
@@ -696,25 +739,31 @@ func iamPolicyToConsole(p *iam.Policy) (*consoleapi.Policy, error) {
 
 func iamServiceAccountToConsole(ctx context.Context, svcs *service.ServicesFactory, sa *iam.ServiceAccount) *consoleapi.ServiceAccount {
 	parentAccessKey := ""
+	parentUsername := ""
 	parentUUID := ""
 	if sa.ParentUserUUID != nil {
 		parentUUID = sa.ParentUserUUID.String()
-		if u, err := svcs.Metadata().GetUserByUUID(ctx, *sa.ParentUserUUID); err == nil {
+		if *sa.ParentUserUUID == iam.AdminUserUUID {
+			parentAccessKey = "admin"
+			parentUsername = "Admin"
+		} else if u, err := svcs.Metadata().GetUserByUUID(ctx, *sa.ParentUserUUID); err == nil {
 			parentAccessKey = u.AccessKey
+			parentUsername = u.Username
 		}
 	}
 
 	return &consoleapi.ServiceAccount{
-		UUID:             sa.UUID.String(),
-		AccessKey:        sa.AccessKey,
-		Username:         sa.Username,
-		ParentUserUUID:   parentUUID,
-		ParentAccessKey:  parentAccessKey,
-		PolicyMode:       string(sa.PolicyMode),
-		Status:           string(sa.Status),
-		AttachedPolicies: sa.AttachedPolicies,
-		CreatedAt:        sa.CreatedAt,
-		UpdatedAt:        sa.UpdatedAt,
-		ExpiresAt:        sa.ExpiresAt,
+		UUID:               sa.UUID.String(),
+		AccessKey:          sa.AccessKey,
+		Username:           sa.Username,
+		ParentUserUUID:     parentUUID,
+		ParentAccessKey:    parentAccessKey,
+		ParentUsername:     parentUsername,
+		PolicyMode:         string(sa.PolicyMode),
+		Status:             string(sa.Status),
+		EmbeddedPolicyJSON: sa.EmbeddedPolicyJSON,
+		CreatedAt:          sa.CreatedAt,
+		UpdatedAt:          sa.UpdatedAt,
+		ExpiresAt:          sa.ExpiresAt,
 	}
 }

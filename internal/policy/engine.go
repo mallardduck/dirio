@@ -2,6 +2,7 @@ package policy
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/mallardduck/dirio/pkg/iam"
 )
@@ -65,19 +66,40 @@ func (e *Engine) Evaluate(ctx context.Context, req *RequestContext) Decision {
 	// 3. IAM policy evaluation
 	// Evaluates the effective IAM policies for the principal (user or service account).
 	// Explicit deny from IAM beats everything; explicit allow beats ownership/default-deny.
-	if req.Principal != nil && !req.Principal.IsAnonymous && e.resolver != nil {
-		policyNames := e.resolveEffectivePolicyNames(ctx, req.Principal)
-		for _, name := range policyNames {
-			doc, err := e.resolver.GetPolicyDocument(ctx, name)
-			if err != nil {
-				continue // skip missing or inaccessible policies
+	if req.Principal != nil && !req.Principal.IsAnonymous {
+		// SA override mode: evaluate the embedded policy JSON directly (no store lookup).
+		if req.Principal.IsServiceAccount && req.Principal.PolicyMode == iam.PolicyModeOverride {
+			if req.Principal.EmbeddedPolicyJSON != "" {
+				var doc iam.PolicyDocument
+				if json.Unmarshal([]byte(req.Principal.EmbeddedPolicyJSON), &doc) == nil {
+					d := e.evaluatePolicy(&doc, req)
+					if d == DecisionExplicitDeny {
+						return DecisionExplicitDeny
+					}
+					if d == DecisionAllow {
+						return DecisionAllow
+					}
+				}
 			}
-			d := e.evaluatePolicy(doc, req)
-			if d == DecisionExplicitDeny {
-				return DecisionExplicitDeny
-			}
-			if d == DecisionAllow {
-				return DecisionAllow
+			// Override mode with no (or unparseable) policy: deny everything.
+			return DecisionDeny
+		}
+
+		// Inherit mode (and regular users): resolve named policies from the store.
+		if e.resolver != nil {
+			policyNames := e.resolveEffectivePolicyNames(ctx, req.Principal)
+			for _, name := range policyNames {
+				doc, err := e.resolver.GetPolicyDocument(ctx, name)
+				if err != nil {
+					continue // skip missing or inaccessible policies
+				}
+				d := e.evaluatePolicy(doc, req)
+				if d == DecisionExplicitDeny {
+					return DecisionExplicitDeny
+				}
+				if d == DecisionAllow {
+					return DecisionAllow
+				}
 			}
 		}
 	}
@@ -178,15 +200,14 @@ func (e *Engine) HasBucketPolicy(bucket string) bool {
 // IAM Policy Resolution
 // ============================================================
 
-// resolveEffectivePolicyNames returns the list of IAM policy names that should
-// be evaluated for the given principal.
+// resolveEffectivePolicyNames returns the named IAM policies to evaluate for the principal.
 //
-// For regular users: their own AttachedPolicies plus policies from all active groups they belong to.
-// For SAs in inherited mode (default): the parent user's AttachedPolicies and group policies.
-// For SAs in override mode, or SAs with no parent: the SA's own AttachedPolicies.
+// For regular users: their own AttachedPolicies plus policies from all active groups.
+// For SAs in inherit mode: the parent user's AttachedPolicies and group policies.
+// SA override mode is handled before this call in Evaluate() via embedded JSON.
 func (e *Engine) resolveEffectivePolicyNames(ctx context.Context, principal *Principal) []string {
 	if !principal.IsServiceAccount {
-		// Regular user: evaluate their own attached policies plus group policies.
+		// Regular user: own policies plus group policies.
 		if principal.User == nil {
 			return nil
 		}
@@ -198,21 +219,14 @@ func (e *Engine) resolveEffectivePolicyNames(ctx context.Context, principal *Pri
 		return names
 	}
 
-	// Service account: resolve based on PolicyMode.
-	if principal.PolicyMode == iam.PolicyModeOverride || principal.ParentUserUUID == nil {
-		// Override mode or no parent UUID: use the SA's own attached policies.
-		if principal.User != nil {
-			return principal.User.AttachedPolicies
-		}
-		return nil
+	// SA inherit mode: fetch parent user's policy names and group policies.
+	if principal.ParentUserUUID == nil {
+		return nil // no parent, no policies
 	}
-
-	// Inherit mode with parent UUID: fetch parent user's policy names and group policies.
 	parentUUID := *principal.ParentUserUUID
 	names, err := e.resolver.GetUserPolicyNamesByUUID(ctx, parentUUID)
 	if err != nil {
-		// Parent not found (deleted?) or other error — fail closed (no policies).
-		return nil
+		return nil // parent not found or error — fail closed
 	}
 	if groupPolicies, err := e.resolver.GetGroupPoliciesForUser(ctx, parentUUID); err == nil {
 		names = append(names, groupPolicies...)

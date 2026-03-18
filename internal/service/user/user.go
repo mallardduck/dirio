@@ -8,33 +8,38 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/mallardduck/dirio/internal/service/validation"
+
+	"github.com/mallardduck/dirio/internal/http/auth"
+
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
-	validation2 "github.com/mallardduck/dirio/internal/service/validation"
 	"github.com/mallardduck/dirio/pkg/iam"
 )
 
 // Service provides user management operations
 type Service struct {
 	metadataManager *metadata.Manager
+	authenticator   *auth.Authenticator
 }
 
 // NewService creates a new user service
-func NewService(metadataManager *metadata.Manager) *Service {
+func NewService(metadataManager *metadata.Manager, authManager *auth.Authenticator) *Service {
 	return &Service{
 		metadataManager: metadataManager,
+		authenticator:   authManager,
 	}
 }
 
 // Create creates a new user with validation
 func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*iam.User, error) {
-	if err := validation2.ValidateAccessKey(req.AccessKey); err != nil {
+	if err := validation.ValidateAccessKey(req.AccessKey); err != nil {
 		return nil, err
 	}
-	if err := validation2.ValidateSecretKey(req.SecretKey); err != nil {
+	if err := validation.ValidateSecretKey(req.SecretKey); err != nil {
 		return nil, err
 	}
-	if err := validation2.ValidateStatus(req.Status); err != nil {
+	if err := validation.ValidateStatus(req.Status); err != nil {
 		return nil, err
 	}
 
@@ -82,7 +87,7 @@ func (s *Service) Get(ctx context.Context, userUID uuid.UUID) (*iam.User, error)
 // API boundaries (e.g. the MinIO-compatible HTTP API) where access keys are the
 // wire-format identifier. Internal code should prefer Get(uuid).
 func (s *Service) GetByAccessKey(ctx context.Context, accessKey string) (*iam.User, error) {
-	if err := validation2.ValidateAccessKey(accessKey); err != nil {
+	if err := validation.ValidateAccessKey(accessKey); err != nil {
 		return nil, err
 	}
 	user, err := s.metadataManager.GetUserByAccessKey(ctx, accessKey)
@@ -103,14 +108,14 @@ func (s *Service) Update(ctx context.Context, userUID uuid.UUID, req *UpdateUser
 	}
 
 	if req.SecretKey != nil {
-		if err := validation2.ValidateSecretKey(*req.SecretKey); err != nil {
+		if err := validation.ValidateSecretKey(*req.SecretKey); err != nil {
 			return nil, err
 		}
 		user.SecretKey = *req.SecretKey
 	}
 
 	if req.Status != nil {
-		if err := validation2.ValidateStatus(*req.Status); err != nil {
+		if err := validation.ValidateStatus(*req.Status); err != nil {
 			return nil, err
 		}
 		user.Status = *req.Status
@@ -131,6 +136,9 @@ func (s *Service) Update(ctx context.Context, userUID uuid.UUID, req *UpdateUser
 
 // Delete deletes a user by UUID.
 func (s *Service) Delete(ctx context.Context, userUID uuid.UUID) error {
+	if userUID == iam.AdminUserUUID {
+		return svcerrors.ErrUserIsSystemAdmin
+	}
 	if _, err := s.Get(ctx, userUID); err != nil {
 		return err
 	}
@@ -139,12 +147,13 @@ func (s *Service) Delete(ctx context.Context, userUID uuid.UUID) error {
 
 // List returns all user UUIDs.
 func (s *Service) List(ctx context.Context) ([]uuid.UUID, error) {
+	// TODO: should we inject the Admin UUID?
 	return s.metadataManager.ListUsers(ctx)
 }
 
 // AttachPolicy attaches a policy to a user (idempotent).
 func (s *Service) AttachPolicy(ctx context.Context, userUID uuid.UUID, policyName string) error {
-	if err := validation2.ValidatePolicyName(policyName); err != nil {
+	if err := validation.ValidatePolicyName(policyName); err != nil {
 		return err
 	}
 
@@ -172,7 +181,7 @@ func (s *Service) AttachPolicy(ctx context.Context, userUID uuid.UUID, policyNam
 
 // DetachPolicy detaches a policy from a user.
 func (s *Service) DetachPolicy(ctx context.Context, userUID uuid.UUID, policyName string) error {
-	if err := validation2.ValidatePolicyName(policyName); err != nil {
+	if err := validation.ValidatePolicyName(policyName); err != nil {
 		return err
 	}
 

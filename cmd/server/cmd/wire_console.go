@@ -26,7 +26,7 @@ func setupConsole(srv *server.Server, enabled, dedicatedPort bool, port int) {
 		return
 	}
 
-	factory := service.NewServiceFactory(srv.Storage(), srv.Metadata(), srv.PolicyEngine())
+	factory := service.NewServiceFactory(srv.Storage(), srv.Metadata(), srv.PolicyEngine(), srv.Auth())
 	adapter := consolewire.NewAdapter(factory)
 	handler := console.New(adapter, srv.Router(), newConsoleAdminAuth(srv.Auth()))
 

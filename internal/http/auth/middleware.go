@@ -63,8 +63,9 @@ func (a *Authenticator) withSAContext(ctx context.Context, accessKey string) con
 		return ctx
 	}
 	return contextInt.WithServiceAccountInfo(ctx, &contextInt.ServiceAccountInfo{
-		ParentUserUUID: sa.ParentUserUUID,
-		PolicyMode:     sa.PolicyMode,
+		ParentUserUUID:     sa.ParentUserUUID,
+		PolicyMode:         sa.PolicyMode,
+		EmbeddedPolicyJSON: sa.EmbeddedPolicyJSON,
 	})
 }
 

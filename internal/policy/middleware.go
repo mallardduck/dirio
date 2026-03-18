@@ -87,6 +87,7 @@ func AuthorizationMiddleware(config *AuthorizationConfig) func(http.Handler) htt
 				principal.IsServiceAccount = true
 				principal.ParentUserUUID = saInfo.ParentUserUUID
 				principal.PolicyMode = saInfo.PolicyMode
+				principal.EmbeddedPolicyJSON = saInfo.EmbeddedPolicyJSON
 			}
 
 			// Admin bypass - skip all policy checks

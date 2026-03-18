@@ -10,6 +10,11 @@ import (
 	"github.com/google/uuid"
 )
 
+// AdminUserUUID is the stable UUID for the built-in admin account.
+// The console uses this to identify the admin user returned by ListUsers
+// and to route SA parent assignments without an access-key lookup.
+const AdminUserUUID = "badfc0de-fadd-fc0f-fee0-000dadbeef00"
+
 // API defines the surface the console can call into the server.
 // The adapter in internal/console/adapter.go implements this interface
 // by calling the service layer directly (no HTTP round-trips).
@@ -137,33 +142,36 @@ type CreateGroupRequest struct {
 
 // ServiceAccount represents a service account as seen by the console.
 type ServiceAccount struct {
-	UUID             string     `json:"uuid"`
-	AccessKey        string     `json:"accessKey"`
-	SecretKey        string     `json:"secretKey,omitempty"`
-	Username         string     `json:"username"`
-	ParentUserUUID   string     `json:"parentUserUUID,omitempty"`
-	ParentAccessKey  string     `json:"parentAccessKey,omitempty"`
-	PolicyMode       string     `json:"policyMode"` // "inherit" or "override"
-	Status           string     `json:"status"`     // "on" or "off"
-	AttachedPolicies []string   `json:"attachedPolicies,omitempty"`
-	CreatedAt        time.Time  `json:"createdAt"`
-	UpdatedAt        time.Time  `json:"updatedAt"`
-	ExpiresAt        *time.Time `json:"expiresAt,omitempty"`
+	UUID               string     `json:"uuid"`
+	AccessKey          string     `json:"accessKey"`
+	SecretKey          string     `json:"secretKey,omitempty"`
+	Username           string     `json:"username"`
+	ParentUserUUID     string     `json:"parentUserUUID,omitempty"`
+	ParentAccessKey    string     `json:"parentAccessKey,omitempty"`
+	ParentUsername     string     `json:"parentUsername,omitempty"`
+	PolicyMode         string     `json:"policyMode"`                   // "inherit" or "override"
+	Status             string     `json:"status"`                       // "on" or "off"
+	EmbeddedPolicyJSON string     `json:"embeddedPolicyJSON,omitempty"` // Raw IAM policy JSON (override mode)
+	CreatedAt          time.Time  `json:"createdAt"`
+	UpdatedAt          time.Time  `json:"updatedAt"`
+	ExpiresAt          *time.Time `json:"expiresAt,omitempty"`
 }
 
 // CreateServiceAccountRequest is the input for CreateServiceAccount.
 type CreateServiceAccountRequest struct {
-	AccessKey  string     `json:"accessKey,omitempty"`
-	SecretKey  string     `json:"secretKey,omitempty"`
-	ParentUser string     `json:"parentUser,omitempty"` // Parent access key
-	PolicyMode string     `json:"policyMode,omitempty"` // "inherit" or "override"
-	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
+	AccessKey          string     `json:"accessKey,omitempty"`
+	SecretKey          string     `json:"secretKey,omitempty"`
+	ParentUserUUID     string     `json:"parentUserUUID,omitempty"`     // Parent user UUID (works for admin too)
+	PolicyMode         string     `json:"policyMode,omitempty"`         // "inherit" or "override"
+	EmbeddedPolicyJSON string     `json:"embeddedPolicyJSON,omitempty"` // Raw IAM policy JSON; required when PolicyMode == "override"
+	ExpiresAt          *time.Time `json:"expiresAt,omitempty"`
 }
 
 // UpdateServiceAccountRequest is the input for UpdateServiceAccount.
 type UpdateServiceAccountRequest struct {
-	SecretKey *string     `json:"secretKey,omitempty"`
-	ExpiresAt **time.Time `json:"expiresAt,omitempty"`
+	SecretKey          *string     `json:"secretKey,omitempty"`
+	EmbeddedPolicyJSON *string     `json:"embeddedPolicyJSON,omitempty"`
+	ExpiresAt          **time.Time `json:"expiresAt,omitempty"`
 }
 
 // EffectivePermissions shows the evaluated access for a user on a bucket.

@@ -35,9 +35,10 @@ type Principal struct {
 	IsAdmin     bool           // true if root admin (bypass all policies)
 
 	// Service account fields (populated by authorization middleware when request is from a SA)
-	IsServiceAccount bool           // true if this principal is a service account
-	ParentUserUUID   *uuid.UUID     // parent user UUID (nil if no parent or not a SA)
-	PolicyMode       iam.PolicyMode // "inherit" or "override" (empty string treated as inherit)
+	IsServiceAccount   bool           // true if this principal is a service account
+	ParentUserUUID     *uuid.UUID     // parent user UUID (nil if no parent or not a SA)
+	PolicyMode         iam.PolicyMode // "inherit" or "override" (empty string treated as inherit)
+	EmbeddedPolicyJSON string         // raw IAM policy JSON; evaluated directly in override mode
 }
 
 // Resource represents the S3 resource being accessed
