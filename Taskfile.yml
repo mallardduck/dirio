@@ -191,9 +191,9 @@ tasks:
       - templ generate ./console/...
 
   vendor-htmx:
-    desc: Download and vendor HTMX 2.0.4 into the embedded static directory
+    desc: Download and vendor HTMX 2.0.7 into the embedded static directory
     cmds:
-      - curl -sSL https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js -o console/static/js/htmx.min.js
+      - curl -sSL https://unpkg.com/htmx.org@2.0.7/dist/htmx.min.js -o console/static/js/htmx.min.js
 
   download-tailwind:
     desc: Download the Tailwind v4 standalone binary for the current OS/arch into ./bin/
