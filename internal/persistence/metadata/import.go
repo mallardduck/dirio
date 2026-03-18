@@ -69,131 +69,10 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("MinIO import failed: %w", err)
 	}
 
-	// Convert and save policies
-	if len(result.Policies) > 0 {
-		for _, minioPolicy := range result.Policies {
-			// Parse the policy JSON string into a PolicyDocument
-			var policyDoc PolicyDocument
-			if err := jsonutil.Unmarshal([]byte(minioPolicy.PolicyJSON), &policyDoc); err != nil {
-				fmt.Printf("Warning: failed to parse policy document for %s: %v\n", minioPolicy.Name, err)
-				continue
-			}
-
-			policy := &Policy{
-				Version:        iam.PolicyMetadataVersion,
-				Name:           minioPolicy.Name,
-				PolicyDocument: &policyDoc,
-				CreateDate:     minioPolicy.CreateDate,
-				UpdateDate:     minioPolicy.UpdateDate,
-			}
-			if err := m.SavePolicy(ctx, policy); err != nil {
-				fmt.Printf("Warning: failed to save policy %s: %v\n", minioPolicy.Name, err)
-				continue
-			}
-		}
-		fmt.Printf("Imported %d policies\n", len(result.Policies))
-	}
-
-	// Convert and save users (one file per user).
-	// Also build a local accessKey→UUID map for resolving group members and SA parents below.
-	accessKeyToUUID := make(map[string]uuid.UUID, len(result.Users))
-	if len(result.Users) > 0 {
-		for username, minioUser := range result.Users {
-			userUUID := uuid.New()
-			dirioUser := &User{
-				Version:          iam.UserMetadataVersion,
-				UUID:             userUUID,
-				Username:         username, // MinIO uses accessKey as username
-				AccessKey:        minioUser.AccessKey,
-				SecretKey:        minioUser.SecretKey,
-				Status:           convertMinIOStatus(minioUser.Status),
-				UpdatedAt:        minioUser.UpdatedAt,
-				AttachedPolicies: minioUser.AttachedPolicy,
-			}
-			if err := m.SaveUser(ctx, userUUID, dirioUser); err != nil {
-				fmt.Printf("Warning: failed to save user %s: %v\n", username, err)
-				continue
-			}
-			accessKeyToUUID[minioUser.AccessKey] = userUUID
-		}
-		fmt.Printf("Imported %d users\n", len(result.Users))
-	}
-
-	// Convert and save buckets
-	for bucketName, minioBucket := range result.Buckets {
-		meta := &BucketMetadata{
-			Version:      BucketMetadataVersion,
-			Name:         minioBucket.Name,
-			Owner:        nil, // nil = admin-only (MinIO doesn't store owner, assume admin created)
-			Created:      minioBucket.Created,
-			BucketPolicy: parseBucketPolicy(bucketName, minioBucket.PolicyConfigJSON),
-
-			// Import all extended MinIO metadata fields
-			NotificationConfigXML:       string(minioBucket.NotificationConfigXML),
-			LifecycleConfigXML:          string(minioBucket.LifecycleConfigXML),
-			ObjectLockConfigXML:         string(minioBucket.ObjectLockConfigXML),
-			VersioningConfigXML:         string(minioBucket.VersioningConfigXML),
-			EncryptionConfigXML:         string(minioBucket.EncryptionConfigXML),
-			TaggingConfigXML:            string(minioBucket.TaggingConfigXML),
-			QuotaConfigJSON:             string(minioBucket.QuotaConfigJSON),
-			ReplicationConfigXML:        string(minioBucket.ReplicationConfigXML),
-			BucketTargetsConfigJSON:     string(minioBucket.BucketTargetsConfigJSON),
-			BucketTargetsConfigMetaJSON: string(minioBucket.BucketTargetsConfigMetaJSON),
-			PolicyConfigUpdatedAt:       minioBucket.PolicyConfigUpdatedAt,
-			ObjectLockConfigUpdatedAt:   minioBucket.ObjectLockConfigUpdatedAt,
-			EncryptionConfigUpdatedAt:   minioBucket.EncryptionConfigUpdatedAt,
-			TaggingConfigUpdatedAt:      minioBucket.TaggingConfigUpdatedAt,
-			QuotaConfigUpdatedAt:        minioBucket.QuotaConfigUpdatedAt,
-			ReplicationConfigUpdatedAt:  minioBucket.ReplicationConfigUpdatedAt,
-			VersioningConfigUpdatedAt:   minioBucket.VersioningConfigUpdatedAt,
-		}
-		if err := m.saveBucketMetadata(ctx, bucketName, meta); err != nil {
-			fmt.Printf("Warning: failed to save metadata for bucket %s: %v\n", bucketName, err)
-			continue
-		}
-	}
-	if len(result.Buckets) > 0 {
-		fmt.Printf("Imported %d buckets\n", len(result.Buckets))
-	}
-
-	// Convert and save object metadata
-	objectCount := 0
-	for bucketName, objects := range result.ObjectMetadata {
-		for objectKey, minioMeta := range objects {
-			// Convert MinIO metadata to DirIO format
-			dirioMeta := &ObjectMetadata{
-				Version:        ObjectMetadataVersion,
-				ContentType:    minioMeta.Meta["content-type"],
-				ETag:           minioMeta.Meta["etag"],
-				CustomMetadata: make(map[string]string),
-			}
-
-			// Copy all metadata except content-type and etag (which have dedicated fields)
-			for key, value := range minioMeta.Meta {
-				if key != "content-type" && key != "etag" {
-					dirioMeta.CustomMetadata[key] = value
-				}
-			}
-
-			// MinIO's fs.json has no size field — stat the actual object file to
-			// populate Size and LastModified so HeadObject returns correct values.
-			objPath := filepath.Join(bucketName, filepath.FromSlash(objectKey))
-			if objInfo, statErr := m.rootFS.Stat(objPath); statErr == nil {
-				dirioMeta.Size = objInfo.Size()
-				dirioMeta.LastModified = objInfo.ModTime()
-			}
-
-			// Save the object metadata
-			if err := m.PutObjectMetadata(ctx, bucketName, objectKey, dirioMeta); err != nil {
-				fmt.Printf("Warning: failed to save metadata for %s/%s: %v\n", bucketName, objectKey, err)
-				continue
-			}
-			objectCount++
-		}
-	}
-	if objectCount > 0 {
-		fmt.Printf("Imported metadata for %d objects\n", objectCount)
-	}
+	m.importPolicies(ctx, result.Policies)
+	accessKeyToUUID := m.importUsers(ctx, result.Users)
+	m.importBuckets(ctx, result.Buckets)
+	m.importObjectMetadata(ctx, result.ObjectMetadata)
 
 	// Save data config from MinIO import
 	if result.DataConfig != nil {
@@ -212,107 +91,8 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (bool, error) {
 	m.buildUsersIndex(ctx)
 	m.reconcileIndexes(ctx)
 
-	// Convert and save groups.
-	// Member access keys are resolved to UUIDs via the accessKeyToUUID map built above.
-	groupCount := 0
-	for groupName, minioGroup := range result.Groups {
-		now := time.Now()
-		updatedAt := minioGroup.UpdatedAt
-		if updatedAt.IsZero() {
-			updatedAt = now
-		}
-
-		// Resolve member access keys to UUIDs
-		memberUUIDs := make([]uuid.UUID, 0, len(minioGroup.Members))
-		for _, accessKey := range minioGroup.Members {
-			if uid, ok := accessKeyToUUID[accessKey]; ok {
-				memberUUIDs = append(memberUUIDs, uid)
-			} else {
-				fmt.Printf("Warning: group %s member %q not found in imported users\n", groupName, accessKey)
-			}
-		}
-
-		g := &Group{
-			Version:          iam.GroupMetadataVersion,
-			Name:             groupName,
-			Members:          memberUUIDs,
-			AttachedPolicies: minioGroup.Policies,
-			Status:           convertMinIOGroupStatus(minioGroup.Status),
-			CreatedAt:        now,
-			UpdatedAt:        updatedAt,
-		}
-		if err := m.SaveGroup(ctx, g); err != nil {
-			fmt.Printf("Warning: failed to save group %s: %v\n", groupName, err)
-			continue
-		}
-		groupCount++
-	}
-	if groupCount > 0 {
-		fmt.Printf("Imported %d groups\n", groupCount)
-	}
-
-	// Convert and save service accounts.
-	// Parent user access keys are resolved to UUIDs via accessKeyToUUID.
-	saCount := 0
-	for _, minioSA := range result.ServiceAccounts {
-		now := time.Now()
-		updatedAt := minioSA.UpdatedAt
-		if updatedAt.IsZero() {
-			updatedAt = now
-		}
-
-		var parentUUID *uuid.UUID
-		if uid, ok := accessKeyToUUID[minioSA.ParentUser]; ok {
-			parentUUID = &uid
-		} else {
-			fmt.Printf("Warning: service account %s parent %q not found in imported users; skipping\n",
-				minioSA.AccessKey, minioSA.ParentUser)
-			continue
-		}
-
-		var expiresAt *time.Time
-		if !minioSA.ExpiresAt.IsZero() {
-			t := minioSA.ExpiresAt
-			expiresAt = &t
-		}
-
-		// If the service account had an embedded session policy, save it as a
-		// Embed the session policy JSON directly on the SA (no ghost named policies).
-		policyMode := iam.PolicyModeInherit
-		embeddedPolicyJSON := ""
-		if minioSA.SessionPolicyJSON != "" {
-			// Validate it parses before committing to override mode.
-			var sessionDoc PolicyDocument
-			if err := jsonutil.Unmarshal([]byte(minioSA.SessionPolicyJSON), &sessionDoc); err != nil {
-				fmt.Printf("Warning: failed to parse session policy for %s: %v; falling back to inherit\n",
-					minioSA.AccessKey, err)
-			} else {
-				policyMode = iam.PolicyModeOverride
-				embeddedPolicyJSON = minioSA.SessionPolicyJSON
-			}
-		}
-
-		sa := iam.NewServiceAccount(
-			uuid.New(),
-			minioSA.AccessKey,
-			minioSA.SecretKey,
-			minioSA.AccessKey, // use accessKey as display name
-			parentUUID,
-			policyMode,
-			convertMinIOSAStatus(minioSA.Status),
-			embeddedPolicyJSON,
-			expiresAt,
-		)
-		sa.UpdatedAt = updatedAt
-		if err := m.CreateServiceAccount(ctx, sa); err != nil {
-			fmt.Printf("Warning: failed to save service account %s: %v\n", minioSA.AccessKey, err)
-			continue
-		}
-		saCount++
-	}
-	if saCount > 0 {
-		fmt.Printf("Imported %d service accounts\n", saCount)
-	}
+	m.importGroups(ctx, result.Groups, accessKeyToUUID)
+	m.importServiceAccounts(ctx, result.ServiceAccounts, accessKeyToUUID)
 
 	// Save import state
 	state = &ImportState{
@@ -327,6 +107,222 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (bool, error) {
 
 	fmt.Println("MinIO import completed successfully")
 	return true, nil
+}
+
+func (m *Manager) importPolicies(ctx context.Context, policies map[string]*minio.Policy) {
+	for _, p := range policies {
+		var policyDoc PolicyDocument
+		if err := jsonutil.Unmarshal([]byte(p.PolicyJSON), &policyDoc); err != nil {
+			fmt.Printf("Warning: failed to parse policy document for %s: %v\n", p.Name, err)
+			continue
+		}
+		pol := &Policy{
+			Version:        iam.PolicyMetadataVersion,
+			Name:           p.Name,
+			PolicyDocument: &policyDoc,
+			CreateDate:     p.CreateDate,
+			UpdateDate:     p.UpdateDate,
+		}
+		if err := m.SavePolicy(ctx, pol); err != nil {
+			fmt.Printf("Warning: failed to save policy %s: %v\n", p.Name, err)
+		}
+	}
+	if len(policies) > 0 {
+		fmt.Printf("Imported %d policies\n", len(policies))
+	}
+}
+
+// importUsers saves each MinIO user and returns an accessKey→UUID map for downstream resolution.
+func (m *Manager) importUsers(ctx context.Context, users map[string]*minio.User) map[string]uuid.UUID {
+	accessKeyToUUID := make(map[string]uuid.UUID, len(users))
+	for username, u := range users {
+		userUUID := uuid.New()
+		dirioUser := &User{
+			Version:          iam.UserMetadataVersion,
+			UUID:             userUUID,
+			Username:         username,
+			AccessKey:        u.AccessKey,
+			SecretKey:        u.SecretKey,
+			Status:           convertMinIOStatus(u.Status),
+			UpdatedAt:        u.UpdatedAt,
+			AttachedPolicies: u.AttachedPolicy,
+		}
+		if err := m.SaveUser(ctx, userUUID, dirioUser); err != nil {
+			fmt.Printf("Warning: failed to save user %s: %v\n", username, err)
+			continue
+		}
+		accessKeyToUUID[u.AccessKey] = userUUID
+	}
+	if len(users) > 0 {
+		fmt.Printf("Imported %d users\n", len(users))
+	}
+	return accessKeyToUUID
+}
+
+func (m *Manager) importBuckets(ctx context.Context, buckets map[string]*minio.BucketMetadata) {
+	for bucketName, b := range buckets {
+		meta := &BucketMetadata{
+			Version:                     BucketMetadataVersion,
+			Name:                        b.Name,
+			Owner:                       nil, // admin-owned; MinIO does not store bucket owner
+			Created:                     b.Created,
+			BucketPolicy:                parseBucketPolicy(bucketName, b.PolicyConfigJSON),
+			NotificationConfigXML:       string(b.NotificationConfigXML),
+			LifecycleConfigXML:          string(b.LifecycleConfigXML),
+			ObjectLockConfigXML:         string(b.ObjectLockConfigXML),
+			VersioningConfigXML:         string(b.VersioningConfigXML),
+			EncryptionConfigXML:         string(b.EncryptionConfigXML),
+			TaggingConfigXML:            string(b.TaggingConfigXML),
+			QuotaConfigJSON:             string(b.QuotaConfigJSON),
+			ReplicationConfigXML:        string(b.ReplicationConfigXML),
+			BucketTargetsConfigJSON:     string(b.BucketTargetsConfigJSON),
+			BucketTargetsConfigMetaJSON: string(b.BucketTargetsConfigMetaJSON),
+			PolicyConfigUpdatedAt:       b.PolicyConfigUpdatedAt,
+			ObjectLockConfigUpdatedAt:   b.ObjectLockConfigUpdatedAt,
+			EncryptionConfigUpdatedAt:   b.EncryptionConfigUpdatedAt,
+			TaggingConfigUpdatedAt:      b.TaggingConfigUpdatedAt,
+			QuotaConfigUpdatedAt:        b.QuotaConfigUpdatedAt,
+			ReplicationConfigUpdatedAt:  b.ReplicationConfigUpdatedAt,
+			VersioningConfigUpdatedAt:   b.VersioningConfigUpdatedAt,
+		}
+		if err := m.saveBucketMetadata(ctx, bucketName, meta); err != nil {
+			fmt.Printf("Warning: failed to save metadata for bucket %s: %v\n", bucketName, err)
+		}
+	}
+	if len(buckets) > 0 {
+		fmt.Printf("Imported %d buckets\n", len(buckets))
+	}
+}
+
+func (m *Manager) importObjectMetadata(ctx context.Context, objects map[string]map[string]*minio.ObjectMetadata) {
+	count := 0
+	for bucketName, objs := range objects {
+		for objectKey, minioMeta := range objs {
+			dirioMeta := &ObjectMetadata{
+				Version:        ObjectMetadataVersion,
+				ContentType:    minioMeta.Meta["content-type"],
+				ETag:           minioMeta.Meta["etag"],
+				CustomMetadata: make(map[string]string),
+			}
+			for key, value := range minioMeta.Meta {
+				if key != "content-type" && key != "etag" {
+					dirioMeta.CustomMetadata[key] = value
+				}
+			}
+			// Stat the actual object file to populate Size and LastModified.
+			objPath := filepath.Join(bucketName, filepath.FromSlash(objectKey))
+			if info, err := m.rootFS.Stat(objPath); err == nil {
+				dirioMeta.Size = info.Size()
+				dirioMeta.LastModified = info.ModTime()
+			}
+			if err := m.PutObjectMetadata(ctx, bucketName, objectKey, dirioMeta); err != nil {
+				fmt.Printf("Warning: failed to save metadata for %s/%s: %v\n", bucketName, objectKey, err)
+				continue
+			}
+			count++
+		}
+	}
+	if count > 0 {
+		fmt.Printf("Imported metadata for %d objects\n", count)
+	}
+}
+
+func (m *Manager) importGroups(ctx context.Context, groups map[string]*minio.ImportGroup, accessKeyToUUID map[string]uuid.UUID) {
+	count := 0
+	for groupName, g := range groups {
+		now := time.Now()
+		updatedAt := g.UpdatedAt
+		if updatedAt.IsZero() {
+			updatedAt = now
+		}
+		memberUUIDs := make([]uuid.UUID, 0, len(g.Members))
+		for _, accessKey := range g.Members {
+			if uid, ok := accessKeyToUUID[accessKey]; ok {
+				memberUUIDs = append(memberUUIDs, uid)
+			} else {
+				fmt.Printf("Warning: group %s member %q not found in imported users\n", groupName, accessKey)
+			}
+		}
+		grp := &Group{
+			Version:          iam.GroupMetadataVersion,
+			Name:             groupName,
+			Members:          memberUUIDs,
+			AttachedPolicies: g.Policies,
+			Status:           convertMinIOGroupStatus(g.Status),
+			CreatedAt:        now,
+			UpdatedAt:        updatedAt,
+		}
+		if err := m.SaveGroup(ctx, grp); err != nil {
+			fmt.Printf("Warning: failed to save group %s: %v\n", groupName, err)
+			continue
+		}
+		count++
+	}
+	if count > 0 {
+		fmt.Printf("Imported %d groups\n", count)
+	}
+}
+
+func (m *Manager) importServiceAccounts(ctx context.Context, sas map[string]*minio.ImportServiceAccount, accessKeyToUUID map[string]uuid.UUID) {
+	count := 0
+	for _, sa := range sas {
+		now := time.Now()
+		updatedAt := sa.UpdatedAt
+		if updatedAt.IsZero() {
+			updatedAt = now
+		}
+		uid, ok := accessKeyToUUID[sa.ParentUser]
+		if !ok {
+			fmt.Printf("Warning: service account %s parent %q not found in imported users; skipping\n",
+				sa.AccessKey, sa.ParentUser)
+			continue
+		}
+		parentUUID := &uid
+
+		var expiresAt *time.Time
+		if !sa.ExpiresAt.IsZero() {
+			t := sa.ExpiresAt
+			expiresAt = &t
+		}
+
+		policyMode, embeddedPolicyJSON := m.resolveSessionPolicy(sa)
+
+		dirioSA := iam.NewServiceAccount(
+			uuid.New(),
+			sa.AccessKey,
+			sa.SecretKey,
+			sa.AccessKey,
+			parentUUID,
+			policyMode,
+			convertMinIOSAStatus(sa.Status),
+			embeddedPolicyJSON,
+			expiresAt,
+		)
+		dirioSA.UpdatedAt = updatedAt
+		if err := m.CreateServiceAccount(ctx, dirioSA); err != nil {
+			fmt.Printf("Warning: failed to save service account %s: %v\n", sa.AccessKey, err)
+			continue
+		}
+		count++
+	}
+	if count > 0 {
+		fmt.Printf("Imported %d service accounts\n", count)
+	}
+}
+
+// resolveSessionPolicy parses the MinIO session policy JSON and returns the appropriate
+// policy mode and embedded JSON. Falls back to inherit on parse failure.
+func (m *Manager) resolveSessionPolicy(sa *minio.ImportServiceAccount) (mode iam.PolicyMode, policyJSON string) {
+	if sa.SessionPolicyJSON == "" {
+		return iam.PolicyModeInherit, ""
+	}
+	var doc PolicyDocument
+	if err := jsonutil.Unmarshal([]byte(sa.SessionPolicyJSON), &doc); err != nil {
+		fmt.Printf("Warning: failed to parse session policy for %s: %v; falling back to inherit\n",
+			sa.AccessKey, err)
+		return iam.PolicyModeInherit, ""
+	}
+	return iam.PolicyModeOverride, sa.SessionPolicyJSON
 }
 
 // getImportState retrieves the import state

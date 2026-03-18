@@ -40,6 +40,26 @@ linters:
           deny:
             - pkg: "github.com/mallardduck/dirio/internal"
               desc: "console/ must not import internal/ — use consoleapi/ interface only"
+        metadata-only-via-service:
+          # Deny direct metadata imports in handler/adapter/CLI layers.
+          # Intentionally NOT listed here (i.e. allowed to import metadata directly):
+          #   internal/persistence/**  — metadata lives here
+          #   internal/service/**     — service layer wraps metadata
+          #   internal/http/auth/**   — auth reads users directly for credential lookup
+          #   internal/policy/**      — policy engine resolves policies directly
+          #   internal/http/server/** — server wires up the metadata manager at startup
+          #   internal/context/**     — context helpers used by the above layers
+          files:
+            - "**/internal/http/api/**/*.go"
+            - "**/internal/minio/**/*.go"
+            - "**/console/**/*.go"
+            - "**/consoleapi/**/*.go"
+            - "**/cmd/**/*.go"
+            - "**/pkg/**/*.go"
+            - "**/tests/**/*.go"
+          deny:
+            - pkg: "github.com/mallardduck/dirio/internal/persistence/metadata"
+              desc: "import metadata only via the service layer (ServicesFactory); HTTP handlers and console adapters must not access metadata directly"
     errcheck:
       check-type-assertions: false
       check-blank: false

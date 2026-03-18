@@ -29,13 +29,6 @@ import (
 // ErrNotImplemented is returned for API methods not yet backed by the service layer.
 var ErrNotImplemented = errors.New("not implemented")
 
-// AdminKeysProvider exposes the current root access keys so the console can
-// include the admin account in user listings without coupling to the auth package.
-type AdminKeysProvider interface {
-	PrimaryRootAccessKey() string
-	AltRootAccessKey() string
-}
-
 // commonS3Actions is the set of S3 permissions evaluated by GetEffectivePermissions.
 var commonS3Actions = []string{
 	"s3:GetObject",
@@ -62,10 +55,6 @@ func NewAdapter(services *service.ServicesFactory) *Adapter {
 	return &Adapter{services: services}
 }
 
-func (a *Adapter) adminKeys() AdminKeysProvider {
-	return a.services.Authenticator()
-}
-
 // --- Users -------------------------------------------------------------------
 
 func (a *Adapter) ListUsers(ctx context.Context) ([]*consoleapi.User, error) {
@@ -77,9 +66,9 @@ func (a *Adapter) ListUsers(ctx context.Context) ([]*consoleapi.User, error) {
 	users := make([]*consoleapi.User, 0, len(uids)+2)
 
 	// Prepend the admin account(s) — they live in config, not the metadata store.
-	if akp := a.adminKeys(); akp != nil {
+	if auth := a.services.Authenticator(); auth != nil {
 		adminUUID := iam.AdminUserUUID.String()
-		if pk := akp.PrimaryRootAccessKey(); pk != "" {
+		if pk := auth.PrimaryRootAccessKey(); pk != "" {
 			users = append(users, &consoleapi.User{
 				UUID:      adminUUID,
 				AccessKey: pk,
@@ -87,7 +76,7 @@ func (a *Adapter) ListUsers(ctx context.Context) ([]*consoleapi.User, error) {
 				Status:    "on",
 			})
 		}
-		if ak := akp.AltRootAccessKey(); ak != "" && ak != akp.PrimaryRootAccessKey() {
+		if ak := auth.AltRootAccessKey(); ak != "" && ak != auth.PrimaryRootAccessKey() {
 			users = append(users, &consoleapi.User{
 				UUID:      adminUUID,
 				AccessKey: ak,

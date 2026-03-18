@@ -67,40 +67,8 @@ func (e *Engine) Evaluate(ctx context.Context, req *RequestContext) Decision {
 	// Evaluates the effective IAM policies for the principal (user or service account).
 	// Explicit deny from IAM beats everything; explicit allow beats ownership/default-deny.
 	if req.Principal != nil && !req.Principal.IsAnonymous {
-		// SA override mode: evaluate the embedded policy JSON directly (no store lookup).
-		if req.Principal.IsServiceAccount && req.Principal.PolicyMode == iam.PolicyModeOverride {
-			if req.Principal.EmbeddedPolicyJSON != "" {
-				var doc iam.PolicyDocument
-				if json.Unmarshal([]byte(req.Principal.EmbeddedPolicyJSON), &doc) == nil {
-					d := e.evaluatePolicy(&doc, req)
-					if d == DecisionExplicitDeny {
-						return DecisionExplicitDeny
-					}
-					if d == DecisionAllow {
-						return DecisionAllow
-					}
-				}
-			}
-			// Override mode with no (or unparseable) policy: deny everything.
-			return DecisionDeny
-		}
-
-		// Inherit mode (and regular users): resolve named policies from the store.
-		if e.resolver != nil {
-			policyNames := e.resolveEffectivePolicyNames(ctx, req.Principal)
-			for _, name := range policyNames {
-				doc, err := e.resolver.GetPolicyDocument(ctx, name)
-				if err != nil {
-					continue // skip missing or inaccessible policies
-				}
-				d := e.evaluatePolicy(doc, req)
-				if d == DecisionExplicitDeny {
-					return DecisionExplicitDeny
-				}
-				if d == DecisionAllow {
-					return DecisionAllow
-				}
-			}
+		if d, final := e.evaluateIAMPolicies(ctx, req); final {
+			return d
 		}
 	}
 
@@ -114,6 +82,49 @@ func (e *Engine) Evaluate(ctx context.Context, req *RequestContext) Decision {
 	}
 
 	// 5. Default deny
+	return DecisionDeny
+}
+
+// evaluateIAMPolicies evaluates IAM policies for a non-anonymous principal.
+// Returns (decision, true) when a definitive decision is reached.
+// Returns (DecisionDeny, false) when no policy matched — caller should continue to ownership check.
+func (e *Engine) evaluateIAMPolicies(ctx context.Context, req *RequestContext) (Decision, bool) {
+	if req.Principal.IsServiceAccount && req.Principal.PolicyMode == iam.PolicyModeOverride {
+		// Override mode is always final: the embedded policy is the only grant source.
+		return e.evaluateEmbeddedPolicy(req), true
+	}
+	d := e.evaluateNamedPolicies(ctx, req)
+	return d, d != DecisionDeny
+}
+
+// evaluateEmbeddedPolicy evaluates the inline policy JSON on a SA in override mode.
+// Returns DecisionDeny when no policy is set or the JSON is unparseable.
+func (e *Engine) evaluateEmbeddedPolicy(req *RequestContext) Decision {
+	if req.Principal.EmbeddedPolicyJSON == "" {
+		return DecisionDeny
+	}
+	var doc iam.PolicyDocument
+	if json.Unmarshal([]byte(req.Principal.EmbeddedPolicyJSON), &doc) != nil {
+		return DecisionDeny
+	}
+	return e.evaluatePolicy(&doc, req)
+}
+
+// evaluateNamedPolicies resolves and evaluates named IAM policies for inherit-mode principals.
+// Returns DecisionDeny when no policy produced a decision.
+func (e *Engine) evaluateNamedPolicies(ctx context.Context, req *RequestContext) Decision {
+	if e.resolver == nil {
+		return DecisionDeny
+	}
+	for _, name := range e.resolveEffectivePolicyNames(ctx, req.Principal) {
+		doc, err := e.resolver.GetPolicyDocument(ctx, name)
+		if err != nil {
+			continue // skip missing or inaccessible policies
+		}
+		if d := e.evaluatePolicy(doc, req); d != DecisionDeny {
+			return d
+		}
+	}
 	return DecisionDeny
 }
 

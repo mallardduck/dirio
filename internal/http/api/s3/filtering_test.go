@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/mallardduck/dirio/internal/context"
-	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/policy"
+	"github.com/mallardduck/dirio/pkg/iam"
 )
 
 // Test helper functions that don't require HTTPHandler
@@ -17,7 +17,7 @@ func TestGetRequestUser(t *testing.T) {
 	tests := []struct {
 		name     string
 		ctx      stdcontext.Context
-		wantUser *metadata.User
+		wantUser *iam.User
 	}{
 		{
 			name:     "nil context",
@@ -34,9 +34,9 @@ func TestGetRequestUser(t *testing.T) {
 			ctx: stdcontext.WithValue(
 				stdcontext.Background(),
 				context.RequestUserKey,
-				&metadata.User{AccessKey: "test-user"},
+				&iam.User{AccessKey: "test-user"},
 			),
-			wantUser: &metadata.User{AccessKey: "test-user"},
+			wantUser: &iam.User{AccessKey: "test-user"},
 		},
 	}
 
@@ -60,7 +60,7 @@ func TestGetRequestUser(t *testing.T) {
 func TestIsAdminUser(t *testing.T) {
 	tests := []struct {
 		name             string
-		user             *metadata.User
+		user             *iam.User
 		rootAccessKey    string
 		altRootAccessKey string
 		want             bool
@@ -74,28 +74,28 @@ func TestIsAdminUser(t *testing.T) {
 		},
 		{
 			name:             "root access key",
-			user:             &metadata.User{AccessKey: "root"},
+			user:             &iam.User{AccessKey: "root"},
 			rootAccessKey:    "root",
 			altRootAccessKey: "",
 			want:             true,
 		},
 		{
 			name:             "alt root access key",
-			user:             &metadata.User{AccessKey: "altroot"},
+			user:             &iam.User{AccessKey: "altroot"},
 			rootAccessKey:    "root",
 			altRootAccessKey: "altroot",
 			want:             true,
 		},
 		{
 			name:             "regular user",
-			user:             &metadata.User{AccessKey: "alice"},
+			user:             &iam.User{AccessKey: "alice"},
 			rootAccessKey:    "root",
 			altRootAccessKey: "altroot",
 			want:             false,
 		},
 		{
 			name:             "empty alt root access key",
-			user:             &metadata.User{AccessKey: ""},
+			user:             &iam.User{AccessKey: ""},
 			rootAccessKey:    "root",
 			altRootAccessKey: "",
 			want:             false,
@@ -135,7 +135,7 @@ func TestGetRequestPrincipal(t *testing.T) {
 			ctx: stdcontext.WithValue(
 				stdcontext.Background(),
 				context.RequestUserKey,
-				&metadata.User{AccessKey: "root"},
+				&iam.User{AccessKey: "root"},
 			),
 			rootAccessKey:    "root",
 			altRootAccessKey: "",
@@ -148,7 +148,7 @@ func TestGetRequestPrincipal(t *testing.T) {
 			ctx: stdcontext.WithValue(
 				stdcontext.Background(),
 				context.RequestUserKey,
-				&metadata.User{AccessKey: "alice"},
+				&iam.User{AccessKey: "alice"},
 			),
 			rootAccessKey:    "root",
 			altRootAccessKey: "",
@@ -319,7 +319,7 @@ func TestPrincipalString(t *testing.T) {
 		{
 			name: "user with access key",
 			principal: &policy.Principal{
-				User: &metadata.User{AccessKey: "alice"},
+				User: &iam.User{AccessKey: "alice"},
 			},
 			want: "alice",
 		},
@@ -351,7 +351,7 @@ func TestBuildOwnerFromContext(t *testing.T) {
 			ctx: stdcontext.WithValue(
 				stdcontext.Background(),
 				context.RequestUserKey,
-				&metadata.User{
+				&iam.User{
 					AccessKey: "alice-key",
 					Username:  "alice",
 				},

@@ -71,7 +71,7 @@ type ServiceAccount struct {
 }
 
 func NewServiceAccount(
-	uuid uuid.UUID,
+	id uuid.UUID,
 	accessKey, secretKey, username string,
 	parentUserUUID *uuid.UUID,
 	policyMode PolicyMode,
@@ -81,7 +81,7 @@ func NewServiceAccount(
 ) *ServiceAccount {
 	return &ServiceAccount{
 		Version:            ServiceAccountMetadataVersion,
-		UUID:               uuid,
+		UUID:               id,
 		AccessKey:          accessKey,
 		SecretKey:          secretKey,
 		Username:           username,

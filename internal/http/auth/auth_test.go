@@ -74,6 +74,7 @@ func TestAuthenticator_GetUserForAccessKey(t *testing.T) {
 			},
 			testAccessKey: "primary-key",
 			wantUser: &metadata.User{
+				Version:   iam.UserMetadataVersion,
 				UUID:      iam.AdminUserUUID,
 				Username:  "admin",
 				AccessKey: "primary-key",
@@ -90,6 +91,7 @@ func TestAuthenticator_GetUserForAccessKey(t *testing.T) {
 			},
 			testAccessKey: "alt-key",
 			wantUser: &metadata.User{
+				Version:   iam.UserMetadataVersion,
 				UUID:      iam.AdminUserUUID,
 				Username:  "admin",
 				AccessKey: "alt-key",
@@ -106,6 +108,7 @@ func TestAuthenticator_GetUserForAccessKey(t *testing.T) {
 			},
 			testAccessKey: "primary-key",
 			wantUser: &metadata.User{
+				Version:   iam.UserMetadataVersion,
 				UUID:      iam.AdminUserUUID,
 				Username:  "admin",
 				AccessKey: "primary-key",

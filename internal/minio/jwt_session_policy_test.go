@@ -38,8 +38,8 @@ func TestExtractJWTSessionPolicy_NoPolicy(t *testing.T) {
 
 func TestExtractJWTSessionPolicy_InvalidJWT(t *testing.T) {
 	_, err := extractJWTSessionPolicy("not.a.valid.jwt.with.too.many.parts")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	_, err = extractJWTSessionPolicy("onlytwoparts")
-	assert.Error(t, err)
+	require.Error(t, err)
 }

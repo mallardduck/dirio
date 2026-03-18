@@ -58,10 +58,10 @@ func detachIAMPolicy(t *testing.T, ts *TestServer, policyName, userAccessKey str
 	require.Equal(t, http.StatusOK, resp.StatusCode, "Failed to detach IAM policy %s from user %s", policyName, userAccessKey)
 }
 
-// setSAAttachedPolicies patches the service account JSON file on disk to set its
-// attachedPolicies field. Used to test PolicyMode=override without requiring an
-// HTTP endpoint (the admin API does not expose direct SA policy attachment).
-func setSAAttachedPolicies(t *testing.T, ts *TestServer, accessKey string, policies []string) {
+// setSAEmbeddedPolicy patches the service account JSON file on disk to set its
+// embeddedPolicyJSON field. Used to test PolicyMode=override with an inline policy
+// without requiring an HTTP endpoint that exposes direct SA policy attachment.
+func setSAEmbeddedPolicy(t *testing.T, ts *TestServer, accessKey, policyJSON string) {
 	t.Helper()
 
 	saPath := filepath.Join(ts.DataDir, ".dirio", "iam", "service-accounts", accessKey+".json")
@@ -71,7 +71,7 @@ func setSAAttachedPolicies(t *testing.T, ts *TestServer, accessKey string, polic
 	var raw map[string]any
 	require.NoError(t, json.Unmarshal(data, &raw))
 
-	raw["attachedPolicies"] = policies
+	raw["embeddedPolicyJSON"] = policyJSON
 
 	updated, err := json.Marshal(raw)
 	require.NoError(t, err)
@@ -205,14 +205,12 @@ func TestSA_OverrideMode_WithOwnPolicies(t *testing.T) {
 	createIAMPolicy(t, ts, "sawidepolicy", widePolicyDoc)
 	attachIAMPolicy(t, ts, "sawidepolicy", parentAK)
 
-	// SA in override mode with only a narrow policy (bucket-a only).
-	// The admin API does not expose SA policy attachment directly, so we create
-	// the SA and then patch its JSON file on disk to set attachedPolicies.
+	// SA in override mode with only a narrow inline policy (bucket-a only).
+	// Service accounts in override mode carry their policy as embedded JSON,
+	// so we create the SA and then patch its embeddedPolicyJSON on disk.
 	saAK, saSK := "saovrdnarrow1", "saovrdnarrow12345"
 	createServiceAccount(t, ts, saAK, saSK, parentAK, "override")
-
-	createIAMPolicy(t, ts, "sanarrowpolicy", saBucketPolicyDoc(bucketA))
-	setSAAttachedPolicies(t, ts, saAK, []string{"sanarrowpolicy"})
+	setSAEmbeddedPolicy(t, ts, saAK, saBucketPolicyDoc(bucketA))
 
 	t.Run("SA override can access its own allowed bucket", func(t *testing.T) {
 		code := getObject(t, ts, bucketA, "obj.txt", saAK, saSK)
