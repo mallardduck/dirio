@@ -43,24 +43,6 @@ func GetLogData(ctx context.Context) (*LogMetadata, bool) {
 	return metadata, true
 }
 
-func SetLogData(ctx context.Context, in LogMetadata) {
-	metadata, ok := ctx.Value(logDataKey).(*LogMetadata)
-	if ok {
-		if in.Action != "" {
-			metadata.Action = in.Action
-		}
-		if in.User != "" {
-			metadata.User = in.User
-		}
-		if in.AuthzDecision != "" {
-			metadata.AuthzDecision = in.AuthzDecision
-		}
-		if len(in.Custom) > 0 {
-			metadata.Custom = in.Custom
-		}
-	}
-}
-
 // responseWriter wraps http.ResponseWriter to capture status code
 type responseWriter struct {
 	http.ResponseWriter
@@ -163,7 +145,13 @@ func PrepareAccessLogMiddleware(serverLogger *slog.Logger) func(next http.Handle
 				attrs = append(attrs, "extra", data.Custom)
 			}
 
-			log.Info("http request handled", attrs...)
+			// Health, metrics, and favicon are hit constantly by browsers/Docker/orchestrators;
+			// log them at DEBUG to avoid flooding logs under normal operation.
+			if isHighFrequencyRoute(action, teapot.GetRouteName(r)) {
+				log.Debug("http request handled", attrs...)
+			} else {
+				log.Info("http request handled", attrs...)
+			}
 		})
 	}
 }
@@ -173,4 +161,17 @@ func PrepareAccessLogMiddleware(serverLogger *slog.Logger) func(next http.Handle
 func serviceFromAction(action string) string {
 	service, _, _ := strings.Cut(action, ":")
 	return service
+}
+
+// isHighFrequencyRoute reports whether the request is to a route that is hit at
+// high frequency by browsers, Docker, orchestrators, or monitoring scrapers.
+// These are logged at DEBUG to avoid flooding production logs.
+func isHighFrequencyRoute(action, routeName string) bool {
+	switch action {
+	case "dirio:Health", "dirio:HealthReady", "dirio:HealthLive",
+		"minio:HealthLive", "minio:HealthReady",
+		"dirio:Metrics":
+		return true
+	}
+	return routeName == "favicon"
 }
