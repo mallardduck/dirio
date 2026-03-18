@@ -91,6 +91,18 @@ func (s *Service) Get(ctx context.Context, accessKey string) (*iam.ServiceAccoun
 	return sa, nil
 }
 
+// GetByUUID retrieves a service account by its UUID.
+func (s *Service) GetByUUID(ctx context.Context, saUUID uuid.UUID) (*iam.ServiceAccount, error) {
+	sa, err := s.metadata.GetServiceAccountByUUID(ctx, saUUID)
+	if err != nil {
+		if errors.Is(err, metadata.ErrServiceAccountNotFound) {
+			return nil, svcerrors.ErrServiceAccountNotFound
+		}
+		return nil, err
+	}
+	return sa, nil
+}
+
 // Delete deletes a service account by access key
 func (s *Service) Delete(ctx context.Context, accessKey string) error {
 	if err := validation.ValidateAccessKey(accessKey); err != nil {

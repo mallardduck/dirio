@@ -62,11 +62,6 @@ func (f *ServicesFactory) S3() *s3.Service {
 	return f.s3Service
 }
 
-// Metadata returns the metadataManager manager for direct admin access.
-func (f *ServicesFactory) Metadata() *metadata.Manager {
-	return f.metadataManager
-}
-
 // PolicyEngine returns the policy evaluation engine.
 func (f *ServicesFactory) PolicyEngine() *policyEngine.Engine {
 	return f.policyEngine

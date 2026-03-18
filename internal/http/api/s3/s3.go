@@ -6,7 +6,6 @@ import (
 	"github.com/mallardduck/dirio/internal/http/middleware"
 	httpresponse "github.com/mallardduck/dirio/internal/http/response"
 	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
-	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/service"
 	svcs3 "github.com/mallardduck/dirio/internal/service/s3"
@@ -17,7 +16,6 @@ import (
 type HTTPHandler struct {
 	s3Service    *svcs3.Service
 	urlBuilder   URLBuilder
-	metadata     *metadata.Manager      // For ownership lookups during filtering
 	policyEngine *policy.Engine         // For permission checks during filtering
 	adminKeys    policy.AdminKeyChecker // Live admin key source for filtering bypass
 }
@@ -37,7 +35,6 @@ func New(
 	return &HTTPHandler{
 		s3Service:    serviceFactory.S3(),
 		urlBuilder:   urlBuilder,
-		metadata:     serviceFactory.Metadata(),
 		policyEngine: serviceFactory.PolicyEngine(),
 		adminKeys:    adminKeys,
 	}

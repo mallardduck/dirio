@@ -11,9 +11,9 @@ import (
 
 	"github.com/mallardduck/dirio/internal/context"
 	"github.com/mallardduck/dirio/internal/logging"
-	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/policy/variables"
+	"github.com/mallardduck/dirio/pkg/iam"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
@@ -54,8 +54,8 @@ func (h *HTTPHandler) filterBuckets(ctx stdcontext.Context, buckets []s3types.Bu
 	for i := range buckets {
 		bucket := &buckets[i]
 
-		// Fetch bucket metadata for ownership information
-		bucketMeta, err := h.metadata.GetBucketMetadata(ctx, bucket.Name)
+		// Fetch bucket owner for ownership-based policy evaluation.
+		bucketMeta, err := h.s3Service.GetBucket(ctx, bucket.Name)
 		var bucketOwnerUUID *uuid.UUID
 		if err == nil && bucketMeta != nil {
 			bucketOwnerUUID = bucketMeta.Owner
@@ -132,9 +132,9 @@ func (h *HTTPHandler) filterObjects(ctx stdcontext.Context, bucket string, objec
 	// Build variable context for policy variable substitution
 	varCtx := variables.FromRequest(r)
 
-	// Optimization: Fetch bucket owner once and reuse for all objects
+	// Optimization: Fetch bucket owner once and reuse for all objects.
 	var bucketOwnerUUID *uuid.UUID
-	bucketMeta, err := h.metadata.GetBucketMetadata(ctx, bucket)
+	bucketMeta, err := h.s3Service.GetBucket(ctx, bucket)
 	if err == nil && bucketMeta != nil {
 		bucketOwnerUUID = bucketMeta.Owner
 	} else {
@@ -150,15 +150,13 @@ func (h *HTTPHandler) filterObjects(ctx stdcontext.Context, bucket string, objec
 	for i := range objects {
 		obj := &objects[i]
 
-		// Fetch object metadata for ownership information
-		objectMeta, err := h.metadata.GetObjectMetadata(ctx, bucket, obj.Key)
-		var objectOwnerUUID *uuid.UUID
-		if err == nil && objectMeta != nil {
-			objectOwnerUUID = objectMeta.Owner
-		} else {
+		// Fetch object owner for ownership-based policy evaluation.
+		objectOwnerUUID, err := h.s3Service.GetObjectOwnerUUID(ctx, bucket, obj.Key)
+		if err != nil {
 			// Metadata fetch failure - log and treat as deny (safe default)
 			filterLogger.With("bucket", bucket, "key", obj.Key, "error", err).
 				Debug("failed to fetch object metadata, treating as deny")
+			objectOwnerUUID = nil
 		}
 
 		// Build request context for permission check
@@ -224,11 +222,11 @@ func getRequestPrincipal(ctx stdcontext.Context, rootAccessKey, altRootAccessKey
 
 // getRequestUser extracts the user from request context.
 // Pattern from policy.AuthorizationMiddleware.
-func getRequestUser(ctx stdcontext.Context) *metadata.User {
+func getRequestUser(ctx stdcontext.Context) *iam.User {
 	if ctx == nil {
 		return nil
 	}
-	if user, ok := ctx.Value(context.RequestUserKey).(*metadata.User); ok {
+	if user, ok := ctx.Value(context.RequestUserKey).(*iam.User); ok {
 		return user
 	}
 	return nil
@@ -236,7 +234,7 @@ func getRequestUser(ctx stdcontext.Context) *metadata.User {
 
 // isAdminUser checks if the user is a root admin.
 // Pattern from policy.AuthorizationMiddleware.
-func isAdminUser(user *metadata.User, rootAccessKey, altRootAccessKey string) bool {
+func isAdminUser(user *iam.User, rootAccessKey, altRootAccessKey string) bool {
 	if user == nil {
 		return false
 	}

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 
+	"github.com/google/uuid"
+
 	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/persistence/storage"
@@ -101,6 +103,26 @@ func (s *Service) DeleteBucket(ctx context.Context, bucket string) error {
 // ListBuckets returns all buckets
 func (s *Service) ListBuckets(ctx context.Context) ([]s3types.Bucket, error) {
 	return s.diskStorage.ListBuckets(ctx)
+}
+
+// ListBucketsWithMetadata returns full bucket metadata for every bucket.
+// Used by the console to display ownership information alongside bucket names.
+func (s *Service) ListBucketsWithMetadata(ctx context.Context) ([]*metadata.BucketMetadata, error) {
+	return s.metadataManager.ListBucketMetadatas(ctx)
+}
+
+// SetBucketOwner updates the owner UUID of an existing bucket.
+func (s *Service) SetBucketOwner(ctx context.Context, bucket string, ownerUUID *uuid.UUID) error {
+	return s.metadataManager.SetBucketOwner(ctx, bucket, ownerUUID)
+}
+
+// GetObjectOwnerUUID returns the owner UUID of an object, or nil if unset (admin-owned).
+func (s *Service) GetObjectOwnerUUID(ctx context.Context, bucket, key string) (*uuid.UUID, error) {
+	meta, err := s.metadataManager.GetObjectMetadata(ctx, bucket, key)
+	if err != nil {
+		return nil, err
+	}
+	return meta.Owner, nil
 }
 
 // GetBucketLocation returns the bucket location (region)

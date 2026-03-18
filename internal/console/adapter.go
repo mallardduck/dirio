@@ -256,7 +256,7 @@ func (a *Adapter) DetachPolicy(ctx context.Context, policyName, accessKey string
 // --- Buckets -----------------------------------------------------------------
 
 func (a *Adapter) ListBuckets(ctx context.Context) ([]*consoleapi.Bucket, error) {
-	metas, err := a.services.Metadata().ListBucketMetadatas(ctx)
+	metas, err := a.services.S3().ListBucketsWithMetadata(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +269,7 @@ func (a *Adapter) ListBuckets(ctx context.Context) ([]*consoleapi.Bucket, error)
 		}
 		if meta.Owner != nil {
 			b.OwnerUUID = meta.Owner.String()
-			user, err := a.services.Metadata().GetUserByUUID(ctx, *meta.Owner)
+			user, err := a.services.User().Get(ctx, *meta.Owner)
 			if err == nil {
 				b.Owner = &consoleapi.Owner{
 					UUID:      meta.Owner.String(),
@@ -285,7 +285,7 @@ func (a *Adapter) ListBuckets(ctx context.Context) ([]*consoleapi.Bucket, error)
 }
 
 func (a *Adapter) GetBucket(ctx context.Context, bucket string) (*consoleapi.Bucket, error) {
-	meta, err := a.services.Metadata().GetBucketMetadata(ctx, bucket)
+	meta, err := a.services.S3().GetBucket(ctx, bucket)
 	if err != nil {
 		return nil, fmt.Errorf("bucket not found: %s", bucket)
 	}
@@ -295,7 +295,7 @@ func (a *Adapter) GetBucket(ctx context.Context, bucket string) (*consoleapi.Buc
 	}
 	if meta.Owner != nil {
 		b.OwnerUUID = meta.Owner.String()
-		user, err := a.services.Metadata().GetUserByUUID(ctx, *meta.Owner)
+		user, err := a.services.User().Get(ctx, *meta.Owner)
 		if err == nil {
 			b.Owner = &consoleapi.Owner{
 				UUID:      meta.Owner.String(),
@@ -339,7 +339,7 @@ func (a *Adapter) SetBucketPolicy(ctx context.Context, bucket, policyJSON string
 // --- Ownership ---------------------------------------------------------------
 
 func (a *Adapter) GetBucketOwner(ctx context.Context, bucket string) (*consoleapi.Owner, error) {
-	meta, err := a.services.Metadata().GetBucketMetadata(ctx, bucket)
+	meta, err := a.services.S3().GetBucket(ctx, bucket)
 	if err != nil {
 		return nil, err
 	}
@@ -347,7 +347,7 @@ func (a *Adapter) GetBucketOwner(ctx context.Context, bucket string) (*consoleap
 		return &consoleapi.Owner{}, nil // admin-owned, no UUID
 	}
 	owner := &consoleapi.Owner{UUID: meta.Owner.String()}
-	user, err := a.services.Metadata().GetUserByUUID(ctx, *meta.Owner)
+	user, err := a.services.User().Get(ctx, *meta.Owner)
 	if err == nil {
 		owner.AccessKey = user.AccessKey
 		owner.Username = user.Username
@@ -364,19 +364,19 @@ func (a *Adapter) TransferBucketOwnership(ctx context.Context, bucket, newOwnerA
 		return err
 	}
 	ownerUUID := user.UUID
-	return a.services.Metadata().SetBucketOwner(ctx, bucket, &ownerUUID)
+	return a.services.S3().SetBucketOwner(ctx, bucket, &ownerUUID)
 }
 
 func (a *Adapter) GetObjectOwner(ctx context.Context, bucket, key string) (*consoleapi.Owner, error) {
-	meta, err := a.services.Metadata().GetObjectMetadata(ctx, bucket, key)
+	ownerUUID, err := a.services.S3().GetObjectOwnerUUID(ctx, bucket, key)
 	if err != nil {
 		return nil, err
 	}
-	if meta.Owner == nil {
+	if ownerUUID == nil {
 		return &consoleapi.Owner{}, nil // admin-owned
 	}
-	owner := &consoleapi.Owner{UUID: meta.Owner.String()}
-	user, err := a.services.Metadata().GetUserByUUID(ctx, *meta.Owner)
+	owner := &consoleapi.Owner{UUID: ownerUUID.String()}
+	user, err := a.services.User().Get(ctx, *ownerUUID)
 	if err == nil {
 		owner.AccessKey = user.AccessKey
 		owner.Username = user.Username
@@ -479,7 +479,7 @@ func (a *Adapter) GetServiceAccount(ctx context.Context, uuidStr string) (*conso
 	if err != nil {
 		return nil, fmt.Errorf("invalid UUID: %w", err)
 	}
-	sa, err := a.services.Metadata().GetServiceAccountByUUID(ctx, saUUID)
+	sa, err := a.services.ServiceAccount().GetByUUID(ctx, saUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -492,7 +492,7 @@ func (a *Adapter) GetServiceAccountSecret(ctx context.Context, uuidStr string) (
 		return "", fmt.Errorf("invalid UUID: %w", err)
 	}
 
-	sa, err := a.services.Metadata().GetServiceAccountByUUID(ctx, saUUID)
+	sa, err := a.services.ServiceAccount().GetByUUID(ctx, saUUID)
 	if err != nil {
 		return "", err
 	}
@@ -541,7 +541,7 @@ func (a *Adapter) DeleteServiceAccount(ctx context.Context, uuidStr string) erro
 	if err != nil {
 		return fmt.Errorf("invalid UUID: %w", err)
 	}
-	sa, err := a.services.Metadata().GetServiceAccountByUUID(ctx, saUUID)
+	sa, err := a.services.ServiceAccount().GetByUUID(ctx, saUUID)
 	if err != nil {
 		return err
 	}
@@ -553,7 +553,7 @@ func (a *Adapter) UpdateServiceAccount(ctx context.Context, uuidStr string, req 
 	if err != nil {
 		return nil, fmt.Errorf("invalid UUID: %w", err)
 	}
-	sa, err := a.services.Metadata().GetServiceAccountByUUID(ctx, saUUID)
+	sa, err := a.services.ServiceAccount().GetByUUID(ctx, saUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -574,7 +574,7 @@ func (a *Adapter) SetServiceAccountStatus(ctx context.Context, uuidStr string, e
 	if err != nil {
 		return fmt.Errorf("invalid UUID: %w", err)
 	}
-	sa, err := a.services.Metadata().GetServiceAccountByUUID(ctx, saUUID)
+	sa, err := a.services.ServiceAccount().GetByUUID(ctx, saUUID)
 	if err != nil {
 		return err
 	}
@@ -597,7 +597,7 @@ func (a *Adapter) GetEffectivePermissions(ctx context.Context, accessKey, bucket
 		return nil, err
 	}
 
-	bucketMeta, err := a.services.Metadata().GetBucketMetadata(ctx, bucket)
+	bucketMeta, err := a.services.S3().GetBucket(ctx, bucket)
 	if err != nil {
 		return nil, fmt.Errorf("bucket not found: %s", bucket)
 	}
@@ -646,7 +646,7 @@ func (a *Adapter) SimulateRequest(ctx context.Context, req consoleapi.SimulateRe
 		return nil, err
 	}
 
-	bucketMeta, err := a.services.Metadata().GetBucketMetadata(ctx, req.Bucket)
+	bucketMeta, err := a.services.S3().GetBucket(ctx, req.Bucket)
 	if err != nil {
 		return nil, fmt.Errorf("bucket not found: %s", req.Bucket)
 	}
@@ -664,9 +664,9 @@ func (a *Adapter) SimulateRequest(ctx context.Context, req consoleapi.SimulateRe
 	}
 
 	if req.Key != "" {
-		objMeta, err := a.services.Metadata().GetObjectMetadata(ctx, req.Bucket, req.Key)
-		if err == nil && objMeta.Owner != nil {
-			pReq.ObjectOwnerUUID = objMeta.Owner
+		ownerUUID, err := a.services.S3().GetObjectOwnerUUID(ctx, req.Bucket, req.Key)
+		if err == nil && ownerUUID != nil {
+			pReq.ObjectOwnerUUID = ownerUUID
 		}
 	}
 
@@ -746,7 +746,7 @@ func iamServiceAccountToConsole(ctx context.Context, svcs *service.ServicesFacto
 		if *sa.ParentUserUUID == iam.AdminUserUUID {
 			parentAccessKey = "admin"
 			parentUsername = "Admin"
-		} else if u, err := svcs.Metadata().GetUserByUUID(ctx, *sa.ParentUserUUID); err == nil {
+		} else if u, err := svcs.User().Get(ctx, *sa.ParentUserUUID); err == nil {
 			parentAccessKey = u.AccessKey
 			parentUsername = u.Username
 		}
