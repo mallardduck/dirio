@@ -7,6 +7,19 @@
 # those variables are unset.
 set -e
 
+# ── Root: fix data-directory ownership then re-exec as dirio ─────────────────
+# When started as root (the default when no --user is supplied), chown the data
+# directory to the dirio service account and drop privileges via gosu.  This
+# makes the container tolerant of volumes previously owned by any other image
+# (e.g. minio/minio which writes as root).
+#
+# When started as a non-root user (via --user / compose user:) this block is
+# skipped entirely and the server runs as whatever user was specified.
+if [ "$(id -u)" = "0" ]; then
+    chown -R 10001:10001 "${DATA_DIR:-/data}"
+    exec gosu dirio "$0" "$@"
+fi
+
 # ── Pass-through: subcommand or absolute path ─────────────────────────────────
 # If the caller supplies a known dirio subcommand, or an absolute path (e.g.
 # /bin/sh for debug), exec it directly without modification.

@@ -44,6 +44,20 @@ RUN zypper --non-interactive refresh && \
     zypper --non-interactive install --no-recommends ca-certificates-mozilla && \
     zypper clean --all
 
+# Download gosu — used in the entrypoint to drop from root to the dirio user
+# after fixing data-directory ownership on first run or image switch.
+ARG GOSU_VERSION=1.17
+RUN set -eux; \
+    case "$(uname -m)" in \
+        x86_64)  GOARCH=amd64 ;; \
+        aarch64) GOARCH=arm64 ;; \
+        *) echo "Unsupported architecture: $(uname -m)"; exit 1 ;; \
+    esac; \
+    curl -fsSLo /usr/local/bin/gosu \
+        "https://github.com/tianon/gosu/releases/download/${GOSU_VERSION}/gosu-${GOARCH}"; \
+    chmod +x /usr/local/bin/gosu; \
+    gosu nobody true
+
 RUN groupadd --system --gid 10001 dirio && \
     useradd  --system --uid 10001 --gid dirio \
              --no-create-home --shell /usr/sbin/nologin dirio && \
@@ -68,11 +82,10 @@ RUN echo "dirio:x:10001:10001:DirIO service:/app:/sbin/nologin" >> /etc/passwd &
 # Drop in the compiled server binary and the entrypoint script.
 COPY --from=builder /build/dirio-server      /app/dirio-server
 COPY package/docker-entrypoint.sh            /app/docker-entrypoint.sh
+COPY --from=rootfs /usr/local/bin/gosu       /usr/local/bin/gosu
 
-RUN chmod +x /app/dirio-server /app/docker-entrypoint.sh && \
+RUN chmod +x /app/dirio-server /app/docker-entrypoint.sh /usr/local/bin/gosu && \
     chown 10001:10001 /app/dirio-server /app/docker-entrypoint.sh
-
-USER dirio
 
 EXPOSE 9000
 
