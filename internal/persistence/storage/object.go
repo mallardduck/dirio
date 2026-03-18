@@ -18,6 +18,13 @@ import (
 	"github.com/mallardduck/dirio/pkg/iam"
 )
 
+// ObjectContent is the interface for readable object content.
+// It supports both sequential reads and random-access reads (required for range requests).
+type ObjectContent interface {
+	io.ReadCloser
+	io.ReaderAt
+}
+
 // Object represents an S3 object with content
 type Object struct {
 	Key            string
@@ -25,7 +32,7 @@ type Object struct {
 	ContentType    string
 	ETag           string
 	LastModified   time.Time
-	Content        io.ReadCloser
+	Content        ObjectContent
 	CustomMetadata map[string]string // Custom headers like Cache-Control, Content-Disposition, x-amz-meta-*, etc.
 }
 

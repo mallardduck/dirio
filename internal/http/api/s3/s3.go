@@ -1,24 +1,5 @@
 package s3
 
-// TODO(Phase 3.2): Quick wins and critical features ready for implementation
-//   Policy engine is COMPLETE - all these features have authorization infrastructure ready!
-//
-//   Quick Wins (likely routing issues):
-//   1. Fix DeleteObject 405 for MinIO mc (see object.go:DeleteObject)
-//   2. Fix DeleteBucket 405 for MinIO mc (see bucket.go:DeleteBucket)
-//
-//   Critical Path (NEXT PRIORITY):
-//   3. Implement Pre-signed URLs (see auth/signature.go top comment)
-//      - Query string authentication (X-Amz-Signature in URL)
-//      - Expiration validation
-//      - Essential for temporary access sharing
-//
-//   Medium Priority:
-//   4. Implement CopyObject (see routes.go line ~347 comment)
-//   5. Add Range request support to GetObject (see object.go:GetObject)
-//   6. Fix custom metadata key case in responses (simple bug fix)
-//   7. Fix object tagging content corruption (Bug #001 remnant)
-
 import (
 	"net/http"
 

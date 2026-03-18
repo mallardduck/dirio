@@ -43,9 +43,14 @@ type GetObjectRequest struct {
 	Key    string
 }
 
+type ObjectReader interface {
+	io.ReadCloser
+	io.ReaderAt
+}
+
 // GetObjectResponse represents the response from downloading an object
 type GetObjectResponse struct {
-	Content        io.ReadCloser
+	Content        ObjectReader
 	ContentType    string
 	Size           int64
 	ETag           string

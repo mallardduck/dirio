@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"strconv"
 	"strings"
 	"syscall"
@@ -22,12 +24,6 @@ import (
 )
 
 // GetObject handles GET /{bucket}/{key}
-// TODO(Phase 3.2 #5): Add Range request support for resumable downloads and video streaming
-//   - Parse Range header (bytes=0-1023, bytes=1024-, etc.)
-//   - Return 206 Partial Content with Content-Range header
-//   - Handle multiple ranges (multipart/byteranges response)
-//   - Storage layer needs range support in GetObject
-//   - Test with video streaming and aws s3api get-object --range
 func (h *HTTPHandler) GetObject(w http.ResponseWriter, r *http.Request, bucket, key string) {
 	objRequest := &s3.GetObjectRequest{
 		Bucket: bucket,
@@ -59,49 +55,83 @@ func (h *HTTPHandler) GetObject(w http.ResponseWriter, r *http.Request, bucket, 
 		w.Header().Set(key, value)
 	}
 
-	// Check for Range header
-	rangeHeader := r.Header.Get("Range")
-	if rangeHeader != "" {
-		// Parse range header (e.g., "bytes=0-1023" or "bytes=1024-")
-		start, end, err := parseRangeHeader(rangeHeader, obj.Size)
-		if err != nil {
-			// Invalid range - return 416 Range Not Satisfiable
-			w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", obj.Size))
-			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
-			return
-		}
+	// Dispatch to range or full response
+	if rangeHeader := r.Header.Get("Range"); rangeHeader != "" {
+		h.serveRangeResponse(w, r, obj, bucket, key, rangeHeader)
+		return
+	}
+	h.serveFullResponse(w, r, obj, bucket, key)
+}
 
-		// Read full content into buffer to support seeking
-		// TODO: Optimize by implementing seekable storage layer
-		var buf bytes.Buffer
-		if _, err := io.Copy(&buf, obj.Content); err != nil {
-			requestID := middleware.GetRequestID(r.Context())
-			respondError(w, requestID, err, s3types.ErrCodeInternalError, "error reading object content for range request", response.SetErrAsMessage(err))
-			return
-		}
-
-		// Create section reader for the requested range
-		rangeReader := io.NewSectionReader(bytes.NewReader(buf.Bytes()), start, end-start+1)
-		rangeSize := end - start + 1
-
-		// Set range-specific headers
-		w.Header().Set(headers.ContentLength, strconv.FormatInt(rangeSize, 10))
-		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, obj.Size))
-		w.WriteHeader(http.StatusPartialContent)
-
-		// Copy range to response
-		if _, err := io.Copy(w, rangeReader); err != nil {
-			log := logging.ComponentWithContext(r.Context(), "api")
-			if isClientDisconnect(err) {
-				log.Debug("client disconnected while writing range to response", "bucket", bucket, "key", key, "start", start, "end", end, "error", err)
-			} else {
-				log.Warn("failed to write range response body", "bucket", bucket, "key", key, "start", start, "end", end, "error", err)
-			}
-		}
+func (h *HTTPHandler) serveRangeResponse(w http.ResponseWriter, r *http.Request, obj *s3.GetObjectResponse, bucket, key, rangeHeader string) {
+	ranges, err := parseRangesHeader(rangeHeader, obj.Size)
+	if err != nil || len(ranges) == 0 {
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", obj.Size))
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
 		return
 	}
 
-	// No range request - return full object
+	if len(ranges) > 1 {
+		h.serveMultiRangeResponse(w, r, obj, bucket, key, ranges)
+		return
+	}
+
+	rng := ranges[0]
+	rangeLength := rng.end - rng.start + 1
+
+	w.Header().Set(headers.ContentLength, strconv.FormatInt(rangeLength, 10))
+	w.Header().Set(headers.ContentRange, fmt.Sprintf("bytes %d-%d/%d", rng.start, rng.end, obj.Size))
+	w.WriteHeader(http.StatusPartialContent)
+
+	rangeReader := io.NewSectionReader(obj.Content, rng.start, rangeLength)
+	if _, err := io.Copy(w, rangeReader); err != nil {
+		log := logging.ComponentWithContext(r.Context(), "api")
+		if isClientDisconnect(err) {
+			log.Debug("client disconnected while writing range to response", "bucket", bucket, "key", key, "start", rng.start, "end", rng.end, "error", err)
+		} else {
+			log.Warn("failed to write range response body", "bucket", bucket, "key", key, "start", rng.start, "end", rng.end, "error", err)
+		}
+	}
+}
+
+func (h *HTTPHandler) serveMultiRangeResponse(w http.ResponseWriter, r *http.Request, obj *s3.GetObjectResponse, bucket, key string, ranges []rangeSpec) {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+
+	for _, rng := range ranges {
+		partHeader := make(textproto.MIMEHeader)
+		partHeader.Set("Content-Type", obj.ContentType)
+		partHeader.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", rng.start, rng.end, obj.Size))
+		pw, err := mw.CreatePart(partHeader)
+		if err != nil {
+			// mime/multipart writer only errors on closed underlying writer — unreachable here
+			return
+		}
+		if _, err := io.Copy(pw, io.NewSectionReader(obj.Content, rng.start, rng.end-rng.start+1)); err != nil {
+			log := logging.ComponentWithContext(r.Context(), "api")
+			log.Warn("failed to read range for multipart response", "bucket", bucket, "key", key, "start", rng.start, "end", rng.end, "error", err)
+			return
+		}
+	}
+	if err := mw.Close(); err != nil {
+		return
+	}
+
+	w.Header().Set(headers.ContentType, "multipart/byteranges; boundary="+mw.Boundary())
+	w.Header().Set(headers.ContentLength, strconv.Itoa(buf.Len()))
+	w.WriteHeader(http.StatusPartialContent)
+
+	if _, err := io.Copy(w, &buf); err != nil {
+		log := logging.ComponentWithContext(r.Context(), "api")
+		if isClientDisconnect(err) {
+			log.Debug("client disconnected while writing multipart range response", "bucket", bucket, "key", key, "error", err)
+		} else {
+			log.Warn("failed to write multipart range response body", "bucket", bucket, "key", key, "error", err)
+		}
+	}
+}
+
+func (h *HTTPHandler) serveFullResponse(w http.ResponseWriter, r *http.Request, obj *s3.GetObjectResponse, bucket, key string) {
 	w.Header().Set(headers.ContentLength, strconv.FormatInt(obj.Size, 10))
 	w.WriteHeader(http.StatusOK)
 	if _, err := io.Copy(w, obj.Content); err != nil {
@@ -120,24 +150,49 @@ func isClientDisconnect(err error) bool {
 	return errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET)
 }
 
-// parseRangeHeader parses HTTP Range header and returns start and end byte positions
+// rangeSpec holds the resolved start and end byte positions of a single range.
+type rangeSpec struct {
+	start, end int64
+}
+
+// parseRangesHeader parses an HTTP Range header and returns all requested ranges.
+// Supports comma-separated multi-range: "bytes=0-499, 500-999"
+func parseRangesHeader(rangeHeader string, fileSize int64) ([]rangeSpec, error) {
+	if !strings.HasPrefix(rangeHeader, "bytes=") {
+		return nil, errors.New("invalid range header format")
+	}
+	spec := strings.TrimPrefix(rangeHeader, "bytes=")
+	parts := strings.Split(spec, ",")
+	ranges := make([]rangeSpec, 0, len(parts))
+	for _, part := range parts {
+		start, end, err := parseSingleRangePart(strings.TrimSpace(part), fileSize)
+		if err != nil {
+			return nil, err
+		}
+		ranges = append(ranges, rangeSpec{start, end})
+	}
+	return ranges, nil
+}
+
+// parseRangeHeader parses an HTTP Range header for a single range.
 // Supports formats: "bytes=0-1023", "bytes=1024-", "bytes=-1024"
 func parseRangeHeader(rangeHeader string, fileSize int64) (start, end int64, err error) {
-	// Remove "bytes=" prefix
-	if !strings.HasPrefix(rangeHeader, "bytes=") {
-		return 0, 0, errors.New("invalid range header format")
+	ranges, err := parseRangesHeader(rangeHeader, fileSize)
+	if err != nil {
+		return 0, 0, err
 	}
-	rangeSpec := strings.TrimPrefix(rangeHeader, "bytes=")
+	return ranges[0].start, ranges[0].end, nil
+}
 
-	// Split on dash
-	parts := strings.Split(rangeSpec, "-")
+// parseSingleRangePart parses one range part (e.g. "0-1023", "1024-", "-512").
+func parseSingleRangePart(part string, fileSize int64) (start, end int64, err error) {
+	parts := strings.Split(part, "-")
 	if len(parts) != 2 {
 		return 0, 0, errors.New("invalid range specification")
 	}
 
-	// Parse start and end
 	if parts[0] == "" {
-		// Suffix range: bytes=-1024 (last 1024 bytes)
+		// Suffix range: -1024 (last 1024 bytes)
 		suffixLength, parseErr := strconv.ParseInt(parts[1], 10, 64)
 		if parseErr != nil {
 			return 0, 0, parseErr
@@ -154,7 +209,7 @@ func parseRangeHeader(rangeHeader string, fileSize int64) (start, end int64, err
 	}
 
 	if parts[1] == "" {
-		// Open-ended range: bytes=1024-
+		// Open-ended range: 1024-
 		end = fileSize - 1
 	} else {
 		end, parseErr = strconv.ParseInt(parts[1], 10, 64)
@@ -163,7 +218,6 @@ func parseRangeHeader(rangeHeader string, fileSize int64) (start, end int64, err
 		}
 	}
 
-	// Validate range
 	if start < 0 || start >= fileSize {
 		return 0, 0, errors.New("start position out of range")
 	}
