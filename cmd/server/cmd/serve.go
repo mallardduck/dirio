@@ -95,11 +95,27 @@ func runServer(cmd *cobra.Command, _ []string) error {
 		dataDir = config.DataDir.GetDefaultAsString()
 	}
 
+	// Bootstrap logging early with env/flag defaults so that all output from
+	// startup.Init and config.LoadConfig goes to stdout rather than Go's
+	// default stderr handler.
+	logging.Setup(logging.Config{
+		Level:     viper.GetString(config.LogLevel.GetViperKey()),
+		Format:    viper.GetString(config.LogFormat.GetViperKey()),
+		Verbosity: viper.GetString(config.Verbosity.GetViperKey()),
+	})
+
 	// Phase 1 — Starter init: MkdirAll, crypto, rootFS, DataConfig load/default.
 	starter, err := startup.Init(dataDir)
 	if err != nil {
 		return fmt.Errorf("failed to initialise data directory: %w", err)
 	}
+	// Guard against the error paths between here and server.New.  Once
+	// TakeMetadataManager is called below, this becomes a no-op.
+	defer func() {
+		if err := starter.Close(); err != nil {
+			logging.Component("startup").Error("failed to close starter", "error", err)
+		}
+	}()
 
 	// Load full application config (viper/cobra).  Crypto is now initialised
 	// so any encrypted credential values in config.json can be decrypted.
@@ -112,6 +128,8 @@ func runServer(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
+	// Reconfigure logging now that the full settings are resolved (flags and
+	// config file may have overridden the early defaults above).
 	logging.Setup(logging.Config{
 		Level:     settings.LogLevel,
 		Format:    settings.LogFormat,
@@ -165,7 +183,7 @@ func runServer(cmd *cobra.Command, _ []string) error {
 		CLICredentialsExplicitlySet: settings.CLICredentialsExplicitlySet,
 		ShutdownTimeout:             settings.ShutdownTimeout,
 		RootFS:                      starter.RootFS(),
-		Metadata:                    starter.MetadataManager(),
+		Metadata:                    starter.TakeMetadataManager(),
 		Telemetry:                   telProvider,
 	}
 

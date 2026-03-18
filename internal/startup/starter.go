@@ -63,10 +63,21 @@ func (s *Starter) MetadataManager() *metadata.Manager { return s.metaMgr }
 // from an existing config.json.
 func (s *Starter) IsNew() bool { return s.isNew }
 
+// TakeMetadataManager transfers ownership of the metadata manager to the
+// caller, leaving the Starter without a reference.  After this call Close is
+// a no-op for the metadata manager — the caller is responsible for closing it.
+// Used by the serve command so that server.New can own and close the manager
+// during graceful shutdown without a double-close from defer starter.Close().
+func (s *Starter) TakeMetadataManager() *metadata.Manager {
+	mgr := s.metaMgr
+	s.metaMgr = nil
+	return mgr
+}
+
 // Close releases resources acquired by MigrateMinIO or Prepare (specifically
 // the metadata bolt DB).  Safe to call when metaMgr is nil.  Should be called
-// by the init command after it finishes; the serve command lets server.New take
-// ownership and closes the manager during graceful shutdown instead.
+// by the init command after it finishes, or via defer in the serve command for
+// the error paths before server.New takes ownership via TakeMetadataManager.
 func (s *Starter) Close() error {
 	if s.metaMgr != nil {
 		err := s.metaMgr.Close()
