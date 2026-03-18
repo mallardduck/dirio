@@ -37,8 +37,9 @@ func (m *mockServerWrapper) Close() {
 }
 
 // createMockServer creates a test HTTP server with the specified behavior.
-// It binds to 0.0.0.0 on a random port so Docker containers can reach it via host.docker.internal.
-func createMockServer(port int, serverType mockServerType) (wrapper *mockServerWrapper, addr string) {
+// It binds to 0.0.0.0:0 (tcp4, random port) so Docker containers can reach it via host.docker.internal.
+// The OS assigns the port atomically, avoiding any TOCTOU race.
+func createMockServer(serverType mockServerType) (wrapper *mockServerWrapper, addr string) {
 	// Create handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch serverType {
@@ -58,11 +59,12 @@ func createMockServer(port int, serverType mockServerType) (wrapper *mockServerW
 		}
 	})
 
-	// Create listener on 0.0.0.0 with random port (tcp4 forces IPv4)
-	listener, err := net.Listen("tcp4", fmt.Sprintf("0.0.0.0:%d", port))
+	// Bind to port 0 — the OS picks a free port atomically, no TOCTOU race.
+	listener, err := net.Listen("tcp4", "0.0.0.0:0")
 	if err != nil {
 		panic(fmt.Sprintf("failed to create listener: %v", err))
 	}
+	port := listener.Addr().(*net.TCPAddr).Port
 
 	// Create HTTP server
 	server := &http.Server{
@@ -123,8 +125,7 @@ func runClientTest(t *testing.T, testName string, req testcontainers.ContainerRe
 // This proves our tests aren't just passing unconditionally.
 func TestSanityCheck_FailingServer(t *testing.T) {
 	t.Parallel()
-	externalPort := findAvailablePort(t)
-	mockServer, containerURL := createMockServer(externalPort, mockServerFailing)
+	mockServer, containerURL := createMockServer(mockServerFailing)
 	defer mockServer.Close()
 
 	t.Logf("Mock failing server started on port %s (container URL: %s)", mockServer.port, containerURL)
@@ -180,8 +181,7 @@ func TestSanityCheck_FailingServer(t *testing.T) {
 // This catches false positives where tests pass just because status code is 200.
 func TestSanityCheck_DumbSuccessServer(t *testing.T) {
 	t.Parallel()
-	externalPort := findAvailablePort(t)
-	mockServer, containerURL := createMockServer(externalPort, mockServerDumbSuccess)
+	mockServer, containerURL := createMockServer(mockServerDumbSuccess)
 	defer mockServer.Close()
 
 	t.Logf("Mock dumb-success server started on port %s (container URL: %s)", mockServer.port, containerURL)
