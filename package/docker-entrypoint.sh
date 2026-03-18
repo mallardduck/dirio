@@ -16,9 +16,12 @@ set -e
 # When started as a non-root user (via --user / compose user:) this block is
 # skipped entirely and the server runs as whatever user was specified.
 if [ "$(id -u)" = "0" ]; then
+    echo "entrypoint: running as root, fixing ${DATA_DIR:-/data} ownership and dropping to dirio (10001)"
     chown -R 10001:10001 "${DATA_DIR:-/data}"
+    echo "entrypoint: re-exec as dirio"
     exec gosu dirio "$0" "$@"
 fi
+echo "entrypoint: running as $(id -un) ($(id -u))"
 
 # ── Pass-through: subcommand or absolute path ─────────────────────────────────
 # If the caller supplies a known dirio subcommand, or an absolute path (e.g.
