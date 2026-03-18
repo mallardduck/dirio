@@ -87,10 +87,10 @@ COPY --from=rootfs /usr/local/bin/gosu       /usr/local/bin/gosu
 RUN chmod +x /app/dirio-server /app/docker-entrypoint.sh /usr/local/bin/gosu && \
     chown 10001:10001 /app/dirio-server /app/docker-entrypoint.sh
 
-EXPOSE 9000
+EXPOSE 8080
 
 ENV DATA_DIR=/data \
-    PORT=9000 \
+    PORT=8080 \
     DIRIO_LOG_FORMAT=json
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
