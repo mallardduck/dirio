@@ -6,32 +6,26 @@
 ARG BCI_VERSION=16.0
 
 # ── Stage 1: Compile ──────────────────────────────────────────────────────────
-# golang:1.26 is not yet available on SUSE BCI, so we use the official image
-# for compilation and bring BCI in only for the runtime layers.
-FROM golang:alpine AS builder
+FROM registry.suse.com/bci/golang:1.26 AS builder
 
 WORKDIR /build
 
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Download the Tailwind v4 standalone binary for the current build platform.
+COPY . .
+
+# Download the Tailwind v4 standalone binary and regenerate all UI assets.
 RUN set -eux; \
     case "$(uname -m)" in \
         aarch64|arm64) TWARCH=arm64 ;; \
         *)             TWARCH=x64   ;; \
     esac; \
-    mkdir -p bin; \
-    wget -qO bin/tailwindcss \
+    curl -fsSLo /usr/local/bin/tailwindcss \
         "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-${TWARCH}"; \
-    chmod +x bin/tailwindcss
-
-COPY . .
-
-# Regenerate templ outputs and minify CSS from source so the compiled binary
-# always embeds fresh assets, regardless of what was last committed.
-RUN go tool templ generate ./console/... && \
-    ./bin/tailwindcss -i ./console/ui/input.css -o ./console/static/style.css --minify
+    chmod +x /usr/local/bin/tailwindcss; \
+    go tool templ generate ./console/...; \
+    /usr/local/bin/tailwindcss -i ./console/ui/input.css -o ./console/static/style.css --minify
 
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w" \
