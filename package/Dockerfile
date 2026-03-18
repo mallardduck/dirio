@@ -15,10 +15,6 @@ WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Install code-gen tools – these layers are cached until versions change.
-# templ is pinned to match go.mod so generated output is always compatible.
-RUN go install github.com/a-h/templ/cmd/templ@v0.3.977
-
 # Download the Tailwind v4 standalone binary for the current build platform.
 RUN set -eux; \
     case "$(uname -m)" in \
@@ -34,7 +30,7 @@ COPY . .
 
 # Regenerate templ outputs and minify CSS from source so the compiled binary
 # always embeds fresh assets, regardless of what was last committed.
-RUN templ generate ./console/... && \
+RUN go tool templ generate ./console/... && \
     ./bin/tailwindcss -i ./console/ui/input.css -o ./console/static/style.css --minify
 
 RUN CGO_ENABLED=0 GOOS=linux go build \
