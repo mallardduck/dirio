@@ -291,9 +291,6 @@ jobs:
     - name: Install Task
       uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3 # v1.1.0
 
-    - name: Install templ
-      run: go install github.com/a-h/templ/cmd/templ@v0.3.977
-
     - name: Download Tailwind
       run: task download-tailwind
 
