@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
@@ -91,7 +92,11 @@ func (h *HTTPHandler) GetObject(w http.ResponseWriter, r *http.Request, bucket, 
 		// Copy range to response
 		if _, err := io.Copy(w, rangeReader); err != nil {
 			log := logging.ComponentWithContext(r.Context(), "api")
-			log.Warn("failed to write range content", "bucket", bucket, "key", key, "start", start, "end", end, "error", err)
+			if isClientDisconnect(err) {
+				log.Debug("client disconnected while writing range to response", "bucket", bucket, "key", key, "start", start, "end", end, "error", err)
+			} else {
+				log.Warn("failed to write range response body", "bucket", bucket, "key", key, "start", start, "end", end, "error", err)
+			}
 		}
 		return
 	}
@@ -100,10 +105,19 @@ func (h *HTTPHandler) GetObject(w http.ResponseWriter, r *http.Request, bucket, 
 	w.Header().Set(headers.ContentLength, strconv.FormatInt(obj.Size, 10))
 	w.WriteHeader(http.StatusOK)
 	if _, err := io.Copy(w, obj.Content); err != nil {
-		// Can't send error response after headers written, but log for debugging
 		log := logging.ComponentWithContext(r.Context(), "api")
-		log.Warn("failed to write object content", "bucket", bucket, "key", key, "error", err)
+		if isClientDisconnect(err) {
+			log.Debug("client disconnected while writing object to response", "bucket", bucket, "key", key, "error", err)
+		} else {
+			log.Warn("failed to write object response body", "bucket", bucket, "key", key, "error", err)
+		}
 	}
+}
+
+// isClientDisconnect reports whether the error is due to the client closing the connection.
+// This is expected during video streaming and large downloads; callers should log at DEBUG.
+func isClientDisconnect(err error) bool {
+	return errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET)
 }
 
 // parseRangeHeader parses HTTP Range header and returns start and end byte positions
