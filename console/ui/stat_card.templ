@@ -1,0 +1,45 @@
+package ui
+
+// NeonColor names the accent colors available for stat cards.
+// Each value maps to a .neon-bar-* / .neon-glow-* CSS class pair in input.css.
+type NeonColor string
+
+const (
+	NeonRed    NeonColor = "red"
+	NeonCyan   NeonColor = "cyan"
+	NeonYellow NeonColor = "yellow"
+	NeonIndigo NeonColor = "indigo"
+)
+
+// linkClass returns the Tailwind text-color class used for the "View all" link.
+// Matches the per-card convention established on the dashboard.
+func (c NeonColor) linkClass() string {
+	switch c {
+	case NeonCyan:
+		return "text-dirio-cyan"
+	case NeonYellow:
+		return "text-dirio-yellow"
+	case NeonIndigo:
+		return "text-dirio-steel"
+	default: // NeonRed and any future additions fall back to brand teal
+		return "text-dirio-teal"
+	}
+}
+
+// StatCard renders a stat widget with a neon top-bar accent, a large value,
+// and an optional "View all →" link.
+//
+// Pass an empty href to omit the link (e.g. for read-only metric cards).
+templ StatCard(label, value string, href templ.SafeURL, color NeonColor) {
+	<div class="relative bg-dirio-bg-card border border-dirio-border rounded-lg p-5">
+		<div class={ "neon-glow-" + string(color) }></div>
+		<div class={ "neon-bar-" + string(color) }></div>
+		<div class="relative z-[4]">
+			<p class="text-xs text-dirio-muted uppercase tracking-widest mb-2">{ label }</p>
+			<p class="text-3xl font-bold text-dirio-text">{ value }</p>
+			if href != "" {
+				<a href={ href } class={ "text-xs hover:underline mt-2 inline-block", color.linkClass() }>View all →</a>
+			}
+		</div>
+	</div>
+}

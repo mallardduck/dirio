@@ -52,111 +52,27 @@ func DashboardPage(d DashboardData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6\"><div class=\"relative bg-dirio-bg-card border border-dirio-border rounded-lg p-5\"><div class=\"absolute inset-x-0 top-0 h-0.5 bg-dirio-red rounded-t-lg neon-bar-red\"></div><p class=\"text-xs text-dirio-muted uppercase tracking-widest mb-2\">Buckets</p><p class=\"text-3xl font-bold text-dirio-text\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var3 string
-			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(d.BucketCount))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `console/ui/dashboard.templ`, Line: 20, Col: 77}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
+			templ_7745c5c3_Err = StatCard("Buckets", fmt.Sprint(d.BucketCount), PageURL("/buckets"), NeonRed).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</p><a href=\"")
+			templ_7745c5c3_Err = StatCard("IAM Users", fmt.Sprint(d.UserCount), PageURL("/users"), NeonCyan).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var4 templ.SafeURL
-			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(PageURL("/buckets"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `console/ui/dashboard.templ`, Line: 21, Col: 33}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
+			templ_7745c5c3_Err = StatCard("Groups", fmt.Sprint(d.GroupCount), PageURL("/groups"), NeonYellow).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" class=\"text-xs text-dirio-teal hover:underline mt-2 inline-block\">View all →</a></div><div class=\"relative bg-dirio-bg-card border border-dirio-border rounded-lg p-5\"><div class=\"absolute inset-x-0 top-0 h-0.5 bg-dirio-cyan rounded-t-lg neon-bar-cyan\"></div><p class=\"text-xs text-dirio-muted uppercase tracking-widest mb-2\">IAM Users</p><p class=\"text-3xl font-bold text-dirio-text\">")
+			templ_7745c5c3_Err = StatCard("Policies", fmt.Sprint(d.PolicyCount), PageURL("/policies"), NeonIndigo).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var5 string
-			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(d.UserCount))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `console/ui/dashboard.templ`, Line: 26, Col: 75}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</p><a href=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var6 templ.SafeURL
-			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinURLErrs(PageURL("/users"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `console/ui/dashboard.templ`, Line: 27, Col: 31}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" class=\"text-xs text-dirio-cyan hover:underline mt-2 inline-block\">View all →</a></div><div class=\"relative bg-dirio-bg-card border border-dirio-border rounded-lg p-5\"><div class=\"absolute inset-x-0 top-0 h-0.5 bg-dirio-yellow rounded-t-lg neon-bar-yellow\"></div><p class=\"text-xs text-dirio-muted uppercase tracking-widest mb-2\">Groups</p><p class=\"text-3xl font-bold text-dirio-text\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var7 string
-			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(d.GroupCount))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `console/ui/dashboard.templ`, Line: 32, Col: 76}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</p><a href=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var8 templ.SafeURL
-			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinURLErrs(PageURL("/groups"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `console/ui/dashboard.templ`, Line: 33, Col: 32}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" class=\"text-xs text-dirio-yellow hover:underline mt-2 inline-block\">View all →</a></div><div class=\"relative bg-dirio-bg-card border border-dirio-border rounded-lg p-5\"><div class=\"absolute inset-x-0 top-0 h-0.5 bg-dirio-indigo rounded-t-lg neon-bar-indigo\"></div><p class=\"text-xs text-dirio-muted uppercase tracking-widest mb-2\">Policies</p><p class=\"text-3xl font-bold text-dirio-text\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var9 string
-			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(d.PolicyCount))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `console/ui/dashboard.templ`, Line: 38, Col: 77}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</p><a href=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var10 templ.SafeURL
-			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs(PageURL("/policies"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `console/ui/dashboard.templ`, Line: 39, Col: 34}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" class=\"text-xs text-dirio-steel hover:underline mt-2 inline-block\">View all →</a></div></div><div class=\"bg-dirio-bg-card border border-dirio-border rounded-lg p-6\"><h2 class=\"text-sm font-semibold text-dirio-muted uppercase tracking-wider mb-2\">Quick navigation</h2><p class=\"text-sm text-dirio-muted leading-relaxed\">Use the sidebar to navigate between Buckets, Users, Groups, and Policies. Inline actions (delete, status toggle) use HTMX partial swaps — no full page reloads.</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><div class=\"bg-dirio-bg-card border border-dirio-border rounded-lg p-6\"><h2 class=\"text-sm font-semibold text-dirio-muted uppercase tracking-wider mb-2\">Quick navigation</h2><p class=\"text-sm text-dirio-muted leading-relaxed\">Use the sidebar to navigate between Buckets, Users, Groups, and Policies. Inline actions (delete, status toggle) use HTMX partial swaps — no full page reloads.</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

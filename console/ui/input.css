@@ -139,28 +139,54 @@
   --radius:                     var(--radius);
 }
 
-/* ─── Neon glow bar effects ──────────────────────────────────────────────── */
-/* Multi-layer box-shadow radiates color outward from the top accent bar.     */
-.neon-bar-red {
-  box-shadow: 0 0 4px var(--color-dirio-red),
-              0 0 12px var(--color-dirio-red),
-              0 0 28px var(--color-dirio-red);
+/* ─── Neon top-bar + outer glow effects ──────────────────────────────────── */
+/* Two-layer approach:                                                         */
+/*   .neon-bar-*  — solid 4px bar; ::before provides subtle inner blur glow   */
+/*   .neon-glow-* — blurred div above the edge, mask-fades downward so the    */
+/*                  light spills onto the background without hitting the card  */
+
+/* Shared bar base */
+.neon-bar-red, .neon-bar-cyan, .neon-bar-yellow, .neon-bar-indigo {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+  z-index: 3;
 }
-.neon-bar-cyan {
-  box-shadow: 0 0 4px var(--color-dirio-cyan),
-              0 0 12px var(--color-dirio-cyan),
-              0 0 28px var(--color-dirio-cyan);
+.neon-bar-red::before,
+.neon-bar-cyan::before,
+.neon-bar-yellow::before,
+.neon-bar-indigo::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: inherit;
+  filter: blur(6px);
+  opacity: 0.6;
+  z-index: -1;
 }
-.neon-bar-yellow {
-  box-shadow: 0 0 4px var(--color-dirio-yellow),
-              0 0 12px var(--color-dirio-yellow),
-              0 0 28px var(--color-dirio-yellow);
+
+/* Shared outer glow base */
+.neon-glow-red, .neon-glow-cyan, .neon-glow-yellow, .neon-glow-indigo {
+  position: absolute;
+  top: -6px; left: -8px; right: -8px;
+  height: 24px;
+  filter: blur(14px);
+  opacity: 0.7;
+  mask-image: linear-gradient(to bottom, black, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, black, transparent);
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+  z-index: 1;
+  pointer-events: none;
 }
-.neon-bar-indigo {
-  box-shadow: 0 0 4px var(--color-dirio-indigo),
-              0 0 12px var(--color-dirio-indigo),
-              0 0 28px var(--color-dirio-indigo);
-}
+
+/* Per-color fills */
+.neon-bar-red,  .neon-glow-red    { background: var(--color-dirio-red); }
+.neon-bar-cyan, .neon-glow-cyan   { background: var(--color-dirio-cyan); }
+.neon-bar-yellow, .neon-glow-yellow { background: var(--color-dirio-yellow); }
+.neon-bar-indigo, .neon-glow-indigo { background: var(--color-dirio-indigo); }
 
 /* ─── Theme toggle: highlight the active segment ─────────────────────────── */
 [data-theme-btn][aria-pressed="true"] {
