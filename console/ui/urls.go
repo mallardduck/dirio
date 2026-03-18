@@ -5,6 +5,9 @@ import "github.com/a-h/templ"
 // BasePath is the URL prefix under which the admin console is mounted.
 const BasePath = "/dirio/ui"
 
+// AppVersion is the running server version, set by console.New() at startup.
+var AppVersion = "dev"
+
 // PageURL returns the full console URL for the given page path (e.g. "/buckets").
 // Pass "/" for the dashboard root.
 func PageURL(path string) templ.SafeURL {

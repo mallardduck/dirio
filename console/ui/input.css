@@ -139,6 +139,29 @@
   --radius:                     var(--radius);
 }
 
+/* ─── Neon glow bar effects ──────────────────────────────────────────────── */
+/* Multi-layer box-shadow radiates color outward from the top accent bar.     */
+.neon-bar-red {
+  box-shadow: 0 0 4px var(--color-dirio-red),
+              0 0 12px var(--color-dirio-red),
+              0 0 28px var(--color-dirio-red);
+}
+.neon-bar-cyan {
+  box-shadow: 0 0 4px var(--color-dirio-cyan),
+              0 0 12px var(--color-dirio-cyan),
+              0 0 28px var(--color-dirio-cyan);
+}
+.neon-bar-yellow {
+  box-shadow: 0 0 4px var(--color-dirio-yellow),
+              0 0 12px var(--color-dirio-yellow),
+              0 0 28px var(--color-dirio-yellow);
+}
+.neon-bar-indigo {
+  box-shadow: 0 0 4px var(--color-dirio-indigo),
+              0 0 12px var(--color-dirio-indigo),
+              0 0 28px var(--color-dirio-indigo);
+}
+
 /* ─── Theme toggle: highlight the active segment ─────────────────────────── */
 [data-theme-btn][aria-pressed="true"] {
   background-color: var(--color-dirio-bg-card2);

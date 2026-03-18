@@ -52,7 +52,7 @@ func DashboardPage(d DashboardData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6\"><div class=\"relative overflow-hidden bg-dirio-bg-card border border-dirio-border rounded-lg p-5\"><div class=\"absolute inset-x-0 top-0 h-0.5 bg-dirio-red\"></div><p class=\"text-xs text-dirio-muted uppercase tracking-widest mb-2\">Buckets</p><p class=\"text-3xl font-bold text-dirio-text\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6\"><div class=\"relative bg-dirio-bg-card border border-dirio-border rounded-lg p-5\"><div class=\"absolute inset-x-0 top-0 h-0.5 bg-dirio-red rounded-t-lg neon-bar-red\"></div><p class=\"text-xs text-dirio-muted uppercase tracking-widest mb-2\">Buckets</p><p class=\"text-3xl font-bold text-dirio-text\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -78,7 +78,7 @@ func DashboardPage(d DashboardData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" class=\"text-xs text-dirio-teal hover:underline mt-2 inline-block\">View all →</a></div><div class=\"relative overflow-hidden bg-dirio-bg-card border border-dirio-border rounded-lg p-5\"><div class=\"absolute inset-x-0 top-0 h-0.5 bg-dirio-cyan\"></div><p class=\"text-xs text-dirio-muted uppercase tracking-widest mb-2\">IAM Users</p><p class=\"text-3xl font-bold text-dirio-text\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" class=\"text-xs text-dirio-teal hover:underline mt-2 inline-block\">View all →</a></div><div class=\"relative bg-dirio-bg-card border border-dirio-border rounded-lg p-5\"><div class=\"absolute inset-x-0 top-0 h-0.5 bg-dirio-cyan rounded-t-lg neon-bar-cyan\"></div><p class=\"text-xs text-dirio-muted uppercase tracking-widest mb-2\">IAM Users</p><p class=\"text-3xl font-bold text-dirio-text\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -104,7 +104,7 @@ func DashboardPage(d DashboardData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" class=\"text-xs text-dirio-cyan hover:underline mt-2 inline-block\">View all →</a></div><div class=\"relative overflow-hidden bg-dirio-bg-card border border-dirio-border rounded-lg p-5\"><div class=\"absolute inset-x-0 top-0 h-0.5 bg-dirio-yellow\"></div><p class=\"text-xs text-dirio-muted uppercase tracking-widest mb-2\">Groups</p><p class=\"text-3xl font-bold text-dirio-text\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" class=\"text-xs text-dirio-cyan hover:underline mt-2 inline-block\">View all →</a></div><div class=\"relative bg-dirio-bg-card border border-dirio-border rounded-lg p-5\"><div class=\"absolute inset-x-0 top-0 h-0.5 bg-dirio-yellow rounded-t-lg neon-bar-yellow\"></div><p class=\"text-xs text-dirio-muted uppercase tracking-widest mb-2\">Groups</p><p class=\"text-3xl font-bold text-dirio-text\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -130,7 +130,7 @@ func DashboardPage(d DashboardData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" class=\"text-xs text-dirio-yellow hover:underline mt-2 inline-block\">View all →</a></div><div class=\"relative overflow-hidden bg-dirio-bg-card border border-dirio-border rounded-lg p-5\"><div class=\"absolute inset-x-0 top-0 h-0.5 bg-dirio-indigo\"></div><p class=\"text-xs text-dirio-muted uppercase tracking-widest mb-2\">Policies</p><p class=\"text-3xl font-bold text-dirio-text\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" class=\"text-xs text-dirio-yellow hover:underline mt-2 inline-block\">View all →</a></div><div class=\"relative bg-dirio-bg-card border border-dirio-border rounded-lg p-5\"><div class=\"absolute inset-x-0 top-0 h-0.5 bg-dirio-indigo rounded-t-lg neon-bar-indigo\"></div><p class=\"text-xs text-dirio-muted uppercase tracking-widest mb-2\">Policies</p><p class=\"text-3xl font-bold text-dirio-text\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

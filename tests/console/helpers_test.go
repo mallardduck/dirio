@@ -37,7 +37,7 @@ func NewTestServer(t *testing.T) *TestServer {
 		// Wire the console (mirrors cmd/server/cmd/wire_console.go).
 		factory := service.NewServiceFactory(srv.Storage(), srv.Metadata(), srv.PolicyEngine(), srv.Auth())
 		adapter := consolewire.NewAdapter(factory)
-		handler := console.New(adapter, srv.Router(), &testAdminAuth{authenticator: srv.Auth()})
+		handler := console.New(adapter, srv.Router(), &testAdminAuth{authenticator: srv.Auth()}, "test")
 		srv.SetConsole(handler, 0) // 0 = same port, mounted at /dirio/ui/
 	})
 

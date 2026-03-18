@@ -11,6 +11,7 @@ import (
 	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/http/server"
 	"github.com/mallardduck/dirio/internal/service"
+	"github.com/mallardduck/dirio/internal/version"
 	"github.com/mallardduck/dirio/pkg/iam"
 )
 
@@ -28,7 +29,7 @@ func setupConsole(srv *server.Server, enabled, dedicatedPort bool, port int) {
 
 	factory := service.NewServiceFactory(srv.Storage(), srv.Metadata(), srv.PolicyEngine(), srv.Auth())
 	adapter := consolewire.NewAdapter(factory)
-	handler := console.New(adapter, srv.Router(), newConsoleAdminAuth(srv.Auth()))
+	handler := console.New(adapter, srv.Router(), newConsoleAdminAuth(srv.Auth()), version.Version)
 
 	effectivePort := 0
 	if dedicatedPort {

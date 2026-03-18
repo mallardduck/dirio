@@ -35,7 +35,8 @@ var staticFiles embed.FS
 // adminAuth validates admin credentials at login time.
 // When mounted at a path prefix, callers must strip that prefix before passing
 // requests here (e.g. http.StripPrefix("/dirio/ui", New(api, s3Router, adminAuth))).
-func New(api consoleapi.API, s3Router ui.S3Router, adminAuth consoleauth.AdminAuth) *teapot.Router {
+func New(api consoleapi.API, s3Router ui.S3Router, adminAuth consoleauth.AdminAuth, version string) *teapot.Router {
+	ui.AppVersion = version
 	sessions, err := consoleauth.NewSession()
 	if err != nil {
 		panic("console: failed to create session manager: " + err.Error())
