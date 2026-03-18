@@ -18,6 +18,7 @@ var (
 var (
 	ErrPolicyNotFound      = errors.New("policy not found")
 	ErrPolicyAlreadyExists = errors.New("policy already exists")
+	ErrPolicyIsBuiltin     = errors.New("built-in policy cannot be deleted")
 	ErrInvalidPolicyName   = errors.New("invalid policy name")
 	ErrInvalidPolicyDoc    = errors.New("invalid policy document")
 )

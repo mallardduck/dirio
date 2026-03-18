@@ -102,10 +102,14 @@ func (s *Service) Update(ctx context.Context, name string, req *UpdatePolicyRequ
 	return policy, nil
 }
 
-// Delete deletes a policy by name
+// Delete deletes a policy by name. Built-in policies cannot be deleted.
 func (s *Service) Delete(ctx context.Context, name string) error {
 	if err := validation.ValidatePolicyName(name); err != nil {
 		return err
+	}
+
+	if iam.IsBuiltinPolicy(name) {
+		return svcerrors.ErrPolicyIsBuiltin
 	}
 
 	// Check if policy exists

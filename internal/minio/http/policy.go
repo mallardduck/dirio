@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"io"
 	"log/slog"
 	nethttp "net/http"
@@ -112,6 +113,10 @@ func (s PolicyHTTPService) RemoveCannedPolicy(w nethttp.ResponseWriter, r *netht
 	if err != nil {
 		s.log.Error("Failed to delete policy", "error", err, "name", policyName)
 
+		if errors.Is(err, svcerrors.ErrPolicyIsBuiltin) {
+			w.WriteHeader(nethttp.StatusForbidden)
+			return
+		}
 		if svcerrors.IsNotFound(err) {
 			w.WriteHeader(nethttp.StatusNotFound)
 			return

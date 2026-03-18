@@ -8,8 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestListPolicies_Empty verifies ListPolicies returns an empty map on a fresh server
-func TestListPolicies_Empty(t *testing.T) {
+// TestListPolicies_Builtins verifies that a fresh server has the MinIO-compatible
+// built-in policies seeded (readwrite, readonly, writeonly, diagnostics, consoleAdmin).
+func TestListPolicies_Builtins(t *testing.T) {
 	ts := NewTestServer(t)
 
 	resp := ts.AdminRequest(t, http.MethodGet, "/list-canned-policies", nil)
@@ -17,7 +18,11 @@ func TestListPolicies_Empty(t *testing.T) {
 
 	var policies map[string]any
 	DecodeJSON(t, resp, &policies)
-	assert.Empty(t, policies)
+	assert.Contains(t, policies, "readwrite")
+	assert.Contains(t, policies, "readonly")
+	assert.Contains(t, policies, "writeonly")
+	assert.Contains(t, policies, "diagnostics")
+	assert.Contains(t, policies, "consoleAdmin")
 }
 
 // TestCreatePolicy_Success creates a policy and verifies it appears in list

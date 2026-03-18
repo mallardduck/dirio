@@ -85,6 +85,7 @@ type Policy struct {
 	PolicyDocument string    `json:"policyDocument"` // raw JSON string
 	CreateDate     time.Time `json:"createDate"`
 	UpdateDate     time.Time `json:"updateDate"`
+	IsBuiltin      bool      `json:"isBuiltin,omitempty"` // true for system-defined policies
 }
 
 // Bucket represents a bucket as seen by the console.

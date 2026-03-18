@@ -67,4 +67,5 @@ type Policy struct {
 	PolicyDocument *PolicyDocument `json:"policyDocument"` // The actual IAM policy
 	CreateDate     time.Time       `json:"createDate"`
 	UpdateDate     time.Time       `json:"updateDate"`
+	IsBuiltin      bool            `json:"isBuiltin,omitempty"` // true for system-defined policies
 }

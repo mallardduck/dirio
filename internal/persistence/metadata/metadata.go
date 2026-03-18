@@ -161,8 +161,46 @@ func New(rootFS billy.Filesystem) (*Manager, error) {
 	ctx := context.Background()
 	mgr.buildUsersIndex(ctx)
 	mgr.reconcileIndexes(ctx)
+	mgr.seedBuiltinPolicies(ctx)
 
 	return mgr, nil
+}
+
+// seedBuiltinPolicies writes the MinIO-compatible built-in policies to disk if
+// they do not already exist. This ensures users imported from MinIO with
+// built-in policy attachments (e.g. "readwrite") can resolve those policies.
+func (m *Manager) seedBuiltinPolicies(ctx context.Context) {
+	now := time.Now()
+	for _, name := range iam.BuiltinPolicyNames {
+		doc := iam.BuiltinPolicyDocument(name)
+		if doc == nil {
+			continue
+		}
+
+		existing, err := m.GetPolicy(ctx, name)
+		if err == nil && existing != nil {
+			// Already exists — ensure the IsBuiltin flag is set (upgrade path).
+			if !existing.IsBuiltin {
+				existing.IsBuiltin = true
+				if saveErr := m.SavePolicy(ctx, existing); saveErr != nil {
+					m.log.Warn("failed to mark built-in policy", "name", name, "error", saveErr)
+				}
+			}
+			continue
+		}
+
+		policy := &iam.Policy{
+			Version:        iam.PolicyMetadataVersion,
+			Name:           name,
+			PolicyDocument: doc,
+			IsBuiltin:      true,
+			CreateDate:     now,
+			UpdateDate:     now,
+		}
+		if saveErr := m.SavePolicy(ctx, policy); saveErr != nil {
+			m.log.Warn("failed to seed built-in policy", "name", name, "error", saveErr)
+		}
+	}
 }
 
 // buildUsersIndex populates the in-memory UUID index from disk.

@@ -690,6 +690,7 @@ func iamPolicyToConsole(p *iam.Policy) (*consoleapi.Policy, error) {
 		PolicyDocument: string(docJSON),
 		CreateDate:     p.CreateDate,
 		UpdateDate:     p.UpdateDate,
+		IsBuiltin:      p.IsBuiltin,
 	}, nil
 }
 
