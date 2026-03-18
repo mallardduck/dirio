@@ -212,3 +212,40 @@ type Policy struct {
 	CreateDate time.Time
 	UpdateDate time.Time
 }
+
+// ImportGroup represents a MinIO IAM group collected during import.
+type ImportGroup struct {
+	Name      string
+	Members   []string // access keys of member users
+	Status    string   // "enabled" / "disabled"
+	Policies  []string // policy names attached to this group
+	UpdatedAt time.Time
+}
+
+// ImportServiceAccount represents a MinIO service account collected during import.
+type ImportServiceAccount struct {
+	AccessKey         string
+	SecretKey         string
+	ParentUser        string // parent user's access key
+	Status            string // "on" / "off" / "enabled" / "disabled"
+	UpdatedAt         time.Time
+	ExpiresAt         time.Time // zero value = no expiry
+	SessionPolicyJSON string    // raw IAM policy JSON extracted from JWT; empty = inherit parent
+}
+
+// ServiceAccountIdentity represents MinIO's service account identity.json format.
+type ServiceAccountIdentity struct {
+	Version     int                       `json:"version"`
+	Credentials ServiceAccountCredentials `json:"credentials"`
+	UpdatedAt   time.Time                 `json:"updatedAt"`
+}
+
+// ServiceAccountCredentials holds the credential fields inside identity.json.
+type ServiceAccountCredentials struct {
+	AccessKey    string    `json:"accessKey"`
+	SecretKey    string    `json:"secretKey"`
+	SessionToken string    `json:"sessionToken"` // MinIO-specific JWT; not imported
+	Expiration   time.Time `json:"expiration"`
+	Status       string    `json:"status"`
+	ParentUser   string    `json:"parentUser"`
+}

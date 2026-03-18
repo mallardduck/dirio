@@ -94,23 +94,27 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (bool, error) {
 		fmt.Printf("Imported %d policies\n", len(result.Policies))
 	}
 
-	// Convert and save users (one file per user)
+	// Convert and save users (one file per user).
+	// Also build a local accessKey→UUID map for resolving group members and SA parents below.
+	accessKeyToUUID := make(map[string]uuid.UUID, len(result.Users))
 	if len(result.Users) > 0 {
 		for username, minioUser := range result.Users {
+			userUUID := uuid.New()
 			dirioUser := &User{
 				Version:          iam.UserMetadataVersion,
-				UUID:             uuid.New(), // Generate UUID for imported user
-				Username:         username,   // MinIO uses accessKey as username
+				UUID:             userUUID,
+				Username:         username, // MinIO uses accessKey as username
 				AccessKey:        minioUser.AccessKey,
 				SecretKey:        minioUser.SecretKey,
 				Status:           convertMinIOStatus(minioUser.Status),
 				UpdatedAt:        minioUser.UpdatedAt,
 				AttachedPolicies: minioUser.AttachedPolicy,
 			}
-			if err := m.SaveUser(ctx, dirioUser.UUID, dirioUser); err != nil {
+			if err := m.SaveUser(ctx, userUUID, dirioUser); err != nil {
 				fmt.Printf("Warning: failed to save user %s: %v\n", username, err)
 				continue
 			}
+			accessKeyToUUID[minioUser.AccessKey] = userUUID
 		}
 		fmt.Printf("Imported %d users\n", len(result.Users))
 	}
@@ -208,6 +212,123 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (bool, error) {
 	m.buildUsersIndex(ctx)
 	m.reconcileIndexes(ctx)
 
+	// Convert and save groups.
+	// Member access keys are resolved to UUIDs via the accessKeyToUUID map built above.
+	groupCount := 0
+	for groupName, minioGroup := range result.Groups {
+		now := time.Now()
+		updatedAt := minioGroup.UpdatedAt
+		if updatedAt.IsZero() {
+			updatedAt = now
+		}
+
+		// Resolve member access keys to UUIDs
+		memberUUIDs := make([]uuid.UUID, 0, len(minioGroup.Members))
+		for _, accessKey := range minioGroup.Members {
+			if uid, ok := accessKeyToUUID[accessKey]; ok {
+				memberUUIDs = append(memberUUIDs, uid)
+			} else {
+				fmt.Printf("Warning: group %s member %q not found in imported users\n", groupName, accessKey)
+			}
+		}
+
+		g := &Group{
+			Version:          iam.GroupMetadataVersion,
+			Name:             groupName,
+			Members:          memberUUIDs,
+			AttachedPolicies: minioGroup.Policies,
+			Status:           convertMinIOGroupStatus(minioGroup.Status),
+			CreatedAt:        now,
+			UpdatedAt:        updatedAt,
+		}
+		if err := m.SaveGroup(ctx, g); err != nil {
+			fmt.Printf("Warning: failed to save group %s: %v\n", groupName, err)
+			continue
+		}
+		groupCount++
+	}
+	if groupCount > 0 {
+		fmt.Printf("Imported %d groups\n", groupCount)
+	}
+
+	// Convert and save service accounts.
+	// Parent user access keys are resolved to UUIDs via accessKeyToUUID.
+	saCount := 0
+	for _, minioSA := range result.ServiceAccounts {
+		now := time.Now()
+		updatedAt := minioSA.UpdatedAt
+		if updatedAt.IsZero() {
+			updatedAt = now
+		}
+
+		var parentUUID *uuid.UUID
+		if uid, ok := accessKeyToUUID[minioSA.ParentUser]; ok {
+			parentUUID = &uid
+		} else {
+			fmt.Printf("Warning: service account %s parent %q not found in imported users; skipping\n",
+				minioSA.AccessKey, minioSA.ParentUser)
+			continue
+		}
+
+		var expiresAt *time.Time
+		if !minioSA.ExpiresAt.IsZero() {
+			t := minioSA.ExpiresAt
+			expiresAt = &t
+		}
+
+		// If the service account had an embedded session policy, save it as a
+		// named policy and use PolicyModeOverride so the SA is restricted to it
+		// rather than inheriting the full parent-user policy set.
+		policyMode := iam.PolicyModeInherit
+		var attachedPolicies []string
+		if minioSA.SessionPolicyJSON != "" {
+			var sessionDoc PolicyDocument
+			if err := jsonutil.Unmarshal([]byte(minioSA.SessionPolicyJSON), &sessionDoc); err != nil {
+				fmt.Printf("Warning: failed to parse session policy for %s: %v; falling back to inherit\n",
+					minioSA.AccessKey, err)
+			} else {
+				sessionPolicyName := "_import_sa_" + minioSA.AccessKey
+				sessionPolicy := &Policy{
+					Version:        iam.PolicyMetadataVersion,
+					Name:           sessionPolicyName,
+					PolicyDocument: &sessionDoc,
+					CreateDate:     now,
+					UpdateDate:     now,
+				}
+				if err := m.SavePolicy(ctx, sessionPolicy); err != nil {
+					fmt.Printf("Warning: failed to save session policy for %s: %v; falling back to inherit\n",
+						minioSA.AccessKey, err)
+				} else {
+					policyMode = iam.PolicyModeOverride
+					attachedPolicies = []string{sessionPolicyName}
+				}
+			}
+		}
+
+		sa := &ServiceAccount{
+			Version:          iam.ServiceAccountMetadataVersion,
+			UUID:             uuid.New(),
+			AccessKey:        minioSA.AccessKey,
+			SecretKey:        minioSA.SecretKey,
+			Username:         minioSA.AccessKey, // use accessKey as display name
+			ParentUserUUID:   parentUUID,
+			PolicyMode:       policyMode,
+			AttachedPolicies: attachedPolicies,
+			Status:           convertMinIOSAStatus(minioSA.Status),
+			CreatedAt:        now,
+			UpdatedAt:        updatedAt,
+			ExpiresAt:        expiresAt,
+		}
+		if err := m.CreateServiceAccount(ctx, sa); err != nil {
+			fmt.Printf("Warning: failed to save service account %s: %v\n", minioSA.AccessKey, err)
+			continue
+		}
+		saCount++
+	}
+	if saCount > 0 {
+		fmt.Printf("Imported %d service accounts\n", saCount)
+	}
+
 	// Save import state
 	state = &ImportState{
 		Imported:      true,
@@ -244,6 +365,24 @@ func (m *Manager) getImportState() (*ImportState, error) {
 // saveImportState saves the import state
 func (m *Manager) saveImportState(state *ImportState) error {
 	return jsonutil.MarshalToFile(m.metadataFS, ".import-state", state)
+}
+
+// convertMinIOGroupStatus maps MinIO group status strings to DirIO GroupStatus.
+// Any unrecognised value defaults to disabled for safety.
+func convertMinIOGroupStatus(minioStatus string) iam.GroupStatus {
+	if minioStatus == "enabled" || minioStatus == "on" {
+		return iam.GroupStatusActive
+	}
+	return iam.GroupStatusDisabled
+}
+
+// convertMinIOSAStatus maps MinIO service account status strings to DirIO ServiceAcctStatus.
+// MinIO uses "on"/"off" for service accounts.
+func convertMinIOSAStatus(minioStatus string) iam.ServiceAcctStatus {
+	if minioStatus == "on" || minioStatus == "enabled" {
+		return iam.ServiceAcctStatusActive
+	}
+	return iam.ServiceAcctStatusDisabled
 }
 
 // convertMinIOStatus maps MinIO user status strings ("enabled"/"disabled") to DirIO UserStatus ("on"/"off").

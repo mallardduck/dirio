@@ -1,7 +1,9 @@
 package minio
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
@@ -17,11 +19,13 @@ import (
 
 // ImportResult contains the results of a MinIO import operation
 type ImportResult struct {
-	Users          map[string]*User
-	Buckets        map[string]*BucketMetadata
-	Policies       map[string]*Policy
-	ObjectMetadata map[string]map[string]*ObjectMetadata // bucket -> object key -> metadata
-	DataConfig     *data.ConfigData                      // Data directory configuration
+	Users           map[string]*User
+	Buckets         map[string]*BucketMetadata
+	Policies        map[string]*Policy
+	Groups          map[string]*ImportGroup
+	ServiceAccounts map[string]*ImportServiceAccount
+	ObjectMetadata  map[string]map[string]*ObjectMetadata // bucket -> object key -> metadata
+	DataConfig      *data.ConfigData                      // Data directory configuration
 }
 
 // Import reads MinIO data from the specified filesystem and returns parsed data.
@@ -39,10 +43,12 @@ func Import(minioFS billy.Filesystem) (*ImportResult, error) {
 	}
 
 	result := &ImportResult{
-		Users:          make(map[string]*User),
-		Buckets:        make(map[string]*BucketMetadata),
-		Policies:       make(map[string]*Policy),
-		ObjectMetadata: make(map[string]map[string]*ObjectMetadata),
+		Users:           make(map[string]*User),
+		Buckets:         make(map[string]*BucketMetadata),
+		Policies:        make(map[string]*Policy),
+		Groups:          make(map[string]*ImportGroup),
+		ServiceAccounts: make(map[string]*ImportServiceAccount),
+		ObjectMetadata:  make(map[string]map[string]*ObjectMetadata),
 	}
 
 	// Import configuration
@@ -71,6 +77,16 @@ func Import(minioFS billy.Filesystem) (*ImportResult, error) {
 	// Expand group memberships into user policy lists
 	if err := importGroupMemberships(minioFS, result.Users); err != nil {
 		return nil, fmt.Errorf("failed to import group memberships: %w", err)
+	}
+
+	// Import groups as entities (members + attached policies)
+	if err := importGroups(minioFS, result.Groups); err != nil {
+		return nil, fmt.Errorf("failed to import groups: %w", err)
+	}
+
+	// Import service accounts
+	if err := importServiceAccounts(minioFS, result.ServiceAccounts); err != nil {
+		return nil, fmt.Errorf("failed to import service accounts: %w", err)
 	}
 
 	// Import buckets
@@ -556,12 +572,189 @@ func importGroupMemberships(minioFS billy.Filesystem, users map[string]*User) er
 	return nil
 }
 
+// importGroups reads MinIO group definitions and populates an ImportGroup per group.
+// This creates group entities (name, members, status, policies) to be saved into DirIO.
+// Member resolution from access key → UUID happens later in CheckAndImportMinIO.
+func importGroups(minioFS billy.Filesystem, groups map[string]*ImportGroup) error {
+	groupsDir := filepath.Join("config", "iam", "groups")
+
+	if _, err := minioFS.Stat(groupsDir); err != nil {
+		if isNotExist(err) {
+			return nil // No groups defined
+		}
+		return err
+	}
+
+	entries, err := minioFS.ReadDir(groupsDir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		groupName := entry.Name()
+
+		// Read members.json
+		membersPath := filepath.Join(groupsDir, groupName, "members.json")
+		membersData, err := util.ReadFile(minioFS, membersPath)
+		if err != nil {
+			fmt.Printf("Warning: failed to read members for group %s: %v\n", groupName, err)
+			continue
+		}
+
+		var identity GroupIdentity
+		if err := json.Unmarshal(membersData, &identity); err != nil {
+			fmt.Printf("Warning: failed to parse members for group %s: %v\n", groupName, err)
+			continue
+		}
+
+		g := &ImportGroup{
+			Name:    groupName,
+			Members: identity.Members,
+			Status:  identity.Status,
+		}
+
+		// Read policydb/groups/<name>.json for attached policies
+		policyPath := filepath.Join("config", "iam", "policydb", "groups", groupName+".json")
+		if policyData, err := util.ReadFile(minioFS, policyPath); err == nil {
+			var mapping GroupPolicyMapping
+			if err := json.Unmarshal(policyData, &mapping); err == nil {
+				g.Policies = mapping.Policy
+				g.UpdatedAt = mapping.UpdatedAt
+			}
+		}
+
+		groups[groupName] = g
+		fmt.Printf("Found MinIO group: %s (members: %v, policies: %v)\n", groupName, identity.Members, g.Policies)
+	}
+
+	return nil
+}
+
+// importServiceAccounts reads MinIO service accounts from config/iam/service-accounts/.
+// The MinIO sessionToken JWT is intentionally not imported — DirIO issues its own tokens.
+// Session policies embedded in the JWT are not extracted; service accounts default to
+// PolicyModeInherit (parent user's policies apply).
+// TODO: Consider actually importing the embedded session policy from the JWT
+func importServiceAccounts(minioFS billy.Filesystem, accounts map[string]*ImportServiceAccount) error {
+	saDir := filepath.Join("config", "iam", "service-accounts")
+
+	if _, err := minioFS.Stat(saDir); err != nil {
+		if isNotExist(err) {
+			return nil // No service accounts
+		}
+		return err
+	}
+
+	entries, err := minioFS.ReadDir(saDir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		accessKey := entry.Name()
+		identityPath := filepath.Join(saDir, accessKey, "identity.json")
+
+		identityData, err := util.ReadFile(minioFS, identityPath)
+		if err != nil {
+			fmt.Printf("Warning: failed to read service account %s: %v\n", accessKey, err)
+			continue
+		}
+
+		var identity ServiceAccountIdentity
+		if err := json.Unmarshal(identityData, &identity); err != nil {
+			fmt.Printf("Warning: failed to parse service account %s: %v\n", accessKey, err)
+			continue
+		}
+
+		creds := identity.Credentials
+		sa := &ImportServiceAccount{
+			AccessKey:  creds.AccessKey,
+			SecretKey:  creds.SecretKey,
+			ParentUser: creds.ParentUser,
+			Status:     creds.Status,
+			UpdatedAt:  identity.UpdatedAt,
+		}
+
+		// Zero expiration (1970-01-01) means no expiry in MinIO
+		if !creds.Expiration.IsZero() && creds.Expiration.Year() > 1970 {
+			sa.ExpiresAt = creds.Expiration
+		}
+
+		// Attempt to extract session policy from the JWT sessionToken.
+		if creds.SessionToken != "" {
+			if policyJSON, err := extractJWTSessionPolicy(creds.SessionToken); err != nil {
+				fmt.Printf("Warning: failed to extract session policy for %s: %v\n", accessKey, err)
+			} else if policyJSON != "" {
+				sa.SessionPolicyJSON = policyJSON
+			}
+		}
+
+		accounts[accessKey] = sa
+		fmt.Printf("Found MinIO service account: %s (parent: %s, has session policy: %v)\n",
+			accessKey, creds.ParentUser, sa.SessionPolicyJSON != "")
+	}
+
+	return nil
+}
+
+// extractJWTSessionPolicy decodes the payload of a MinIO JWT sessionToken and
+// returns the embedded session policy as a raw JSON string, or an empty string
+// if the token carries no embedded policy.
+//
+// No signature verification is performed — this is import-only and the token
+// was already validated by the source MinIO instance.
+func extractJWTSessionPolicy(sessionToken string) (string, error) {
+	parts := strings.SplitN(sessionToken, ".", 3)
+	if len(parts) != 3 {
+		return "", fmt.Errorf("unexpected JWT structure (got %d parts)", len(parts))
+	}
+
+	// Base64url-decode the payload (middle part). JWT uses raw (no-padding) encoding.
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("base64url decode: %w", err)
+	}
+
+	var payload struct {
+		SaPolicy      string `json:"sa-policy"`
+		SessionPolicy string `json:"sessionPolicy"`
+	}
+	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+		return "", fmt.Errorf("unmarshal JWT payload: %w", err)
+	}
+
+	if payload.SaPolicy != "embedded-policy" || payload.SessionPolicy == "" {
+		return "", nil // no embedded policy — inherit from parent
+	}
+
+	// sessionPolicy is itself base64url-encoded IAM policy JSON.
+	policyBytes, err := base64.RawURLEncoding.DecodeString(payload.SessionPolicy)
+	if err != nil {
+		return "", fmt.Errorf("base64url decode session policy: %w", err)
+	}
+
+	// Validate it is well-formed JSON before returning.
+	if !json.Valid(policyBytes) {
+		return "", fmt.Errorf("session policy is not valid JSON")
+	}
+
+	return string(policyBytes), nil
+}
+
 // isNotExist checks if an error is a "not exist" error
 func isNotExist(err error) bool {
 	if err == nil {
 		return false
 	}
-	if err == fs.ErrNotExist {
+	if errors.Is(err, fs.ErrNotExist) {
 		return true
 	}
 	// Check for common "not exist" error messages from different filesystem implementations
