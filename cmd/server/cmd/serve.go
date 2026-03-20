@@ -194,6 +194,10 @@ func runServer(cmd *cobra.Command, _ []string) error {
 
 	setupConsole(srv, settings.ConsoleEnabled, settings.ConsoleDedicatedPort, settings.ConsolePort)
 
+	// Launch Phase 2 MinIO import (groups, service accounts) in the background
+	// now that the server is constructed and ready to serve S3 requests.
+	starter.RunAsyncImport(cmd.Context())
+
 	log.Info("starting server", "port", settings.Port, "data_dir", settings.DataDir)
 
 	if err := srv.Start(cmd.Context()); err != nil {

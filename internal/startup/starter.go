@@ -46,6 +46,11 @@ type Starter struct {
 	rootFS  billy.Filesystem
 	metaMgr *metadata.Manager
 
+	// asyncImport is the Phase 2 import function (groups, service accounts)
+	// returned by CheckAndImportMinIO. Non-nil only when a MinIO import was
+	// detected and Phase 2 has not yet completed. Consumed by RunAsyncImport.
+	asyncImport func(context.Context)
+
 	// isNew is true when DataConfig was freshly generated rather than loaded
 	// from an existing config.json on disk.  MigrateMinIO and Prepare may
 	// set it to false when they write or reload the config.
@@ -72,6 +77,23 @@ func (s *Starter) TakeMetadataManager() *metadata.Manager {
 	mgr := s.metaMgr
 	s.metaMgr = nil
 	return mgr
+}
+
+// HasPendingAsyncImport reports whether a Phase 2 MinIO import (groups,
+// service accounts) is waiting to be run.
+func (s *Starter) HasPendingAsyncImport() bool { return s.asyncImport != nil }
+
+// RunAsyncImport launches Phase 2 of the MinIO import (groups, service
+// accounts) in a background goroutine. It is a no-op when no async work is
+// pending. Must be called after the server is constructed so that the
+// metadata manager is ready to handle writes.
+func (s *Starter) RunAsyncImport(ctx context.Context) {
+	if s.asyncImport == nil {
+		return
+	}
+	fn := s.asyncImport
+	s.asyncImport = nil
+	go fn(ctx)
 }
 
 // Close releases resources acquired by MigrateMinIO or Prepare (specifically
@@ -165,16 +187,19 @@ func (s *Starter) MigrateMinIO(ctx context.Context) error {
 	}
 	s.metaMgr = metaMgr
 
-	imported, err := metaMgr.CheckAndImportMinIO(ctx)
+	phase1Ran, asyncPhase, err := metaMgr.CheckAndImportMinIO(ctx)
 	if err != nil {
 		log.Warn("minio data check & import failed", "error", err)
 	}
+	if asyncPhase != nil {
+		s.asyncImport = asyncPhase
+	}
 
-	// Reload DataConfig whenever this call performed an import, regardless of
-	// whether the config was fresh or pre-existing.  This is the key fix: when
-	// "dirio init" has already written a config.json, s.isNew is false but the
-	// import still overwrites config.json with MinIO-sourced settings.
-	if imported {
+	// Reload DataConfig whenever Phase 1 ran this call, regardless of whether
+	// the config was fresh or pre-existing.  This is the key fix: when "dirio
+	// init" has already written a config.json, s.isNew is false but the import
+	// still overwrites config.json with MinIO-sourced settings.
+	if phase1Ran {
 		dc, err := data.LoadDataConfig(s.rootFS)
 		if err != nil {
 			return fmt.Errorf("failed to reload data config after minio import: %w", err)
