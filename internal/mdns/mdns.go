@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
+	"runtime"
 	"time"
 
 	"github.com/brutella/dnssd"
@@ -87,13 +89,26 @@ func (s *Service) Start(ctx context.Context) error {
 	uniqueID := hostname.Identity()
 	hostnameStr := fmt.Sprintf("%s-%s", s.config.ServiceName, uniqueID)
 
+	// On Linux there is no native mDNS stack, so brutella/dnssd uses its pure
+	// Go implementation which produces a malformed NSEC TypeBitMap that causes
+	// browsers to reject the response. Passing IPs explicitly works around this.
+	// On macOS/Windows we leave IPs nil so the native stack handles everything
+	// correctly (setting IPs forces the pure Go path and breaks AAAA records).
+	ips, iface := detectOutboundIPs(s.log)
+	var advertiseIPs []net.IP
+	if runtime.GOOS == "linux" {
+		advertiseIPs = ips
+	}
+
 	s.log.Debug("creating dnssd service",
 		"name", s.config.ServiceName,
 		"hostname", hostnameStr,
-		"port", s.config.Port)
+		"port", s.config.Port,
+		"detected_ips", ips,
+		"iface", iface)
 
 	// Create dnssd configs for each service type
-	configs := s.createServiceConfigs(hostnameStr)
+	configs := s.createServiceConfigs(hostnameStr, advertiseIPs)
 
 	// Create responder
 	responder, err := dnssd.NewResponder()
@@ -121,7 +136,9 @@ func (s *Service) Start(ctx context.Context) error {
 			"name", service.Name,
 			"type", service.Type,
 			"host", service.Host,
-			"port", service.Port)
+			"port", service.Port,
+			"ips", ips,
+			"iface", iface)
 	}
 
 	// Store responder and handles
@@ -140,6 +157,8 @@ func (s *Service) Start(ctx context.Context) error {
 	s.log.Debug("mdns service started",
 		"service", s.config.ServiceName,
 		"hostname", hostnameStr+".local",
+		"ips", ips,
+		"iface", iface,
 		"port", s.config.Port)
 
 	return nil
@@ -205,10 +224,14 @@ func (s *Service) GetAdvertisedHost() string {
 }
 
 // createServiceConfigs creates dnssd.Config for each service type.
-func (s *Service) createServiceConfigs(nodeHostname string) []dnssd.Config {
+// ips is passed explicitly on Linux to work around a brutella/dnssd bug where
+// auto-discovered IPs produce a malformed NSEC TypeBitMap that browsers reject.
+// On macOS/Windows ips is nil — the native mDNS stack handles IP discovery.
+func (s *Service) createServiceConfigs(nodeHostname string, ips []net.IP) []dnssd.Config {
 	baseConfig := dnssd.Config{
 		Host: nodeHostname,
 		Port: s.config.Port,
+		IPs:  ips,
 	}
 
 	// Build TXT records
@@ -225,6 +248,7 @@ func (s *Service) createServiceConfigs(nodeHostname string) []dnssd.Config {
 			Host:   baseConfig.Host,
 			Port:   baseConfig.Port,
 			Text:   baseConfig.Text,
+			IPs:    baseConfig.IPs,
 		},
 		// S3 HTTP service
 		{
@@ -234,6 +258,7 @@ func (s *Service) createServiceConfigs(nodeHostname string) []dnssd.Config {
 			Host:   baseConfig.Host,
 			Port:   baseConfig.Port,
 			Text:   baseConfig.Text,
+			IPs:    baseConfig.IPs,
 		},
 	}
 
@@ -246,6 +271,7 @@ func (s *Service) createServiceConfigs(nodeHostname string) []dnssd.Config {
 			Host:   baseConfig.Host,
 			Port:   s.config.AdminPort,
 			Text:   baseConfig.Text,
+			IPs:    baseConfig.IPs,
 		})
 	}
 
@@ -258,8 +284,59 @@ func (s *Service) createServiceConfigs(nodeHostname string) []dnssd.Config {
 			Host:   baseConfig.Host,
 			Port:   s.config.HTTPSPort,
 			Text:   baseConfig.Text,
+			IPs:    baseConfig.IPs,
 		})
 	}
 
 	return configs
+}
+
+// detectPrimaryIP returns the IP address and interface name that would be used
+// for outbound connections. Uses a UDP dial (no packets sent) to ask the OS
+// which source address it would pick for external traffic, identifies the
+// owning interface, then returns ALL addresses on that interface (both IPv4
+// and IPv6) so both A and AAAA records are advertised.
+func detectOutboundIPs(log *slog.Logger) ([]net.IP, string) {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		log.Warn("mdns: failed to detect primary IP, dnssd will auto-discover", "error", err)
+		return nil, ""
+	}
+	defer conn.Close() //nolint:errcheck
+
+	outboundIP := conn.LocalAddr().(*net.UDPAddr).IP
+
+	// Walk interfaces to find the one that owns the outbound IP, then collect
+	// all of its addresses so we advertise both A and AAAA records.
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		log.Warn("mdns: detected IP but could not enumerate interfaces", "ip", outboundIP, "error", err)
+		return []net.IP{outboundIP}, ""
+	}
+	for _, iface := range ifaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		var ifaceIPs []net.IP
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip != nil {
+				ifaceIPs = append(ifaceIPs, ip)
+			}
+		}
+		for _, ip := range ifaceIPs {
+			if ip.Equal(outboundIP) {
+				return ifaceIPs, iface.Name
+			}
+		}
+	}
+
+	return []net.IP{outboundIP}, ""
 }
