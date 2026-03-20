@@ -47,6 +47,15 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Run GoReleaser Extra
+      uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7.0.0
+      with:
+        distribution: goreleaser
+        version: latest
+        args: release --config .goreleaser.extra.yaml --clean --skip=validate,announce
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # ── Container image release ───────────────────────────────────────────────────
   # Metadata computation runs in parallel with goreleaser (both need only tests),
   # but the actual docker push waits for goreleaser so the release is atomic.
@@ -74,7 +83,7 @@ jobs:
 
   docker:
     name: Release Image
-    needs: [goreleaser, meta]
+    needs: [meta]
     uses: ./.github/workflows/_reusable-docker.yml
     with:
       tags:           ${{ needs.meta.outputs.tags }}
