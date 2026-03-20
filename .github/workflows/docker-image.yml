@@ -49,6 +49,22 @@ jobs:
           type=raw,value=head
           type=raw,value=sha-${{ steps.sha.outputs.short }}
 
+    - name: Write job summary
+      run: |
+        echo "## Head Image Metadata" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
+        echo "| Commit | \`${{ github.event.workflow_run.head_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Short SHA | \`${{ steps.sha.outputs.short }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Base Version | \`${{ steps.latest_tag.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Embedded Version | \`${{ steps.latest_tag.outputs.version }}-head+${{ steps.sha.outputs.short }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Image Tags" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
   docker:
     name: Build & Push Head Image
     needs: meta
