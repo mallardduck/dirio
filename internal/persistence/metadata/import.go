@@ -17,6 +17,8 @@ import (
 	"github.com/mallardduck/dirio/pkg/iam"
 )
 
+var importLog = logging.Component("import")
+
 // ImportState tracks MinIO import status.
 // Phase 1 (blocking): policies, users, buckets, object metadata → Imported=true.
 // Phase 2 (async): groups, service accounts → AsyncComplete=true.
@@ -46,7 +48,6 @@ type ImportState struct {
 // before Phase 2 finished, this call skips Phase 1 and returns only the async
 // Phase 2 function (phase1Ran=false so DataConfig is not reloaded unnecessarily).
 func (m *Manager) CheckAndImportMinIO(ctx context.Context) (phase1Ran bool, asyncPhase func(context.Context), err error) {
-	log := logging.Component("import")
 
 	if err := ctx.Err(); err != nil {
 		return false, nil, fmt.Errorf("context cancelled: %w", err)
@@ -68,7 +69,7 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (phase1Ran bool, asyn
 	if state.Imported && state.AsyncComplete {
 		minioModTime, err := m.getMinIOModTime()
 		if err == nil && minioModTime.After(state.MinIOModTime) {
-			log.Warn("MinIO data modified after import; consider re-importing")
+			importLog.Warn("MinIO data modified after import; consider re-importing")
 		}
 		return false, nil, nil
 	}
@@ -76,13 +77,13 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (phase1Ran bool, asyn
 	// Phase 1 already done on a previous run but Phase 2 was interrupted.
 	// Rebuild the accessKey→UUID map from BoltDB and return only the async func.
 	if state.Imported && !state.AsyncComplete {
-		log.Info("Phase 1 already complete; resuming async Phase 2 (groups, service accounts)")
+		importLog.Info("Phase 1 already complete; resuming async Phase 2 (groups, service accounts)")
 		accessKeyToUUID := m.buildAccessKeyToUUIDMap(ctx)
 		return false, m.makeAsyncPhase(state, accessKeyToUUID), nil
 	}
 
 	// --- Phase 1 (blocking) ---
-	log.Info("detected MinIO data, starting Phase 1 import (policies, users, buckets, objects)")
+	importLog.Info("detected MinIO data, starting Phase 1 import (policies, users, buckets, objects)")
 
 	minioFS, err := path.NewMinIOFS(m.rootFS)
 	if err != nil {
@@ -97,13 +98,12 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (phase1Ran bool, asyn
 	m.importPolicies(ctx, result.Policies)
 	accessKeyToUUID := m.importUsers(ctx, result.Users)
 	m.importBuckets(ctx, result.Buckets)
-	m.importObjectMetadata(ctx, result.ObjectMetadata)
 
 	if result.DataConfig != nil {
 		if err := data.SaveDataConfig(m.rootFS, result.DataConfig); err != nil {
 			return false, nil, fmt.Errorf("failed to save data config: %w", err)
 		}
-		log.Info("saved data config from MinIO import",
+		importLog.Info("saved data config from MinIO import",
 			"region", result.DataConfig.Region,
 			"compression", result.DataConfig.Compression.Enabled,
 		)
@@ -126,7 +126,7 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (phase1Ran bool, asyn
 		return false, nil, fmt.Errorf("failed to save import state after Phase 1: %w", err)
 	}
 
-	log.Info("Phase 1 import complete; Phase 2 (groups, service accounts) will run async")
+	importLog.Info("Phase 1 import complete; Phase 2 (groups, service accounts) will run async")
 	return true, m.makeAsyncPhase(state, accessKeyToUUID), nil
 }
 
@@ -135,31 +135,31 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (phase1Ran bool, asyn
 // accessKeyToUUID by value so they survive the caller returning.
 func (m *Manager) makeAsyncPhase(state *ImportState, accessKeyToUUID map[string]uuid.UUID) func(context.Context) {
 	return func(ctx context.Context) {
-		log := logging.Component("import")
-		log.Info("starting async Phase 2 import (groups, service accounts)")
+		importLog.Info("starting async Phase 2 import (groups, service accounts)")
 
 		minioFS, err := path.NewMinIOFS(m.rootFS)
 		if err != nil {
-			log.Error("failed to create MinIO filesystem for Phase 2", "error", err)
+			importLog.Error("failed to create MinIO filesystem for Phase 2", "error", err)
 			return
 		}
 
 		result, err := minio.Import(minioFS)
 		if err != nil {
-			log.Error("MinIO re-read for Phase 2 failed", "error", err)
+			importLog.Error("MinIO re-read for Phase 2 failed", "error", err)
 			return
 		}
 
+		m.importObjectMetadata(ctx, result.ObjectMetadata)
 		m.importGroups(ctx, result.Groups, accessKeyToUUID)
 		m.importServiceAccounts(ctx, result.ServiceAccounts, accessKeyToUUID)
 
 		state.AsyncComplete = true
 		state.AsyncCompletedAt = time.Now()
 		if err := m.saveImportState(state); err != nil {
-			log.Error("failed to save import state after Phase 2", "error", err)
+			importLog.Error("failed to save import state after Phase 2", "error", err)
 			return
 		}
-		log.Info("async Phase 2 import complete")
+		importLog.Info("async Phase 2 import complete")
 	}
 }
 
@@ -167,10 +167,9 @@ func (m *Manager) makeAsyncPhase(state *ImportState, accessKeyToUUID map[string]
 // users already persisted in BoltDB. Used when Phase 1 completed in a prior
 // run and Phase 2 needs to resume without re-importing users.
 func (m *Manager) buildAccessKeyToUUIDMap(ctx context.Context) map[string]uuid.UUID {
-	log := logging.Component("import")
 	users, err := m.GetUsers(ctx)
 	if err != nil {
-		log.Error("failed to load users for Phase 2 resume", "error", err)
+		importLog.Error("failed to load users for Phase 2 resume", "error", err)
 		return map[string]uuid.UUID{}
 	}
 	result := make(map[string]uuid.UUID, len(users))
@@ -181,11 +180,13 @@ func (m *Manager) buildAccessKeyToUUIDMap(ctx context.Context) map[string]uuid.U
 }
 
 func (m *Manager) importPolicies(ctx context.Context, policies map[string]*minio.Policy) {
-	log := logging.Component("import")
 	for _, p := range policies {
+		if _, err := m.GetPolicy(ctx, p.Name); err == nil {
+			continue // already imported
+		}
 		var policyDoc PolicyDocument
 		if err := jsonutil.Unmarshal([]byte(p.PolicyJSON), &policyDoc); err != nil {
-			log.Warn("failed to parse policy document", "policy", p.Name, "error", err)
+			importLog.Warn("failed to parse policy document", "policy", p.Name, "error", err)
 			continue
 		}
 		pol := &Policy{
@@ -196,19 +197,22 @@ func (m *Manager) importPolicies(ctx context.Context, policies map[string]*minio
 			UpdateDate:     p.UpdateDate,
 		}
 		if err := m.SavePolicy(ctx, pol); err != nil {
-			log.Warn("failed to save policy", "policy", p.Name, "error", err)
+			importLog.Warn("failed to save policy", "policy", p.Name, "error", err)
 		}
 	}
 	if len(policies) > 0 {
-		log.Info("imported policies", "count", len(policies))
+		importLog.Info("imported policies", "count", len(policies))
 	}
 }
 
 // importUsers saves each MinIO user and returns an accessKey→UUID map for downstream resolution.
 func (m *Manager) importUsers(ctx context.Context, users map[string]*minio.User) map[string]uuid.UUID {
-	log := logging.Component("import")
 	accessKeyToUUID := make(map[string]uuid.UUID, len(users))
 	for username, u := range users {
+		if existing, err := m.GetUserByAccessKey(ctx, u.AccessKey); err == nil {
+			accessKeyToUUID[u.AccessKey] = existing.UUID // needed by Phase 2
+			continue                                     // already imported
+		}
 		userUUID := uuid.New()
 		dirioUser := &User{
 			Version:          iam.UserMetadataVersion,
@@ -221,20 +225,22 @@ func (m *Manager) importUsers(ctx context.Context, users map[string]*minio.User)
 			AttachedPolicies: u.AttachedPolicy,
 		}
 		if err := m.SaveUser(ctx, userUUID, dirioUser); err != nil {
-			log.Warn("failed to save user", "username", username, "error", err)
+			importLog.Warn("failed to save user", "username", username, "error", err)
 			continue
 		}
 		accessKeyToUUID[u.AccessKey] = userUUID
 	}
 	if len(users) > 0 {
-		log.Info("imported users", "count", len(users))
+		importLog.Info("imported users", "count", len(users))
 	}
 	return accessKeyToUUID
 }
 
 func (m *Manager) importBuckets(ctx context.Context, buckets map[string]*minio.BucketMetadata) {
-	log := logging.Component("import")
 	for bucketName, b := range buckets {
+		if _, err := m.GetBucketMetadata(ctx, bucketName); err == nil {
+			continue // already imported
+		}
 		meta := &BucketMetadata{
 			Version:                     BucketMetadataVersion,
 			Name:                        b.Name,
@@ -260,19 +266,21 @@ func (m *Manager) importBuckets(ctx context.Context, buckets map[string]*minio.B
 			VersioningConfigUpdatedAt:   b.VersioningConfigUpdatedAt,
 		}
 		if err := m.saveBucketMetadata(ctx, bucketName, meta); err != nil {
-			log.Warn("failed to save bucket metadata", "bucket", bucketName, "error", err)
+			importLog.Warn("failed to save bucket metadata", "bucket", bucketName, "error", err)
 		}
 	}
 	if len(buckets) > 0 {
-		log.Info("imported buckets", "count", len(buckets))
+		importLog.Info("imported buckets", "count", len(buckets))
 	}
 }
 
 func (m *Manager) importObjectMetadata(ctx context.Context, objects map[string]map[string]*minio.ObjectMetadata) {
-	log := logging.Component("import")
 	count := 0
 	for bucketName, objs := range objects {
 		for objectKey, minioMeta := range objs {
+			if _, err := m.GetObjectMetadata(ctx, bucketName, objectKey); err == nil {
+				continue // already imported
+			}
 			dirioMeta := &ObjectMetadata{
 				Version:        ObjectMetadataVersion,
 				ContentType:    minioMeta.Meta["content-type"],
@@ -291,21 +299,23 @@ func (m *Manager) importObjectMetadata(ctx context.Context, objects map[string]m
 				dirioMeta.LastModified = info.ModTime()
 			}
 			if err := m.PutObjectMetadata(ctx, bucketName, objectKey, dirioMeta); err != nil {
-				log.Warn("failed to save object metadata", "bucket", bucketName, "key", objectKey, "error", err)
+				importLog.Warn("failed to save object metadata", "bucket", bucketName, "key", objectKey, "error", err)
 				continue
 			}
 			count++
 		}
 	}
 	if count > 0 {
-		log.Info("imported object metadata", "count", count)
+		importLog.Info("imported object metadata", "count", count)
 	}
 }
 
 func (m *Manager) importGroups(ctx context.Context, groups map[string]*minio.ImportGroup, accessKeyToUUID map[string]uuid.UUID) {
-	log := logging.Component("import")
 	count := 0
 	for groupName, g := range groups {
+		if _, err := m.GetGroup(ctx, groupName); err == nil {
+			continue // already imported
+		}
 		now := time.Now()
 		updatedAt := g.UpdatedAt
 		if updatedAt.IsZero() {
@@ -316,7 +326,7 @@ func (m *Manager) importGroups(ctx context.Context, groups map[string]*minio.Imp
 			if uid, ok := accessKeyToUUID[accessKey]; ok {
 				memberUUIDs = append(memberUUIDs, uid)
 			} else {
-				log.Warn("group member not found in imported users", "group", groupName, "access_key", accessKey)
+				importLog.Warn("group member not found in imported users", "group", groupName, "access_key", accessKey)
 			}
 		}
 		grp := &Group{
@@ -329,20 +339,22 @@ func (m *Manager) importGroups(ctx context.Context, groups map[string]*minio.Imp
 			UpdatedAt:        updatedAt,
 		}
 		if err := m.SaveGroup(ctx, grp); err != nil {
-			log.Warn("failed to save group", "group", groupName, "error", err)
+			importLog.Warn("failed to save group", "group", groupName, "error", err)
 			continue
 		}
 		count++
 	}
 	if count > 0 {
-		log.Info("imported groups", "count", count)
+		importLog.Info("imported groups", "count", count)
 	}
 }
 
 func (m *Manager) importServiceAccounts(ctx context.Context, sas map[string]*minio.ImportServiceAccount, accessKeyToUUID map[string]uuid.UUID) {
-	log := logging.Component("import")
 	count := 0
 	for _, sa := range sas {
+		if _, err := m.GetServiceAccount(ctx, sa.AccessKey); err == nil {
+			continue // already imported
+		}
 		now := time.Now()
 		updatedAt := sa.UpdatedAt
 		if updatedAt.IsZero() {
@@ -350,7 +362,7 @@ func (m *Manager) importServiceAccounts(ctx context.Context, sas map[string]*min
 		}
 		uid, ok := accessKeyToUUID[sa.ParentUser]
 		if !ok {
-			log.Warn("service account parent not found in imported users; skipping",
+			importLog.Warn("service account parent not found in imported users; skipping",
 				"access_key", sa.AccessKey, "parent", sa.ParentUser)
 			continue
 		}
@@ -377,13 +389,13 @@ func (m *Manager) importServiceAccounts(ctx context.Context, sas map[string]*min
 		)
 		dirioSA.UpdatedAt = updatedAt
 		if err := m.CreateServiceAccount(ctx, dirioSA); err != nil {
-			log.Warn("failed to save service account", "access_key", sa.AccessKey, "error", err)
+			importLog.Warn("failed to save service account", "access_key", sa.AccessKey, "error", err)
 			continue
 		}
 		count++
 	}
 	if count > 0 {
-		log.Info("imported service accounts", "count", count)
+		importLog.Info("imported service accounts", "count", count)
 	}
 }
 
@@ -395,7 +407,7 @@ func (m *Manager) resolveSessionPolicy(sa *minio.ImportServiceAccount) (mode iam
 	}
 	var doc PolicyDocument
 	if err := jsonutil.Unmarshal([]byte(sa.SessionPolicyJSON), &doc); err != nil {
-		logging.Component("import").Warn("failed to parse session policy; falling back to inherit",
+		importLog.Warn("failed to parse session policy; falling back to inherit",
 			"access_key", sa.AccessKey, "error", err)
 		return iam.PolicyModeInherit, ""
 	}
@@ -469,7 +481,7 @@ func parseBucketPolicy(bucketName string, policyJSON []byte) *PolicyDocument {
 	}
 	var policyDoc PolicyDocument
 	if err := jsonutil.Unmarshal(policyJSON, &policyDoc); err != nil {
-		logging.Component("import").Warn("failed to parse bucket policy", "bucket", bucketName, "error", err)
+		importLog.Warn("failed to parse bucket policy", "bucket", bucketName, "error", err)
 		return nil
 	}
 	return &policyDoc
