@@ -39,53 +39,11 @@ builds:
       - -X github.com/mallardduck/dirio/internal/version.BuiltBy=goreleaser
       - -X github.com/mallardduck/dirio/internal/version.GitTreeState={{.GitTreeState}}
 
-  - id: client
-    main: ./cmd/client
-    binary: dio
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - darwin
-      - windows
-    goarch:
-      - amd64
-      - arm64
-    ldflags:
-      - -s -w
-      - -X github.com/mallardduck/dirio/internal/version.Version={{.Version}}
-      - -X github.com/mallardduck/dirio/internal/version.Commit={{.Commit}}
-      - -X github.com/mallardduck/dirio/internal/version.BuildTime={{.Date}}
-      - -X github.com/mallardduck/dirio/internal/version.BuiltBy=goreleaser
-      - -X github.com/mallardduck/dirio/internal/version.GitTreeState={{.GitTreeState}}
-
 archives:
   - id: server-archive
     builds:
       - server
     name_template: "{{ .ProjectName }}-server_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    formats:
-      - tar.gz
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
-
-  - id: client-archive
-    builds:
-      - client
-    name_template: "{{ .ProjectName }}-client_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    formats:
-      - tar.gz
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
-
-  - id: all-archive
-    builds:
-      - server
-      - client
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats:
       - tar.gz
     format_overrides:

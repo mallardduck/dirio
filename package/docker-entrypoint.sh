@@ -60,4 +60,4 @@ set -- serve \
 
 [ -n "${SHUTDOWN_TIMEOUT:-}" ] && set -- "$@" --shutdown-timeout "$SHUTDOWN_TIMEOUT"
 
-exec /app/dirio-server "$@"
+exec /app/dirio "$@"

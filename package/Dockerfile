@@ -41,7 +41,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
       -X github.com/mallardduck/dirio/internal/version.BuiltBy=${BUILT_BY} \
       -X github.com/mallardduck/dirio/internal/version.GitTreeState=${GIT_TREE_STATE}" \
     -trimpath \
-    -o dirio-server \
+    -o dirio \
     ./cmd/server
 
 # ── Stage 2: Prepare chroot from SUSE BCI Base 16 ────────────────────────────
@@ -77,7 +77,7 @@ RUN groupadd --system --gid 10001 dirio && \
 
 # ── Stage 3: Minimal final image ──────────────────────────────────────────────
 ARG BCI_VERSION
-FROM registry.suse.com/bci/bci-minimal:${BCI_VERSION}
+FROM registry.suse.com/bci/bci-micro:${BCI_VERSION}
 
 # Pull in up-to-date CA certificates from the prepared rootfs.
 COPY --from=rootfs /etc/ssl       /etc/ssl
@@ -91,12 +91,12 @@ RUN echo "dirio:x:10001:10001:DirIO service:/app:/sbin/nologin" >> /etc/passwd &
     chown 10001:10001 /app /data
 
 # Drop in the compiled server binary and the entrypoint script.
-COPY --from=builder /build/dirio-server      /app/dirio-server
+COPY --from=builder /build/dirio             /app/dirio
 COPY package/docker-entrypoint.sh            /app/docker-entrypoint.sh
 COPY --from=rootfs /usr/local/bin/gosu       /usr/local/bin/gosu
 
-RUN chmod +x /app/dirio-server /app/docker-entrypoint.sh /usr/local/bin/gosu && \
-    chown 10001:10001 /app/dirio-server /app/docker-entrypoint.sh
+RUN chmod +x /app/dirio /app/docker-entrypoint.sh /usr/local/bin/gosu && \
+    chown 10001:10001 /app/dirio /app/docker-entrypoint.sh
 
 EXPOSE 8080
 

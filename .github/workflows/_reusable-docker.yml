@@ -23,6 +23,14 @@ on:
         description: 'Version string to embed in the binary (e.g. v1.2.3).'
         type: string
         default: 'dev'
+      built_by:
+        description: 'Builder identifier to embed in the binary (e.g. gha.docker).'
+        type: string
+        default: 'local.docker'
+      git_tree_state:
+        description: 'Git tree state to embed in the binary (clean or dirty).'
+        type: string
+        default: 'unknown'
 
   workflow_dispatch:
     inputs:
