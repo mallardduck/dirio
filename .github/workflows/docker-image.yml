@@ -19,9 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     outputs:
-      tags:   ${{ steps.meta.outputs.tags }}
-      labels: ${{ steps.meta.outputs.labels }}
-      ref:    ${{ github.event.workflow_run.head_sha }}
+      tags:         ${{ steps.meta.outputs.tags }}
+      labels:       ${{ steps.meta.outputs.labels }}
+      ref:          ${{ github.event.workflow_run.head_sha }}
+      short_sha:    ${{ steps.sha.outputs.short }}
+      base_version: ${{ steps.latest_tag.outputs.version }}
 
     steps:
     - name: Extract short SHA
@@ -29,6 +31,14 @@ jobs:
       run: echo "short=${SHA::7}" >> $GITHUB_OUTPUT
       env:
         SHA: ${{ github.event.workflow_run.head_sha }}
+
+    - name: Get latest release tag
+      id: latest_tag
+      run: |
+        tag=$(gh release list --limit 1 --json tagName -q '.[0].tagName // "0.0.0"')
+        echo "version=${tag#v}" >> $GITHUB_OUTPUT
+      env:
+        GH_TOKEN: ${{ github.token }}
 
     - name: Extract metadata
       id: meta
@@ -44,8 +54,9 @@ jobs:
     needs: meta
     uses: ./.github/workflows/_reusable-docker.yml
     with:
-      ref:    ${{ needs.meta.outputs.ref }}
-      tags:   ${{ needs.meta.outputs.tags }}
-      labels: ${{ needs.meta.outputs.labels }}
-      push:   true
+      ref:     ${{ needs.meta.outputs.ref }}
+      tags:    ${{ needs.meta.outputs.tags }}
+      labels:  ${{ needs.meta.outputs.labels }}
+      push:    true
+      version: "${{ needs.meta.outputs.base_version }}-head+${{ needs.meta.outputs.short_sha }}"
     secrets: inherit
