@@ -296,13 +296,13 @@ func (s *Service) createServiceConfigs(nodeHostname string, ips []net.IP) []dnss
 // which source address it would pick for external traffic, identifies the
 // owning interface, then returns ALL addresses on that interface (both IPv4
 // and IPv6) so both A and AAAA records are advertised.
-func detectOutboundIPs(log *slog.Logger) ([]net.IP, string) {
+func detectOutboundIPs(log *slog.Logger) (ips []net.IP, iface string) {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
 		log.Warn("mdns: failed to detect primary IP, dnssd will auto-discover", "error", err)
 		return nil, ""
 	}
-	defer conn.Close() //nolint:errcheck
+	defer conn.Close() //nolint:errcheck // Close on a UDP dial conn never returns a meaningful error
 
 	outboundIP := conn.LocalAddr().(*net.UDPAddr).IP
 
