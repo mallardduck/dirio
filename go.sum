@@ -125,8 +125,8 @@ github.com/lufia/plan9stats v0.0.0-20260216142805-b3301c5f2a88 h1:PTw+yKnXcOFCR6
 github.com/lufia/plan9stats v0.0.0-20260216142805-b3301c5f2a88/go.mod h1:autxFIvghDt3jPTLoqZ9OZ7s9qTGNAWmYCjVFWPX/zg=
 github.com/magiconair/properties v1.8.10 h1:s31yESBquKXCV9a/ScB3ESkOjUYYv+X0rg8SYxI99mE=
 github.com/magiconair/properties v1.8.10/go.mod h1:Dhd985XPs7jluiymwWYZ0G4Z61jb3vdS329zhj2hYo0=
-github.com/mallardduck/dnssd v0.0.0-20260320194035-5914cac044dd h1:xXNQ32mRhIXpO6VrkYbsU91lXzQPxkYCRPClUokrIQY=
-github.com/mallardduck/dnssd v0.0.0-20260320194035-5914cac044dd/go.mod h1:tG4GE8orv6+irE5rdsNgb6MJSxm6cyMUKdC5jmD22gk=
+github.com/mallardduck/dnssd v0.0.0-20260320220649-bc4db50b7db8 h1:uE15L7jNiGBgF77kGRK8xBOOyEp5tV7YyO6xrul4RVE=
+github.com/mallardduck/dnssd v0.0.0-20260320220649-bc4db50b7db8/go.mod h1:tG4GE8orv6+irE5rdsNgb6MJSxm6cyMUKdC5jmD22gk=
 github.com/mallardduck/go-http-helpers v0.1.0 h1:jRDoVnPahYuOOsX7nS0S9YAWkC9R6RFvDSfIck828yk=
 github.com/mallardduck/go-http-helpers v0.1.0/go.mod h1:eO0jzR/8OqxIeLGgeRCTYRB5Q8yHH+pndXwQYJH2LVg=
 github.com/mallardduck/teapot-router v0.14.2 h1:3YzAJeLWu8LR8Jlr3f7Up7LHQh9pMHlEUXOKagJw8YU=
