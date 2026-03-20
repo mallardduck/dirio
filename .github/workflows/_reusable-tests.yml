@@ -22,7 +22,7 @@ jobs:
         cache: true
 
     - name: Install Task
-      uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3 # v1.1.0
+      uses: go-task/setup-task@3be4020d41929789a01026e0e427a4321ce0ad44 # v2.0.0
 
     - name: Download dependencies
       run: go mod download
@@ -72,7 +72,7 @@ jobs:
         cache: true
 
     - name: Install Task
-      uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3 # v1.1.0
+      uses: go-task/setup-task@3be4020d41929789a01026e0e427a4321ce0ad44 # v2.0.0
 
     - name: Download dependencies
       run: go mod download
@@ -116,7 +116,7 @@ jobs:
         cache: true
 
     - name: Install Task
-      uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3 # v1.1.0
+      uses: go-task/setup-task@3be4020d41929789a01026e0e427a4321ce0ad44 # v2.0.0
 
     - name: Download dependencies
       run: go mod download
@@ -160,7 +160,7 @@ jobs:
         cache: true
 
     - name: Install Task
-      uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3 # v1.1.0
+      uses: go-task/setup-task@3be4020d41929789a01026e0e427a4321ce0ad44 # v2.0.0
 
     - name: Download dependencies
       run: go mod download
@@ -205,7 +205,7 @@ jobs:
         cache: true
 
     - name: Install Task
-      uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3 # v1.1.0
+      uses: go-task/setup-task@3be4020d41929789a01026e0e427a4321ce0ad44 # v2.0.0
 
     - name: Download dependencies
       run: go mod download
@@ -289,7 +289,7 @@ jobs:
         cache: true
 
     - name: Install Task
-      uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3 # v1.1.0
+      uses: go-task/setup-task@3be4020d41929789a01026e0e427a4321ce0ad44 # v2.0.0
 
     - name: Download Tailwind
       run: task download-tailwind
