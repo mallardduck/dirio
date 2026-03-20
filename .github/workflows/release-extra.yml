@@ -1,0 +1,44 @@
+name: Release (Extra Platforms)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to attach darwin/windows binaries to (e.g. v1.2.3)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser-extra:
+    name: GoReleaser (darwin + windows)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code at tag
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        ref: ${{ inputs.tag }}
+        fetch-depth: 0
+
+    - name: Fetch all tags
+      run: git fetch --force --tags
+
+    - name: Set up Go
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      with:
+        go-version: '1.26'
+        cache: true
+
+    - name: Install Task
+      uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3 # v1.1.0
+
+    - name: Run GoReleaser (darwin + windows)
+      uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7.0.0
+      with:
+        distribution: goreleaser
+        version: latest
+        args: release --config .goreleaser.extra.yaml --clean --skip=validate,announce
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

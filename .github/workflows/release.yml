@@ -75,7 +75,10 @@ jobs:
     needs: [goreleaser, meta]
     uses: ./.github/workflows/_reusable-docker.yml
     with:
-      tags:   ${{ needs.meta.outputs.tags }}
-      labels: ${{ needs.meta.outputs.labels }}
-      push:   true
+      tags:           ${{ needs.meta.outputs.tags }}
+      labels:         ${{ needs.meta.outputs.labels }}
+      push:           true
+      version:        ${{ github.ref_name }}
+      built_by:       gha.docker
+      git_tree_state: clean
     secrets: inherit

@@ -19,6 +19,10 @@ on:
         description: 'Push the built image to the registry.'
         type: boolean
         default: true
+      version:
+        description: 'Version string to embed in the binary (e.g. v1.2.3).'
+        type: string
+        default: 'dev'
 
   workflow_dispatch:
     inputs:
@@ -38,6 +42,18 @@ on:
         description: 'Push the built image to the registry.'
         type: boolean
         default: false   # safer default for manual runs
+      version:
+        description: 'Version string to embed in the binary (e.g. v1.2.3).'
+        type: string
+        default: 'dev'
+      built_by:
+        description: 'Builder identifier to embed in the binary (e.g. gha.docker).'
+        type: string
+        default: 'local.docker'
+      git_tree_state:
+        description: 'Git tree state to embed in the binary (clean or dirty).'
+        type: string
+        default: 'unknown'
 
 permissions:
   contents: read
@@ -72,5 +88,11 @@ jobs:
         push: ${{ inputs.push }}
         tags: ${{ inputs.tags }}
         labels: ${{ inputs.labels }}
+        build-args: |
+          VERSION=${{ inputs.version }}
+          COMMIT=${{ github.sha }}
+          BUILD_TIME=${{ github.event.head_commit.timestamp }}
+          BUILT_BY=${{ inputs.built_by }}
+          GIT_TREE_STATE=${{ inputs.git_tree_state }}
         cache-from: type=gha
         cache-to: type=gha,mode=max

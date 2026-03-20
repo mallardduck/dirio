@@ -27,8 +27,19 @@ RUN set -eux; \
     go tool templ generate ./console/...; \
     /usr/local/bin/tailwindcss -i ./console/ui/input.css -o ./console/static/style.css --minify
 
+ARG VERSION=dev
+ARG COMMIT=none
+ARG BUILD_TIME=unknown
+ARG BUILT_BY=local.docker
+ARG GIT_TREE_STATE=unknown
+
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w" \
+    -ldflags="-s -w \
+      -X github.com/mallardduck/dirio/internal/version.Version=${VERSION} \
+      -X github.com/mallardduck/dirio/internal/version.Commit=${COMMIT} \
+      -X github.com/mallardduck/dirio/internal/version.BuildTime=${BUILD_TIME} \
+      -X github.com/mallardduck/dirio/internal/version.BuiltBy=${BUILT_BY} \
+      -X github.com/mallardduck/dirio/internal/version.GitTreeState=${GIT_TREE_STATE}" \
     -trimpath \
     -o dirio-server \
     ./cmd/server

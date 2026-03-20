@@ -1,5 +1,9 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 # vim: set ts=2 sw=2 tw=0 fo=cnqoj
+#
+# Extra platform release config (darwin + windows). Run manually via the
+# "Release (Extra Platforms)" workflow to attach these binaries to an existing
+# release tag.
 
 version: 2
 
@@ -22,7 +26,8 @@ builds:
     env:
       - CGO_ENABLED=0
     goos:
-      - linux
+      - darwin
+      - windows
     goarch:
       - amd64
       - arm64
@@ -40,7 +45,8 @@ builds:
     env:
       - CGO_ENABLED=0
     goos:
-      - linux
+      - darwin
+      - windows
     goarch:
       - amd64
       - arm64
@@ -59,6 +65,10 @@ archives:
     name_template: "{{ .ProjectName }}-server_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats:
       - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
 
   - id: client-archive
     builds:
@@ -66,6 +76,10 @@ archives:
     name_template: "{{ .ProjectName }}-client_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats:
       - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
 
   - id: all-archive
     builds:
@@ -74,17 +88,13 @@ archives:
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats:
       - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
 
 checksum:
-  name_template: 'checksums.txt'
-
-snapshot:
-  version_template: "{{ incpatch .Version }}-next"
+  name_template: 'checksums-extra.txt'
 
 changelog:
-  sort: asc
-  filters:
-    exclude:
-      - '^docs:'
-      - '^test:'
-      - '^chore:'
+  disable: true

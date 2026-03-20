@@ -2,41 +2,49 @@ version: "3"
 
 vars:
   TAILWIND_BASE_URL: https://github.com/tailwindlabs/tailwindcss/releases/latest/download
+  # Selects the GoReleaser config for the current platform.
+  # Linux uses the primary config; darwin/windows use the extra-platforms config.
+  GORELEASER_CONFIG:
+    sh: |
+      case "{{OS}}" in
+        linux) echo ".goreleaser.yaml" ;;
+        *) echo ".goreleaser.extra.yaml" ;;
+      esac
 
 tasks:
   # ── Build ──────────────────────────────────────────────────────────────────
 
   build:
-    desc: Build the server binary using GoReleaser (local snapshot)
+    desc: Build the server binary for the current platform using GoReleaser (local snapshot)
     cmds:
-      - goreleaser build --id=server --snapshot --clean --single-target
+      - goreleaser build --config {{.GORELEASER_CONFIG}} --id=server --snapshot --clean --single-target
 
   build-client:
-    desc: Build the client binary using GoReleaser (local snapshot)
+    desc: Build the client binary for the current platform using GoReleaser (local snapshot)
     cmds:
-      - goreleaser build --id=client --snapshot --clean --single-target
+      - goreleaser build --config {{.GORELEASER_CONFIG}} --id=client --snapshot --clean --single-target
 
   build-all:
-    desc: Build both binaries using GoReleaser (local snapshot)
+    desc: Build both binaries for the current platform using GoReleaser (local snapshot)
     cmds:
-      - goreleaser build --snapshot --clean --single-target
+      - goreleaser build --config {{.GORELEASER_CONFIG}} --snapshot --clean --single-target
 
   # ── Release ────────────────────────────────────────────────────────────────
 
   release-server:
-    desc: Build for all platforms (server only)
+    desc: Build server for all platforms supported by the current config (snapshot)
     cmds:
-      - goreleaser build --id=server --snapshot --clean
+      - goreleaser build --config {{.GORELEASER_CONFIG}} --id=server --snapshot --clean
 
   release-client:
-    desc: Build for all platforms (client only)
+    desc: Build client for all platforms supported by the current config (snapshot)
     cmds:
-      - goreleaser build --id=client --snapshot --clean
+      - goreleaser build --config {{.GORELEASER_CONFIG}} --id=client --snapshot --clean
 
   release-all:
-    desc: Build for all platforms (both)
+    desc: Build both binaries for all platforms supported by the current config (snapshot)
     cmds:
-      - goreleaser build --snapshot --clean
+      - goreleaser build --config {{.GORELEASER_CONFIG}} --snapshot --clean
 
   # ── Clean ──────────────────────────────────────────────────────────────────
 
@@ -138,8 +146,18 @@ tasks:
 
   docker-build:
     desc: Build Docker image
+    vars:
+      GIT_TREE_STATE:
+        sh: git diff --quiet && echo clean || echo dirty
+      GIT_COMMIT:
+        sh: git rev-parse --short HEAD
     cmds:
-      - docker build -f ./package/Dockerfile -t dirio:latest .
+      - docker build -f ./package/Dockerfile -t dirio:latest
+          --build-arg VERSION=dev
+          --build-arg COMMIT={{.GIT_COMMIT}}
+          --build-arg BUILT_BY=local.docker
+          --build-arg GIT_TREE_STATE={{.GIT_TREE_STATE}}
+          .
 
   docker-run:
     desc: Build and run with Docker
