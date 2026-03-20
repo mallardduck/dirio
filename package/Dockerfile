@@ -66,7 +66,16 @@ RUN zypper --non-interactive refresh && \
         ca-certificates-mozilla \
         bind-utils \
         grep \
-        gawk && \
+        gawk \
+        tcpdump \
+        mdns-scan \
+        curl \
+        iproute2 \
+        netcat-openbsd \
+        strace \
+        lsof \
+        procps \
+        vim && \
     zypper --installroot /chroot clean -a && \
     rm -rf /chroot/var/cache/zypp/* /chroot/var/log/zypp/* /chroot/etc/zypp/
 
