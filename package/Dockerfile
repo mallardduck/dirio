@@ -44,16 +44,28 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o dirio \
     ./cmd/server
 
-# ── Stage 2: Prepare chroot from SUSE BCI Base 16 ────────────────────────────
-# Use the full base image to install up-to-date CA certificates via zypper,
-# create a dedicated service account, and prepare the application directories
-# before handing off to the minimal final layer.
+# ── Stage 2: Seed image for the chroot ───────────────────────────────────────
+# Captured as a named stage so the zypper stage can COPY its filesystem into
+# /chroot and then install packages on top with --installroot.
 ARG BCI_VERSION
-FROM registry.suse.com/bci/bci-base:${BCI_VERSION} AS rootfs
+FROM registry.suse.com/bci/bci-micro:${BCI_VERSION} AS micro
+
+# ── Stage 3: Build runtime filesystem via zypper --installroot ────────────────
+# bci-base provides zypper; we seed /chroot from bci-micro then install
+# everything we need into it.  zypper resolves all transitive dependencies
+# automatically, so no manual shared-library COPY lines are required.
+ARG BCI_VERSION
+FROM registry.suse.com/bci/bci-base:${BCI_VERSION} AS zypper
+
+RUN mkdir /chroot
+COPY --from=micro / /chroot/
 
 RUN zypper --non-interactive refresh && \
-    zypper --non-interactive install --no-recommends ca-certificates-mozilla && \
-    zypper clean --all
+    zypper --installroot /chroot --non-interactive install --no-recommends \
+        ca-certificates-mozilla \
+        bind-utils && \
+    zypper --installroot /chroot clean -a && \
+    rm -rf /chroot/var/cache/zypp/* /chroot/var/log/zypp/* /chroot/etc/zypp/
 
 # Download gosu — used in the entrypoint to drop from root to the dirio user
 # after fixing data-directory ownership on first run or image switch.
@@ -67,50 +79,33 @@ RUN set -eux; \
     curl -fsSLo /usr/local/bin/gosu \
         "https://github.com/tianon/gosu/releases/download/${GOSU_VERSION}/gosu-${GOARCH}"; \
     chmod +x /usr/local/bin/gosu; \
-    gosu nobody true
+    gosu nobody true; \
+    cp /usr/local/bin/gosu /chroot/usr/local/bin/gosu
 
-RUN groupadd --system --gid 10001 dirio && \
-    useradd  --system --uid 10001 --gid dirio \
-             --no-create-home --shell /usr/sbin/nologin dirio && \
-    mkdir -p /app /data && \
-    chown dirio:dirio /app /data
-
-# ── Stage 3: Prepare micro filesystem ─────────────────────────────────────────
-# Build the full runtime chroot on top of bci-micro so we can COPY it into
-# scratch below — giving us the same footprint with zero inherited labels.
-ARG BCI_VERSION
-FROM registry.suse.com/bci/bci-micro:${BCI_VERSION} AS micro-prep
-
-# Pull in up-to-date CA certificates from the prepared rootfs.
-COPY --from=rootfs /etc/ssl       /etc/ssl
-COPY --from=rootfs /var/lib/ca-certificates /var/lib/ca-certificates
-
-# Add our dedicated service account.  Appending preserves the base image's
-# own user/group entries so nothing in bci-minimal is disturbed.
-RUN echo "dirio:x:10001:10001:DirIO service:/app:/sbin/nologin" >> /etc/passwd && \
-    echo "dirio:x:10001:" >> /etc/group && \
-    mkdir -p /app /data && \
-    chown 10001:10001 /app /data
+# Add the dedicated service account and application directories.
+RUN echo "dirio:x:10001:10001:DirIO service:/app:/sbin/nologin" >> /chroot/etc/passwd && \
+    echo "dirio:x:10001:" >> /chroot/etc/group && \
+    mkdir -p /chroot/app /chroot/data && \
+    chown 10001:10001 /chroot/app /chroot/data
 
 # Drop in the compiled server binary and the entrypoint script.
-COPY --from=builder /build/dirio             /app/dirio
-COPY package/docker-entrypoint.sh            /app/docker-entrypoint.sh
-COPY --from=rootfs /usr/local/bin/gosu       /usr/local/bin/gosu
-
-RUN chmod +x /app/dirio /app/docker-entrypoint.sh /usr/local/bin/gosu && \
-    chown 10001:10001 /app/dirio /app/docker-entrypoint.sh
+COPY --from=builder /build/dirio          /chroot/app/dirio
+COPY package/docker-entrypoint.sh         /chroot/app/docker-entrypoint.sh
+RUN chmod +x /chroot/app/dirio /chroot/app/docker-entrypoint.sh /chroot/usr/local/bin/gosu && \
+    chown 10001:10001 /chroot/app/dirio /chroot/app/docker-entrypoint.sh
 
 # ── Stage 4: Scratch final image ──────────────────────────────────────────────
 # Copy the prepared filesystem wholesale — no base image means no inherited
 # labels, only what we explicitly declare here.
 FROM scratch
 
-COPY --from=micro-prep / /
+COPY --from=zypper /chroot /
 
 LABEL org.opencontainers.image.vendor="MallardDuck" \
       org.opencontainers.image.description="Filesystem-native S3-compatible object store. Objects are files, buckets are directories."
 
 EXPOSE 8080
+EXPOSE 5353/udp
 
 ENV PATH=/app:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     DATA_DIR=/data \
