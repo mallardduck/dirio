@@ -35,7 +35,7 @@ jobs:
     - name: Get latest release tag
       id: latest_tag
       run: |
-        tag=$(gh release list --limit 1 --json tagName -q '.[0].tagName // "0.0.0"')
+        tag=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName -q '.[0].tagName // "0.0.0"')
         echo "version=${tag#v}" >> $GITHUB_OUTPUT
       env:
         GH_TOKEN: ${{ github.token }}
