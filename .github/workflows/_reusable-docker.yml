@@ -95,7 +95,12 @@ jobs:
         file: ./package/Dockerfile
         push: ${{ inputs.push }}
         tags: ${{ inputs.tags }}
-        labels: ${{ inputs.labels }}
+        labels: |
+          org.opencontainers.image.vendor=MallardDuck
+          org.opencontainers.image.authors=https://github.com/mallardduck
+          org.opencontainers.image.description=Filesystem-native S3-compatible object store. Objects are files, buckets are directories.
+          org.opencontainers.image.ref.name=ghcr.io/${{ github.repository }}
+          ${{ inputs.labels }}
         build-args: |
           VERSION=${{ inputs.version }}
           COMMIT=${{ github.sha }}

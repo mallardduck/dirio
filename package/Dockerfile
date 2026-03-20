@@ -75,9 +75,11 @@ RUN groupadd --system --gid 10001 dirio && \
     mkdir -p /app /data && \
     chown dirio:dirio /app /data
 
-# ── Stage 3: Minimal final image ──────────────────────────────────────────────
+# ── Stage 3: Prepare micro filesystem ─────────────────────────────────────────
+# Build the full runtime chroot on top of bci-micro so we can COPY it into
+# scratch below — giving us the same footprint with zero inherited labels.
 ARG BCI_VERSION
-FROM registry.suse.com/bci/bci-micro:${BCI_VERSION}
+FROM registry.suse.com/bci/bci-micro:${BCI_VERSION} AS micro-prep
 
 # Pull in up-to-date CA certificates from the prepared rootfs.
 COPY --from=rootfs /etc/ssl       /etc/ssl
@@ -98,9 +100,20 @@ COPY --from=rootfs /usr/local/bin/gosu       /usr/local/bin/gosu
 RUN chmod +x /app/dirio /app/docker-entrypoint.sh /usr/local/bin/gosu && \
     chown 10001:10001 /app/dirio /app/docker-entrypoint.sh
 
+# ── Stage 4: Scratch final image ──────────────────────────────────────────────
+# Copy the prepared filesystem wholesale — no base image means no inherited
+# labels, only what we explicitly declare here.
+FROM scratch
+
+COPY --from=micro-prep / /
+
+LABEL org.opencontainers.image.vendor="MallardDuck" \
+      org.opencontainers.image.description="Filesystem-native S3-compatible object store. Objects are files, buckets are directories."
+
 EXPOSE 8080
 
-ENV DATA_DIR=/data \
+ENV PATH=/app:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    DATA_DIR=/data \
     PORT=8080 \
     DIRIO_LOG_FORMAT=json
 
