@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/mallardduck/dirio/internal/consts"
 )
 
 // testKeyB64 is a 32-byte key in the "base64:<encoded>" format used by DirIO.
@@ -209,7 +211,7 @@ func TestInitEnvVarTakesPriority(t *testing.T) {
 	}
 
 	// Keyring file should NOT have been created since env var was used.
-	if _, err := os.Stat(filepath.Join(dir, ".dirio", "keyring")); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, consts.DirIOMetadataDir, "keyring")); err == nil {
 		t.Error("keyring file should not be created when env var is set")
 	}
 }
@@ -226,7 +228,7 @@ func TestInitCreatesKeyringOnFirstRun(t *testing.T) {
 		t.Error("expected encryption to be enabled after keyring auto-generation")
 	}
 
-	keyringPath := filepath.Join(dir, ".dirio", "keyring")
+	keyringPath := filepath.Join(dir, consts.DirIOMetadataDir, "keyring")
 	data, err := os.ReadFile(keyringPath)
 	if err != nil {
 		t.Fatalf("keyring file not created: %v", err)
@@ -251,7 +253,7 @@ func TestInitLoadsExistingKeyring(t *testing.T) {
 	t.Cleanup(func() { defaultManager = &Manager{} })
 
 	// Write a known key to the keyring.
-	keyringDir := filepath.Join(dir, ".dirio")
+	keyringDir := filepath.Join(dir, consts.DirIOMetadataDir)
 	if err := os.MkdirAll(keyringDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +285,7 @@ func TestInitLoadsKeyringWithPreviousKeys(t *testing.T) {
 	t.Cleanup(func() { defaultManager = &Manager{} })
 
 	// Keyring with current + one previous key.
-	keyringDir := filepath.Join(dir, ".dirio")
+	keyringDir := filepath.Join(dir, consts.DirIOMetadataDir)
 	if err := os.MkdirAll(keyringDir, 0o700); err != nil {
 		t.Fatal(err)
 	}

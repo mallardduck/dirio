@@ -6,6 +6,8 @@ import (
 	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mallardduck/dirio/internal/consts"
 )
 
 func TestImport_MinIO2019_RealData(t *testing.T) {
@@ -15,13 +17,13 @@ func TestImport_MinIO2019_RealData(t *testing.T) {
 	fs := osfs.New(dataRoot)
 
 	// Check if .minio.sys exists
-	if _, err := fs.Stat(".minio.sys"); err != nil {
+	if _, err := fs.Stat(consts.MinioMetadataDir); err != nil {
 		t.Skip("Skipping: minio-data-2019 not found")
 		return
 	}
 
 	// Create MinIO filesystem
-	minioFS, err := fs.Chroot(".minio.sys")
+	minioFS, err := fs.Chroot(consts.MinioMetadataDir)
 	require.NoError(t, err)
 
 	// Run import

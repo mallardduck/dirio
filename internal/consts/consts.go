@@ -1,6 +1,8 @@
 package consts
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+)
 
 const (
 	DefaultBucketLocation = "us-east-1"
@@ -33,4 +35,9 @@ const (
 
 var (
 	AdminUUID uuid.UUID = uuid.MustParse(AdminUUIDString)
+)
+
+const (
+	DirIOMetadataDir = ".dirio"
+	MinioMetadataDir = ".minio.sys"
 )

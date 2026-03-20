@@ -21,6 +21,7 @@ import (
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 	"github.com/mallardduck/teapot-router/pkg/urlbuilder"
 
+	"github.com/mallardduck/dirio/internal/consts"
 	minioHTTP "github.com/mallardduck/dirio/internal/minio/http"
 
 	"github.com/mallardduck/dirio/internal/service"
@@ -450,7 +451,7 @@ func (s *Server) watchDataConfig(ctx context.Context) {
 
 	// Watch the directory so we catch rename/replace patterns used by some
 	// editors and atomic-write helpers, not just in-place writes.
-	watchDir := filepath.Join(s.config.DataDir, ".dirio")
+	watchDir := filepath.Join(s.config.DataDir, consts.DirIOMetadataDir)
 	if err := watcher.Add(watchDir); err != nil {
 		log.Warn("config watcher: failed to watch directory — live credential reload unavailable",
 			"dir", watchDir, "error", err)

@@ -7,6 +7,8 @@ import (
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mallardduck/dirio/internal/consts"
 )
 
 func TestDefaultDataConfig(t *testing.T) {
@@ -149,7 +151,7 @@ func TestLoadDataConfig_InvalidJSON(t *testing.T) {
 	fs := memfs.New()
 
 	// Create .dirio directory
-	err := fs.MkdirAll(".dirio", 0o755)
+	err := fs.MkdirAll(consts.DirIOMetadataDir, 0o755)
 	require.NoError(t, err)
 
 	// Write invalid JSON
@@ -177,7 +179,7 @@ func TestLoadDataConfig_InvalidData(t *testing.T) {
 	}
 
 	// Manually save it without validation
-	err := fs.MkdirAll(".dirio", 0o755)
+	err := fs.MkdirAll(consts.DirIOMetadataDir, 0o755)
 	require.NoError(t, err)
 
 	data, err := json.MarshalIndent(invalidConfig, "", "  ")

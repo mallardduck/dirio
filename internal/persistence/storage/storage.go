@@ -12,6 +12,8 @@ import (
 
 	"github.com/go-git/go-billy/v5"
 
+	"github.com/mallardduck/dirio/internal/consts"
+
 	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/persistence/path"
@@ -85,7 +87,7 @@ func (s *Storage) ListBuckets(ctx context.Context) ([]s3types.Bucket, error) {
 
 		// Skip metadataManager directories
 		name := entry.Name()
-		if name == ".minio.sys" || name == ".dirio" || name[0] == '.' {
+		if name == consts.MinioMetadataDir || name == consts.DirIOMetadataDir || name[0] == '.' {
 			continue
 		}
 

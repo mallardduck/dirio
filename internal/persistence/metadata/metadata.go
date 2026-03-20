@@ -18,6 +18,7 @@ import (
 	"github.com/phuslu/lru"
 	bbolt "go.etcd.io/bbolt"
 
+	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/logging"
 
 	contextInt "github.com/mallardduck/dirio/internal/context"
@@ -143,7 +144,7 @@ func New(rootFS billy.Filesystem) (*Manager, error) {
 		return nil, fmt.Errorf("failed to create IAM service-accounts directory: %w", err)
 	}
 
-	dbPath := filepath.Join(rootFS.Root(), path.MetadataDir, "dirio.db")
+	dbPath := filepath.Join(rootFS.Root(), consts.DirIOMetadataDir, "dirio.db")
 	db, err := openDB(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open metadata index: %w", err)

@@ -9,6 +9,8 @@ import (
 	"github.com/go-git/go-billy/v5/util"
 	"github.com/google/uuid"
 
+	"github.com/mallardduck/dirio/internal/consts"
+
 	"github.com/mallardduck/dirio/internal/config/data"
 	"github.com/mallardduck/dirio/internal/jsonutil"
 	"github.com/mallardduck/dirio/internal/logging"
@@ -53,7 +55,7 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (phase1Ran bool, asyn
 		return false, nil, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	if _, err := m.rootFS.Stat(path.MinIODir); err != nil {
+	if _, err := m.rootFS.Stat(consts.MinioMetadataDir); err != nil {
 		if isNotExist(err) {
 			return false, nil, nil // No MinIO data present.
 		}
@@ -466,7 +468,7 @@ func convertMinIOStatus(minioStatus string) iam.UserStatus {
 
 // getMinIOModTime gets the last modification time of MinIO data
 func (m *Manager) getMinIOModTime() (time.Time, error) {
-	info, err := m.rootFS.Stat(path.MinIODir)
+	info, err := m.rootFS.Stat(consts.MinioMetadataDir)
 	if err != nil {
 		return time.Time{}, err
 	}

@@ -22,12 +22,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/go-git/go-billy/v5"
 
 	"github.com/mallardduck/dirio/internal/config/data"
+	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/crypto"
 	"github.com/mallardduck/dirio/internal/global"
+	"github.com/mallardduck/dirio/internal/hostname"
 	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/persistence/path"
@@ -122,6 +125,8 @@ func Init(dataDir string) (*Starter, error) {
 		return nil, fmt.Errorf("cannot create data directory: %w", err)
 	}
 
+	hostname.SetStateDir(filepath.Join(dataDir, consts.DirIOMetadataDir))
+
 	if err := crypto.Init(dataDir); err != nil {
 		return nil, fmt.Errorf("failed to initialise encryption: %w", err)
 	}
@@ -171,7 +176,7 @@ func (s *Starter) MigrateMinIO(ctx context.Context) error {
 	log := logging.Component("startup")
 
 	// Fast path: skip entirely when there is no MinIO data directory.
-	if _, err := s.rootFS.Stat(path.MinIODir); err != nil {
+	if _, err := s.rootFS.Stat(consts.MinioMetadataDir); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			log.Debug("minio data directory not found, skipping import")
 			return nil

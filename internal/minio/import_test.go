@@ -11,6 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mallardduck/dirio/internal/consts"
 )
 
 func formatJSONText() (serverUID uuid.UUID, config string) {
@@ -23,14 +25,14 @@ func TestImport_EmptyDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create minimal format.json for validation
-	minioSys := filepath.Join(tmpDir, ".minio.sys")
+	minioSys := filepath.Join(tmpDir, consts.MinioMetadataDir)
 	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 
 	_, formatJSON := formatJSONText()
 	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
 
 	// Create billy filesystem scoped to .minio.sys directory
-	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	minioFS := osfs.New(filepath.Join(tmpDir, consts.MinioMetadataDir))
 	result, err := Import(minioFS)
 	require.NoError(t, err)
 	assert.NotNil(t, result)
@@ -44,7 +46,7 @@ func TestImport_WithUsers(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create minimal format.json
-	minioSys := filepath.Join(tmpDir, ".minio.sys")
+	minioSys := filepath.Join(tmpDir, consts.MinioMetadataDir)
 	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 	_, formatJSON := formatJSONText()
 	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
@@ -67,7 +69,7 @@ func TestImport_WithUsers(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(usersDir, "identity.json"), identityJSON, 0o644))
 
 	// Create billy filesystem scoped to .minio.sys directory
-	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	minioFS := osfs.New(filepath.Join(tmpDir, consts.MinioMetadataDir))
 	result, err := Import(minioFS)
 	require.NoError(t, err)
 	assert.Len(t, result.Users, 1)
@@ -84,7 +86,7 @@ func TestImport_WithPolicies(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create minimal format.json
-	minioSys := filepath.Join(tmpDir, ".minio.sys")
+	minioSys := filepath.Join(tmpDir, consts.MinioMetadataDir)
 	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 	_, formatJSON := formatJSONText()
 	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
@@ -115,7 +117,7 @@ func TestImport_WithPolicies(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(policiesDir, "policy.json"), policyJSON, 0o644))
 
 	// Create billy filesystem scoped to .minio.sys directory
-	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	minioFS := osfs.New(filepath.Join(tmpDir, consts.MinioMetadataDir))
 	result, err := Import(minioFS)
 	require.NoError(t, err)
 	assert.Len(t, result.Policies, 1)
@@ -131,7 +133,7 @@ func TestImport_WithUserPolicyMappings(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create minimal format.json
-	minioSys := filepath.Join(tmpDir, ".minio.sys")
+	minioSys := filepath.Join(tmpDir, consts.MinioMetadataDir)
 	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 	_, formatJSON := formatJSONText()
 	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
@@ -164,7 +166,7 @@ func TestImport_WithUserPolicyMappings(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(policydbDir, "alice.json"), mappingJSON, 0o644))
 
 	// Create billy filesystem scoped to .minio.sys directory
-	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	minioFS := osfs.New(filepath.Join(tmpDir, consts.MinioMetadataDir))
 	result, err := Import(minioFS)
 	require.NoError(t, err)
 	assert.Len(t, result.Users, 1)
@@ -178,7 +180,7 @@ func TestImport_WithBucketsNoMetadata(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create minimal format.json
-	minioSys := filepath.Join(tmpDir, ".minio.sys")
+	minioSys := filepath.Join(tmpDir, consts.MinioMetadataDir)
 	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 	_, formatJSON := formatJSONText()
 	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
@@ -188,7 +190,7 @@ func TestImport_WithBucketsNoMetadata(t *testing.T) {
 	require.NoError(t, os.MkdirAll(bucketsDir, 0o755))
 
 	// Create billy filesystem scoped to .minio.sys directory
-	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	minioFS := osfs.New(filepath.Join(tmpDir, consts.MinioMetadataDir))
 	result, err := Import(minioFS)
 	require.NoError(t, err)
 	assert.Len(t, result.Buckets, 1)
@@ -204,13 +206,13 @@ func TestImport_InvalidFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create invalid format.json (erasure mode instead of fs)
-	minioSys := filepath.Join(tmpDir, ".minio.sys")
+	minioSys := filepath.Join(tmpDir, consts.MinioMetadataDir)
 	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 	formatJSON := `{"version":"1","format":"erasure","id":"test-erasure"}`
 	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
 
 	// Create billy filesystem scoped to .minio.sys directory
-	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	minioFS := osfs.New(filepath.Join(tmpDir, consts.MinioMetadataDir))
 	_, err := Import(minioFS)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "format validation failed")
@@ -221,7 +223,7 @@ func TestImport_MissingFormatFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create billy filesystem scoped to .minio.sys directory
-	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	minioFS := osfs.New(filepath.Join(tmpDir, consts.MinioMetadataDir))
 	_, err := Import(minioFS)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "format validation failed")
@@ -232,7 +234,7 @@ func TestImport_CompleteSetup(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Setup format.json
-	minioSys := filepath.Join(tmpDir, ".minio.sys")
+	minioSys := filepath.Join(tmpDir, consts.MinioMetadataDir)
 	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 	_, formatJSON := formatJSONText()
 	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
@@ -299,7 +301,7 @@ func TestImport_CompleteSetup(t *testing.T) {
 
 	// Run import
 	// Create billy filesystem scoped to .minio.sys directory
-	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	minioFS := osfs.New(filepath.Join(tmpDir, consts.MinioMetadataDir))
 	result, err := Import(minioFS)
 	require.NoError(t, err)
 

@@ -9,6 +9,7 @@ import (
 	"github.com/go-git/go-billy/v5/util"
 	"github.com/google/uuid"
 
+	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/crypto"
 )
 
@@ -162,7 +163,7 @@ func SaveDataConfig(rootFS billy.Filesystem, config *ConfigData) error {
 	config.UpdatedAt = time.Now()
 
 	// Ensure .dirio directory exists
-	if err := rootFS.MkdirAll(".dirio", 0o755); err != nil {
+	if err := rootFS.MkdirAll(consts.DirIOMetadataDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create .dirio directory: %w", err)
 	}
 

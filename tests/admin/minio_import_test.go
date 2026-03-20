@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/mallardduck/dirio/internal/consts"
 	miniopkg "github.com/mallardduck/dirio/internal/minio"
 )
 
@@ -19,7 +20,7 @@ import (
 func buildMinIOSys(t *testing.T, dataDir string) string {
 	t.Helper()
 
-	minioSys := filepath.Join(dataDir, ".minio.sys")
+	minioSys := filepath.Join(dataDir, consts.MinioMetadataDir)
 	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 
 	formatJSON := `{"version":"1","format":"fs","id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","fs":{"version":"2"}}`

@@ -13,6 +13,8 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mallardduck/dirio/internal/consts"
 )
 
 // createServiceAccount creates a service account via the madmin-encrypted admin API.
@@ -64,7 +66,7 @@ func detachIAMPolicy(t *testing.T, ts *TestServer, policyName, userAccessKey str
 func setSAEmbeddedPolicy(t *testing.T, ts *TestServer, accessKey, policyJSON string) {
 	t.Helper()
 
-	saPath := filepath.Join(ts.DataDir, ".dirio", "iam", "service-accounts", accessKey+".json")
+	saPath := filepath.Join(ts.DataDir, consts.DirIOMetadataDir, "iam", "service-accounts", accessKey+".json")
 	data, err := os.ReadFile(saPath)
 	require.NoError(t, err, "SA file should exist at %s", saPath)
 
@@ -83,7 +85,7 @@ func setSAEmbeddedPolicy(t *testing.T, ts *TestServer, accessKey, policyJSON str
 func setSAExpiresAt(t *testing.T, ts *TestServer, accessKey string, expiresAt time.Time) {
 	t.Helper()
 
-	saPath := filepath.Join(ts.DataDir, ".dirio", "iam", "service-accounts", accessKey+".json")
+	saPath := filepath.Join(ts.DataDir, consts.DirIOMetadataDir, "iam", "service-accounts", accessKey+".json")
 	data, err := os.ReadFile(saPath)
 	require.NoError(t, err, "SA file should exist at %s", saPath)
 

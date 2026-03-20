@@ -1,7 +1,6 @@
 package hostname
 
 import (
-	"strings"
 	"sync"
 	"testing"
 
@@ -24,11 +23,10 @@ func TestIdentity(t *testing.T) {
 		assert.NotEmpty(t, id)
 	})
 
-	t.Run("identity contains base and stable ID", func(t *testing.T) {
+	t.Run("identity is at least one label", func(t *testing.T) {
 		id := Identity()
-		// Should be in format "base-stableid"
-		parts := strings.Split(id, "-")
-		assert.GreaterOrEqual(t, len(parts), 2, "Identity should contain base and stable ID separated by hyphen")
+		assert.NotEmpty(t, id)
+		assert.NotContains(t, id, " ", "Identity should have no spaces")
 	})
 
 	t.Run("identity is mDNS safe", func(t *testing.T) {

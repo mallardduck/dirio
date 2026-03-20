@@ -9,6 +9,8 @@ import (
 	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mallardduck/dirio/internal/consts"
 )
 
 // TestImport_WithObjectMetadata tests importing objects with fs.json metadata
@@ -16,7 +18,7 @@ func TestImport_WithObjectMetadata(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create minimal format.json
-	minioSys := filepath.Join(tmpDir, ".minio.sys")
+	minioSys := filepath.Join(tmpDir, consts.MinioMetadataDir)
 	require.NoError(t, os.MkdirAll(minioSys, 0o755))
 	_, formatJSON := formatJSONText()
 	require.NoError(t, os.WriteFile(filepath.Join(minioSys, "format.json"), []byte(formatJSON), 0o644))
@@ -64,7 +66,7 @@ func TestImport_WithObjectMetadata(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(subObjDir, "fs.json"), fsJSON2Data, 0o644))
 
 	// Run import
-	minioFS := osfs.New(filepath.Join(tmpDir, ".minio.sys"))
+	minioFS := osfs.New(filepath.Join(tmpDir, consts.MinioMetadataDir))
 	result, err := Import(minioFS)
 	require.NoError(t, err)
 

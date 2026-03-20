@@ -35,14 +35,8 @@ func TestStableID(t *testing.T) {
 func TestLoadOrCreateRandomID(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Override stateDir for testing
-	originalStateDir := stateDirFunc
-	defer func() {
-		stateDirFunc = originalStateDir
-	}()
-	stateDirFunc = func() string {
-		return tmpDir
-	}
+	SetStateDir(tmpDir)
+	t.Cleanup(func() { SetStateDir("") })
 
 	t.Run("creates new ID when file doesn't exist", func(t *testing.T) {
 		id := loadOrCreateRandomID()
@@ -83,43 +77,10 @@ func TestLoadOrCreateRandomID(t *testing.T) {
 	})
 }
 
-func TestDefaultStateDir(t *testing.T) {
-	t.Run("uses XDG_CONFIG_HOME when set", func(t *testing.T) {
-		originalXDG := os.Getenv("XDG_CONFIG_HOME")
-		defer func() {
-			if originalXDG != "" {
-				os.Setenv("XDG_CONFIG_HOME", originalXDG)
-			} else {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			}
-		}()
+func TestSetStateDir(t *testing.T) {
+	original := stateDirPath
+	t.Cleanup(func() { stateDirPath = original })
 
-		os.Setenv("XDG_CONFIG_HOME", "/tmp/test-config")
-		dir := defaultStateDir()
-		// Normalize to forward slashes for cross-platform comparison
-		assert.Equal(t, "/tmp/test-config/dirio", filepath.ToSlash(dir))
-	})
-
-	t.Run("falls back to ~/.config when XDG not set", func(t *testing.T) {
-		originalXDG := os.Getenv("XDG_CONFIG_HOME")
-		defer func() {
-			if originalXDG != "" {
-				os.Setenv("XDG_CONFIG_HOME", originalXDG)
-			} else {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			}
-		}()
-
-		os.Unsetenv("XDG_CONFIG_HOME")
-		dir := defaultStateDir()
-
-		// Normalize to forward slashes for cross-platform comparison
-		// Should contain .config/dirio
-		assert.Contains(t, filepath.ToSlash(dir), ".config/dirio")
-	})
-
-	t.Run("always returns non-empty path", func(t *testing.T) {
-		dir := defaultStateDir()
-		assert.NotEmpty(t, dir)
-	})
+	SetStateDir("/mnt/data/.dirio")
+	assert.Equal(t, "/mnt/data/.dirio", stateDirPath)
 }

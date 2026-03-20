@@ -7,6 +7,8 @@ import (
 
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-billy/v5/util"
+
+	"github.com/mallardduck/dirio/internal/consts"
 )
 
 func TestValidatePathSafe(t *testing.T) {
@@ -289,7 +291,7 @@ func TestNewMetadataFS(t *testing.T) {
 	}
 
 	// Verify metadata directory was created
-	metadataPath := filepath.Join(tmpDir, MetadataDir)
+	metadataPath := filepath.Join(tmpDir, consts.DirIOMetadataDir)
 	info, err := os.Stat(metadataPath)
 	if err != nil {
 		t.Fatalf("metadata directory not created: %v", err)
@@ -326,7 +328,7 @@ func TestNewMinIOFS(t *testing.T) {
 	}
 
 	// Create MinIO directory
-	minioPath := filepath.Join(tmpDir, MinIODir)
+	minioPath := filepath.Join(tmpDir, consts.MinioMetadataDir)
 	if err := os.MkdirAll(minioPath, 0o755); err != nil {
 		t.Fatalf("Failed to create MinIO directory: %v", err)
 	}

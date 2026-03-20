@@ -45,6 +45,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/mallardduck/dirio/internal/consts"
 )
 
 const (
@@ -167,7 +169,7 @@ func loadOrCreateKeyring(dataDir string) (current []byte, previous [][]byte, err
 	}
 
 	// Ensure .dirio directory exists (restrictive permissions).
-	dirPath := filepath.Join(dataDir, ".dirio")
+	dirPath := filepath.Join(dataDir, consts.DirIOMetadataDir)
 	if err := os.MkdirAll(dirPath, 0o700); err != nil {
 		return nil, nil, fmt.Errorf("create %s: %w", dirPath, err)
 	}
@@ -224,7 +226,7 @@ func RotateKeyring(dataDir string) (string, error) {
 		content += existing + "\n"
 	}
 
-	dirPath := filepath.Join(dataDir, ".dirio")
+	dirPath := filepath.Join(dataDir, consts.DirIOMetadataDir)
 	if err := os.MkdirAll(dirPath, 0o700); err != nil {
 		return "", fmt.Errorf("create %s: %w", dirPath, err)
 	}

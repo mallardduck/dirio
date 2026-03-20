@@ -13,7 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mallardduck/dirio/internal/persistence/path"
+	"github.com/mallardduck/dirio/internal/consts"
+
 	"github.com/mallardduck/dirio/pkg/iam"
 )
 
@@ -245,7 +246,7 @@ func TestIndexRebuild(t *testing.T) {
 	require.NoError(t, mgr.Close())
 
 	// Delete the bolt DB to force a full rebuild.
-	dbPath := filepath.Join(tmpDir, path.MetadataDir, "dirio.db")
+	dbPath := filepath.Join(tmpDir, consts.DirIOMetadataDir, "dirio.db")
 	require.NoError(t, os.Remove(dbPath))
 
 	// Second manager must rebuild indexes from JSON files.

@@ -14,6 +14,8 @@ import (
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/util"
 
+	"github.com/mallardduck/dirio/internal/consts"
+
 	"github.com/mallardduck/dirio/internal/config/data"
 )
 
@@ -326,7 +328,7 @@ func importBuckets(minioFS billy.Filesystem, buckets map[string]*BucketMetadata)
 		if !entry.IsDir() {
 			continue
 		}
-		if entry.Name() == ".minio.sys" {
+		if entry.Name() == consts.MinioMetadataDir {
 			continue
 		}
 
@@ -412,7 +414,7 @@ func importObjectMetadata(minioFS billy.Filesystem, objectMetadata map[string]ma
 		if !bucketEntry.IsDir() {
 			continue
 		}
-		if bucketEntry.Name() == ".minio.sys" {
+		if bucketEntry.Name() == consts.MinioMetadataDir {
 			continue
 		}
 

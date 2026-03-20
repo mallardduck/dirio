@@ -31,3 +31,22 @@ func Base() string {
 
 	return defaultBase
 }
+
+// baseIsExplicit reports whether the base hostname was explicitly provided
+// via env var or OS hostname, as opposed to falling back to the hardcoded default.
+func baseIsExplicit() bool {
+	if v := os.Getenv(envOverride); v != "" {
+		if s := sanitize(v); s != "" {
+			return true
+		}
+	}
+
+	if h, err := os.Hostname(); err == nil && h != "" {
+		h = strings.Split(h, ".")[0]
+		if s := sanitize(h); s != "" {
+			return true
+		}
+	}
+
+	return false
+}

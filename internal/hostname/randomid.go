@@ -15,7 +15,7 @@ func stableID() string {
 }
 
 func loadOrCreateRandomID() string {
-	path := filepath.Join(stateDir(), "hostid")
+	path := filepath.Join(stateDirPath, "hostid")
 
 	if b, err := os.ReadFile(path); err == nil {
 		if len(b) == idBytes*2 {
@@ -33,28 +33,9 @@ func loadOrCreateRandomID() string {
 	return id
 }
 
-// stateDirFunc is the function used to determine the state directory.
-// Can be overridden in tests.
-var stateDirFunc = defaultStateDir
+// stateDirPath is set by SetStateDir (called by startup.Init).
+var stateDirPath string
 
-// stateDir returns the directory path where hostname state files are stored.
-func stateDir() string {
-	return stateDirFunc()
-}
-
-// defaultStateDir returns the directory path where hostname state files are stored.
-// This uses XDG conventions and returns ~/.config/dirio on Unix-like systems.
-// Future enhancement: integrate with cobra+viper config system for centralized
-// configuration management including write support for persisted state.
-func defaultStateDir() string {
-	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
-		return filepath.Join(dir, "dirio")
-	}
-
-	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".config", "dirio")
-	}
-
-	// Fallback to current directory if home can't be determined
-	return ".dirio"
-}
+// SetStateDir configures the directory where hostname state files are stored.
+// startup.Init calls this with the resolved data directory.
+func SetStateDir(dir string) { stateDirPath = dir }

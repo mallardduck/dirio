@@ -21,14 +21,8 @@ import (
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/go-git/go-billy/v5/util"
-)
 
-const (
-	// MinIODir MinIO metadata directory name
-	MinIODir = ".minio.sys"
-
-	// MetadataDir DirIO metadata directory name
-	MetadataDir = ".dirio"
+	"github.com/mallardduck/dirio/internal/consts"
 )
 
 var (
@@ -73,7 +67,7 @@ func NewRootFS(dataDir string) (billy.Filesystem, error) {
 // Returns an error if the MinIO directory doesn't exist.
 func NewMinIOFS(rootFS billy.Filesystem) (billy.Filesystem, error) {
 	// Verify MinIO directory exists
-	info, err := rootFS.Stat(MinIODir)
+	info, err := rootFS.Stat(consts.MinioMetadataDir)
 	if err != nil {
 		return nil, fmt.Errorf("MinIO metadata directory not found: %w", err)
 	}
@@ -85,7 +79,7 @@ func NewMinIOFS(rootFS billy.Filesystem) (billy.Filesystem, error) {
 	// Create a chrooted filesystem for the MinIO directory
 	// Since go-billy v5 doesn't have chroot, we'll use a wrapper
 	readOnlyRootFS := ReadOnlyFS{rootFS}
-	return newScopedFS(readOnlyRootFS, MinIODir), nil
+	return newScopedFS(readOnlyRootFS, consts.MinioMetadataDir), nil
 }
 
 // NewMetadataFS creates a read/write filesystem scoped to the DirIO metadata directory.
@@ -94,12 +88,12 @@ func NewMinIOFS(rootFS billy.Filesystem) (billy.Filesystem, error) {
 // Creates the metadata directory if it doesn't exist.
 func NewMetadataFS(rootFS billy.Filesystem) (billy.Filesystem, error) {
 	// Ensure metadata directory exists
-	if err := rootFS.MkdirAll(MetadataDir, 0o755); err != nil {
+	if err := rootFS.MkdirAll(consts.DirIOMetadataDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create metadata directory: %w", err)
 	}
 
 	// Create a scoped filesystem for the metadata directory
-	return newScopedFS(rootFS, MetadataDir), nil
+	return newScopedFS(rootFS, consts.DirIOMetadataDir), nil
 }
 
 // NewBucketFS creates a filesystem scoped to a specific bucket directory.

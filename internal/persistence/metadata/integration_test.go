@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/minio"
 )
 
@@ -76,7 +77,7 @@ func TestMinIOImport_CreatesMetadataFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify metadata files were created
-	metadataDir := filepath.Join(tmpDir, ".dirio", "objects")
+	metadataDir := filepath.Join(tmpDir, consts.DirIOMetadataDir, "objects")
 	fileCount := 0
 	err = filepath.Walk(metadataDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
