@@ -68,10 +68,9 @@ RUN zypper --non-interactive refresh && \
         grep \
         gawk \
         tcpdump \
-        mdns-scan \
         curl \
         iproute2 \
-        netcat-openbsd \
+        netcat \
         strace \
         lsof \
         procps \
