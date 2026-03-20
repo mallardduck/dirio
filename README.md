@@ -49,22 +49,12 @@ aws --endpoint-url http://localhost:9000 s3 cp file.txt s3://test/
 
 See [QUICKSTART.md](QUICKSTART.md) for detailed setup.
 
-## Directory Layout
+## Use Cases
 
-```
-/data/
-├── .metadata/             # DirIO metadata (JSON)
-│   ├── users.json         # Credentials
-│   ├── policies.json      # Policy definitions  
-│   ├── buckets/           # Per-bucket config
-│   └── .import-state      # MinIO import tracking
-├── .minio.sys/            # MinIO metadata (read-only)
-└── buckets/               # Actual objects
-    └── mybucket/
-        └── path/to/file.jpg
-```
-
-Objects in `buckets/` are regular files. Nothing special.
+- **Homelab NAS storage**: Host S3 buckets on your NAS without MinIO overhead
+- **Static site assets**: Serve website media files via S3 API
+- **Backup targets**: Use S3-compatible tools with local filesystem storage
+- **Development**: Test S3 integrations locally with real files
 
 ## Supported Operations
 
@@ -77,32 +67,14 @@ Objects in `buckets/` are regular files. Nothing special.
 
 ## IAM & Authorization
 
-DirIO uses a **hybrid IAM approach** combining the best of S3 and MinIO:
+DirIO supports S3 bucket policies and user/group management via the MinIO Admin API:
 
-**S3 API Layer (Data Plane):**
-- Bucket policies with AWS-standard actions (`s3:GetObject`, `s3:PutObject`)
-- Policy conditions (IpAddress, StringEquals, DateLessThan, etc.)
-- Policy variables (`${aws:username}`, `${aws:SourceIp}`)
-- UUID-based ownership (AWS-like implicit permissions)
-- Result filtering (ListBuckets/ListObjects based on permissions)
+- ✅ S3 bucket policies (AWS CLI, boto3, MinIO `mc`)
+- ✅ User & policy management via `mc admin`
+- ❌ AWS IAM API (`aws iam`) — not supported
+- ❌ Terraform AWS provider — requires AWS IAM API
 
-**MinIO Admin API (Control Plane):**
-- User management via `mc admin user add/remove/list`
-- Policy management via `mc admin policy create/attach`
-- Compatible with MinIO `mc` client
-
-**Shared Backend:**
-- Unified IAM metadata in `.dirio/iam/`
-- S3-standard PolicyDocument format
-- Thread-safe policy evaluation engine
-
-**What's Supported:**
-- ✅ S3 bucket policies (AWS CLI, boto3, MinIO mc)
-- ✅ MinIO Admin API (`mc admin` commands)
-- ❌ AWS IAM API (`aws iam` - explicitly not supported)
-- ❌ Terraform AWS provider (requires AWS IAM API)
-
-See [docs/IAM-ARCHITECTURE.md](docs/design/IAM-ARCHITECTURE.md) for complete details.
+See [docs/IAM-ARCHITECTURE.md](docs/design/IAM-ARCHITECTURE.md) for details.
 
 ## MinIO Migration
 
@@ -114,13 +86,6 @@ Point DirIO at your existing MinIO data directory. It will:
 4. Track import state to detect changes
 
 You can switch back to MinIO anytime. The `buckets/` directory is shared.
-
-## Use Cases
-
-- **Homelab NAS storage**: Host S3 buckets on your NAS without MinIO overhead
-- **Static site assets**: Serve website media files via S3 API
-- **Backup targets**: Use S3-compatible tools with local filesystem storage
-- **Development**: Test S3 integrations locally with real files
 
 ## Contributing & Development
 

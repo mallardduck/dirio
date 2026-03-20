@@ -61,6 +61,28 @@ pkg/
   s3types/          — S3 types and errors
 ```
 
+## Data Directory Layout
+
+```
+/data/
+├── .dirio/
+│   ├── config.json            # Instance config (region, credentials, compression)
+│   ├── metadata/              # BoltDB metadata store
+│   │   ├── users/             # User records (keyed by UUID)
+│   │   ├── policies/          # IAM policy records
+│   │   ├── buckets/           # Per-bucket metadata
+│   │   ├── objects/           # Per-object metadata
+│   │   ├── groups/            # Group records
+│   │   ├── service-accounts/  # Service account records
+│   │   └── .import-state      # MinIO import phase tracking
+│   └── keyring/               # Encryption keys
+├── .minio.sys/                # MinIO metadata (read-only, import source)
+└── <bucket-name>/             # Object files (regular filesystem files)
+    └── path/to/object
+```
+
+Objects are plain files — no special encoding. The `.dirio/` directory is the only DirIO-managed state.
+
 ## Architecture Notes
 
 - **Single binary, single data directory.** No external databases.
