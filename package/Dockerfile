@@ -61,9 +61,12 @@ RUN mkdir /chroot
 COPY --from=micro / /chroot/
 
 RUN zypper --non-interactive refresh && \
+    zypper --non-interactive install --no-recommends libcap-progs && \
     zypper --installroot /chroot --non-interactive install --no-recommends \
         ca-certificates-mozilla \
-        bind-utils && \
+        bind-utils \
+        grep \
+        gawk && \
     zypper --installroot /chroot clean -a && \
     rm -rf /chroot/var/cache/zypp/* /chroot/var/log/zypp/* /chroot/etc/zypp/
 
@@ -92,7 +95,8 @@ RUN echo "dirio:x:10001:10001:DirIO service:/app:/sbin/nologin" >> /chroot/etc/p
 COPY --from=builder /build/dirio          /chroot/app/dirio
 COPY package/docker-entrypoint.sh         /chroot/app/docker-entrypoint.sh
 RUN chmod +x /chroot/app/dirio /chroot/app/docker-entrypoint.sh /chroot/usr/local/bin/gosu && \
-    chown 10001:10001 /chroot/app/dirio /chroot/app/docker-entrypoint.sh
+    chown 10001:10001 /chroot/app/dirio /chroot/app/docker-entrypoint.sh && \
+    setcap cap_net_bind_service=+eip /chroot/app/dirio
 
 # ── Stage 4: Scratch final image ──────────────────────────────────────────────
 # Copy the prepared filesystem wholesale — no base image means no inherited
