@@ -2,6 +2,8 @@ module github.com/mallardduck/dirio
 
 go 1.26
 
+replace github.com/brutella/dnssd => github.com/mallardduck/dnssd v0.0.0-20260320194035-5914cac044dd
+
 require (
 	github.com/Oudwins/tailwind-merge-go v0.2.1
 	github.com/a-h/templ v0.3.1001
