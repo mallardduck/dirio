@@ -4,28 +4,15 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    types: [opened, reopened, synchronize]
 
 permissions:
   contents: write
   pull-requests: write
 
 jobs:
-  label_prs:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: release-drafter/release-drafter@139054aeaa9adc52ab36ddf67437541f039b88e2
-        with:
-          disable-releaser: true  # only label, don't touch the draft release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   update_release_draft:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
     steps:
-      - uses: release-drafter/release-drafter@139054aeaa9adc52ab36ddf67437541f039b88e2
+      - uses: release-drafter/release-drafter@139054aeaa9adc52ab36ddf67437541f039b88e2 # v7.1.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
