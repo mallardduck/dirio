@@ -64,13 +64,13 @@ Beyond authentication, individual endpoints enforce additional authorization che
 Follows the established pattern from `internal/http/server/health/` and `internal/http/server/metrics/`:
 
 ```
-internal/http/server/dirioapi/
+internal/http/api/dirio/
     ├── routes.go      # RegisterRoutes(r, deps) — wires handlers to router paths
     ├── handler.go     # HTTP handler functions
-    └── dirioapi.go    # RouteHandlers struct + RouteHandlerDependencies
+    └── dirioapi.go    # RouteHandlers interface + Handler struct + error helpers
 ```
 
-`RegisterRoutes` is called from `server.SetupRoutes` unconditionally, just like `health.RegisterRoutes` and `metrics.RegisterRoutes`. The `RouteDependencies` struct in `server/routes.go` gains a `DirioAPI dirioapi.RouteHandlers` field.
+`RegisterRoutes` is called from `server.SetupRoutes` unconditionally, just like `health.RegisterRoutes` and `metrics.RegisterRoutes`. The `RouteDependencies` struct in `server/routes.go` has a `DirioAPI dirioapi.RouteHandlers` field.
 
 The handlers call into the service layer directly — the same service interfaces already used by `adapter.go`. Response types are drawn from `consoleapi/` so that both the console and the REST API share the same wire format for DirIO-specific objects.
 
@@ -346,9 +346,9 @@ This API is a server-side prerequisite for Phase 7.3 of the DirIO Client. It sho
 
 ### Phase 7.0 — DirIO API Foundation (server-side)
 
-- `internal/http/server/dirioapi/` package skeleton following `health/` pattern
+- `internal/http/api/dirio/` package following `health/` pattern
 - `RegisterRoutes` wired into `server.SetupRoutes` unconditionally
-- `DirioAPI dirioapi.RouteHandlers` field added to `server.RouteDependencies`
+- `DirioAPI dirioapi.RouteHandlers` field in `server.RouteDependencies`
 - All five endpoints implemented and covered by integration tests in `tests/dirioapi/`
 - Error envelope format consistent across all endpoints
 

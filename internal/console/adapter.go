@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"strings"
 
 	"github.com/google/uuid"
@@ -330,10 +331,14 @@ func (a *Adapter) SetBucketPolicy(ctx context.Context, bucket, policyJSON string
 func (a *Adapter) GetBucketOwner(ctx context.Context, bucket string) (*consoleapi.Owner, error) {
 	meta, err := a.services.S3().GetBucket(ctx, bucket)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, svcerrors.ErrBucketNotFound
+		}
 		return nil, err
 	}
 	if meta.Owner == nil {
-		return &consoleapi.Owner{}, nil // admin-owned, no UUID
+		// Admin-owned bucket: return the well-known admin UUID with no user fields.
+		return &consoleapi.Owner{UUID: consoleapi.AdminUserUUID}, nil
 	}
 	owner := &consoleapi.Owner{UUID: meta.Owner.String()}
 	user, err := a.services.User().Get(ctx, *meta.Owner)
@@ -348,21 +353,35 @@ func (a *Adapter) TransferBucketOwnership(ctx context.Context, bucket, newOwnerA
 	user, err := a.services.User().GetByAccessKey(ctx, newOwnerAccessKey)
 	if err != nil {
 		if errors.Is(err, svcerrors.ErrUserNotFound) {
-			return fmt.Errorf("user not found: %s", newOwnerAccessKey)
+			return fmt.Errorf("user %q: %w", newOwnerAccessKey, svcerrors.ErrUserNotFound)
 		}
 		return err
 	}
 	ownerUUID := user.UUID
-	return a.services.S3().SetBucketOwner(ctx, bucket, &ownerUUID)
+	if err := a.services.S3().SetBucketOwner(ctx, bucket, &ownerUUID); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return svcerrors.ErrBucketNotFound
+		}
+		return err
+	}
+	return nil
 }
 
 func (a *Adapter) GetObjectOwner(ctx context.Context, bucket, key string) (*consoleapi.Owner, error) {
 	ownerUUID, err := a.services.S3().GetObjectOwnerUUID(ctx, bucket, key)
 	if err != nil {
-		return nil, err
+		// The metadata layer may return fs.ErrNotExist (raw file error) or a plain
+		// "object metadata not found" string depending on where in the stack the
+		// lookup fails.  In either case, disambiguate via HeadBucket.
+		exists, headErr := a.services.S3().HeadBucket(ctx, bucket)
+		if headErr == nil && !exists {
+			return nil, svcerrors.ErrBucketNotFound
+		}
+		return nil, svcerrors.ErrObjectNotFound
 	}
 	if ownerUUID == nil {
-		return &consoleapi.Owner{}, nil // admin-owned
+		// Admin-owned object: return the well-known admin UUID with no user fields.
+		return &consoleapi.Owner{UUID: consoleapi.AdminUserUUID}, nil
 	}
 	owner := &consoleapi.Owner{UUID: ownerUUID.String()}
 	user, err := a.services.User().Get(ctx, *ownerUUID)
@@ -581,14 +600,17 @@ func (a *Adapter) GetEffectivePermissions(ctx context.Context, accessKey, bucket
 	iamUser, err := a.services.User().GetByAccessKey(ctx, accessKey)
 	if err != nil {
 		if errors.Is(err, svcerrors.ErrUserNotFound) {
-			return nil, fmt.Errorf("user not found: %s", accessKey)
+			return nil, fmt.Errorf("user %q: %w", accessKey, svcerrors.ErrUserNotFound)
 		}
 		return nil, err
 	}
 
 	bucketMeta, err := a.services.S3().GetBucket(ctx, bucket)
 	if err != nil {
-		return nil, fmt.Errorf("bucket not found: %s", bucket)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, svcerrors.ErrBucketNotFound
+		}
+		return nil, err
 	}
 
 	engine := a.services.PolicyEngine()
@@ -630,14 +652,17 @@ func (a *Adapter) SimulateRequest(ctx context.Context, req consoleapi.SimulateRe
 	iamUser, err := a.services.User().GetByAccessKey(ctx, req.AccessKey)
 	if err != nil {
 		if errors.Is(err, svcerrors.ErrUserNotFound) {
-			return nil, fmt.Errorf("user not found: %s", req.AccessKey)
+			return nil, fmt.Errorf("user %q: %w", req.AccessKey, svcerrors.ErrUserNotFound)
 		}
 		return nil, err
 	}
 
 	bucketMeta, err := a.services.S3().GetBucket(ctx, req.Bucket)
 	if err != nil {
-		return nil, fmt.Errorf("bucket not found: %s", req.Bucket)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, svcerrors.ErrBucketNotFound
+		}
+		return nil, err
 	}
 
 	pReq := &policy.RequestContext{

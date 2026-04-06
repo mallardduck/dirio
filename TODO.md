@@ -449,18 +449,18 @@ Both single-port and dual-port modes are supported and maintained. **Dual-port i
 
 **Design docs:** [DIO-CLIENT-ARCHITECTURE.md](docs/design/DIO-CLIENT-ARCHITECTURE.md) · [DIRIO-API.md](docs/design/DIRIO-API.md)
 
-### Phase 7.0 — DirIO API Foundation (server-side prerequisite)
+### Phase 7.0 — DirIO API Foundation (server-side prerequisite) ✅
 
 The `dio` ownership and simulation commands require HTTP endpoints that do not yet exist. This phase adds them to the server, independent of the console.
 
-- [ ] `internal/http/server/dirioapi/` package — `RegisterRoutes`, `RouteHandlers`, handlers
-- [ ] Wire into `server.SetupRoutes` unconditionally (not gated by `--console` or `noconsole`)
-- [ ] `GET /.dirio/api/v1/buckets/{bucket}/owner` — get bucket owner
-- [ ] `PUT /.dirio/api/v1/buckets/{bucket}/owner` — transfer ownership (admin only)
-- [ ] `GET /.dirio/api/v1/buckets/{bucket}/objects/{key}` — get object owner
-- [ ] `POST /.dirio/api/v1/simulate` — policy simulation
-- [ ] `GET /.dirio/api/v1/buckets/{bucket}/permissions/{accessKey}` — effective permissions matrix
-- [ ] Integration tests in `tests/dirioapi/`
+- [x] `internal/http/api/dirio/` package — `RegisterRoutes`, `RouteHandlers`, handlers
+- [x] Wire into `server.SetupRoutes` unconditionally (not gated by `--console` or `noconsole`)
+- [x] `GET /.dirio/api/v1/buckets/{bucket}/owner` — get bucket owner
+- [x] `PUT /.dirio/api/v1/buckets/{bucket}/owner` — transfer ownership (admin only)
+- [x] `GET /.dirio/api/v1/buckets/{bucket}/objects/{key}` — get object owner
+- [x] `POST /.dirio/api/v1/simulate` — policy simulation
+- [x] `GET /.dirio/api/v1/buckets/{bucket}/permissions/{accessKey}` — effective permissions matrix
+- [x] Integration tests in `tests/dirioapi/`
 
 ### Phase 7.1 — Client Foundation
 
