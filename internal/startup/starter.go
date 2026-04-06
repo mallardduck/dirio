@@ -114,7 +114,7 @@ func (s *Starter) Close() error {
 
 // Init creates a Starter by:
 //  1. Ensuring the data directory exists (MkdirAll).
-//  2. Initialising the encryption keyring.
+//  2. Initializing the encryption keyring.
 //  3. Creating the root filesystem.
 //  4. Loading DataConfig from .dirio/config.json, or generating a fresh
 //     in-memory default (not yet persisted to disk).

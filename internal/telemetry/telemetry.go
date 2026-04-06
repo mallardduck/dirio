@@ -52,7 +52,7 @@ func (p *Provider) MeterProvider() metric.MeterProvider { return p.mp }
 // Shutdown flushes and closes all exporters.  Call during graceful shutdown.
 func (p *Provider) Shutdown(ctx context.Context) error { return p.mp.Shutdown(ctx) }
 
-// Setup initialises the OTel MeterProvider with a Prometheus pull reader and,
+// Setup initializes the OTel MeterProvider with a Prometheus pull reader and,
 // when cfg.OTLPEnabled is true, an OTLP HTTP push reader.  It also sets the
 // global OTel MeterProvider so that otelhttp and other libraries pick it up.
 func Setup(ctx context.Context, cfg Config) (*Provider, error) {

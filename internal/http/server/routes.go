@@ -8,7 +8,7 @@ import (
 
 	minioHTTP "github.com/mallardduck/dirio/internal/minio/http"
 
-	"github.com/mallardduck/dirio/internal/http/server/dirioapi"
+	"github.com/mallardduck/dirio/internal/http/api/dirio"
 	"github.com/mallardduck/dirio/internal/http/server/prof"
 
 	"github.com/mallardduck/dirio/internal/http/api"
