@@ -5,7 +5,7 @@ import (
 
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 
-	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
+	loggingHttp "github.com/mallardduck/dirio/internal/http/middleware/logging"
 
 	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/service"

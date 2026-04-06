@@ -24,8 +24,10 @@ import (
 	"github.com/mallardduck/dirio/internal/consts"
 	minioHTTP "github.com/mallardduck/dirio/internal/minio/http"
 
+	"github.com/mallardduck/dirio/internal/console"
 	"github.com/mallardduck/dirio/internal/service"
 
+	"github.com/mallardduck/dirio/internal/http/server/dirioapi"
 	"github.com/mallardduck/dirio/internal/http/server/health"
 	"github.com/mallardduck/dirio/internal/http/server/metrics"
 	"github.com/mallardduck/dirio/internal/http/server/prof"
@@ -38,8 +40,8 @@ import (
 
 	"github.com/mallardduck/dirio/internal/config/data"
 
+	loggingHttp "github.com/mallardduck/dirio/internal/http/middleware/logging"
 	"github.com/mallardduck/dirio/internal/logging"
-	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/mdns"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/persistence/storage"
@@ -243,6 +245,8 @@ func (s *Server) setupRoutes() {
 		urlbuilder.New(s.config.CanonicalDomain),
 	)
 
+	consoleAdapter := console.NewAdapter(serviceFactory)
+
 	deps := RouteDependencies{
 		auth:         s.auth,
 		policyEngine: s.policyEngine,
@@ -251,10 +255,11 @@ func (s *Server) setupRoutes() {
 		APIHandler:   apiHandler,
 
 		// New things
-		Health:  health.New(s.metadata, s.config.RootFS),
-		Metrics: metrics.New(s.telemetry),
-		Minio:   minioHTTP.New(serviceFactory),
-		Pprof:   prof.New(),
+		Health:   health.New(s.metadata, s.config.RootFS),
+		Metrics:  metrics.New(s.telemetry),
+		Minio:    minioHTTP.New(serviceFactory),
+		Pprof:    prof.New(),
+		DirioAPI: dirioapi.New(consoleAdapter, s.auth),
 	}
 
 	SetupRoutes(s.router, deps)

@@ -12,9 +12,9 @@ import (
 
 	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/context"
+	loggingHttp "github.com/mallardduck/dirio/internal/http/middleware/logging"
 	httpresponse "github.com/mallardduck/dirio/internal/http/response"
 	"github.com/mallardduck/dirio/internal/logging"
-	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/policy/variables"
 	"github.com/mallardduck/dirio/pkg/s3types"

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mallardduck/dirio/internal/consts"
-	"github.com/mallardduck/dirio/internal/minio"
+	minioimport "github.com/mallardduck/dirio/internal/minio/import"
 )
 
 // TestMinIOImport_CreatesMetadataFiles tests that importing MinIO data actually creates metadata files
@@ -24,7 +24,7 @@ func TestMinIOImport_CreatesMetadataFiles(t *testing.T) {
 
 	// Import from MinIO
 	minioFS := osfs.New(minioDataDir)
-	result, err := minio.Import(minioFS)
+	result, err := minioimport.Import(minioFS)
 	require.NoError(t, err)
 
 	// Create DirIO metadata manager

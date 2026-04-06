@@ -8,6 +8,7 @@ import (
 
 	minioHTTP "github.com/mallardduck/dirio/internal/minio/http"
 
+	"github.com/mallardduck/dirio/internal/http/server/dirioapi"
 	"github.com/mallardduck/dirio/internal/http/server/prof"
 
 	"github.com/mallardduck/dirio/internal/http/api"
@@ -33,10 +34,11 @@ type RouteDependencies struct {
 	APIHandler   *api.Handler
 
 	// Modern Deps
-	Health  health.RouteHandlers
-	Metrics metrics.RouteHandlers
-	Minio   minioHTTP.RouteHandlers
-	Pprof   prof.RouteHandlers
+	Health   health.RouteHandlers
+	Metrics  metrics.RouteHandlers
+	Minio    minioHTTP.RouteHandlers
+	Pprof    prof.RouteHandlers
+	DirioAPI dirioapi.RouteHandlers
 }
 
 // SetupRoutes configures all application routes on the provided router.
@@ -70,6 +72,15 @@ func SetupRoutes(r *teapot.Router, deps RouteDependencies) {
 	// pprof profiling endpoints — only registered when --debug is set.
 	// Unauthenticated: debug mode is not intended for production use.
 	prof.RegisterRoutes(r, deps.Pprof)
+
+	// DirIO REST API — requires SigV4 authentication; no S3 policy authz or chunked encoding.
+	var dirioAPIMW []func(http.Handler) http.Handler
+	if deps.auth != nil {
+		dirioAPIMW = []func(http.Handler) http.Handler{deps.auth.AuthMiddleware}
+	}
+	r.MiddlewareGroup(func(r *teapot.Router) {
+		dirioapi.RegisterRoutes(r, deps.DirioAPI)
+	}, dirioAPIMW...)
 
 	// S3 API routes (authenticated + chunked encoding)
 	var s3Deps *s3RouteDeps

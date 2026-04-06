@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/mallardduck/dirio/internal/http/middleware"
+	loggingHttp "github.com/mallardduck/dirio/internal/http/middleware/logging"
 	httpresponse "github.com/mallardduck/dirio/internal/http/response"
-	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/service"
 	svcs3 "github.com/mallardduck/dirio/internal/service/s3"

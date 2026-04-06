@@ -14,7 +14,7 @@ import (
 	"github.com/mallardduck/dirio/internal/config/data"
 	"github.com/mallardduck/dirio/internal/jsonutil"
 	"github.com/mallardduck/dirio/internal/logging"
-	"github.com/mallardduck/dirio/internal/minio"
+	minioimport "github.com/mallardduck/dirio/internal/minio/import"
 	"github.com/mallardduck/dirio/internal/persistence/path"
 	"github.com/mallardduck/dirio/pkg/iam"
 )
@@ -92,7 +92,7 @@ func (m *Manager) CheckAndImportMinIO(ctx context.Context) (phase1Ran bool, asyn
 		return false, nil, fmt.Errorf("failed to create MinIO filesystem: %w", err)
 	}
 
-	result, err := minio.Import(minioFS)
+	result, err := minioimport.Import(minioFS)
 	if err != nil {
 		return false, nil, fmt.Errorf("MinIO import failed: %w", err)
 	}
@@ -145,7 +145,7 @@ func (m *Manager) makeAsyncPhase(state *ImportState, accessKeyToUUID map[string]
 			return
 		}
 
-		result, err := minio.Import(minioFS)
+		result, err := minioimport.Import(minioFS)
 		if err != nil {
 			importLog.Error("MinIO re-read for Phase 2 failed", "error", err)
 			return
@@ -181,7 +181,7 @@ func (m *Manager) buildAccessKeyToUUIDMap(ctx context.Context) map[string]uuid.U
 	return result
 }
 
-func (m *Manager) importPolicies(ctx context.Context, policies map[string]*minio.Policy) {
+func (m *Manager) importPolicies(ctx context.Context, policies map[string]*minioimport.Policy) {
 	for _, p := range policies {
 		if _, err := m.GetPolicy(ctx, p.Name); err == nil {
 			continue // already imported
@@ -208,7 +208,7 @@ func (m *Manager) importPolicies(ctx context.Context, policies map[string]*minio
 }
 
 // importUsers saves each MinIO user and returns an accessKey→UUID map for downstream resolution.
-func (m *Manager) importUsers(ctx context.Context, users map[string]*minio.User) map[string]uuid.UUID {
+func (m *Manager) importUsers(ctx context.Context, users map[string]*minioimport.User) map[string]uuid.UUID {
 	accessKeyToUUID := make(map[string]uuid.UUID, len(users))
 	for username, u := range users {
 		if existing, err := m.GetUserByAccessKey(ctx, u.AccessKey); err == nil {
@@ -238,7 +238,7 @@ func (m *Manager) importUsers(ctx context.Context, users map[string]*minio.User)
 	return accessKeyToUUID
 }
 
-func (m *Manager) importBuckets(ctx context.Context, buckets map[string]*minio.BucketMetadata) {
+func (m *Manager) importBuckets(ctx context.Context, buckets map[string]*minioimport.BucketMetadata) {
 	for bucketName, b := range buckets {
 		if _, err := m.GetBucketMetadata(ctx, bucketName); err == nil {
 			continue // already imported
@@ -276,7 +276,7 @@ func (m *Manager) importBuckets(ctx context.Context, buckets map[string]*minio.B
 	}
 }
 
-func (m *Manager) importObjectMetadata(ctx context.Context, objects map[string]map[string]*minio.ObjectMetadata) {
+func (m *Manager) importObjectMetadata(ctx context.Context, objects map[string]map[string]*minioimport.ObjectMetadata) {
 	count := 0
 	for bucketName, objs := range objects {
 		for objectKey, minioMeta := range objs {
@@ -312,7 +312,7 @@ func (m *Manager) importObjectMetadata(ctx context.Context, objects map[string]m
 	}
 }
 
-func (m *Manager) importGroups(ctx context.Context, groups map[string]*minio.ImportGroup, accessKeyToUUID map[string]uuid.UUID) {
+func (m *Manager) importGroups(ctx context.Context, groups map[string]*minioimport.ImportGroup, accessKeyToUUID map[string]uuid.UUID) {
 	count := 0
 	for groupName, g := range groups {
 		if _, err := m.GetGroup(ctx, groupName); err == nil {
@@ -351,7 +351,7 @@ func (m *Manager) importGroups(ctx context.Context, groups map[string]*minio.Imp
 	}
 }
 
-func (m *Manager) importServiceAccounts(ctx context.Context, sas map[string]*minio.ImportServiceAccount, accessKeyToUUID map[string]uuid.UUID) {
+func (m *Manager) importServiceAccounts(ctx context.Context, sas map[string]*minioimport.ImportServiceAccount, accessKeyToUUID map[string]uuid.UUID) {
 	count := 0
 	for _, sa := range sas {
 		if _, err := m.GetServiceAccount(ctx, sa.AccessKey); err == nil {
@@ -403,7 +403,7 @@ func (m *Manager) importServiceAccounts(ctx context.Context, sas map[string]*min
 
 // resolveSessionPolicy parses the MinIO session policy JSON and returns the appropriate
 // policy mode and embedded JSON. Falls back to inherit on parse failure.
-func (m *Manager) resolveSessionPolicy(sa *minio.ImportServiceAccount) (mode iam.PolicyMode, policyJSON string) {
+func (m *Manager) resolveSessionPolicy(sa *minioimport.ImportServiceAccount) (mode iam.PolicyMode, policyJSON string) {
 	if sa.SessionPolicyJSON == "" {
 		return iam.PolicyModeInherit, ""
 	}

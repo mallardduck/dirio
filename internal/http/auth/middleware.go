@@ -10,8 +10,8 @@ import (
 
 	contextInt "github.com/mallardduck/dirio/internal/context"
 	"github.com/mallardduck/dirio/internal/http/middleware"
+	loggingHttp "github.com/mallardduck/dirio/internal/http/middleware/logging"
 	httpresponse "github.com/mallardduck/dirio/internal/http/response"
-	loggingHttp "github.com/mallardduck/dirio/internal/logging/http"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/pkg/iam"
 	"github.com/mallardduck/dirio/pkg/s3types"
