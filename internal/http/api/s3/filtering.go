@@ -9,14 +9,11 @@ import (
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 
 	"github.com/mallardduck/dirio/internal/context"
-	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/policy/variables"
 	"github.com/mallardduck/dirio/pkg/iam"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
-
-var filterLogger = logging.Component("filter")
 
 // filterBuckets extracts request context and delegates to the observation service.
 func (h *HTTPHandler) filterBuckets(ctx stdcontext.Context, buckets []s3types.Bucket, r *http.Request) []s3types.Bucket {

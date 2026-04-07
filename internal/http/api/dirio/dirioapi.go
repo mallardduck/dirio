@@ -77,7 +77,7 @@ func writeInternalError(w http.ResponseWriter) {
 	writeError(w, http.StatusInternalServerError, "InternalError", "An unexpected error occurred", "")
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
+func writeJSON(w http.ResponseWriter, status int, v any) { //nolint:unparam // status will vary once DIO error responses are JSON
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)

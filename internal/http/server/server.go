@@ -27,7 +27,7 @@ import (
 	"github.com/mallardduck/dirio/internal/console"
 	"github.com/mallardduck/dirio/internal/service"
 
-	"github.com/mallardduck/dirio/internal/http/api/dirio"
+	dirioapi "github.com/mallardduck/dirio/internal/http/api/dirio"
 	"github.com/mallardduck/dirio/internal/http/server/health"
 	"github.com/mallardduck/dirio/internal/http/server/metrics"
 	"github.com/mallardduck/dirio/internal/http/server/prof"
