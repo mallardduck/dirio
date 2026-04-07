@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/fs"
 
 	"github.com/google/uuid"
 
@@ -72,10 +73,17 @@ func (s *Service) CreateBucket(ctx context.Context, req *CreateBucketRequest) (*
 	return s.GetBucket(ctx, req.Name)
 }
 
-// GetBucket retrieves bucket metadataManager
+// GetBucket retrieves bucket metadata.
 // Note: Assumes the caller has validated bucket name
 func (s *Service) GetBucket(ctx context.Context, bucket string) (*metadata.BucketMetadata, error) {
-	return s.metadataManager.GetBucketMetadata(ctx, bucket)
+	meta, err := s.metadataManager.GetBucketMetadata(ctx, bucket)
+	if err != nil {
+		if isMetadataNotFound(err) {
+			return nil, s3types.ErrBucketNotFound
+		}
+		return nil, err
+	}
+	return meta, nil
 }
 
 // HeadBucket checks if a bucket exists
@@ -113,16 +121,75 @@ func (s *Service) ListBucketsWithMetadata(ctx context.Context) ([]*metadata.Buck
 
 // SetBucketOwner updates the owner UUID of an existing bucket.
 func (s *Service) SetBucketOwner(ctx context.Context, bucket string, ownerUUID *uuid.UUID) error {
-	return s.metadataManager.SetBucketOwner(ctx, bucket, ownerUUID)
+	if err := s.metadataManager.SetBucketOwner(ctx, bucket, ownerUUID); err != nil {
+		if isMetadataNotFound(err) {
+			return s3types.ErrBucketNotFound
+		}
+		return err
+	}
+	return nil
 }
 
-// GetObjectOwnerUUID returns the owner UUID of an object, or nil if unset (admin-owned).
-func (s *Service) GetObjectOwnerUUID(ctx context.Context, bucket, key string) (*uuid.UUID, error) {
-	meta, err := s.metadataManager.GetObjectMetadata(ctx, bucket, key)
+// GetBucketOwner resolves full ownership information for a bucket.
+// OwnerInfo.OwnerUUID is nil for admin-owned buckets; AccessKey and Username
+// are populated when the owner is a known IAM user.
+func (s *Service) GetBucketOwner(ctx context.Context, bucket string) (*OwnerInfo, error) {
+	meta, err := s.GetBucket(ctx, bucket)
 	if err != nil {
 		return nil, err
 	}
+	return s.resolveOwner(ctx, meta.Owner), nil
+}
+
+// GetObjectOwner resolves full ownership information for an object.
+// Returns s3types.ErrBucketNotFound or s3types.ErrObjectNotFound as appropriate.
+func (s *Service) GetObjectOwner(ctx context.Context, bucket, key string) (*OwnerInfo, error) {
+	ownerUUID, err := s.GetObjectOwnerUUID(ctx, bucket, key)
+	if err != nil {
+		return nil, err
+	}
+	return s.resolveOwner(ctx, ownerUUID), nil
+}
+
+// resolveOwner maps an owner UUID to an OwnerInfo, looking up IAM user details
+// when the UUID is non-nil. Unknown users are returned with UUID only.
+func (s *Service) resolveOwner(ctx context.Context, ownerUUID *uuid.UUID) *OwnerInfo {
+	info := &OwnerInfo{OwnerUUID: ownerUUID}
+	if ownerUUID == nil {
+		return info
+	}
+	if user, err := s.metadataManager.GetUser(ctx, *ownerUUID); err == nil {
+		info.AccessKey = user.AccessKey
+		info.Username = user.Username
+	}
+	return info
+}
+
+// GetObjectOwnerUUID returns the owner UUID of an object, or nil if unset (admin-owned).
+// Returns s3types.ErrBucketNotFound when the bucket does not exist,
+// and s3types.ErrObjectNotFound when the key does not exist within the bucket.
+func (s *Service) GetObjectOwnerUUID(ctx context.Context, bucket, key string) (*uuid.UUID, error) {
+	meta, err := s.metadataManager.GetObjectMetadata(ctx, bucket, key)
+	if err != nil {
+		if isMetadataNotFound(err) {
+			// Disambiguate: bucket missing vs key missing.
+			exists, headErr := s.diskStorage.BucketExists(ctx, bucket)
+			if headErr == nil && !exists {
+				return nil, s3types.ErrBucketNotFound
+			}
+			return nil, s3types.ErrObjectNotFound
+		}
+		return nil, err
+	}
 	return meta.Owner, nil
+}
+
+// isMetadataNotFound reports whether err from the metadata layer represents a
+// not-found condition. GetBucketMetadata passes through *os.PathError wrapping
+// fs.ErrNotExist; GetObjectMetadata converts it to a plain string.
+func isMetadataNotFound(err error) bool {
+	return errors.Is(err, fs.ErrNotExist) ||
+		(err != nil && (err.Error() == "file does not exist" || err.Error() == "object metadata not found"))
 }
 
 // GetBucketLocation returns the bucket location (region)

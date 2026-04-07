@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 
 	"github.com/mallardduck/dirio/internal/context"
@@ -19,188 +18,16 @@ import (
 
 var filterLogger = logging.Component("filter")
 
-// filterBuckets filters a list of buckets based on s3:GetBucketLocation permission.
-// Returns only buckets the requesting principal has permission to access.
-//
-// Algorithm:
-//  1. Extract principal from request context
-//  2. If admin → return all buckets (fast path)
-//  3. For each bucket:
-//     a. Fetch bucket metadata for ownership
-//     b. Build RequestContext for s3:GetBucketLocation
-//     c. Evaluate permission via policy engine
-//     d. Include if allowed
-//  4. Return filtered list
+// filterBuckets extracts request context and delegates to the observation service.
 func (h *HTTPHandler) filterBuckets(ctx stdcontext.Context, buckets []s3types.Bucket, r *http.Request) []s3types.Bucket {
-	// Extract principal from context
 	principal := getRequestPrincipal(ctx, h.adminKeys.PrimaryRootAccessKey(), h.adminKeys.AltRootAccessKey())
-
-	// Admin fast path - return all buckets
-	if principal.IsAdmin {
-		filterLogger.Debug("admin bypass - returning all buckets")
-		return buckets
-	}
-
-	// Build condition context for policy evaluation
-	conditions := buildConditionContext(r)
-
-	// Build variable context for policy variable substitution
-	varCtx := variables.FromRequest(r)
-
-	filtered := make([]s3types.Bucket, 0, len(buckets))
-	allowedCount := 0
-	deniedCount := 0
-
-	for i := range buckets {
-		bucket := &buckets[i]
-
-		// Fetch bucket owner for ownership-based policy evaluation.
-		bucketMeta, err := h.s3Service.GetBucket(ctx, bucket.Name)
-		var bucketOwnerUUID *uuid.UUID
-		if err == nil && bucketMeta != nil {
-			bucketOwnerUUID = bucketMeta.Owner
-		} else {
-			// Metadata fetch failure - log and treat as deny (safe default)
-			filterLogger.With("bucket", bucket.Name, "error", err).
-				Debug("failed to fetch bucket metadata, treating as deny")
-		}
-
-		// Build request context for permission check
-		reqCtx := &policy.RequestContext{
-			Principal: principal,
-			Action:    "s3:GetBucketLocation",
-			Resource: &policy.Resource{
-				Bucket: bucket.Name,
-				Key:    "",
-			},
-			Conditions:      conditions,
-			VarContext:      varCtx,
-			BucketOwnerUUID: bucketOwnerUUID,
-			ObjectOwnerUUID: nil, // Not applicable for bucket operations
-			OriginalRequest: r,
-		}
-
-		// Evaluate permission
-		decision := h.policyEngine.Evaluate(ctx, reqCtx)
-
-		if decision.IsAllowed() {
-			filtered = append(filtered, *bucket)
-			allowedCount++
-		} else {
-			deniedCount++
-		}
-	}
-
-	// Log filtering results
-	principalStr := principalString(principal)
-	filterLogger.With(
-		"principal", principalStr,
-		"total_buckets", len(buckets),
-		"allowed", allowedCount,
-		"denied", deniedCount,
-	).Debug("filtered bucket list")
-
-	return filtered
+	return h.observationSvc.FilterBuckets(ctx, principal, buckets, buildConditionContext(r), variables.FromRequest(r))
 }
 
-// filterObjects filters a list of objects based on s3:GetObject permission.
-// Returns only objects the requesting principal has permission to access.
-//
-// Algorithm:
-//  1. Extract principal from request context
-//  2. If admin → return all objects (fast path)
-//  3. Fetch bucket owner once (reuse for all objects)
-//  4. For each object:
-//     a. Fetch object metadata for ownership
-//     b. Build RequestContext for s3:GetObject
-//     c. Evaluate permission via policy engine
-//     d. Include if allowed
-//  5. Return filtered list
+// filterObjects extracts request context and delegates to the observation service.
 func (h *HTTPHandler) filterObjects(ctx stdcontext.Context, bucket string, objects []s3types.Object, r *http.Request) []s3types.Object {
-	// Extract principal from context
 	principal := getRequestPrincipal(ctx, h.adminKeys.PrimaryRootAccessKey(), h.adminKeys.AltRootAccessKey())
-
-	// Admin fast path - return all objects
-	if principal.IsAdmin {
-		filterLogger.Debug("admin bypass - returning all objects", "bucket", bucket)
-		return objects
-	}
-
-	// Build condition context for policy evaluation
-	conditions := buildConditionContext(r)
-
-	// Build variable context for policy variable substitution
-	varCtx := variables.FromRequest(r)
-
-	// Optimization: Fetch bucket owner once and reuse for all objects.
-	var bucketOwnerUUID *uuid.UUID
-	bucketMeta, err := h.s3Service.GetBucket(ctx, bucket)
-	if err == nil && bucketMeta != nil {
-		bucketOwnerUUID = bucketMeta.Owner
-	} else {
-		// Non-fatal: bucket metadata fetch failure
-		filterLogger.With("bucket", bucket, "error", err).
-			Debug("failed to fetch bucket metadata for filtering")
-	}
-
-	filtered := make([]s3types.Object, 0, len(objects))
-	allowedCount := 0
-	deniedCount := 0
-
-	for i := range objects {
-		obj := &objects[i]
-
-		// Fetch object owner for ownership-based policy evaluation.
-		objectOwnerUUID, err := h.s3Service.GetObjectOwnerUUID(ctx, bucket, obj.Key)
-		if err != nil {
-			// Metadata fetch failure - log and treat as deny (safe default)
-			filterLogger.With("bucket", bucket, "key", obj.Key, "error", err).
-				Debug("failed to fetch object metadata, treating as deny")
-			objectOwnerUUID = nil
-		}
-
-		// Build request context for permission check
-		reqCtx := &policy.RequestContext{
-			Principal: principal,
-			Action:    "s3:GetObject",
-			Resource: &policy.Resource{
-				Bucket: bucket,
-				Key:    obj.Key,
-			},
-			Conditions:      conditions,
-			VarContext:      varCtx,
-			BucketOwnerUUID: bucketOwnerUUID,
-			ObjectOwnerUUID: objectOwnerUUID,
-			OriginalRequest: r,
-		}
-
-		// Evaluate permission
-		decision := h.policyEngine.Evaluate(ctx, reqCtx)
-
-		if decision.IsAllowed() {
-			filtered = append(filtered, *obj)
-			allowedCount++
-		} else {
-			deniedCount++
-		}
-	}
-
-	// Log filtering results
-	principalStr := principalString(principal)
-	filterRatio := 0.0
-	if len(objects) > 0 {
-		filterRatio = float64(deniedCount) / float64(len(objects))
-	}
-	filterLogger.With(
-		"bucket", bucket,
-		"principal", principalStr,
-		"total_objects", len(objects),
-		"allowed", allowedCount,
-		"denied", deniedCount,
-		"filter_ratio", filterRatio,
-	).Debug("filtered object list")
-
-	return filtered
+	return h.observationSvc.FilterObjects(ctx, principal, bucket, objects, buildConditionContext(r), variables.FromRequest(r))
 }
 
 // getRequestPrincipal extracts the principal from request context and builds a Principal.
@@ -250,6 +77,7 @@ func buildConditionContext(r *http.Request) *policy.ConditionContext {
 		UserAgent:       r.UserAgent(),
 		SecureTransport: r.TLS != nil,
 		CurrentTime:     time.Now(),
+		ContentLength:   r.ContentLength,
 	}
 }
 

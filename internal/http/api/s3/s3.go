@@ -8,16 +8,17 @@ import (
 	httpresponse "github.com/mallardduck/dirio/internal/http/response"
 	"github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/service"
+	"github.com/mallardduck/dirio/internal/service/observation"
 	svcs3 "github.com/mallardduck/dirio/internal/service/s3"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
 // HTTPHandler handles S3 API requests
 type HTTPHandler struct {
-	s3Service    *svcs3.Service
-	urlBuilder   URLBuilder
-	policyEngine *policy.Engine         // For permission checks during filtering
-	adminKeys    policy.AdminKeyChecker // Live admin key source for filtering bypass
+	s3Service      *svcs3.Service
+	observationSvc *observation.Service
+	urlBuilder     URLBuilder
+	adminKeys      policy.AdminKeyChecker // Live admin key source for filtering bypass
 }
 
 // URLBuilder defines the interface for generating URLs in S3 API responses
@@ -33,10 +34,10 @@ func New(
 	adminKeys policy.AdminKeyChecker,
 ) *HTTPHandler {
 	return &HTTPHandler{
-		s3Service:    serviceFactory.S3(),
-		urlBuilder:   urlBuilder,
-		policyEngine: serviceFactory.PolicyEngine(),
-		adminKeys:    adminKeys,
+		s3Service:      serviceFactory.S3(),
+		observationSvc: serviceFactory.Observation(),
+		urlBuilder:     urlBuilder,
+		adminKeys:      adminKeys,
 	}
 }
 

@@ -4,9 +4,20 @@ import (
 	"io"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/pkg/s3types"
 )
+
+// OwnerInfo carries the resolved ownership of a bucket or object.
+// OwnerUUID is nil for admin-owned resources.
+// AccessKey and Username are populated when the owner is a known IAM user.
+type OwnerInfo struct {
+	OwnerUUID *uuid.UUID
+	AccessKey string
+	Username  string
+}
 
 // ============================================================================
 // Bucket Request/Response Types

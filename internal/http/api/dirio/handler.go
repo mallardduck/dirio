@@ -10,6 +10,7 @@ import (
 	"github.com/mallardduck/dirio/consoleapi"
 	dcontext "github.com/mallardduck/dirio/internal/context"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
+	"github.com/mallardduck/dirio/pkg/s3types"
 )
 
 // stub returns a 200 OK handler used when the real api is unavailable (CLI listing).
@@ -46,9 +47,9 @@ func mapServiceError(w http.ResponseWriter, err error, resource string) bool {
 		return false
 	}
 	switch {
-	case errors.Is(err, svcerrors.ErrBucketNotFound):
+	case errors.Is(err, svcerrors.ErrBucketNotFound), errors.Is(err, s3types.ErrBucketNotFound):
 		writeError(w, http.StatusNotFound, "NoSuchBucket", "The specified bucket does not exist", resource)
-	case errors.Is(err, svcerrors.ErrObjectNotFound):
+	case errors.Is(err, svcerrors.ErrObjectNotFound), errors.Is(err, s3types.ErrObjectNotFound):
 		writeError(w, http.StatusNotFound, "NoSuchObject", "The specified object does not exist", resource)
 	case errors.Is(err, svcerrors.ErrUserNotFound):
 		writeError(w, http.StatusNotFound, "NoSuchUser", "The specified access key does not exist", resource)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/mallardduck/dirio/internal/crypto"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
 	"github.com/mallardduck/dirio/internal/service/validation"
@@ -24,8 +25,18 @@ func NewService(m *metadata.Manager) *Service {
 	return &Service{metadata: m}
 }
 
-// Create creates a new service account
+// Create creates a new service account.
+// If AccessKey is empty, a DirIO service account key pair is auto-generated.
 func (s *Service) Create(ctx context.Context, req *CreateServiceAccountRequest) (*iam.ServiceAccount, error) {
+	if req.AccessKey == "" {
+		accessKey, secretKey, err := crypto.GenerateDirIOKey(crypto.PrefixService)
+		if err != nil {
+			return nil, fmt.Errorf("generating service account key: %w", err)
+		}
+		req.AccessKey = accessKey
+		req.SecretKey = secretKey
+	}
+
 	if err := validation.ValidateAccessKey(req.AccessKey); err != nil {
 		return nil, err
 	}

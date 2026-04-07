@@ -4,7 +4,6 @@
 package policy
 
 import (
-	"net/http"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,12 +15,11 @@ import (
 
 // RequestContext contains all information needed for policy evaluation
 type RequestContext struct {
-	Principal       *Principal
-	Action          string    // The IAM permission to check (e.g., "s3:GetObject")
-	Resource        *Resource // The resource being accessed
-	Conditions      *ConditionContext
-	VarContext      *variables.Context // Variable substitution context (Phase 3.3)
-	OriginalRequest *http.Request      // Access to raw request if needed
+	Principal  *Principal
+	Action     string    // The IAM permission to check (e.g., "s3:GetObject")
+	Resource   *Resource // The resource being accessed
+	Conditions *ConditionContext
+	VarContext *variables.Context // Variable substitution context (Phase 3.3)
 
 	// Ownership information (Phase 3.3) - populated by middleware for ownership-based authorization
 	BucketOwnerUUID *uuid.UUID // Owner UUID of the bucket (nil if admin-only or unknown)
@@ -58,13 +56,15 @@ func (r *Resource) ARN() string {
 	return "arn:aws:s3:::" + r.Bucket + "/" + r.Key
 }
 
-// ConditionContext contains request metadata for condition evaluation
+// ConditionContext contains request metadata for condition evaluation.
+// All HTTP-specific values (ContentLength, SourceIP, etc.) are extracted by the
+// HTTP layer and stored here so the policy engine has no dependency on *http.Request.
 type ConditionContext struct {
 	SourceIP        string
 	UserAgent       string
 	SecureTransport bool
 	CurrentTime     time.Time
-	// Expand in Phase 3.2 for condition operators
+	ContentLength   int64 // Used by s3:content-length / s3:RequestObjectSize conditions
 }
 
 // Decision is the result of policy evaluation

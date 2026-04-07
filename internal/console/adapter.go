@@ -7,18 +7,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/mallardduck/dirio/consoleapi"
-	"github.com/mallardduck/dirio/internal/crypto"
-	"github.com/mallardduck/dirio/internal/policy"
-	"github.com/mallardduck/dirio/internal/policy/variables"
 	"github.com/mallardduck/dirio/internal/service"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
 	svcgroup "github.com/mallardduck/dirio/internal/service/group"
+	"github.com/mallardduck/dirio/internal/service/observation"
 	svcpolicy "github.com/mallardduck/dirio/internal/service/policy"
 	svcs3 "github.com/mallardduck/dirio/internal/service/s3"
 	svcsacct "github.com/mallardduck/dirio/internal/service/serviceaccount"
@@ -29,22 +26,6 @@ import (
 
 // ErrNotImplemented is returned for API methods not yet backed by the service layer.
 var ErrNotImplemented = errors.New("not implemented")
-
-// commonS3Actions is the set of S3 permissions evaluated by GetEffectivePermissions.
-var commonS3Actions = []string{
-	"s3:GetObject",
-	"s3:PutObject",
-	"s3:DeleteObject",
-	"s3:ListBucket",
-	"s3:GetBucketPolicy",
-	"s3:PutBucketPolicy",
-	"s3:DeleteBucketPolicy",
-	"s3:CreateBucket",
-	"s3:DeleteBucket",
-	"s3:GetObjectTagging",
-	"s3:PutObjectTagging",
-	"s3:DeleteObjectTagging",
-}
 
 // Adapter implements consoleapi.API via the service layer.
 type Adapter struct {
@@ -277,7 +258,7 @@ func (a *Adapter) ListBuckets(ctx context.Context) ([]*consoleapi.Bucket, error)
 func (a *Adapter) GetBucket(ctx context.Context, bucket string) (*consoleapi.Bucket, error) {
 	meta, err := a.services.S3().GetBucket(ctx, bucket)
 	if err != nil {
-		return nil, fmt.Errorf("bucket not found: %s", bucket)
+		return nil, err
 	}
 	b := &consoleapi.Bucket{
 		Name:      meta.Name,
@@ -329,24 +310,11 @@ func (a *Adapter) SetBucketPolicy(ctx context.Context, bucket, policyJSON string
 // --- Ownership ---------------------------------------------------------------
 
 func (a *Adapter) GetBucketOwner(ctx context.Context, bucket string) (*consoleapi.Owner, error) {
-	meta, err := a.services.S3().GetBucket(ctx, bucket)
+	info, err := a.services.S3().GetBucketOwner(ctx, bucket)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, svcerrors.ErrBucketNotFound
-		}
 		return nil, err
 	}
-	if meta.Owner == nil {
-		// Admin-owned bucket: return the well-known admin UUID with no user fields.
-		return &consoleapi.Owner{UUID: consoleapi.AdminUserUUID}, nil
-	}
-	owner := &consoleapi.Owner{UUID: meta.Owner.String()}
-	user, err := a.services.User().Get(ctx, *meta.Owner)
-	if err == nil {
-		owner.AccessKey = user.AccessKey
-		owner.Username = user.Username
-	}
-	return owner, nil
+	return ownerInfoToConsole(info), nil
 }
 
 func (a *Adapter) TransferBucketOwnership(ctx context.Context, bucket, newOwnerAccessKey string) error {
@@ -358,38 +326,15 @@ func (a *Adapter) TransferBucketOwnership(ctx context.Context, bucket, newOwnerA
 		return err
 	}
 	ownerUUID := user.UUID
-	if err := a.services.S3().SetBucketOwner(ctx, bucket, &ownerUUID); err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return svcerrors.ErrBucketNotFound
-		}
-		return err
-	}
-	return nil
+	return a.services.S3().SetBucketOwner(ctx, bucket, &ownerUUID)
 }
 
 func (a *Adapter) GetObjectOwner(ctx context.Context, bucket, key string) (*consoleapi.Owner, error) {
-	ownerUUID, err := a.services.S3().GetObjectOwnerUUID(ctx, bucket, key)
+	info, err := a.services.S3().GetObjectOwner(ctx, bucket, key)
 	if err != nil {
-		// The metadata layer may return fs.ErrNotExist (raw file error) or a plain
-		// "object metadata not found" string depending on where in the stack the
-		// lookup fails.  In either case, disambiguate via HeadBucket.
-		exists, headErr := a.services.S3().HeadBucket(ctx, bucket)
-		if headErr == nil && !exists {
-			return nil, svcerrors.ErrBucketNotFound
-		}
-		return nil, svcerrors.ErrObjectNotFound
+		return nil, err
 	}
-	if ownerUUID == nil {
-		// Admin-owned object: return the well-known admin UUID with no user fields.
-		return &consoleapi.Owner{UUID: consoleapi.AdminUserUUID}, nil
-	}
-	owner := &consoleapi.Owner{UUID: ownerUUID.String()}
-	user, err := a.services.User().Get(ctx, *ownerUUID)
-	if err == nil {
-		owner.AccessKey = user.AccessKey
-		owner.Username = user.Username
-	}
-	return owner, nil
+	return ownerInfoToConsole(info), nil
 }
 
 // --- Groups ------------------------------------------------------------------
@@ -517,15 +462,6 @@ func (a *Adapter) CreateServiceAccount(ctx context.Context, req consoleapi.Creat
 		parentUserUUID = &uid
 	}
 
-	if req.AccessKey == "" {
-		accessKey, secretKey, err := crypto.GenerateDirIOKey(crypto.PrefixService)
-		if err != nil {
-			return nil, fmt.Errorf("generating service account key: %w", err)
-		}
-		req.AccessKey = accessKey
-		req.SecretKey = secretKey
-	}
-
 	sa, err := a.services.ServiceAccount().Create(ctx, &svcsacct.CreateServiceAccountRequest{
 		AccessKey:          req.AccessKey,
 		SecretKey:          req.SecretKey,
@@ -597,111 +533,48 @@ func (a *Adapter) SetServiceAccountStatus(ctx context.Context, uuidStr string, e
 // --- Policy Observability ----------------------------------------------------
 
 func (a *Adapter) GetEffectivePermissions(ctx context.Context, accessKey, bucket string) (*consoleapi.EffectivePermissions, error) {
-	iamUser, err := a.services.User().GetByAccessKey(ctx, accessKey)
+	perms, err := a.services.Observation().GetEffectivePermissions(ctx, accessKey, bucket)
 	if err != nil {
-		if errors.Is(err, svcerrors.ErrUserNotFound) {
-			return nil, fmt.Errorf("user %q: %w", accessKey, svcerrors.ErrUserNotFound)
-		}
 		return nil, err
 	}
-
-	bucketMeta, err := a.services.S3().GetBucket(ctx, bucket)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, svcerrors.ErrBucketNotFound
-		}
-		return nil, err
-	}
-
-	engine := a.services.PolicyEngine()
-	principal := &policy.Principal{
-		User:        iamUser,
-		IsAnonymous: false,
-		IsAdmin:     false,
-	}
-	varCtx := variables.ForUser(iamUser)
-
-	allowed := make([]string, 0)
-	denied := make([]string, 0)
-
-	for _, action := range commonS3Actions {
-		req := &policy.RequestContext{
-			Principal:       principal,
-			Action:          action,
-			Resource:        &policy.Resource{Bucket: bucket},
-			VarContext:      varCtx,
-			BucketOwnerUUID: bucketMeta.Owner,
-		}
-		decision := engine.Evaluate(ctx, req)
-		if decision.IsAllowed() {
-			allowed = append(allowed, action)
-		} else {
-			denied = append(denied, action)
-		}
-	}
-
 	return &consoleapi.EffectivePermissions{
-		AccessKey:      accessKey,
-		Bucket:         bucket,
-		AllowedActions: allowed,
-		DeniedActions:  denied,
+		AccessKey:      perms.AccessKey,
+		Bucket:         perms.Bucket,
+		AllowedActions: perms.AllowedActions,
+		DeniedActions:  perms.DeniedActions,
 	}, nil
 }
 
 func (a *Adapter) SimulateRequest(ctx context.Context, req consoleapi.SimulateRequest) (*consoleapi.SimulateResult, error) {
-	iamUser, err := a.services.User().GetByAccessKey(ctx, req.AccessKey)
+	result, err := a.services.Observation().Simulate(ctx, observation.SimulateRequest{
+		AccessKey: req.AccessKey,
+		Bucket:    req.Bucket,
+		Action:    req.Action,
+		Key:       req.Key,
+	})
 	if err != nil {
-		if errors.Is(err, svcerrors.ErrUserNotFound) {
-			return nil, fmt.Errorf("user %q: %w", req.AccessKey, svcerrors.ErrUserNotFound)
-		}
 		return nil, err
 	}
-
-	bucketMeta, err := a.services.S3().GetBucket(ctx, req.Bucket)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, svcerrors.ErrBucketNotFound
-		}
-		return nil, err
-	}
-
-	pReq := &policy.RequestContext{
-		Principal: &policy.Principal{
-			User:        iamUser,
-			IsAnonymous: false,
-			IsAdmin:     false,
-		},
-		Action:          req.Action,
-		Resource:        &policy.Resource{Bucket: req.Bucket, Key: req.Key},
-		VarContext:      variables.ForUser(iamUser),
-		BucketOwnerUUID: bucketMeta.Owner,
-	}
-
-	if req.Key != "" {
-		ownerUUID, err := a.services.S3().GetObjectOwnerUUID(ctx, req.Bucket, req.Key)
-		if err == nil && ownerUUID != nil {
-			pReq.ObjectOwnerUUID = ownerUUID
-		}
-	}
-
-	decision := a.services.PolicyEngine().Evaluate(ctx, pReq)
-
-	result := &consoleapi.SimulateResult{Allowed: decision.IsAllowed()}
-	switch decision {
-	case policy.DecisionAllow:
-		result.Reason = "Allowed by bucket policy or resource ownership"
-	case policy.DecisionExplicitDeny:
-		result.Reason = "Explicitly denied by bucket policy"
-	case policy.DecisionDeny:
-		fallthrough //nolint:gocritic // emptyFallthrough: needed for exhaustive compliance
-	default:
-		result.Reason = "Default deny — no matching allow rule found"
-	}
-
-	return result, nil
+	return &consoleapi.SimulateResult{
+		Allowed: result.Allowed,
+		Reason:  result.Reason,
+	}, nil
 }
 
 // --- conversion helpers ------------------------------------------------------
+
+// ownerInfoToConsole converts an s3.OwnerInfo to a consoleapi.Owner.
+// Nil OwnerUUID means the resource is admin-owned; the well-known admin UUID is used.
+func ownerInfoToConsole(info *svcs3.OwnerInfo) *consoleapi.Owner {
+	if info.OwnerUUID == nil {
+		return &consoleapi.Owner{UUID: consoleapi.AdminUserUUID}
+	}
+	return &consoleapi.Owner{
+		UUID:      info.OwnerUUID.String(),
+		AccessKey: info.AccessKey,
+		Username:  info.Username,
+	}
+}
 
 func iamUserToConsole(u *iam.User) *consoleapi.User {
 	policies := u.AttachedPolicies

@@ -346,10 +346,12 @@ func evaluateStatement(stmt *iam.Statement, req *RequestContext) Decision {
 	// 4. Check conditions (Phase 3.3)
 	if len(stmt.Condition) > 0 {
 		secureTransport := false
+		contentLength := int64(0)
 		if req.Conditions != nil {
 			secureTransport = req.Conditions.SecureTransport
+			contentLength = req.Conditions.ContentLength
 		}
-		condCtx := conditions.FromRequest(req.OriginalRequest, req.VarContext, secureTransport)
+		condCtx := conditions.Build(req.VarContext, secureTransport, contentLength)
 		evaluator := conditions.NewEvaluator(condCtx)
 
 		match, err := evaluator.Evaluate(stmt.Condition)

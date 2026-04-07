@@ -6,6 +6,7 @@ import (
 	"github.com/mallardduck/dirio/internal/persistence/storage"
 	policyEngine "github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/service/group"
+	"github.com/mallardduck/dirio/internal/service/observation"
 	"github.com/mallardduck/dirio/internal/service/policy"
 	"github.com/mallardduck/dirio/internal/service/s3"
 	"github.com/mallardduck/dirio/internal/service/serviceaccount"
@@ -25,6 +26,7 @@ type ServicesFactory struct {
 	s3Service             *s3.Service
 	groupService          *group.Service
 	serviceAccountService *serviceaccount.Service
+	observationService    *observation.Service
 }
 
 // NewServiceFactory creates a new service factory with dependency injection
@@ -34,16 +36,19 @@ func NewServiceFactory(
 	engine *policyEngine.Engine,
 	authenticator *auth.Authenticator,
 ) *ServicesFactory {
+	userSvc := user.NewService(metadataManager, authenticator)
+	s3Svc := s3.NewService(diskStorage, metadataManager, engine)
 	return &ServicesFactory{
 		diskStorage:           diskStorage,
 		metadataManager:       metadataManager,
 		policyEngine:          engine,
 		authenticator:         authenticator,
-		userService:           user.NewService(metadataManager, authenticator),
+		userService:           userSvc,
 		policyService:         policy.NewService(metadataManager),
-		s3Service:             s3.NewService(diskStorage, metadataManager, engine),
+		s3Service:             s3Svc,
 		groupService:          group.NewService(metadataManager),
 		serviceAccountService: serviceaccount.NewService(metadataManager),
+		observationService:    observation.NewService(s3Svc, userSvc, engine),
 	}
 }
 
@@ -80,4 +85,9 @@ func (f *ServicesFactory) Group() *group.Service {
 // ServiceAccount returns the service account service
 func (f *ServicesFactory) ServiceAccount() *serviceaccount.Service {
 	return f.serviceAccountService
+}
+
+// Observation returns the policy observation service (simulation + effective permissions).
+func (f *ServicesFactory) Observation() *observation.Service {
+	return f.observationService
 }

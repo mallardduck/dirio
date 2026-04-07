@@ -112,6 +112,7 @@ func AuthorizationMiddleware(config *AuthorizationConfig) func(http.Handler) htt
 				UserAgent:       r.UserAgent(),
 				SecureTransport: r.TLS != nil,
 				CurrentTime:     time.Now(),
+				ContentLength:   r.ContentLength,
 			}
 
 			// Build variable context for policy variable substitution
@@ -156,7 +157,6 @@ func AuthorizationMiddleware(config *AuthorizationConfig) func(http.Handler) htt
 					VarContext:      varCtx,
 					BucketOwnerUUID: bucketOwnerUUID,
 					ObjectOwnerUUID: objectOwnerUUID,
-					OriginalRequest: r,
 				}
 
 				decision := config.Engine.Evaluate(r.Context(), reqCtx)
@@ -233,7 +233,6 @@ func evaluateMultiResourceAction(
 		VarContext:      varCtx,
 		BucketOwnerUUID: sourceBucketOwnerUUID,
 		ObjectOwnerUUID: sourceObjectOwnerUUID,
-		OriginalRequest: r,
 	}
 	sourceDecision := engine.Evaluate(r.Context(), sourceCtx)
 	if !sourceDecision.IsAllowed() {
@@ -258,7 +257,6 @@ func evaluateMultiResourceAction(
 		VarContext:      varCtx,
 		BucketOwnerUUID: destBucketOwnerUUID,
 		ObjectOwnerUUID: destObjectOwnerUUID,
-		OriginalRequest: r,
 	}
 	destDecision := engine.Evaluate(r.Context(), destCtx)
 	if !destDecision.IsAllowed() {

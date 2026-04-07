@@ -1,7 +1,6 @@
 package conditions
 
 import (
-	"net/http"
 	"time"
 
 	"github.com/google/uuid"
@@ -9,12 +8,14 @@ import (
 	"github.com/mallardduck/dirio/internal/policy/variables"
 )
 
-// FromRequest builds a condition evaluation context from an HTTP request and variable context
-// The secureTransport parameter indicates whether the request was made over HTTPS
-func FromRequest(r *http.Request, varCtx *variables.Context, secureTransport bool) *Context {
+// Build constructs a condition evaluation context from pre-extracted request attributes.
+// All HTTP-specific values must be extracted by the caller before calling Build,
+// keeping the policy engine free of any dependency on *http.Request.
+func Build(varCtx *variables.Context, secureTransport bool, contentLength int64) *Context {
 	ctx := &Context{
 		VarContext:      varCtx,
 		SecureTransport: secureTransport,
+		ContentLength:   contentLength,
 	}
 
 	// Populate from VarContext if available
@@ -29,13 +30,7 @@ func FromRequest(r *http.Request, varCtx *variables.Context, secureTransport boo
 		ctx.CurrentTime = varCtx.CurrentTime
 		ctx.UserAgent = varCtx.UserAgent
 	} else {
-		// Fallback to extracting from request if no varCtx
 		ctx.CurrentTime = time.Now().UTC()
-	}
-
-	// Extract ContentLength from request
-	if r != nil {
-		ctx.ContentLength = r.ContentLength
 	}
 
 	return ctx
