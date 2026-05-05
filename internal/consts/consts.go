@@ -39,5 +39,6 @@ var (
 
 const (
 	DirIOMetadataDir = ".dirio"
+	DirIOUploadsDir  = ".dirio-uploads"
 	MinioMetadataDir = ".minio.sys"
 )

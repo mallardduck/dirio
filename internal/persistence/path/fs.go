@@ -118,6 +118,22 @@ func NewBucketFS(rootFS billy.Filesystem, bucket string) (billy.Filesystem, erro
 	return newScopedFS(rootFS, bucket), nil
 }
 
+// NewUploadStagingFS creates a filesystem scoped to the upload staging area for a bucket.
+// All in-progress write state (PutObject temp files, multipart parts) lives here,
+// completely outside the bucket directory, so it can never appear in S3 listings.
+//
+// Creates the staging directory if it doesn't exist.
+func NewUploadStagingFS(rootFS billy.Filesystem, bucket string) (billy.Filesystem, error) {
+	if err := ValidatePathSafe(bucket); err != nil {
+		return nil, fmt.Errorf("bucket name failed path security check: %w", err)
+	}
+	stagingPath := filepath.Join(consts.DirIOUploadsDir, bucket)
+	if err := rootFS.MkdirAll(stagingPath, 0o755); err != nil {
+		return nil, fmt.Errorf("failed to create upload staging directory: %w", err)
+	}
+	return newScopedFS(rootFS, stagingPath), nil
+}
+
 // ValidatePathSafe checks if a path is safe from a filesystem security perspective.
 // This function checks for:
 // - Path traversal attempts (../)

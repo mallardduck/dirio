@@ -598,6 +598,12 @@ The actual HTTP serving layer. Behavior is fundamentally different from the S3 A
 
 ## Phase 11: Stability and Performance Enhancements
 
+### Known Bugs / Robustness
+
+- [ ] **Crash-resistant staging cleanup** — orphaned files in `.dirio-uploads/<bucket>/` from mid-upload crashes are not currently removed. `stagingManager` has a `cleanup()` stub; wire it into `Storage.New()` (best-effort sweep on startup) or add a background goroutine with configurable interval. No age threshold needed — everything in staging is transient.
+
+- [ ] **`scopedFS.ReadDir` lazy-stat race** — billy v5.6.2's `readDir` helper uses `os.ReadDir` (lazy `DirEntry.Info()` calls). If a file is deleted between the directory scan and the `Info()` call (e.g. concurrent `DeleteObject` + `ListObjectsV2`), billy returns `ErrNotExist` which propagates as a 500. Fix: override `scopedFS.ReadDir` in `internal/persistence/path/fs.go` to use `fs.base.Open(fs.join(path))` then `f.Readdir(-1)` — same billy path scoping, but `os.File.Readdir(-1)` Lstats all entries eagerly so there is no lazy-eval window. (The temp-file variant of this race is eliminated by the upload staging service; this covers the concurrent-delete edge case.)
+
 ### Operational Validation
 - [ ] **End-to-end MinIO migration test** — export data from a real MinIO instance, import into DirIO, verify all objects, metadata, and IAM (users/policies/mappings) are intact
 - [ ] **Sustained load test** — multipart uploads under a concurrent load using wrk/hey/k6; confirm no heap growth over time (builds on Phase 4.5 memory profiling baseline)

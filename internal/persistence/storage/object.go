@@ -153,18 +153,11 @@ func (s *Storage) PutObject(ctx context.Context, bucket, key string, content io.
 		}
 	}
 
-	// Create a temporary file in the same directory for atomic rename.
-	// Use a UUID so concurrent writes to the same directory never collide on
-	// the temp file name (time.Now().UnixNano() is not safe under contention).
-	tmpName := fmt.Sprintf(".tmp-%s", uuid.New().String())
-	tmpPath := filepath.Join(dir, tmpName)
-	if dir == "." || dir == "" {
-		tmpPath = tmpName
-	}
-
-	tmpFile, err := bucketFS.Create(tmpPath)
+	// Stage the upload outside the bucket directory so in-progress writes can
+	// never appear in S3 listings or race with concurrent ReadDir calls.
+	tmpFile, stagedPath, err := s.staging.stageObject(bucket)
 	if err != nil {
-		return "", fmt.Errorf("failed to create temp file: %w", err)
+		return "", fmt.Errorf("failed to stage upload: %w", err)
 	}
 
 	// Calculate MD5 hash while writing
@@ -191,10 +184,12 @@ func (s *Storage) PutObject(ctx context.Context, bucket, key string, content io.
 	))
 	if err != nil {
 		tmpFile.Close()
+		s.staging.abortObject(stagedPath)
 		return "", fmt.Errorf("failed to write object: %w", err)
 	}
 
 	if err := tmpFile.Close(); err != nil {
+		s.staging.abortObject(stagedPath)
 		return "", fmt.Errorf("failed to close temp file: %w", err)
 	}
 
@@ -214,9 +209,12 @@ func (s *Storage) PutObject(ctx context.Context, bucket, key string, content io.
 	keyMu.Lock()
 	defer keyMu.Unlock()
 
-	// Atomically rename the temp file to the final location
-	if err := bucketFS.Rename(tmpPath, objectPath); err != nil {
-		return "", fmt.Errorf("failed to rename object: %w", err)
+	// Atomically commit the staged file to the final bucket location.
+	// Cross-directory rename is atomic on POSIX; both staging and bucket
+	// live under the same dataDir filesystem.
+	if err := s.staging.commitObject(stagedPath, bucket, objectPath); err != nil {
+		s.staging.abortObject(stagedPath)
+		return "", err
 	}
 
 	// Get user from context for ownership tracking

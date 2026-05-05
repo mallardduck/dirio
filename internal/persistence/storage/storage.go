@@ -37,6 +37,7 @@ type Storage struct {
 	rootFS          billy.Filesystem
 	metadataManager *metadata.Manager
 	log             *slog.Logger
+	staging         *stagingManager
 	// keyMutexes provides per-key serialization for the atomic rename+metadata
 	// step of PutObject.  On Windows, concurrent renames to the same destination
 	// path race at the OS level; serializing only this fast final step keeps I/O
@@ -54,12 +55,22 @@ func New(rootFS billy.Filesystem, metadataManager *metadata.Manager) (*Storage, 
 		rootFS:          rootFS,
 		metadataManager: metadataManager,
 		log:             logging.Component("storage"),
+		staging: &stagingManager{
+			rootFS: rootFS,
+			log:    logging.Component("staging"),
+		},
 	}, nil
 }
 
 // GetBucketFS returns a billy.Filesystem for the specified bucket
 func (s *Storage) GetBucketFS(ctx context.Context, bucket string) (billy.Filesystem, error) {
 	return path.NewBucketFS(s.rootFS, bucket)
+}
+
+// GetUploadStagingFS returns a billy.Filesystem scoped to the upload staging area for a bucket.
+// All in-progress write state lives here, outside bucket directories.
+func (s *Storage) GetUploadStagingFS(ctx context.Context, bucket string) (billy.Filesystem, error) {
+	return s.staging.getUploadStagingFS(bucket)
 }
 
 // ListBuckets returns all buckets

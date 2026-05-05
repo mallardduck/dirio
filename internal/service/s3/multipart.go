@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-git/go-billy/v5/util"
 	"github.com/google/uuid"
 )
 
@@ -50,15 +51,15 @@ func (s *Service) CreateMultipartUpload(ctx context.Context, req *CreateMultipar
 	// Generate unique upload ID
 	uploadID := uuid.New().String()
 
-	// Get bucket filesystem
-	bucketFS, err := s.diskStorage.GetBucketFS(ctx, req.Bucket)
+	// Get staging filesystem for this bucket
+	stagingFS, err := s.diskStorage.GetUploadStagingFS(ctx, req.Bucket)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get bucket filesystem: %w", err)
+		return nil, fmt.Errorf("failed to get staging filesystem: %w", err)
 	}
 
-	// Create multipart directory
-	multipartDir := filepath.Join(".multipart", uploadID)
-	if err := bucketFS.MkdirAll(multipartDir, 0o755); err != nil {
+	// Create upload directory under staging (uploadID is the dir name)
+	multipartDir := uploadID
+	if err := stagingFS.MkdirAll(multipartDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create multipart directory: %w", err)
 	}
 
@@ -78,7 +79,7 @@ func (s *Service) CreateMultipartUpload(ctx context.Context, req *CreateMultipar
 	}
 
 	metaPath := filepath.Join(multipartDir, "upload.json")
-	metaFile, err := bucketFS.Create(metaPath)
+	metaFile, err := stagingFS.Create(metaPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create upload metadataManager file: %w", err)
 	}
@@ -97,29 +98,29 @@ func (s *Service) CreateMultipartUpload(ctx context.Context, req *CreateMultipar
 
 // UploadPart uploads a single part for a multipart upload
 func (s *Service) UploadPart(ctx context.Context, req *UploadPartRequest) (*UploadPartResponse, error) {
-	// Get bucket filesystem
-	bucketFS, err := s.diskStorage.GetBucketFS(ctx, req.Bucket)
+	// Get staging filesystem for this bucket
+	stagingFS, err := s.diskStorage.GetUploadStagingFS(ctx, req.Bucket)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get bucket filesystem: %w", err)
+		return nil, fmt.Errorf("failed to get staging filesystem: %w", err)
 	}
 
 	// Verify multipart upload exists
-	multipartDir := filepath.Join(".multipart", req.UploadID)
+	multipartDir := req.UploadID
 	uploadMetaPath := filepath.Join(multipartDir, "upload.json")
-	_, err = bucketFS.Stat(uploadMetaPath)
+	_, err = stagingFS.Stat(uploadMetaPath)
 	if err != nil {
 		return nil, errors.New("multipart upload not found")
 	}
 
 	// Create parts directory if needed
 	partsDir := filepath.Join(multipartDir, "parts")
-	if err := bucketFS.MkdirAll(partsDir, 0o755); err != nil {
+	if err := stagingFS.MkdirAll(partsDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create parts directory: %w", err)
 	}
 
 	// Write part data
 	partPath := filepath.Join(partsDir, fmt.Sprintf("part-%d.data", req.PartNumber))
-	partFile, err := bucketFS.Create(partPath)
+	partFile, err := stagingFS.Create(partPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create part file: %w", err)
 	}
@@ -149,7 +150,7 @@ func (s *Service) UploadPart(ctx context.Context, req *UploadPartRequest) (*Uplo
 	}
 
 	partMetaPath := filepath.Join(partsDir, fmt.Sprintf("part-%d.json", req.PartNumber))
-	partMetaFile, err := bucketFS.Create(partMetaPath)
+	partMetaFile, err := stagingFS.Create(partMetaPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create part metadataManager file: %w", err)
 	}
@@ -166,16 +167,16 @@ func (s *Service) UploadPart(ctx context.Context, req *UploadPartRequest) (*Uplo
 
 // CompleteMultipartUpload completes a multipart upload by assembling all parts
 func (s *Service) CompleteMultipartUpload(ctx context.Context, req *CompleteMultipartUploadRequest) (*CompleteMultipartUploadResponse, error) {
-	// Get bucket filesystem
-	bucketFS, err := s.diskStorage.GetBucketFS(ctx, req.Bucket)
+	// Get staging filesystem for this bucket
+	stagingFS, err := s.diskStorage.GetUploadStagingFS(ctx, req.Bucket)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get bucket filesystem: %w", err)
+		return nil, fmt.Errorf("failed to get staging filesystem: %w", err)
 	}
 
 	// Verify multipart upload exists and get metadataManager
-	multipartDir := filepath.Join(".multipart", req.UploadID)
+	multipartDir := req.UploadID
 	uploadMetaPath := filepath.Join(multipartDir, "upload.json")
-	uploadMetaFile, err := bucketFS.Open(uploadMetaPath)
+	uploadMetaFile, err := stagingFS.Open(uploadMetaPath)
 	if err != nil {
 		return nil, errors.New("multipart upload not found")
 	}
@@ -196,7 +197,7 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, req *CompleteMult
 	partsDir := filepath.Join(multipartDir, "parts")
 	for _, part := range req.Parts {
 		partMetaPath := filepath.Join(partsDir, fmt.Sprintf("part-%d.json", part.PartNumber))
-		partMetaFile, err := bucketFS.Open(partMetaPath)
+		partMetaFile, err := stagingFS.Open(partMetaPath)
 		if err != nil {
 			return nil, fmt.Errorf("part %d not found", part.PartNumber)
 		}
@@ -221,7 +222,7 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, req *CompleteMult
 	var assembledData bytes.Buffer
 	for _, part := range req.Parts {
 		partPath := filepath.Join(partsDir, fmt.Sprintf("part-%d.data", part.PartNumber))
-		partFile, err := bucketFS.Open(partPath)
+		partFile, err := stagingFS.Open(partPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open part %d: %w", part.PartNumber, err)
 		}
@@ -253,14 +254,14 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, req *CompleteMult
 // AbortMultipartUpload aborts a multipart upload and cleans up all parts
 func (s *Service) AbortMultipartUpload(ctx context.Context, req *AbortMultipartUploadRequest) error {
 	// Verify multipart upload exists
-	bucketFS, err := s.diskStorage.GetBucketFS(ctx, req.Bucket)
+	stagingFS, err := s.diskStorage.GetUploadStagingFS(ctx, req.Bucket)
 	if err != nil {
-		return fmt.Errorf("failed to get bucket filesystem: %w", err)
+		return fmt.Errorf("failed to get staging filesystem: %w", err)
 	}
 
-	multipartDir := filepath.Join(".multipart", req.UploadID)
+	multipartDir := req.UploadID
 	uploadMetaPath := filepath.Join(multipartDir, "upload.json")
-	_, err = bucketFS.Stat(uploadMetaPath)
+	_, err = stagingFS.Stat(uploadMetaPath)
 	if err != nil {
 		return errors.New("multipart upload not found")
 	}
@@ -271,23 +272,23 @@ func (s *Service) AbortMultipartUpload(ctx context.Context, req *AbortMultipartU
 
 // ListParts lists all parts for a multipart upload
 func (s *Service) ListParts(ctx context.Context, req *ListPartsRequest) (*ListPartsResponse, error) {
-	// Get bucket filesystem
-	bucketFS, err := s.diskStorage.GetBucketFS(ctx, req.Bucket)
+	// Get staging filesystem for this bucket
+	stagingFS, err := s.diskStorage.GetUploadStagingFS(ctx, req.Bucket)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get bucket filesystem: %w", err)
+		return nil, fmt.Errorf("failed to get staging filesystem: %w", err)
 	}
 
 	// Verify multipart upload exists
-	multipartDir := filepath.Join(".multipart", req.UploadID)
+	multipartDir := req.UploadID
 	uploadMetaPath := filepath.Join(multipartDir, "upload.json")
-	_, err = bucketFS.Stat(uploadMetaPath)
+	_, err = stagingFS.Stat(uploadMetaPath)
 	if err != nil {
 		return nil, errors.New("multipart upload not found")
 	}
 
 	// List all parts
 	partsDir := filepath.Join(multipartDir, "parts")
-	partFiles, err := bucketFS.ReadDir(partsDir)
+	partFiles, err := stagingFS.ReadDir(partsDir)
 	if err != nil {
 		// No parts yet
 		return &ListPartsResponse{
@@ -306,7 +307,7 @@ func (s *Service) ListParts(ctx context.Context, req *ListPartsRequest) (*ListPa
 		}
 
 		partMetaPath := filepath.Join(partsDir, fileInfo.Name())
-		partMetaFile, err := bucketFS.Open(partMetaPath)
+		partMetaFile, err := stagingFS.Open(partMetaPath)
 		if err != nil {
 			continue
 		}
@@ -336,13 +337,9 @@ func (s *Service) ListParts(ctx context.Context, req *ListPartsRequest) (*ListPa
 
 // cleanupMultipartUpload removes all parts and metadataManager for a multipart upload
 func (s *Service) cleanupMultipartUpload(ctx context.Context, bucket, uploadID string) error {
-	// Get bucket filesystem
-	bucketFS, err := s.diskStorage.GetBucketFS(ctx, bucket)
+	stagingFS, err := s.diskStorage.GetUploadStagingFS(ctx, bucket)
 	if err != nil {
-		return fmt.Errorf("failed to get bucket filesystem: %w", err)
+		return fmt.Errorf("failed to get staging filesystem: %w", err)
 	}
-
-	// Remove multipart directory
-	multipartDir := filepath.Join(".multipart", uploadID)
-	return bucketFS.Remove(multipartDir)
+	return util.RemoveAll(stagingFS, uploadID)
 }
