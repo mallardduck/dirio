@@ -17,7 +17,7 @@ require (
 	github.com/mallardduck/go-http-helpers v0.1.0
 	github.com/mallardduck/teapot-router v0.14.2
 	github.com/minio/madmin-go/v3 v3.0.110
-	github.com/phuslu/lru v1.0.18
+	github.com/phuslu/lru v1.0.19
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
