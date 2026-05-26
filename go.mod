@@ -9,14 +9,14 @@ require (
 	github.com/a-h/templ v0.3.1001
 	github.com/brutella/dnssd v1.2.14
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/docker/docker v28.5.2+incompatible
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/go-chi/chi/v5 v5.2.5
+	github.com/go-chi/chi/v5 v5.3.0
 	github.com/go-git/go-billy/v5 v5.8.0
 	github.com/google/uuid v1.6.0
 	github.com/mallardduck/go-http-helpers v0.1.0
 	github.com/mallardduck/teapot-router v0.14.2
 	github.com/minio/madmin-go/v3 v3.0.110
+	github.com/moby/moby/api v1.54.1
 	github.com/phuslu/lru v1.0.19
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
@@ -154,7 +154,6 @@ require (
 	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/go-archive v0.2.0 // indirect
-	github.com/moby/moby/api v1.54.1 // indirect
 	github.com/moby/moby/client v0.4.0 // indirect
 	github.com/moby/patternmatcher v0.6.1 // indirect
 	github.com/moby/sys/sequential v0.6.0 // indirect
