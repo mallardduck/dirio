@@ -99,6 +99,11 @@ tasks:
       - go test -coverprofile=coverage.out ./...
       - go tool cover -html=coverage.out -o coverage.html
 
+  test-coverage-ide:
+    desc: Run all non-Docker tests with merged coverage profile for IDE import (GoLand)
+    cmds:
+      - go test -coverpkg=./... -coverprofile=coverage.out ./... -skip "TestAWSCLI|TestBoto3|TestMinIOMC|TestMCAdmin|TestSanityCheck|S3Mock"
+
   test-clients:
     desc: Run client tests (requires Docker)
     cmds:
