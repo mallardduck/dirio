@@ -113,6 +113,20 @@ func (s *GroupHTTPService) UpdateGroupMembers(w nethttp.ResponseWriter, r *netht
 	ctx := r.Context()
 
 	if body.IsRemove {
+		// Empty member list with IsRemove means "delete the group entirely".
+		if len(body.Members) == 0 {
+			if err := s.groups.Delete(ctx, body.Group); err != nil {
+				s.log.Error("Failed to delete group", "error", err, "group", body.Group)
+				if svcerrors.IsNotFound(err) {
+					w.WriteHeader(nethttp.StatusNotFound)
+					return
+				}
+				w.WriteHeader(nethttp.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(nethttp.StatusOK)
+			return
+		}
 		if !s.removeGroupMembers(w, ctx, body.Group, body.Members) {
 			return
 		}

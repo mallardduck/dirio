@@ -285,6 +285,9 @@ run_test "DeleteBucket" "bucket_operations" "exit_code" test_delete_bucket
 # Output JSON results
 finalize_test_runner
 
+echo "End: MC"
+printf "\n\n"
+
 # Exit with appropriate code
 if [ $TEST_FAILED -gt 0 ]; then
     exit 1

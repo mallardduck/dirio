@@ -8,7 +8,8 @@ ARG MC_RELEASE
 RUN apk add --no-cache \
     ca-certificates \
     curl \
-    bash
+    bash \
+    jq
 
 # 2. Install the pinned MinIO mc client version
 RUN curl -fSL "https://dl.min.io/client/mc/release/linux-amd64/archive/mc.${MC_RELEASE}" \

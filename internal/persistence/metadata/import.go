@@ -383,6 +383,8 @@ func (m *Manager) importServiceAccounts(ctx context.Context, sas map[string]*min
 			sa.AccessKey,
 			sa.SecretKey,
 			sa.AccessKey,
+			"",
+			"",
 			parentUUID,
 			policyMode,
 			convertMinIOSAStatus(sa.Status),

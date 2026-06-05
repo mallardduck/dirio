@@ -12,6 +12,8 @@ import (
 type CreateServiceAccountRequest struct {
 	AccessKey          string
 	SecretKey          string
+	Name               string         // human-readable label
+	Description        string         // optional description
 	ParentUser         *string        // optional parent user access key (resolved to UUID internally)
 	ParentUserUUID     *uuid.UUID     // optional: skip access-key lookup and use this UUID directly (e.g. for admin)
 	PolicyMode         iam.PolicyMode // optional policy mode ("inherit" or "override"; empty = inherit)
@@ -23,6 +25,8 @@ type CreateServiceAccountRequest struct {
 type UpdateServiceAccountRequest struct {
 	SecretKey          *string
 	Status             *iam.ServiceAcctStatus
+	Name               *string     // nil = no change
+	Description        *string     // nil = no change
 	EmbeddedPolicyJSON *string     // nil = no change; non-nil (including "") = update
 	ExpiresAt          **time.Time // double pointer: nil = no change, non-nil = update (can clear with pointer to nil)
 }

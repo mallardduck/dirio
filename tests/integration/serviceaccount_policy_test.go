@@ -25,7 +25,7 @@ func createServiceAccount(t *testing.T, ts *TestServer, accessKey, secretKey, pa
 	body := map[string]string{
 		"accessKey":  accessKey,
 		"secretKey":  secretKey,
-		"parentUser": parentUser,
+		"targetUser": parentUser, // madmin-compatible field name for the parent user
 		"policyMode": policyMode,
 	}
 	bodyJSON, err := json.Marshal(body)

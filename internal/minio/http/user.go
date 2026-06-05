@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	nethttp "net/http"
+	"strings"
 
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 	"github.com/mallardduck/go-http-helpers/pkg/query"
@@ -230,7 +231,7 @@ func (s *UserHTTPService) InfoUser(w nethttp.ResponseWriter, r *nethttp.Request)
 	response := map[string]any{
 		"accessKey":        userEntity.AccessKey,
 		"status":           userEntity.Status.MinioString(),
-		"policyName":       "", // TODO: figure out how they handle these
+		"policyName":       strings.Join(userEntity.AttachedPolicies, ","),
 		"memberOf":         groups,
 		"updatedAt":        userEntity.UpdatedAt,
 		"attachedPolicies": userEntity.AttachedPolicies,

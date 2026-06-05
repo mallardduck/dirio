@@ -20,17 +20,21 @@ func RegisterRouter(r *teapot.Router, h RouteHandlers) {
 		r.POST("/add-canned-policy", h.HandleAddCannedPolicy()).Name("policies.add")
 		r.PUT("/add-canned-policy", h.HandleAddCannedPolicy()).Name("policies.add")
 		r.POST("/remove-canned-policy", h.HandleRemoveCannedPolicy()).Name("policies.remove")
+		r.DELETE("/remove-canned-policy", h.HandleRemoveCannedPolicy()).Name("policies.remove") // madmin client uses DELETE
 		r.GET("/info-canned-policy", h.HandleCannedPolicyInfo()).Name("policies.info")
 
 		// Service Account Management
 		r.GET("/list-service-accounts", h.HandleListServiceAccounts()).Name("serviceaccounts.list")
 		r.POST("/add-service-account", h.HandleAddServiceAccount()).Name("serviceaccounts.add")
+		r.PUT("/add-service-account", h.HandleAddServiceAccount()).Name("serviceaccounts.add") // madmin client uses PUT
 		r.POST("/delete-service-account", h.HandleDeleteServiceAccount()).Name("serviceaccounts.delete")
+		r.DELETE("/delete-service-account", h.HandleDeleteServiceAccount()).Name("serviceaccounts.delete") // madmin client uses DELETE
 		r.GET("/info-service-account", h.HandleServiceAccountInfo()).Name("serviceaccounts.info")
 		r.POST("/update-service-account", h.HandleUpdateServiceAccount()).Name("serviceaccounts.update")
 
 		// Group Management
 		r.POST("/update-group-members", h.HandleUpdateGroupMembers()).Name("groups.updatemembers")
+		r.PUT("/update-group-members", h.HandleUpdateGroupMembers()).Name("groups.updatemembers") // madmin uses PUT
 		r.GET("/group", h.HandleGroupInfo()).Name("groups.info")
 		r.GET("/groups", h.HandleListGroups()).Name("groups.list")
 		r.POST("/set-group-status", h.HandleSetGroupStatus()).Name("groups.setstatus")

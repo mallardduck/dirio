@@ -19,7 +19,10 @@ Examples:
   dio config init               # create or update ~/.dirio/client.yaml
   dio ls                        # list buckets on the default profile
   dio ls mybucket               # list objects in a bucket
-  dio ls prod/mybucket/prefix/  # list with a named profile and prefix`,
+  dio ls prod/mybucket/prefix/  # list with a named profile and prefix
+  dio sa list                   # list service accounts
+  dio iam user list             # list IAM users
+  dio iam policy list           # list named IAM policies`,
 }
 
 // Execute runs the root command. Called from main.

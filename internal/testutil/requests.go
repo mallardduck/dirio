@@ -192,6 +192,23 @@ func (ts *TestServer) EncryptedAdminRequest(t *testing.T, method, path string, b
 	return resp
 }
 
+// DecryptAdminResponse reads an encrypted admin API response body, decrypts it
+// using the test server's secret key, and unmarshals it into v.
+func (ts *TestServer) DecryptAdminResponse(t *testing.T, resp *http.Response, v any) {
+	t.Helper()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("testutil: read admin response body: %v", err)
+	}
+	decrypted, err := madmin.DecryptData(ts.SecretKey, bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("testutil: decrypt admin response: %v", err)
+	}
+	if err := json.Unmarshal(decrypted, v); err != nil {
+		t.Fatalf("testutil: decode decrypted admin response: %v", err)
+	}
+}
+
 // SetBucketPolicy sets a bucket policy via the S3 API, failing the test on error.
 func (ts *TestServer) SetBucketPolicy(t *testing.T, bucket, policyJSON string) {
 	t.Helper()

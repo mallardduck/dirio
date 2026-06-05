@@ -96,6 +96,8 @@ TEST_USER_SECRET="mcadmusersecret1"
 TEST_POLICY="mcadmpol${TS}"
 TEST_GROUP="mcadmgroup${TS}"
 TEST_BUCKET="mcadmbucket${TS}"
+TEST_SA_NAME="mcadmsa${TS}"
+SA_KEY_FILE="/tmp/mc_admin_sa_key_${TS}"
 
 #------------------------------------------------------------------------------
 # Test Functions
@@ -222,35 +224,93 @@ test_admin_policy_remove() {
     mc admin policy remove ${MC_ALIAS} ${TEST_POLICY} > /dev/null 2>&1
 }
 
+test_admin_sa_add() {
+    local output key
+    # mc prints generated credentials to stdout; capture and persist to file
+    # because run_test executes this in a subshell — env vars don't propagate back.
+    output=$(mc admin user svcacct add ${MC_ALIAS} ${TEST_USER} --name "${TEST_SA_NAME}" --json 2>/dev/null)
+    key=$(echo "${output}" | jq -r '.accessKey // empty')
+    [ -n "${key}" ] && echo "${key}" > "${SA_KEY_FILE}"
+    [ -n "${key}" ]
+}
+
+test_admin_sa_list() {
+    local key
+    key=$(cat "${SA_KEY_FILE}" 2>/dev/null || echo "")
+    mc admin user svcacct ls ${MC_ALIAS} ${TEST_USER} --json 2>/dev/null | grep -q "${key}"
+}
+
+test_admin_sa_info() {
+    local key
+    key=$(cat "${SA_KEY_FILE}" 2>/dev/null || echo "")
+    mc admin user svcacct info ${MC_ALIAS} "${key}" > /dev/null 2>&1
+}
+
+test_admin_sa_disable() {
+    local key
+    key=$(cat "${SA_KEY_FILE}" 2>/dev/null || echo "")
+    mc admin user svcacct disable ${MC_ALIAS} "${key}" > /dev/null 2>&1
+}
+
+test_admin_sa_enable() {
+    local key
+    key=$(cat "${SA_KEY_FILE}" 2>/dev/null || echo "")
+    mc admin user svcacct enable ${MC_ALIAS} "${key}" > /dev/null 2>&1
+}
+
+test_admin_sa_remove() {
+    local key
+    key=$(cat "${SA_KEY_FILE}" 2>/dev/null || echo "")
+    mc admin user svcacct rm ${MC_ALIAS} "${key}" > /dev/null 2>&1
+    # Verify removed
+    if mc admin user svcacct info ${MC_ALIAS} "${key}" > /dev/null 2>&1; then
+        echo "Service account still exists after removal"
+        return 1
+    fi
+    return 0
+}
+
 #------------------------------------------------------------------------------
 # Run All Tests
 #------------------------------------------------------------------------------
 
-# First do creation/modify actions
-run_test "AdminUserAdd"              "user_management"   "exit_code" test_admin_user_add
-run_test "AdminUserList"             "user_management"   "exit_code" test_admin_user_list
-run_test "AdminUserInfo"             "user_management"   "exit_code" test_admin_user_info
-run_test "AdminPolicyCreate"         "policy_management" "exit_code" test_admin_policy_create
-run_test "AdminPolicyList"           "policy_management" "exit_code" test_admin_policy_list
-run_test "AdminPolicyInfo"           "policy_management" "exit_code" test_admin_policy_info
-run_test "AdminPolicyAttach"         "policy_management" "exit_code" test_admin_policy_attach
-run_test "AdminPolicyAttachedToUser" "policy_management" "exit_code" test_admin_policy_attached_to_user
-run_test "AdminGroupAdd"             "group_management"  "exit_code" test_admin_group_add
-run_test "AdminGroupList"            "group_management"  "exit_code" test_admin_group_list
-run_test "AdminGroupInfo"            "group_management"  "exit_code" test_admin_group_info
-run_test "AdminUserDisable"          "user_management"   "exit_code" test_admin_user_disable
-# Then undo them - but skip list/info actions
-run_test "AdminUserEnable"           "user_management"   "exit_code" test_admin_user_enable
-run_test "AdminGroupRemoveUser"           "group_management"   "exit_code" test_admin_group_remove_user
-run_test "AdminGroupRemove"          "group_management"   "exit_code" test_admin_group_remove
-run_test "AdminPolicyDetach"           "policy_management" "exit_code" test_admin_policy_detach
-run_test "AdminPolicyDetachedFromUser" "policy_management" "exit_code" test_admin_policy_detached_from_user
-run_test "AdminPolicyRemove"         "policy_management" "exit_code" test_admin_policy_remove
-run_test "AdminUserRemove"           "user_management"   "exit_code" test_admin_user_remove
+# User + policy + group lifecycle
+run_test "AdminUserAdd"              "user_management"        "exit_code" test_admin_user_add
+run_test "AdminUserList"             "user_management"        "exit_code" test_admin_user_list
+run_test "AdminUserInfo"             "user_management"        "exit_code" test_admin_user_info
+run_test "AdminPolicyCreate"         "policy_management"      "exit_code" test_admin_policy_create
+run_test "AdminPolicyList"           "policy_management"      "exit_code" test_admin_policy_list
+run_test "AdminPolicyInfo"           "policy_management"      "exit_code" test_admin_policy_info
+run_test "AdminPolicyAttach"         "policy_management"      "exit_code" test_admin_policy_attach
+run_test "AdminPolicyAttachedToUser" "policy_management"      "exit_code" test_admin_policy_attached_to_user
+run_test "AdminGroupAdd"             "group_management"       "exit_code" test_admin_group_add
+run_test "AdminGroupList"            "group_management"       "exit_code" test_admin_group_list
+run_test "AdminGroupInfo"            "group_management"       "exit_code" test_admin_group_info
+run_test "AdminUserDisable"          "user_management"        "exit_code" test_admin_user_disable
+run_test "AdminUserEnable"           "user_management"        "exit_code" test_admin_user_enable
+
+# Service account lifecycle (parent user must exist first)
+run_test "AdminSAAdd"                "service_accounts"       "exit_code" test_admin_sa_add
+run_test "AdminSAList"               "service_accounts"       "exit_code" test_admin_sa_list
+run_test "AdminSAInfo"               "service_accounts"       "exit_code" test_admin_sa_info
+run_test "AdminSADisable"            "service_accounts"       "exit_code" test_admin_sa_disable
+run_test "AdminSAEnable"             "service_accounts"       "exit_code" test_admin_sa_enable
+run_test "AdminSARemove"             "service_accounts"       "exit_code" test_admin_sa_remove
+
+# Teardown
+run_test "AdminGroupRemoveUser"      "group_management"       "exit_code" test_admin_group_remove_user
+run_test "AdminGroupRemove"          "group_management"       "exit_code" test_admin_group_remove
+run_test "AdminPolicyDetach"         "policy_management"      "exit_code" test_admin_policy_detach
+run_test "AdminPolicyDetachedFromUser" "policy_management"    "exit_code" test_admin_policy_detached_from_user
+run_test "AdminPolicyRemove"         "policy_management"      "exit_code" test_admin_policy_remove
+run_test "AdminUserRemove"           "user_management"        "exit_code" test_admin_user_remove
 printf "\n\n"
 
 # Output JSON results
 finalize_test_runner
+
+echo "End: MCAdmin"
+printf "\n\n"
 
 if [ $TEST_FAILED -gt 0 ]; then
     exit 1

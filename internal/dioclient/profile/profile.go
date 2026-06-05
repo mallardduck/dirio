@@ -13,10 +13,11 @@ const defaultConfigFile = ".dirio/client.yaml"
 
 // Profile holds connection parameters for a single DirIO server.
 type Profile struct {
-	Endpoint  string `yaml:"endpoint"`
-	AccessKey string `yaml:"access_key"`
-	SecretKey string `yaml:"secret_key"`
-	Region    string `yaml:"region,omitempty"`
+	Endpoint   string `yaml:"endpoint"`
+	AccessKey  string `yaml:"access_key"`
+	SecretKey  string `yaml:"secret_key"`
+	Region     string `yaml:"region,omitempty"`
+	ServerType string `yaml:"server_type,omitempty"`
 }
 
 // Config is the top-level structure of ~/.dirio/client.yaml.

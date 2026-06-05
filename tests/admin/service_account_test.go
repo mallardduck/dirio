@@ -13,11 +13,11 @@ func TestListServiceAccounts_Empty(t *testing.T) {
 	ts := NewTestServer(t)
 
 	resp := ts.AdminRequest(t, http.MethodGet, "/list-service-accounts", nil)
-	defer DrainAndClose(resp)
+	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var result map[string]any
-	DecodeJSON(t, resp, &result)
+	ts.DecryptAdminResponse(t, resp, &result)
 	accounts, ok := result["accounts"].([]any)
 	require.True(t, ok, "response should have 'accounts' field")
 	assert.Empty(t, accounts)
@@ -31,18 +31,42 @@ func TestAddServiceAccount_Success(t *testing.T) {
 		"accessKey": "svcaccount1",
 		"secretKey": "svcpassword123",
 	}
-	resp := ts.EncryptedAdminRequest(t, http.MethodPost, "/add-service-account", body)
-	defer DrainAndClose(resp)
+	resp := ts.EncryptedAdminRequest(t, http.MethodPut, "/add-service-account", body)
+	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var creds map[string]any
+	ts.DecryptAdminResponse(t, resp, &creds)
+	credentials := creds["credentials"].(map[string]any)
+	assert.Equal(t, "svcaccount1", credentials["accessKey"])
 
 	// Verify it appears in the list
 	resp2 := ts.AdminRequest(t, http.MethodGet, "/list-service-accounts", nil)
-	defer DrainAndClose(resp2)
-	var result map[string]any
-	DecodeJSON(t, resp2, &result)
-	accounts := result["accounts"].([]any)
-	assert.Len(t, accounts, 1)
-	assert.Equal(t, "svcaccount1", accounts[0])
+	defer resp2.Body.Close()
+	require.Equal(t, http.StatusOK, resp2.StatusCode)
+
+	var listResult map[string]any
+	ts.DecryptAdminResponse(t, resp2, &listResult)
+	accounts := listResult["accounts"].([]any)
+	require.Len(t, accounts, 1)
+	acct := accounts[0].(map[string]any)
+	assert.Equal(t, "svcaccount1", acct["accessKey"])
+}
+
+// TestAddServiceAccount_AutoGeneratesKey verifies that a service account is created
+// with an auto-generated key when no accessKey is provided.
+func TestAddServiceAccount_AutoGeneratesKey(t *testing.T) {
+	ts := NewTestServer(t)
+
+	body := map[string]string{"secretKey": "svcpassword123", "name": "ci-bot"}
+	resp := ts.EncryptedAdminRequest(t, http.MethodPut, "/add-service-account", body)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var creds map[string]any
+	ts.DecryptAdminResponse(t, resp, &creds)
+	credentials := creds["credentials"].(map[string]any)
+	assert.NotEmpty(t, credentials["accessKey"], "server should auto-generate an access key")
 }
 
 // TestAddServiceAccount_AlreadyExists verifies 409 on duplicate access key.
@@ -50,11 +74,11 @@ func TestAddServiceAccount_AlreadyExists(t *testing.T) {
 	ts := NewTestServer(t)
 
 	body := map[string]string{"accessKey": "svcaccount1", "secretKey": "svcpassword123"}
-	resp := ts.EncryptedAdminRequest(t, http.MethodPost, "/add-service-account", body)
+	resp := ts.EncryptedAdminRequest(t, http.MethodPut, "/add-service-account", body)
 	DrainAndClose(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	resp2 := ts.EncryptedAdminRequest(t, http.MethodPost, "/add-service-account", body)
+	resp2 := ts.EncryptedAdminRequest(t, http.MethodPut, "/add-service-account", body)
 	defer DrainAndClose(resp2)
 	assert.Equal(t, http.StatusConflict, resp2.StatusCode)
 }
@@ -69,19 +93,9 @@ func TestAddServiceAccount_ConflictsWithUser(t *testing.T) {
 
 	// Try to create a service account with the same key
 	body := map[string]string{"accessKey": "alice", "secretKey": "svcpassword123"}
-	resp := ts.EncryptedAdminRequest(t, http.MethodPost, "/add-service-account", body)
+	resp := ts.EncryptedAdminRequest(t, http.MethodPut, "/add-service-account", body)
 	defer DrainAndClose(resp)
 	assert.Equal(t, http.StatusConflict, resp.StatusCode)
-}
-
-// TestAddServiceAccount_MissingKey verifies 400 when accessKey is absent.
-func TestAddServiceAccount_MissingKey(t *testing.T) {
-	ts := NewTestServer(t)
-
-	body := map[string]string{"secretKey": "svcpassword123"} // no accessKey
-	resp := ts.EncryptedAdminRequest(t, http.MethodPost, "/add-service-account", body)
-	defer DrainAndClose(resp)
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
 
 // TestDeleteServiceAccount_Success creates and deletes a service account.
@@ -90,20 +104,22 @@ func TestDeleteServiceAccount_Success(t *testing.T) {
 
 	// Create
 	body := map[string]string{"accessKey": "svcaccount1", "secretKey": "svcpassword123"}
-	resp := ts.EncryptedAdminRequest(t, http.MethodPost, "/add-service-account", body)
+	resp := ts.EncryptedAdminRequest(t, http.MethodPut, "/add-service-account", body)
 	DrainAndClose(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	// Delete
-	resp2 := ts.AdminRequest(t, http.MethodPost, "/delete-service-account?accessKey=svcaccount1", nil)
+	// Delete (madmin uses DELETE)
+	resp2 := ts.AdminRequest(t, http.MethodDelete, "/delete-service-account?accessKey=svcaccount1", nil)
 	defer DrainAndClose(resp2)
-	assert.Equal(t, http.StatusOK, resp2.StatusCode)
+	assert.Equal(t, http.StatusNoContent, resp2.StatusCode)
 
 	// Verify it's gone
 	resp3 := ts.AdminRequest(t, http.MethodGet, "/list-service-accounts", nil)
-	defer DrainAndClose(resp3)
+	defer resp3.Body.Close()
+	require.Equal(t, http.StatusOK, resp3.StatusCode)
+
 	var result map[string]any
-	DecodeJSON(t, resp3, &result)
+	ts.DecryptAdminResponse(t, resp3, &result)
 	accounts := result["accounts"].([]any)
 	assert.Empty(t, accounts)
 }
@@ -112,7 +128,7 @@ func TestDeleteServiceAccount_Success(t *testing.T) {
 func TestDeleteServiceAccount_NotFound(t *testing.T) {
 	ts := NewTestServer(t)
 
-	resp := ts.AdminRequest(t, http.MethodPost, "/delete-service-account?accessKey=ghost", nil)
+	resp := ts.AdminRequest(t, http.MethodDelete, "/delete-service-account?accessKey=ghost", nil)
 	defer DrainAndClose(resp)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
@@ -122,18 +138,17 @@ func TestInfoServiceAccount_Success(t *testing.T) {
 	ts := NewTestServer(t)
 
 	body := map[string]string{"accessKey": "svcaccount1", "secretKey": "svcpassword123"}
-	resp := ts.EncryptedAdminRequest(t, http.MethodPost, "/add-service-account", body)
+	resp := ts.EncryptedAdminRequest(t, http.MethodPut, "/add-service-account", body)
 	DrainAndClose(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	resp2 := ts.AdminRequest(t, http.MethodGet, "/info-service-account?accessKey=svcaccount1", nil)
-	defer DrainAndClose(resp2)
+	defer resp2.Body.Close()
 	require.Equal(t, http.StatusOK, resp2.StatusCode)
 
 	var info map[string]any
-	DecodeJSON(t, resp2, &info)
-	assert.Equal(t, "svcaccount1", info["accessKey"])
-	assert.Equal(t, "on", info["status"])
+	ts.DecryptAdminResponse(t, resp2, &info)
+	assert.Equal(t, "on", info["accountStatus"])
 }
 
 // TestInfoServiceAccount_NotFound verifies 404 for unknown service accounts.
@@ -160,35 +175,34 @@ func TestUpdateServiceAccount_Status(t *testing.T) {
 
 	// Create
 	body := map[string]string{"accessKey": "svcaccount1", "secretKey": "svcpassword123"}
-	resp := ts.EncryptedAdminRequest(t, http.MethodPost, "/add-service-account", body)
+	resp := ts.EncryptedAdminRequest(t, http.MethodPut, "/add-service-account", body)
 	DrainAndClose(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	// Disable
+	// Disable (madmin uses POST for update)
 	updateBody := map[string]string{"newStatus": "off"}
 	resp2 := ts.EncryptedAdminRequest(t, http.MethodPost, "/update-service-account?accessKey=svcaccount1", updateBody)
 	defer DrainAndClose(resp2)
-	require.Equal(t, http.StatusOK, resp2.StatusCode)
+	require.Equal(t, http.StatusNoContent, resp2.StatusCode)
 
 	// Verify status changed
 	resp3 := ts.AdminRequest(t, http.MethodGet, "/info-service-account?accessKey=svcaccount1", nil)
-	defer DrainAndClose(resp3)
+	defer resp3.Body.Close()
+	require.Equal(t, http.StatusOK, resp3.StatusCode)
+
 	var info map[string]any
-	DecodeJSON(t, resp3, &info)
-	assert.Equal(t, "off", info["status"])
+	ts.DecryptAdminResponse(t, resp3, &info)
+	assert.Equal(t, "off", info["accountStatus"])
 }
 
 // TestServiceAccountCanAuthenticate verifies that a service account can sign requests
-// that are accepted by the authentication layer. We test this via the admin API, which
-// requires a valid signed request but does not enforce extra admin-only restrictions.
-// A request signed with bad credentials returns 403 with "InvalidAccessKeyId".
-// A request signed with valid SA credentials returns 200 (the admin API just needs auth).
+// that are accepted by the authentication layer.
 func TestServiceAccountCanAuthenticate(t *testing.T) {
 	ts := NewTestServer(t)
 
 	// Create the service account
 	body := map[string]string{"accessKey": "svcaccount1", "secretKey": "svcpassword123"}
-	resp := ts.EncryptedAdminRequest(t, http.MethodPost, "/add-service-account", body)
+	resp := ts.EncryptedAdminRequest(t, http.MethodPut, "/add-service-account", body)
 	DrainAndClose(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -203,9 +217,6 @@ func TestServiceAccountCanAuthenticate(t *testing.T) {
 		SecretKey: "svcpassword123",
 	}
 
-	// The admin list-groups endpoint requires a valid signed request.
-	// With valid SA credentials the auth middleware accepts the request → 200.
-	// With invalid credentials the middleware would return 403 with InvalidAccessKeyId.
 	resp2 := saTS.AdminRequest(t, http.MethodGet, "/groups", nil)
 	defer DrainAndClose(resp2)
 	assert.Equal(t, http.StatusOK, resp2.StatusCode, "SA should authenticate successfully against admin API")

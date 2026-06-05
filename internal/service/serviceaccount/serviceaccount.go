@@ -71,6 +71,8 @@ func (s *Service) Create(ctx context.Context, req *CreateServiceAccountRequest) 
 		req.AccessKey,
 		req.SecretKey,
 		req.AccessKey,
+		req.Name,
+		req.Description,
 		parentUserUUID,
 		req.PolicyMode,
 		iam.ServiceAcctStatusActive,
@@ -145,6 +147,14 @@ func (s *Service) Update(ctx context.Context, accessKey string, req *UpdateServi
 			return nil, err
 		}
 		sa.SecretKey = *req.SecretKey
+	}
+
+	if req.Name != nil {
+		sa.Name = *req.Name
+	}
+
+	if req.Description != nil {
+		sa.Description = *req.Description
 	}
 
 	if req.Status != nil {

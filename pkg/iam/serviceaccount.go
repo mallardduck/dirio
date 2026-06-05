@@ -61,6 +61,8 @@ type ServiceAccount struct {
 	AccessKey          string            `json:"accessKey"`                    // Credential access key
 	SecretKey          string            `json:"secretKey"`                    // Credential secret key
 	Username           string            `json:"username"`                     // Display name
+	Name               string            `json:"name,omitempty"`               // Human-readable label (madmin-compatible)
+	Description        string            `json:"description,omitempty"`        // Optional description (madmin-compatible)
 	ParentUserUUID     *uuid.UUID        `json:"parentUserUUID,omitempty"`     // Optional parent user UUID (stable across key rotation)
 	PolicyMode         PolicyMode        `json:"policyMode,omitempty"`         // "inherit" (default) or "override"
 	Status             ServiceAcctStatus `json:"status"`                       // Account status (on/off)
@@ -73,6 +75,7 @@ type ServiceAccount struct {
 func NewServiceAccount(
 	id uuid.UUID,
 	accessKey, secretKey, username string,
+	name, description string,
 	parentUserUUID *uuid.UUID,
 	policyMode PolicyMode,
 	status ServiceAcctStatus,
@@ -85,6 +88,8 @@ func NewServiceAccount(
 		AccessKey:          accessKey,
 		SecretKey:          secretKey,
 		Username:           username,
+		Name:               name,
+		Description:        description,
 		ParentUserUUID:     parentUserUUID,
 		PolicyMode:         policyMode,
 		Status:             status,
