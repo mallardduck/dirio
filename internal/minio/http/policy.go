@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	nethttp "net/http"
 	"slices"
+	"time"
 
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 	"github.com/mallardduck/go-http-helpers/pkg/query"
@@ -18,6 +19,14 @@ import (
 	"github.com/mallardduck/dirio/internal/service/user"
 	"github.com/mallardduck/dirio/pkg/iam"
 )
+
+// policyInfoV2 matches the madmin PolicyInfo wire format for ?v=2 responses.
+type policyInfoV2 struct {
+	PolicyName string              `json:"PolicyName"`
+	Policy     *iam.PolicyDocument `json:"Policy"`
+	CreateDate time.Time           `json:"CreateDate,omitempty"`
+	UpdateDate time.Time           `json:"UpdateDate,omitempty"`
+}
 
 type PolicyHTTPService struct {
 	users    *user.Service
@@ -87,8 +96,16 @@ func (s PolicyHTTPService) ListCannedPolicies(w nethttp.ResponseWriter, r *netht
 		return
 	}
 
+	// MinIO wire format: map from policy name to its IAM policy document directly.
+	// The madmin client (and mc) expect {"policyName": {"Version":"...","Statement":[...]}}
+	// not DirIO's internal iam.Policy wrapper.
+	docs := make(map[string]*iam.PolicyDocument, len(policies))
+	for name, p := range policies {
+		docs[name] = p.PolicyDocument
+	}
+
 	w.Header().Set(headers.ContentType, "application/json")
-	data, err := jsonutil.Marshal(policies)
+	data, err := jsonutil.Marshal(docs)
 	if err != nil {
 		s.log.Error("Failed to marshal response", "error", err)
 		w.WriteHeader(nethttp.StatusInternalServerError)
@@ -157,8 +174,21 @@ func (s PolicyHTTPService) InfoCannedPolicy(w nethttp.ResponseWriter, r *nethttp
 		return
 	}
 
+	// v=2 returns PolicyInfo (name + doc + timestamps); v=1/default returns raw IAM doc.
+	var payload any
+	if query.String(r, "v", "") == "2" {
+		payload = policyInfoV2{
+			PolicyName: cannedPolicy.Name,
+			Policy:     cannedPolicy.PolicyDocument,
+			CreateDate: cannedPolicy.CreateDate,
+			UpdateDate: cannedPolicy.UpdateDate,
+		}
+	} else {
+		payload = cannedPolicy.PolicyDocument
+	}
+
 	w.Header().Set(headers.ContentType, "application/json")
-	data, err := jsonutil.Marshal(cannedPolicy)
+	data, err := jsonutil.Marshal(payload)
 	if err != nil {
 		s.log.Error("Failed to marshal response", "error", err)
 		w.WriteHeader(nethttp.StatusInternalServerError)
