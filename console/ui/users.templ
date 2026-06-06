@@ -8,8 +8,9 @@ import (
 
 // UsersPageData holds all data for the users list page.
 type UsersPageData struct {
-	Users    []*consoleapi.User
-	ErrorMsg string
+	Users           []*consoleapi.User
+	ErrorMsg        string
+	GeneratedSecret string // non-empty when a secret was auto-generated on create
 }
 
 // UsersPage renders the full users list page.
@@ -22,24 +23,41 @@ templ UsersPage(d UsersPageData) {
 					<h2 class="text-sm font-semibold text-dirio-text">Create User</h2>
 				</div>
 				<div class="px-5 py-4">
-					<form method="POST" action={ PageURL("/users") } class="flex items-end gap-3">
+					if d.GeneratedSecret != "" {
+						<div class="mb-4 bg-dirio-teal/10 border border-dirio-teal/40 rounded px-4 py-3 text-xs text-dirio-teal">
+							<p class="font-semibold mb-1">Auto-generated secret key — copy it now, it won't be shown again:</p>
+							<code class="font-mono select-all break-all">{ d.GeneratedSecret }</code>
+						</div>
+					}
+					if d.ErrorMsg != "" {
+						<div class="mb-4 bg-dirio-coral/10 border border-dirio-coral/30 rounded px-4 py-2 text-xs text-dirio-coral">{ d.ErrorMsg }</div>
+					}
+					<form method="POST" action={ PageURL("/users") } class="flex items-end gap-3" x-data="{ gen: false }">
 						<div class="flex-1 max-w-xs">
 							<label class="block text-xs text-dirio-muted mb-1">Access Key</label>
 							<input
 								type="text"
 								name="accessKey"
-								placeholder="jane.doe"
+								placeholder="janedoe"
 								required
 								class="w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
 							/>
 						</div>
 						<div class="flex-1 max-w-xs">
-							<label class="block text-xs text-dirio-muted mb-1">Secret Key</label>
+							<div class="flex items-center justify-between mb-1">
+								<span class="text-xs text-dirio-muted">Secret Key</span>
+								<label class="flex items-center gap-1.5 text-xs text-dirio-muted cursor-pointer select-none">
+									<input type="checkbox" name="generate_secret" x-model="gen" class="rounded"/>
+									Auto-generate
+								</label>
+							</div>
 							<input
 								type="password"
 								name="secretKey"
-								placeholder="••••••••"
-								required
+								:placeholder="gen ? 'will be auto-generated' : '••••••••'"
+								:disabled="gen"
+								:required="!gen"
+								:class="gen ? 'opacity-40 cursor-not-allowed' : ''"
 								class="w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
 							/>
 						</div>
@@ -135,11 +153,18 @@ templ userRow(u *consoleapi.User) {
 						AccessKey: u.AccessKey,
 						FetchURL:  string(PageURL("/users/" + u.UUID + "/secret")),
 					})
+					<form
+						hx-post={ PageURL("/users/" + u.UUID + "/secret/rotate") }
+						hx-target="body"
+						hx-swap="innerHTML"
+					>
+						<button type="submit" class="text-xs text-dirio-teal hover:underline">Rotate Secret</button>
+					</form>
 					<button
 						class="text-xs text-dirio-teal hover:underline"
 						onclick={ UserUpdateSecretClick(u) }
 					>
-						Rotate Secret
+						Update Secret
 					</button>
 					<form
 						hx-post={ PageURL("/users/" + u.UUID + "/delete") }

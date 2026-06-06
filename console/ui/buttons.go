@@ -23,9 +23,16 @@ func UserUpdateSecretClick(u *consoleapi.User) templ.ComponentScript {
 	return templ.ComponentScript{
 		Name: "update-user-secret",
 		Call: fmt.Sprintf(
-			"const secret = prompt('Enter new secret key for %s:'); if(secret) { htmx.ajax('POST', '%s', {values: {secretKey: secret}, target: '#users-section', swap: 'outerHTML'}) }",
+			"const secret = prompt('Enter new secret key for %s:'); if(secret) { htmx.ajax('POST', '%s', {values: {secretKey: secret}, target: 'body', swap: 'innerHTML'}) }",
 			u.AccessKey,
 			PageURL("/users/"+u.UUID+"/secret"),
 		),
+	}
+}
+
+func ConfirmSubmit(message string) templ.ComponentScript {
+	return templ.ComponentScript{
+		Name: "confirm-submit",
+		Call: fmt.Sprintf("if(!confirm(%q)){event.preventDefault()}", message),
 	}
 }

@@ -1,0 +1,230 @@
+package ui
+
+import (
+	"sort"
+
+	"github.com/mallardduck/dirio/consoleapi"
+)
+
+// ObjectDetailData holds all data for the object detail page.
+type ObjectDetailData struct {
+	Bucket string
+	Meta   *consoleapi.ObjectMetadata
+	Tags   map[string]string
+	Owner  *consoleapi.Owner
+}
+
+// ObjectDetailPage renders the full object detail page.
+templ ObjectDetailPage(d ObjectDetailData) {
+	@Base(d.Meta.Key, "/buckets") {
+		<div class="space-y-6">
+			<!-- Breadcrumb -->
+			<nav class="flex items-center gap-2 text-xs text-dirio-muted flex-wrap">
+				<a href={ PageURL("/buckets") } class="hover:text-dirio-teal transition-colors">Buckets</a>
+				<span>/</span>
+				<a href={ PageURL("/buckets/" + d.Bucket) } class="hover:text-dirio-teal transition-colors">{ d.Bucket }</a>
+				<span>/</span>
+				<a href={ PageURL("/buckets/" + d.Bucket + "/objects?prefix=" + parentPrefix(d.Meta.Key)) } class="hover:text-dirio-teal transition-colors">Objects</a>
+				<span>/</span>
+				<span class="text-dirio-text font-medium font-mono">{ d.Meta.Key }</span>
+			</nav>
+
+			<!-- Metadata card -->
+			<div class="bg-dirio-bg-card border border-dirio-border rounded-lg">
+				<div class="px-5 py-4 border-b border-dirio-border">
+					<h2 class="text-sm font-semibold text-dirio-text">Metadata</h2>
+				</div>
+				<div class="px-5 py-4 grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
+					@metaRow("Key", d.Meta.Key)
+					@metaRow("Size", formatBytes(d.Meta.Size))
+					@metaRow("ETag", d.Meta.ETag)
+					@metaRow("Content-Type", d.Meta.ContentType)
+					@metaRow("Last Modified", d.Meta.LastModified.Format("2006-01-02 15:04:05 UTC"))
+					if d.Owner != nil && d.Owner.AccessKey != "" {
+						@metaRow("Owner", d.Owner.AccessKey+" ("+d.Owner.UUID+")")
+					}
+				</div>
+				if len(d.Meta.CustomMetadata) > 0 {
+					<div class="px-5 pb-4 border-t border-dirio-border pt-4">
+						<p class="text-xs font-semibold text-dirio-muted uppercase tracking-wider mb-3">Custom Metadata</p>
+						<div class="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+							for _, k := range sortedKeys(d.Meta.CustomMetadata) {
+								@metaRow(k, d.Meta.CustomMetadata[k])
+							}
+						</div>
+					</div>
+				}
+				<!-- Presigned URL result slot -->
+				<div id="presign-result" class="px-5 pb-4"></div>
+			</div>
+
+			<!-- Tags card -->
+			<div class="bg-dirio-bg-card border border-dirio-border rounded-lg">
+				<div class="px-5 py-4 border-b border-dirio-border">
+					<h2 class="text-sm font-semibold text-dirio-text">Tags</h2>
+					<p class="text-xs text-dirio-muted mt-0.5">Add or edit key/value tags. Leave key blank to remove a row.</p>
+				</div>
+				<div class="px-5 py-4">
+					<form
+						hx-post={ string(PageURL("/buckets/" + d.Bucket + "/objects/" + d.Meta.Key + "/tags")) }
+						hx-target="body"
+						hx-push-url="false"
+					>
+						<div class="space-y-2 mb-3">
+							for _, k := range sortedKeys(d.Tags) {
+								<div class="flex gap-2 items-center">
+									<input
+										type="text"
+										name="tag_key"
+										value={ k }
+										placeholder="key"
+										class="flex-1 bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-xs text-dirio-text font-mono focus:outline-none focus:border-dirio-teal"
+									/>
+									<input
+										type="text"
+										name="tag_value"
+										value={ d.Tags[k] }
+										placeholder="value"
+										class="flex-1 bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-xs text-dirio-text font-mono focus:outline-none focus:border-dirio-teal"
+									/>
+								</div>
+							}
+							for range 3 {
+								<div class="flex gap-2 items-center">
+									<input
+										type="text"
+										name="tag_key"
+										placeholder="new key"
+										class="flex-1 bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-xs text-dirio-muted font-mono focus:outline-none focus:border-dirio-teal"
+									/>
+									<input
+										type="text"
+										name="tag_value"
+										placeholder="value"
+										class="flex-1 bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-xs text-dirio-muted font-mono focus:outline-none focus:border-dirio-teal"
+									/>
+								</div>
+							}
+						</div>
+						<button
+							type="submit"
+							class="px-4 py-1.5 text-sm rounded border border-dirio-teal text-dirio-teal hover:bg-dirio-teal hover:text-dirio-bg transition-colors"
+						>Save Tags</button>
+					</form>
+				</div>
+			</div>
+
+			<!-- Actions card -->
+			<div class="bg-dirio-bg-card border border-dirio-border rounded-lg">
+				<div class="px-5 py-4 border-b border-dirio-border">
+					<h2 class="text-sm font-semibold text-dirio-text">Actions</h2>
+				</div>
+				<div class="px-5 py-4 flex flex-wrap gap-6">
+					<!-- Presigned GET URL generator -->
+					<div class="space-y-2">
+						<p class="text-xs text-dirio-muted font-medium">Download (pre-signed URL)</p>
+						<form
+							hx-post={ string(PageURL("/buckets/" + d.Bucket + "/objects/" + d.Meta.Key + "/presign")) }
+							hx-target="#presign-result"
+							hx-swap="innerHTML"
+							class="flex items-end gap-2"
+						>
+							<div>
+								<label class="block text-xs text-dirio-muted mb-1">Expires in</label>
+								<select
+									name="expiry"
+									class="bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-xs text-dirio-text focus:outline-none focus:border-dirio-teal"
+								>
+									<option value="15m">15 minutes</option>
+									<option value="1h">1 hour</option>
+									<option value="24h">24 hours</option>
+									<option value="168h">7 days</option>
+								</select>
+							</div>
+							<button
+								type="submit"
+								class="px-3 py-1.5 text-xs rounded border border-dirio-border text-dirio-muted hover:border-dirio-teal hover:text-dirio-teal transition-colors"
+							>Generate URL</button>
+						</form>
+					</div>
+					<!-- Copy object -->
+					<div class="space-y-2">
+						<p class="text-xs text-dirio-muted font-medium">Copy Object</p>
+						<form
+							method="POST"
+							action={ PageURL("/buckets/" + d.Bucket + "/objects/" + d.Meta.Key + "/copy") }
+							class="flex items-end gap-2"
+						>
+							<div>
+								<label class="block text-xs text-dirio-muted mb-1">Destination bucket</label>
+								<input
+									type="text"
+									name="dst_bucket"
+									placeholder={ d.Bucket }
+									class="bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-xs text-dirio-text font-mono focus:outline-none focus:border-dirio-teal w-36"
+								/>
+							</div>
+							<div>
+								<label class="block text-xs text-dirio-muted mb-1">Destination key</label>
+								<input
+									type="text"
+									name="dst_key"
+									placeholder={ d.Meta.Key + ".copy" }
+									class="bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-xs text-dirio-text font-mono focus:outline-none focus:border-dirio-teal w-48"
+								/>
+							</div>
+							<button
+								type="submit"
+								class="px-3 py-1.5 text-xs rounded border border-dirio-border text-dirio-muted hover:border-dirio-teal hover:text-dirio-teal transition-colors"
+							>Copy</button>
+						</form>
+					</div>
+				</div>
+				<!-- Delete -->
+				<div class="px-5 pb-4 pt-2 border-t border-dirio-border">
+					<form
+						method="POST"
+						action={ PageURL("/buckets/" + d.Bucket + "/objects/" + d.Meta.Key + "/delete") }
+					>
+						<button
+							type="submit"
+							onclick={ ConfirmSubmit("Delete " + d.Meta.Key + "?") }
+							class="px-3 py-1.5 text-xs rounded border border-dirio-coral text-dirio-coral hover:bg-dirio-coral hover:text-dirio-bg transition-colors"
+						>Delete Object</button>
+					</form>
+				</div>
+			</div>
+		</div>
+	}
+}
+
+// PresignedURLResult renders the copyable presigned URL result, swapped in via HTMX.
+templ PresignedURLResult(url string) {
+	<div class="flex gap-2 items-center mt-2">
+		<input
+			type="text"
+			readonly
+			value={ url }
+			onclick="this.select(); navigator.clipboard && navigator.clipboard.writeText(this.value)"
+			class="flex-1 font-mono text-xs bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-dirio-text cursor-pointer focus:outline-none focus:border-dirio-teal"
+		/>
+		<span class="text-xs text-dirio-muted whitespace-nowrap">Click to copy</span>
+	</div>
+}
+
+templ metaRow(label, value string) {
+	<div class="flex gap-4">
+		<span class="text-dirio-muted w-32 shrink-0 text-xs">{ label }</span>
+		<span class="font-mono text-xs text-dirio-text break-all">{ value }</span>
+	</div>
+}
+
+// sortedKeys returns the keys of a string map in sorted order.
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}

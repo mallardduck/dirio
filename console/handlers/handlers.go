@@ -134,10 +134,12 @@ func (h *Handler) Users(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) UserCreate(w http.ResponseWriter, r *http.Request) {
 	accessKey := r.FormValue("accessKey")
+	generateSecret := r.FormValue("generate_secret") == "on"
 	secretKey := r.FormValue("secretKey")
-	_, err := h.api.CreateUser(r.Context(), consoleapi.CreateUserRequest{
-		AccessKey: accessKey,
-		SecretKey: secretKey,
+	user, err := h.api.CreateUser(r.Context(), consoleapi.CreateUserRequest{
+		AccessKey:      accessKey,
+		SecretKey:      secretKey,
+		GenerateSecret: generateSecret,
 	})
 	users, _ := h.api.ListUsers(r.Context())
 	data := ui.UsersPageData{
@@ -147,6 +149,7 @@ func (h *Handler) UserCreate(w http.ResponseWriter, r *http.Request) {
 		data.ErrorMsg = err.Error()
 		h.triggerToast(w, "Failed to create user: "+err.Error(), "error")
 	} else {
+		data.GeneratedSecret = user.SecretKey
 		h.triggerToast(w, "User created successfully", "success")
 	}
 	render(w, r, ui.UsersPage(data))
@@ -193,13 +196,30 @@ func (h *Handler) UserUpdateSecret(w http.ResponseWriter, r *http.Request) {
 	_, err := h.api.UpdateUser(r.Context(), uuid, consoleapi.UpdateUserRequest{
 		SecretKey: &secretKey,
 	})
+	users, _ := h.api.ListUsers(r.Context())
+	data := ui.UsersPageData{Users: users}
+	if err != nil {
+		h.triggerToast(w, "Failed to update secret: "+err.Error(), "error")
+	} else {
+		h.triggerToast(w, "Secret updated successfully", "success")
+	}
+	render(w, r, ui.UsersPage(data))
+}
+
+func (h *Handler) UserRotateSecret(w http.ResponseWriter, r *http.Request) {
+	uuid := teapot.URLParam(r, "uuid")
+	user, err := h.api.UpdateUser(r.Context(), uuid, consoleapi.UpdateUserRequest{
+		GenerateSecret: true,
+	})
+	users, _ := h.api.ListUsers(r.Context())
+	data := ui.UsersPageData{Users: users}
 	if err != nil {
 		h.triggerToast(w, "Failed to rotate secret: "+err.Error(), "error")
 	} else {
+		data.GeneratedSecret = user.SecretKey
 		h.triggerToast(w, "Secret rotated successfully", "success")
 	}
-	users, _ := h.api.ListUsers(r.Context())
-	render(w, r, ui.UsersTable(users))
+	render(w, r, ui.UsersPage(data))
 }
 
 func (h *Handler) UserRevealSecret(w http.ResponseWriter, r *http.Request) {
@@ -240,7 +260,35 @@ func (h *Handler) Buckets(w http.ResponseWriter, r *http.Request) {
 		render(w, r, ui.BucketsTable(buckets))
 		return
 	}
-	render(w, r, ui.BucketsPage(buckets))
+	users, _ := h.api.ListUsers(r.Context())
+	render(w, r, ui.BucketsPage(ui.BucketsPageData{Buckets: buckets, Users: users}))
+}
+
+func (h *Handler) BucketCreate(w http.ResponseWriter, r *http.Request) {
+	name := r.FormValue("name")
+	ownerAccessKey := r.FormValue("owner_access_key")
+	err := h.api.CreateBucket(r.Context(), name, ownerAccessKey)
+	buckets, _ := h.api.ListBuckets(r.Context())
+	users, _ := h.api.ListUsers(r.Context())
+	data := ui.BucketsPageData{Buckets: buckets, Users: users}
+	if err != nil {
+		data.ErrorMsg = err.Error()
+		h.triggerToast(w, "Failed to create bucket: "+err.Error(), "error")
+	} else {
+		h.triggerToast(w, "Bucket created successfully", "success")
+	}
+	render(w, r, ui.BucketsPage(data))
+}
+
+func (h *Handler) BucketDelete(w http.ResponseWriter, r *http.Request) {
+	bucket := teapot.URLParam(r, "bucket")
+	if err := h.api.DeleteBucket(r.Context(), bucket); err != nil {
+		h.triggerToast(w, "Failed to delete bucket: "+err.Error(), "error")
+		http.Redirect(w, r, string(ui.PageURL("/buckets/"+bucket)), http.StatusSeeOther)
+		return
+	}
+	h.triggerToast(w, "Bucket deleted", "success")
+	http.Redirect(w, r, string(ui.PageURL("/buckets")), http.StatusSeeOther)
 }
 
 func (h *Handler) BucketDetail(w http.ResponseWriter, r *http.Request) {
@@ -252,12 +300,13 @@ func (h *Handler) BucketDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	policyJSON, _ := h.api.GetBucketPolicy(r.Context(), bucket)
 	owner, _ := h.api.GetBucketOwner(r.Context(), bucket)
-	data := ui.BucketDetailData{
+	users, _ := h.api.ListUsers(r.Context())
+	render(w, r, ui.BucketDetailPage(ui.BucketDetailData{
 		Bucket:     b,
 		PolicyJSON: policyJSON,
 		Owner:      owner,
-	}
-	render(w, r, ui.BucketDetailPage(data))
+		Users:      users,
+	}))
 }
 
 func (h *Handler) BucketPolicySet(w http.ResponseWriter, r *http.Request) {
@@ -274,10 +323,12 @@ func (h *Handler) BucketPolicySet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	owner, _ := h.api.GetBucketOwner(r.Context(), bucket)
+	users, _ := h.api.ListUsers(r.Context())
 	render(w, r, ui.BucketDetailPage(ui.BucketDetailData{
 		Bucket:     b,
 		PolicyJSON: policyJSON,
 		Owner:      owner,
+		Users:      users,
 	}))
 }
 
@@ -292,6 +343,7 @@ func (h *Handler) BucketTransferOwnership(w http.ResponseWriter, r *http.Request
 	b, _ := h.api.GetBucket(r.Context(), bucket)
 	policyJSON, _ := h.api.GetBucketPolicy(r.Context(), bucket)
 	owner, _ := h.api.GetBucketOwner(r.Context(), bucket)
+	users, _ := h.api.ListUsers(r.Context())
 	if b == nil {
 		http.Error(w, "Bucket not found", http.StatusNotFound)
 		return
@@ -300,6 +352,7 @@ func (h *Handler) BucketTransferOwnership(w http.ResponseWriter, r *http.Request
 		Bucket:     b,
 		PolicyJSON: policyJSON,
 		Owner:      owner,
+		Users:      users,
 	}))
 }
 
@@ -337,11 +390,13 @@ func (h *Handler) GroupDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	allPolicies, _ := h.api.ListPolicies(r.Context())
+	allUsers, _ := h.api.ListUsers(r.Context())
 	flash := r.URL.Query().Get("flash")
 	errMsg := r.URL.Query().Get("error")
 	render(w, r, ui.GroupDetailPage(ui.GroupDetailData{
 		Group:       g,
 		AllPolicies: allPolicies,
+		Users:       allUsers,
 		Flash:       flash,
 		ErrorMsg:    errMsg,
 	}))
@@ -358,7 +413,7 @@ func (h *Handler) GroupDelete(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GroupAddMember(w http.ResponseWriter, r *http.Request) {
 	name := teapot.URLParam(r, "group")
-	userRawUID := r.FormValue("user_uid")
+	userRawUID := r.FormValue("access_key")
 	if err := h.api.AddGroupMember(r.Context(), name, userRawUID); err != nil {
 		http.Redirect(w, r, string(ui.PageURL("/groups/"+name))+"?error="+err.Error(), http.StatusSeeOther)
 		return
@@ -368,7 +423,7 @@ func (h *Handler) GroupAddMember(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GroupRemoveMember(w http.ResponseWriter, r *http.Request) {
 	name := teapot.URLParam(r, "group")
-	accessKey := r.FormValue("access_key")
+	accessKey := r.FormValue("user_uuid")
 	if err := h.api.RemoveGroupMember(r.Context(), name, accessKey); err != nil {
 		http.Redirect(w, r, string(ui.PageURL("/groups/"+name))+"?error="+err.Error(), http.StatusSeeOther)
 		return

@@ -1,0 +1,178 @@
+package ui
+
+import "github.com/mallardduck/dirio/consoleapi"
+
+// PolicyDetailData holds all data for the policy detail page.
+type PolicyDetailData struct {
+	Policy   *consoleapi.Policy
+	Users    []*consoleapi.User
+	Flash    string
+	ErrorMsg string
+}
+
+// PolicyDetailPage renders the policy detail / edit page.
+templ PolicyDetailPage(d PolicyDetailData) {
+	@Base(d.Policy.Name, "/policies") {
+		<div class="space-y-6">
+			<!-- Breadcrumb -->
+			<nav class="flex items-center gap-2 text-xs text-dirio-muted">
+				<a href={ PageURL("/policies") } class="hover:text-dirio-teal transition-colors">IAM Policies</a>
+				<span>/</span>
+				<span class="text-dirio-text font-medium">{ d.Policy.Name }</span>
+			</nav>
+			if d.Flash != "" {
+				<div class="bg-dirio-teal/10 border border-dirio-teal/30 rounded px-4 py-2 text-xs text-dirio-teal">{ d.Flash }</div>
+			}
+			if d.ErrorMsg != "" {
+				<div class="bg-dirio-coral/10 border border-dirio-coral/30 rounded px-4 py-2 text-xs text-dirio-coral">{ d.ErrorMsg }</div>
+			}
+
+			<!-- Info row -->
+			<div class="grid grid-cols-3 gap-4 text-sm">
+				<div class="bg-dirio-bg-card border border-dirio-border rounded-lg px-4 py-3">
+					<p class="text-xs text-dirio-muted mb-1">Type</p>
+					<p class="text-dirio-text">
+						if d.Policy.IsBuiltin {
+							System (built-in)
+						} else {
+							Custom
+						}
+					</p>
+				</div>
+				<div class="bg-dirio-bg-card border border-dirio-border rounded-lg px-4 py-3">
+					<p class="text-xs text-dirio-muted mb-1">Created</p>
+					<p class="text-dirio-text font-mono text-xs">{ d.Policy.CreateDate.Format("2006-01-02 15:04") }</p>
+				</div>
+				<div class="bg-dirio-bg-card border border-dirio-border rounded-lg px-4 py-3">
+					<p class="text-xs text-dirio-muted mb-1">Last Updated</p>
+					<p class="text-dirio-text font-mono text-xs">{ d.Policy.UpdateDate.Format("2006-01-02 15:04") }</p>
+				</div>
+			</div>
+
+			<!-- Policy document editor -->
+			<div class="bg-dirio-bg-card border border-dirio-border rounded-lg">
+				<div class="px-5 py-4 border-b border-dirio-border">
+					<h2 class="text-sm font-semibold text-dirio-text">Policy Document</h2>
+					<p class="text-xs text-dirio-muted mt-0.5">IAM policy JSON document.</p>
+				</div>
+				<div class="px-5 py-4">
+					<form method="POST" action={ PageURL("/policies/" + d.Policy.Name) }>
+						<textarea
+							name="document"
+							rows="18"
+							spellcheck="false"
+							class="w-full font-mono text-xs bg-dirio-bg-input border border-dirio-border rounded px-3 py-2 text-dirio-text focus:outline-none focus:border-dirio-teal resize-y"
+							placeholder={ `{"Version": "2012-10-17", "Statement": []}` }
+						>{ d.Policy.PolicyDocument }</textarea>
+						<div class="flex items-center gap-3 mt-3">
+							if !d.Policy.IsBuiltin {
+								<button
+									type="submit"
+									class="px-4 py-1.5 text-sm rounded border border-dirio-teal text-dirio-teal hover:bg-dirio-teal hover:text-dirio-bg transition-colors"
+								>Save</button>
+								<a
+									href={ PageURL("/policies") }
+									class="px-4 py-1.5 text-sm rounded border border-dirio-border text-dirio-muted hover:border-dirio-coral hover:text-dirio-coral transition-colors"
+								>Cancel</a>
+							} else {
+								<p class="text-xs text-dirio-muted italic">System policies cannot be edited.</p>
+							}
+						</div>
+					</form>
+				</div>
+			</div>
+
+			<!-- Attached users -->
+			<div class="bg-dirio-bg-card border border-dirio-border rounded-lg">
+				<div class="px-5 py-4 border-b border-dirio-border">
+					<h2 class="text-sm font-semibold text-dirio-text">Attached Users</h2>
+				</div>
+				<div class="px-5 py-4 space-y-4">
+					<!-- Users with this policy attached -->
+					@policyAttachedUsersList(d.Policy.Name, d.Users)
+					<!-- Attach form -->
+					if !d.Policy.IsBuiltin {
+						<form method="POST" action={ PageURL("/policies/" + d.Policy.Name + "/attach-user") } class="flex items-end gap-3">
+							<div class="flex-1 max-w-xs">
+								<label class="block text-xs text-dirio-muted mb-1">Attach to user (access key)</label>
+								<input
+									type="text"
+									name="access_key"
+									placeholder="alice"
+									required
+									class="w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
+								/>
+							</div>
+							<button
+								type="submit"
+								class="px-4 py-1.5 text-sm rounded border border-dirio-teal text-dirio-teal hover:bg-dirio-teal hover:text-dirio-bg transition-colors"
+							>Attach</button>
+						</form>
+					}
+				</div>
+			</div>
+
+			<!-- Danger zone -->
+			if !d.Policy.IsBuiltin {
+				<div class="bg-dirio-bg-card border border-dirio-coral/30 rounded-lg">
+					<div class="px-5 py-4 border-b border-dirio-coral/30">
+						<h2 class="text-sm font-semibold text-dirio-coral">Danger Zone</h2>
+					</div>
+					<div class="px-5 py-4">
+						<form
+							method="POST"
+							action={ PageURL("/policies/" + d.Policy.Name + "/delete") }
+						>
+							<button
+								type="submit"
+								onclick={ ConfirmSubmit("Delete policy " + d.Policy.Name + "? This cannot be undone.") }
+								class="px-4 py-1.5 text-sm rounded border border-dirio-coral text-dirio-coral hover:bg-dirio-coral hover:text-dirio-bg transition-colors"
+							>Delete Policy</button>
+						</form>
+					</div>
+				</div>
+			}
+		</div>
+	}
+}
+
+templ policyAttachedUsersList(policyName string, users []*consoleapi.User) {
+	<div>
+		<p class="text-xs text-dirio-muted mb-2">Users with this policy attached:</p>
+		<div class="space-y-1">
+			for _, u := range users {
+				if hasPolicy(u.AttachedPolicies, policyName) {
+					<div class="flex items-center justify-between bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5">
+						<span class="font-mono text-xs text-dirio-text">{ u.AccessKey }</span>
+						<form method="POST" action={ PageURL("/policies/" + policyName + "/detach-user") } class="inline">
+							<input type="hidden" name="access_key" value={ u.AccessKey }/>
+							<button type="submit" class="text-xs text-dirio-coral hover:underline">Detach</button>
+						</form>
+					</div>
+				}
+			}
+			if countUsersWithPolicy(users, policyName) == 0 {
+				<p class="text-xs text-dirio-muted italic">No users have this policy attached.</p>
+			}
+		</div>
+	</div>
+}
+
+func hasPolicy(policies []string, name string) bool {
+	for _, p := range policies {
+		if p == name {
+			return true
+		}
+	}
+	return false
+}
+
+func countUsersWithPolicy(users []*consoleapi.User, policyName string) int {
+	n := 0
+	for _, u := range users {
+		if hasPolicy(u.AttachedPolicies, policyName) {
+			n++
+		}
+	}
+	return n
+}

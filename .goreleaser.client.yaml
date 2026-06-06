@@ -1,5 +1,8 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 # vim: set ts=2 sw=2 tw=0 fo=cnqoj
+#
+# Client (dio) release config for linux + darwin. Run via the release workflow
+# after the server config; run manually via "Release (Client)" workflow.
 
 version: 2
 
@@ -8,17 +11,11 @@ project_name: dirio
 before:
   hooks:
     - go mod tidy
-    # Install templ CLI pinned to the version in go.mod.
-    - go install github.com/a-h/templ/cmd/templ@v0.3.1020
-    # Download the Tailwind standalone binary for the current OS/arch.
-    - task download-tailwind
-    # Regenerate templ outputs and minify CSS from source.
-    - task build-ui
 
 builds:
-  - id: server
-    main: ./cmd/server
-    binary: dirio
+  - id: client
+    main: ./cmd/client
+    binary: dio
     env:
       - CGO_ENABLED=0
     goos:
@@ -36,23 +33,15 @@ builds:
       - -X github.com/mallardduck/dirio/internal/version.GitTreeState={{.GitTreeState}}
 
 archives:
-  - id: server-archive
+  - id: client-archive
     builds:
-      - server
-    name_template: "dirio_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+      - client
+    name_template: "dio_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats:
       - tar.gz
 
 checksum:
-  name_template: 'checksums.txt'
-
-snapshot:
-  version_template: "{{ incpatch .Version }}-next"
+  name_template: 'checksums-client.txt'
 
 changelog:
-  sort: asc
-  filters:
-    exclude:
-      - '^docs:'
-      - '^test:'
-      - '^chore:'
+  disable: true

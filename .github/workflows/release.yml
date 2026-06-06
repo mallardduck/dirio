@@ -38,7 +38,7 @@ jobs:
     - name: Install Task
       uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2.1.0
 
-    - name: Run GoReleaser
+    - name: Run GoReleaser (server — linux/darwin)
       uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
       with:
         distribution: goreleaser
@@ -47,12 +47,21 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Run GoReleaser Extra
+    - name: Run GoReleaser (client — linux/darwin)
       uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
       with:
         distribution: goreleaser
         version: latest
-        args: release --config .goreleaser.extra.yaml --clean --skip=validate,announce
+        args: release --config .goreleaser.client.yaml --skip=before,validate,announce
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Run GoReleaser (windows)
+      uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
+      with:
+        distribution: goreleaser
+        version: latest
+        args: release --config .goreleaser.windows.yaml --skip=before,validate,announce
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

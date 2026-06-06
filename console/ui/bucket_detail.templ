@@ -7,6 +7,7 @@ type BucketDetailData struct {
 	Bucket     *consoleapi.Bucket
 	PolicyJSON string            // empty string = no policy set
 	Owner      *consoleapi.Owner // current owner
+	Users      []*consoleapi.User
 }
 
 // BucketDetailPage renders the bucket detail page.
@@ -44,20 +45,34 @@ templ bucketDetailContent(d BucketDetailData) {
 					action={ PageURL("/buckets/" + d.Bucket.Name + "/ownership") }
 					class="flex items-end gap-3"
 				>
-					<div class="flex-1 max-w-xs">
-						<label class="block text-xs text-dirio-muted mb-1">Transfer to access key</label>
-						<input
-							type="text"
-							name="access_key"
-							placeholder="alice"
-							required
-							class="w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
-						/>
-					</div>
+					@UserSelect(UserSelectProps{
+						Name:       "access_key",
+						Label:      "Transfer to user",
+						Users:      d.Users,
+						EmptyLabel: "— admin (clear owner) —",
+					})
 					<button
 						type="submit"
 						class="px-4 py-1.5 text-sm rounded border border-dirio-border text-dirio-muted hover:border-dirio-teal hover:text-dirio-teal transition-colors"
 					>Transfer</button>
+				</form>
+			</div>
+		</div>
+		<!-- Danger zone -->
+		<div class="bg-dirio-bg-card border border-dirio-border rounded-lg">
+			<div class="px-5 py-4 border-b border-dirio-border">
+				<h2 class="text-sm font-semibold text-dirio-text">Danger Zone</h2>
+			</div>
+			<div class="px-5 py-4">
+				<form
+					method="POST"
+					action={ PageURL("/buckets/" + d.Bucket.Name + "/delete") }
+					onsubmit={ ConfirmSubmit("Delete bucket " + d.Bucket.Name + "? This cannot be undone.") }
+				>
+					<button
+						type="submit"
+						class="px-4 py-1.5 text-sm rounded border border-dirio-coral text-dirio-coral hover:bg-dirio-coral hover:text-dirio-bg transition-colors"
+					>Delete Bucket</button>
 				</form>
 			</div>
 		</div>

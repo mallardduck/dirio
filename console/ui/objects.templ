@@ -1,0 +1,245 @@
+package ui
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/mallardduck/dirio/consoleapi"
+)
+
+// ObjectsPage renders the full bucket object browser page.
+templ ObjectsPage(bucket, prefix string, objects []*consoleapi.ObjectInfo) {
+	@Base(bucket, "/buckets") {
+		<div class="space-y-4">
+			@objectsBreadcrumb(bucket, prefix)
+			<div class="flex items-center justify-between">
+				<p class="text-sm text-dirio-muted">{ fmt.Sprint(len(objects)) } item(s)</p>
+				@objectsUploadButton(bucket, prefix)
+			</div>
+			@ObjectsTable(bucket, prefix, objects)
+		</div>
+	}
+}
+
+// ObjectsTable renders the objects list as an HTMX-swappable fragment.
+// Includes the hx-trigger="reload" hook used by the upload widget.
+templ ObjectsTable(bucket, prefix string, objects []*consoleapi.ObjectInfo) {
+	<div
+		id="objects-section"
+		hx-get={ string(PageURL("/buckets/" + bucket + "/objects?prefix=" + prefix)) }
+		hx-trigger="reload"
+		hx-target="#objects-section"
+		hx-swap="outerHTML"
+	>
+		<div class="bg-dirio-bg-card border border-dirio-border rounded-lg overflow-hidden">
+			<table class="w-full text-sm">
+				<thead>
+					<tr class="border-b border-dirio-border text-left">
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Name</th>
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Size</th>
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Last Modified</th>
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider text-right">Actions</th>
+					</tr>
+				</thead>
+				<tbody>
+					if len(objects) == 0 {
+						<tr>
+							<td colspan="4" class="px-4 py-8 text-center text-dirio-muted">
+								if prefix != "" {
+									This folder is empty.
+								} else {
+									No objects in this bucket.
+								}
+							</td>
+						</tr>
+					}
+					for _, obj := range objects {
+						if obj.IsPrefix {
+							@objectFolderRow(bucket, obj)
+						} else {
+							@objectFileRow(bucket, prefix, obj)
+						}
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ objectFolderRow(bucket string, obj *consoleapi.ObjectInfo) {
+	<tr class="border-b border-dirio-border last:border-0 hover:bg-dirio-bg-card2 transition-colors">
+		<td class="px-4 py-3">
+			<a
+				href={ PageURL("/buckets/" + bucket + "/objects?prefix=" + obj.Key) }
+				class="flex items-center gap-2 text-dirio-teal hover:underline"
+			>
+				<span class="text-dirio-muted">📁</span>
+				{ strings.TrimPrefix(obj.Key, parentPrefix(strings.TrimSuffix(obj.Key, "/"))) }
+			</a>
+		</td>
+		<td class="px-4 py-3 text-dirio-muted text-xs">—</td>
+		<td class="px-4 py-3 text-dirio-muted text-xs">—</td>
+		<td class="px-4 py-3 text-right"></td>
+	</tr>
+}
+
+templ objectFileRow(bucket, prefix string, obj *consoleapi.ObjectInfo) {
+	<tr class="border-b border-dirio-border last:border-0 hover:bg-dirio-bg-card2 transition-colors">
+		<td class="px-4 py-3">
+			<a
+				href={ PageURL("/buckets/" + bucket + "/objects/" + obj.Key) }
+				class="text-dirio-text hover:text-dirio-teal transition-colors font-mono text-xs"
+			>
+				{ strings.TrimPrefix(obj.Key, prefix) }
+			</a>
+		</td>
+		<td class="px-4 py-3 text-dirio-muted text-xs">{ formatBytes(obj.Size) }</td>
+		<td class="px-4 py-3 text-dirio-muted text-xs">{ obj.LastModified.Format("2006-01-02 15:04") }</td>
+		<td class="px-4 py-3 text-right">
+			<form
+				hx-post={ string(PageURL("/buckets/" + bucket + "/objects/" + obj.Key + "/delete?prefix=" + prefix)) }
+				hx-target="#objects-section"
+				hx-swap="outerHTML"
+				hx-confirm={ "Delete " + obj.Key + "?" }
+				class="inline"
+			>
+				<button type="submit" class="text-xs text-dirio-coral hover:underline">Delete</button>
+			</form>
+		</td>
+	</tr>
+}
+
+// objectsBreadcrumb renders the clickable prefix path navigation.
+templ objectsBreadcrumb(bucket, prefix string) {
+	<nav class="flex items-center gap-2 text-xs text-dirio-muted flex-wrap">
+		<a href={ PageURL("/buckets") } class="hover:text-dirio-teal transition-colors">Buckets</a>
+		<span>/</span>
+		<a href={ PageURL("/buckets/" + bucket) } class="hover:text-dirio-teal transition-colors">{ bucket }</a>
+		<span>/</span>
+		<a href={ PageURL("/buckets/" + bucket + "/objects") } class="hover:text-dirio-teal transition-colors">Objects</a>
+		if prefix != "" {
+			for _, seg := range prefixSegments(prefix) {
+				<span>/</span>
+				<a href={ PageURL("/buckets/" + bucket + "/objects?prefix=" + seg.Prefix) } class="hover:text-dirio-teal transition-colors">{ seg.Label }</a>
+			}
+		}
+	</nav>
+}
+
+// prefixSegment is a single clickable segment in the breadcrumb.
+type prefixSegment struct {
+	Label  string
+	Prefix string
+}
+
+// prefixSegments converts a prefix like "a/b/c/" into clickable breadcrumb segments.
+func prefixSegments(prefix string) []prefixSegment {
+	parts := strings.Split(strings.TrimSuffix(prefix, "/"), "/")
+	segs := make([]prefixSegment, 0, len(parts))
+	acc := ""
+	for _, p := range parts {
+		if p == "" {
+			continue
+		}
+		acc += p + "/"
+		segs = append(segs, prefixSegment{Label: p, Prefix: acc})
+	}
+	return segs
+}
+
+// objectsUploadButton renders the upload trigger button and the Alpine.js upload dialog.
+templ objectsUploadButton(bucket, prefix string) {
+	<div
+		x-data="dirioUploader()"
+		x-init={ fmt.Sprintf("init('%s','%s')", bucket, prefix) }
+	>
+		<button
+			@click="open = true"
+			type="button"
+			class="px-3 py-1.5 text-xs rounded border border-dirio-teal text-dirio-teal hover:bg-dirio-teal hover:text-dirio-bg transition-colors"
+		>Upload File</button>
+		<!-- Upload dialog -->
+		<div
+			x-show="open"
+			x-cloak
+			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+			@keydown.escape.window="open = false"
+		>
+			<div class="bg-dirio-bg-card border border-dirio-border rounded-lg p-6 w-full max-w-md space-y-4 shadow-xl">
+				<h3 class="text-sm font-semibold text-dirio-text">Upload File</h3>
+				<div>
+					<label class="block text-xs text-dirio-muted mb-1">Select file</label>
+					<input
+						type="file"
+						@change="file = $event.target.files[0]"
+						class="w-full text-sm text-dirio-text file:mr-3 file:py-1 file:px-3 file:rounded file:border file:border-dirio-border file:text-xs file:bg-dirio-bg-input file:text-dirio-muted"
+					/>
+				</div>
+				<div x-show="file" class="text-xs text-dirio-muted" x-text="'File: ' + (file ? file.name : '')"></div>
+				<!-- Progress bar -->
+				<div x-show="uploading" class="space-y-1">
+					<div class="w-full bg-dirio-bg-input rounded-full h-1.5">
+						<div class="bg-dirio-teal h-1.5 rounded-full transition-all" :style="'width:' + progress + '%'"></div>
+					</div>
+					<p class="text-xs text-dirio-muted text-right" x-text="progress + '%'"></p>
+				</div>
+				<div x-show="error" class="text-xs text-dirio-coral" x-text="error"></div>
+				<div x-show="done" class="text-xs text-dirio-teal">Upload complete!</div>
+				<div class="flex gap-3 justify-end">
+					<button
+						type="button"
+						@click="open = false; done = false; error = ''; file = null; progress = 0"
+						class="px-3 py-1.5 text-xs rounded border border-dirio-border text-dirio-muted hover:border-dirio-teal hover:text-dirio-teal transition-colors"
+					>
+						<span x-show="done">Close</span>
+						<span x-show="!done">Cancel</span>
+					</button>
+					<button
+						type="button"
+						@click="doUpload()"
+						:disabled="!file || uploading"
+						x-show="!done"
+						class="px-3 py-1.5 text-xs rounded border border-dirio-teal text-dirio-teal hover:bg-dirio-teal hover:text-dirio-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+					>
+						<span x-show="!uploading">Upload</span>
+						<span x-show="uploading">Uploading…</span>
+					</button>
+				</div>
+			</div>
+		</div>
+		<script>
+			function dirioUploader() {
+				return {
+					open: false, file: null, progress: 0, uploading: false, error: '', done: false,
+					_bucket: '', _prefix: '',
+					init(bucket, prefix) { this._bucket = bucket; this._prefix = prefix; },
+					async doUpload() {
+						if (!this.file) return;
+						this.uploading = true; this.error = '';
+						try {
+							const key = this._prefix + this.file.name;
+							const uploadPath = '/dirio/ui/buckets/' + encodeURIComponent(this._bucket) + '/upload-url?key=' + encodeURIComponent(key);
+							const resp = await fetch(uploadPath, { method: 'POST' });
+							if (!resp.ok) throw new Error('Failed to get upload URL');
+							const { url } = await resp.json();
+							await new Promise((res, rej) => {
+								const xhr = new XMLHttpRequest();
+								xhr.upload.onprogress = e => { if (e.lengthComputable) this.progress = Math.round(e.loaded / e.total * 100); };
+								xhr.onload = () => xhr.status < 300 ? res() : rej(new Error('Upload failed: ' + xhr.status));
+								xhr.onerror = () => rej(new Error('Network error'));
+								xhr.open('PUT', url);
+								xhr.setRequestHeader('Content-Type', this.file.type || 'application/octet-stream');
+								xhr.send(this.file);
+							});
+							this.done = true;
+							htmx.trigger(document.getElementById('objects-section'), 'reload');
+						} catch (e) {
+							this.error = e.message;
+						}
+						this.uploading = false;
+					}
+				};
+			}
+		</script>
+	</div>
+}

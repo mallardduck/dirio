@@ -6,10 +6,52 @@ import (
 	"github.com/mallardduck/dirio/consoleapi"
 )
 
+// BucketsPageData holds all data for the buckets list page.
+type BucketsPageData struct {
+	Buckets  []*consoleapi.Bucket
+	Users    []*consoleapi.User
+	ErrorMsg string
+}
+
 // BucketsPage renders the full buckets list page.
-templ BucketsPage(buckets []*consoleapi.Bucket) {
+templ BucketsPage(d BucketsPageData) {
 	@Base("Buckets", "/buckets") {
-		@BucketsTable(buckets)
+		<div class="space-y-6">
+			<!-- Create bucket -->
+			<div class="bg-dirio-bg-card border border-dirio-border rounded-lg">
+				<div class="px-5 py-4 border-b border-dirio-border">
+					<h2 class="text-sm font-semibold text-dirio-text">Create Bucket</h2>
+				</div>
+				<div class="px-5 py-4">
+					if d.ErrorMsg != "" {
+						<div class="mb-3 bg-dirio-coral/10 border border-dirio-coral/30 rounded px-4 py-2 text-xs text-dirio-coral">{ d.ErrorMsg }</div>
+					}
+					<form method="POST" action={ PageURL("/buckets") } class="flex items-end gap-3">
+						<div>
+							<label class="block text-xs text-dirio-muted mb-1">Bucket Name</label>
+							<input
+								type="text"
+								name="name"
+								required
+								placeholder="my-bucket"
+								class="bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text font-mono placeholder-dirio-muted focus:outline-none focus:border-dirio-teal w-64"
+							/>
+						</div>
+						@UserSelect(UserSelectProps{
+							Name:       "owner_access_key",
+							Label:      "Owner (optional)",
+							Users:      d.Users,
+							EmptyLabel: "admin (default)",
+						})
+						<button
+							type="submit"
+							class="px-4 py-1.5 text-sm rounded border border-dirio-teal text-dirio-teal hover:bg-dirio-teal hover:text-dirio-bg transition-colors"
+						>Create</button>
+					</form>
+				</div>
+			</div>
+			@BucketsTable(d.Buckets)
+		</div>
 	}
 }
 
@@ -26,19 +68,23 @@ templ BucketsTable(buckets []*consoleapi.Bucket) {
 						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Owner</th>
 						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Owner UUID</th>
 						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider">Created</th>
+						<th class="px-4 py-3 text-xs font-semibold text-dirio-muted uppercase tracking-wider text-right">Actions</th>
 					</tr>
 				</thead>
 				<tbody>
 					if len(buckets) == 0 {
 						<tr>
-							<td colspan="4" class="px-4 py-8 text-center text-dirio-muted">No buckets found.</td>
+							<td colspan="5" class="px-4 py-8 text-center text-dirio-muted">No buckets found.</td>
 						</tr>
 					}
 					for _, b := range buckets {
 						<tr class="border-b border-dirio-border last:border-0 hover:bg-dirio-bg-card2 transition-colors">
 							<td class="px-4 py-3 font-medium">
-							<a href={ PageURL("/buckets/" + b.Name) } class="text-dirio-text hover:text-dirio-teal transition-colors">{ b.Name }</a>
-						</td>
+								<div class="flex items-center gap-3">
+									<a href={ PageURL("/buckets/" + b.Name) } class="text-dirio-text hover:text-dirio-teal transition-colors">{ b.Name }</a>
+									<a href={ PageURL("/buckets/" + b.Name + "/objects") } class="text-xs text-dirio-muted hover:text-dirio-teal transition-colors">Browse</a>
+								</div>
+							</td>
 							<td class="px-4 py-3 text-xs text-dirio-muted">
 								if b.Owner != nil {
 									{ b.Owner.Username }
@@ -54,6 +100,16 @@ templ BucketsTable(buckets []*consoleapi.Bucket) {
 								}
 							</td>
 							<td class="px-4 py-3 text-dirio-muted text-xs">{ b.CreatedAt.Format("2006-01-02") }</td>
+							<td class="px-4 py-3 text-right">
+								<form
+									hx-post={ PageURL("/buckets/" + b.Name + "/delete") }
+									hx-confirm={ "Delete bucket " + b.Name + "? This cannot be undone." }
+									hx-target="#buckets-section"
+									hx-swap="outerHTML"
+								>
+									<button type="submit" class="text-xs text-dirio-coral hover:underline">Delete</button>
+								</form>
+							</td>
 						</tr>
 					}
 				</tbody>

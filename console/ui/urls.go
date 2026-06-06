@@ -2,8 +2,13 @@ package ui
 
 import "github.com/a-h/templ"
 
+// DefaultBasePath is the console URL prefix used in single-port mode.
+const DefaultBasePath = "/dirio/ui"
+
 // BasePath is the URL prefix under which the admin console is mounted.
-const BasePath = "/dirio/ui"
+// DefaultBasePath in single-port mode; "" in dedicated-port mode.
+// Set by console.New() at startup — do not modify directly.
+var BasePath = DefaultBasePath
 
 // AppVersion is the running server version, set by console.New() at startup.
 var AppVersion = "dev"

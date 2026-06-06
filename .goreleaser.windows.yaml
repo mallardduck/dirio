@@ -1,9 +1,9 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 # vim: set ts=2 sw=2 tw=0 fo=cnqoj
 #
-# Extra platform release config (darwin + windows). Run manually via the
-# "Release (Extra Platforms)" workflow to attach these binaries to an existing
-# release tag.
+# Windows release config for both dirio (server) and dio (client). Run via the
+# release workflow after the server config; run manually via "Release (Windows)"
+# workflow to re-attach Windows binaries to an existing release tag.
 
 version: 2
 
@@ -13,7 +13,7 @@ before:
   hooks:
     - go mod tidy
     # Install templ CLI pinned to the version in go.mod.
-    - go install github.com/a-h/templ/cmd/templ@v0.3.977
+    - go install github.com/a-h/templ/cmd/templ@v0.3.1020
     # Download the Tailwind standalone binary for the current OS/arch.
     - task download-tailwind
     # Regenerate templ outputs and minify CSS from source.
@@ -26,7 +26,6 @@ builds:
     env:
       - CGO_ENABLED=0
     goos:
-      - darwin
       - windows
     goarch:
       - amd64
@@ -45,7 +44,6 @@ builds:
     env:
       - CGO_ENABLED=0
     goos:
-      - darwin
       - windows
     goarch:
       - amd64
@@ -62,27 +60,19 @@ archives:
   - id: server-archive
     builds:
       - server
-    name_template: "{{ .ProjectName }}-server_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "dirio_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats:
-      - tar.gz
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
+      - zip
 
   - id: client-archive
     builds:
       - client
-    name_template: "{{ .ProjectName }}-client_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "dio_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats:
-      - tar.gz
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
+      - zip
 
 checksum:
-  name_template: 'checksums-extra.txt'
+  name_template: 'checksums-windows.txt'
 
 changelog:
   disable: true

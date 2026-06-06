@@ -134,13 +134,20 @@ func (s *Service) Update(ctx context.Context, userUID uuid.UUID, req *UpdateUser
 	return user, nil
 }
 
-// Delete deletes a user by UUID.
+// Delete deletes a user by UUID, removing them from all groups first.
 func (s *Service) Delete(ctx context.Context, userUID uuid.UUID) error {
 	if userUID == iam.AdminUserUUID {
 		return svcerrors.ErrUserIsSystemAdmin
 	}
 	if _, err := s.Get(ctx, userUID); err != nil {
 		return err
+	}
+	groupNames, err := s.metadataManager.GetGroupNamesForUser(ctx, userUID)
+	if err != nil {
+		return err
+	}
+	for _, name := range groupNames {
+		_ = s.metadataManager.RemoveUserFromGroup(ctx, name, userUID)
 	}
 	return s.metadataManager.DeleteUser(ctx, userUID)
 }

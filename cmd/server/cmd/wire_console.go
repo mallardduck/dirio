@@ -7,6 +7,7 @@ import (
 
 	"github.com/mallardduck/dirio/console"
 	consoleauth "github.com/mallardduck/dirio/console/auth"
+	"github.com/mallardduck/dirio/console/ui"
 	consolewire "github.com/mallardduck/dirio/internal/console"
 	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/http/server"
@@ -29,7 +30,12 @@ func setupConsole(srv *server.Server, enabled, dedicatedPort bool, port int) {
 
 	factory := service.NewServiceFactory(srv.Storage(), srv.Metadata(), srv.PolicyEngine(), srv.Auth())
 	adapter := consolewire.NewAdapter(factory)
-	handler := console.New(adapter, srv.Router(), newConsoleAdminAuth(srv.Auth()), version.Version)
+
+	basePath := ui.DefaultBasePath
+	if dedicatedPort {
+		basePath = ""
+	}
+	handler := console.New(adapter, srv.Router(), newConsoleAdminAuth(srv.Auth()), version.Version, basePath)
 
 	effectivePort := 0
 	if dedicatedPort {

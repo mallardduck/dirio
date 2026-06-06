@@ -33,11 +33,12 @@ var staticFiles embed.FS
 // New returns an http.Handler that serves the admin console.
 // s3Router is used purely for URL generation via named routes; it is not invoked.
 // adminAuth validates admin credentials at login time.
-// When mounted at a path prefix, callers must strip that prefix before passing
-// requests here (e.g. http.StripPrefix("/dirio/ui", New(api, s3Router, adminAuth))).
-func New(api consoleapi.API, s3Router ui.S3Router, adminAuth consoleauth.AdminAuth, version string) *teapot.Router {
+// basePath is the URL prefix the console is reachable under: "/dirio/ui" in
+// single-port mode, "" in dedicated-port mode (console owns its own listener root).
+func New(api consoleapi.API, s3Router ui.S3Router, adminAuth consoleauth.AdminAuth, version, basePath string) *teapot.Router {
 	ui.AppVersion = version
-	sessions, err := consoleauth.NewSession()
+	ui.BasePath = basePath
+	sessions, err := consoleauth.NewSession(basePath)
 	if err != nil {
 		panic("console: failed to create session manager: " + err.Error())
 	}
@@ -75,6 +76,7 @@ func New(api consoleapi.API, s3Router ui.S3Router, adminAuth consoleauth.AdminAu
 		r.Func().POST("/users/{uuid}/delete", h.UserDelete).Name("users.delete")
 		r.Func().POST("/users/{uuid}/status", h.UserSetStatus).Name("users.status")
 		r.Func().POST("/users/{uuid}/secret", h.UserUpdateSecret).Name("users.secret.update")
+		r.Func().POST("/users/{uuid}/secret/rotate", h.UserRotateSecret).Name("users.secret.rotate")
 		r.Func().GET("/users/{uuid}/secret", h.UserRevealSecret).Name("users.secret.reveal")
 		r.Func().GET("/groups", h.Groups).Name("groups")
 		r.Func().POST("/groups", h.GroupCreate).Name("groups.create")
@@ -93,6 +95,8 @@ func New(api consoleapi.API, s3Router ui.S3Router, adminAuth consoleauth.AdminAu
 		r.Func().GET("/service-accounts/{uuid}/secret", h.ServiceAccountRevealSecret).Name("service-accounts.secret.reveal")
 		r.Func().GET("/policies", h.Policies).Name("policies")
 		r.Func().GET("/buckets", h.Buckets).Name("buckets")
+		r.Func().POST("/buckets", h.BucketCreate).Name("buckets.create")
+		r.Func().POST("/buckets/{bucket}/delete", h.BucketDelete).Name("buckets.delete")
 		r.Func().GET("/buckets/{bucket}", h.BucketDetail).Name("buckets.detail")
 		r.Func().POST("/buckets/{bucket}/policy", h.BucketPolicySet).Name("buckets.policy.set")
 		r.Func().POST("/buckets/{bucket}/ownership", h.BucketTransferOwnership).Name("buckets.ownership.transfer")

@@ -1,6 +1,6 @@
 # DirIO Development Roadmap
 
-Current status: **Phase 4.5 complete** — Phases 1–4.5 done; next up is Phase 5 (production readiness) and Phase 8 (extended console UI).
+Current status: **Phase 8 complete (except 8.1)** — Phases 1–8 done (8.1 Audit Log Viewer deferred); next up is Phase 8.1 or Phase 9.
 
 > 📋 Completed work log: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
@@ -495,24 +495,34 @@ The `dio` ownership and simulation commands require HTTP endpoints that do not y
 - ✅ Server-side admin API compatibility verified via TestMCAdmin (25/25 mc tests pass against DirIO)
 - ✅ Client-side integration tests: `tests/dioclient/admin_test.go` (20 tests pass against in-process DirIO server)
 
-## Phase 8: Web Console — Extended Features
+## Phase 8: Web Console — Extended Features ✅ (except 8.1)
 
 **Foundation built in Phase 4.3 (auth, IAM views, policy editor, simulator, ownership management). This phase covers the S3 data plane UI and IAM management forms — making DirIO fully operable without a terminal for day-to-day tasks.**
 
-### S3 Data Browser
-- [ ] **Bucket browser** — list objects with prefix navigation (folder-style), sortable by name/size/date
-- [ ] **Object detail** — view metadata, tags, owner, ETag; download button; copy pre-signed URL
-- [ ] **Upload interface** — drag-and-drop file upload with progress bar; multipart for large files; uses POST policy or pre-signed PUT
-- [ ] **Object actions** — delete object, copy object (within/across buckets), set tags
+### S3 Data Browser ✅ COMPLETE
+- ✅ **Bucket browser** — list objects with prefix navigation (folder-style breadcrumbs), delete per row
+- ✅ **Object detail** — metadata card (key, size, ETag, content-type, last modified), owner, tags editor (editable key/value pairs), presigned URL generation
+- ✅ **Upload interface** — Alpine.js drag-and-drop dialog with XHR progress bar; fetches pre-signed PUT URL server-side; triggers table refresh on completion
+- ✅ **Object actions** — delete object (confirm dialog), copy object (dst bucket + key form), set tags (inline form), generate pre-signed download URL
 
-### IAM Management Forms
-- [ ] **User CRUD forms** — create/edit/delete users directly in console (currently requires `mc admin`)
-- [ ] **Policy CRUD forms** — create/edit named policies with JSON editor + validation (currently requires `mc admin` or the raw policy editor)
-- [ ] **Service account management** — create/revoke service accounts, view expiry, manage policy mode
-- [ ] **Group management UI** — create groups, assign members, attach policies
+### IAM Management Forms ✅ COMPLETE
+- ✅ **User CRUD forms** — create user (access key + secret key or auto-generate), delete, enable/disable, reveal secret, rotate secret (auto-generate) vs update secret (manual prompt), user detail page with attached policies and policy attach/detach
+- ✅ **Policy CRUD forms** — create named policy with JSON editor, policy detail page with document editor, attached users list with per-user detach
+- ✅ **Service account management** — service account detail page: edit expiry date, seed/edit embedded policy JSON, reveal secret, rotate secret, enable/disable, delete
+- ✅ **Group management UI** — create groups, add/remove members via user picker (UserSelect component), attach/detach policies, enable/disable, delete
 
-### Audit Log Viewer (depends on Phase 6)
+### Console Infrastructure Improvements ✅ COMPLETE
+- ✅ **Dedicated-port mode** — dynamic `BasePath` (`""` on own port, `"/dirio/ui"` on main port); session cookie path computed at startup
+- ✅ **UserSelect component** — reusable dropdown for any form needing a user picker; supports optional empty/"admin" selection
+- ✅ **Bucket create with owner** — create form includes optional owner picker; empty = admin-owned
+- ✅ **Bucket delete** — delete button on list row (HTMX confirm) and bucket detail Danger Zone card
+- ✅ **Transfer bucket to admin** — ownership transfer supports clearing owner (UserSelect with empty label)
+- ✅ **User delete cleanup** — deleting a user removes them from all group memberships via `GetGroupNamesForUser` index
+- ✅ **Orphaned member removal** — remove form uses raw UUID so deleted users can still be removed from groups
+
+### Phase 8.1: Audit Log Viewer
 - [ ] Filterable log stream in console — filter by user, bucket, action, allow/deny, time range
+  - Depends on a queryable audit log source for console — may require rebuilding audit log feature and logging.
 - [ ] Export filtered log to CSV/JSON
 
 ## Phase 9: Ensure vHost and Path-style buckets are both supported correctly (Plus Website buckets)

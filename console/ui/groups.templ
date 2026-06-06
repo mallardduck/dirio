@@ -3,8 +3,19 @@ package ui
 import (
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/mallardduck/dirio/consoleapi"
 )
+
+// memberKey returns the access key for a member UUID, falling back to the UUID string.
+func memberKey(users []*consoleapi.User, uid uuid.UUID) string {
+	for _, u := range users {
+		if u.UUID == uid.String() {
+			return u.AccessKey
+		}
+	}
+	return uid.String()
+}
 
 // GroupsPageData holds all data for the groups list page.
 type GroupsPageData struct {
@@ -106,6 +117,7 @@ templ groupRow(g *consoleapi.Group) {
 type GroupDetailData struct {
 	Group       *consoleapi.Group
 	AllPolicies []*consoleapi.Policy
+	Users       []*consoleapi.User
 	Flash       string
 	ErrorMsg    string
 }
@@ -139,9 +151,9 @@ templ GroupDetailPage(d GroupDetailData) {
 						<div class="divide-y divide-dirio-border">
 							for _, member := range d.Group.Members {
 								<div class="flex items-center justify-between py-2">
-									<span class="font-mono text-sm text-dirio-text">{ member.String() }</span>
+									<span class="font-mono text-sm text-dirio-text">{ memberKey(d.Users, member) }</span>
 									<form method="POST" action={ PageURL("/groups/" + d.Group.Name + "/members/remove") }>
-										<input type="hidden" name="access_key" value={ member.String() }/>
+										<input type="hidden" name="user_uuid" value={ member.String() }/>
 										<button
 											type="submit"
 											class="text-xs text-dirio-muted hover:text-dirio-coral transition-colors px-2 py-0.5 rounded border border-transparent hover:border-dirio-coral"
@@ -153,16 +165,11 @@ templ GroupDetailPage(d GroupDetailData) {
 					}
 					<!-- Add member form -->
 					<form method="POST" action={ PageURL("/groups/" + d.Group.Name + "/members") } class="flex items-end gap-3 pt-2">
-						<div class="flex-1 max-w-xs">
-							<label class="block text-xs text-dirio-muted mb-1">Add member by access key</label>
-							<input
-								type="text"
-								name="access_key"
-								placeholder="alice"
-								required
-								class="w-full bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text placeholder-dirio-muted focus:outline-none focus:border-dirio-teal"
-							/>
-						</div>
+						@UserSelect(UserSelectProps{
+							Name:  "access_key",
+							Label: "Add member",
+							Users: d.Users,
+						})
 						<button
 							type="submit"
 							class="px-4 py-1.5 text-sm rounded border border-dirio-border text-dirio-muted hover:border-dirio-teal hover:text-dirio-teal transition-colors"

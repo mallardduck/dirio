@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/mallardduck/dirio/console"
+	"github.com/mallardduck/dirio/console/ui"
 	consolewire "github.com/mallardduck/dirio/internal/console"
 	"github.com/mallardduck/dirio/internal/http/auth"
 	internalserver "github.com/mallardduck/dirio/internal/http/server"
@@ -18,7 +19,7 @@ import (
 	"github.com/mallardduck/dirio/pkg/iam"
 )
 
-const consolePrefix = "/dirio/ui"
+const consolePrefix = ui.DefaultBasePath
 
 // TestServer extends testutil.TestServer with console-specific methods.
 // Embedding the pointer promotes all base methods (CreateBucket, SignRequest,
@@ -37,7 +38,7 @@ func NewTestServer(t *testing.T) *TestServer {
 		// Wire the console (mirrors cmd/server/cmd/wire_console.go).
 		factory := service.NewServiceFactory(srv.Storage(), srv.Metadata(), srv.PolicyEngine(), srv.Auth())
 		adapter := consolewire.NewAdapter(factory)
-		handler := console.New(adapter, srv.Router(), &testAdminAuth{authenticator: srv.Auth()}, "test")
+		handler := console.New(adapter, srv.Router(), &testAdminAuth{authenticator: srv.Auth()}, "test", ui.DefaultBasePath)
 		srv.SetConsole(handler, 0) // 0 = same port, mounted at /dirio/ui/
 	})
 

@@ -34,15 +34,18 @@ type sessionPayload struct {
 // invalidated when the server restarts — acceptable for an admin console.
 type Session struct {
 	signingKey []byte
+	cookiePath string // "/" in dedicated-port mode, "/dirio/ui/" in single-port mode
 }
 
 // NewSession creates a Session with a randomly generated signing key.
-func NewSession() (*Session, error) {
+// basePath should be "" for dedicated-port mode or "/dirio/ui" for single-port mode.
+func NewSession(basePath string) (*Session, error) {
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
 		return nil, err
 	}
-	return &Session{signingKey: key}, nil
+	cookiePath := basePath + "/"
+	return &Session{signingKey: key, cookiePath: cookiePath}, nil
 }
 
 // Create writes a signed session cookie for the given access key.
@@ -61,7 +64,7 @@ func (s *Session) Create(w http.ResponseWriter, accessKey string) error {
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieName,
 		Value:    cookieValue,
-		Path:     "/dirio/ui/",
+		Path:     s.cookiePath,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Unix(p.ExpiresAt, 0),
@@ -108,7 +111,7 @@ func (s *Session) Clear(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:    cookieName,
 		Value:   "",
-		Path:    "/dirio/ui/",
+		Path:    s.cookiePath,
 		MaxAge:  -1,
 		Expires: time.Unix(0, 0),
 	})
@@ -130,7 +133,7 @@ func (s *Session) SetFlash(w http.ResponseWriter, message, msgType string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     flashCookieName,
 		Value:    cookieValue,
-		Path:     "/dirio/ui/",
+		Path:     s.cookiePath,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -147,7 +150,7 @@ func (s *Session) GetFlash(w http.ResponseWriter, r *http.Request) (FlashData, b
 	http.SetCookie(w, &http.Cookie{
 		Name:    flashCookieName,
 		Value:   "",
-		Path:    "/dirio/ui/",
+		Path:    s.cookiePath,
 		MaxAge:  -1,
 		Expires: time.Unix(0, 0),
 	})

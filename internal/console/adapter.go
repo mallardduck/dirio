@@ -12,6 +12,10 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/mallardduck/dirio/consoleapi"
+	"github.com/mallardduck/dirio/internal/consts"
+	contextInt "github.com/mallardduck/dirio/internal/context"
+	"github.com/mallardduck/dirio/internal/crypto"
+	httpauth "github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/service"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
 	svcgroup "github.com/mallardduck/dirio/internal/service/group"
@@ -110,14 +114,27 @@ func (a *Adapter) GetUserSecret(ctx context.Context, uuidStr string) (string, er
 }
 
 func (a *Adapter) CreateUser(ctx context.Context, req consoleapi.CreateUserRequest) (*consoleapi.User, error) {
+	secretKey := req.SecretKey
+	if req.GenerateSecret {
+		_, generated, err := crypto.GenerateDirIOKey(crypto.PrefixUser)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate secret key: %w", err)
+		}
+		secretKey = generated
+	}
 	u, err := a.services.User().Create(ctx, &svcuser.CreateUserRequest{
 		AccessKey: req.AccessKey,
-		SecretKey: req.SecretKey,
+		SecretKey: secretKey,
+		Status:    iam.UserStatusActive,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return iamUserToConsole(u), nil
+	result := iamUserToConsole(u)
+	if req.GenerateSecret {
+		result.SecretKey = secretKey
+	}
+	return result, nil
 }
 
 func (a *Adapter) UpdateUser(ctx context.Context, uuidStr string, req consoleapi.UpdateUserRequest) (*consoleapi.User, error) {
@@ -125,13 +142,27 @@ func (a *Adapter) UpdateUser(ctx context.Context, uuidStr string, req consoleapi
 	if err != nil {
 		return nil, fmt.Errorf("invalid UUID: %w", err)
 	}
+	secretKey := req.SecretKey
+	var generatedSecret string
+	if req.GenerateSecret {
+		_, generated, err := crypto.GenerateDirIOKey(crypto.PrefixUser)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate secret key: %w", err)
+		}
+		generatedSecret = generated
+		secretKey = &generatedSecret
+	}
 	updated, err := a.services.User().Update(ctx, uUUID, &svcuser.UpdateUserRequest{
-		SecretKey: req.SecretKey,
+		SecretKey: secretKey,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return iamUserToConsole(updated), nil
+	result := iamUserToConsole(updated)
+	if req.GenerateSecret {
+		result.SecretKey = generatedSecret
+	}
+	return result, nil
 }
 
 func (a *Adapter) DeleteUser(ctx context.Context, uuidStr string) error {
@@ -204,6 +235,20 @@ func (a *Adapter) CreatePolicy(ctx context.Context, req consoleapi.CreatePolicyR
 	return iamPolicyToConsole(p)
 }
 
+func (a *Adapter) UpdatePolicy(ctx context.Context, name string, req consoleapi.UpdatePolicyRequest) (*consoleapi.Policy, error) {
+	var doc iam.PolicyDocument
+	if err := json.Unmarshal([]byte(req.PolicyDocument), &doc); err != nil {
+		return nil, fmt.Errorf("invalid policy document JSON: %w", err)
+	}
+	p, err := a.services.Policy().Update(ctx, name, &svcpolicy.UpdatePolicyRequest{
+		PolicyDocument: &doc,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return iamPolicyToConsole(p)
+}
+
 func (a *Adapter) DeletePolicy(ctx context.Context, name string) error {
 	return a.services.Policy().Delete(ctx, name)
 }
@@ -225,6 +270,27 @@ func (a *Adapter) DetachPolicy(ctx context.Context, policyName, accessKey string
 }
 
 // --- Buckets -----------------------------------------------------------------
+
+func (a *Adapter) CreateBucket(ctx context.Context, name, ownerAccessKey string) error {
+	// metadata.Manager.CreateBucket reads user.UUID from context to set ownership.
+	// Inject the appropriate user: the specified owner if provided, otherwise admin.
+	// Admin is in-memory only (no metadata file), so inject a stub for that case.
+	if ownerAccessKey != "" {
+		owner, err := a.services.User().GetByAccessKey(ctx, ownerAccessKey)
+		if err != nil {
+			return fmt.Errorf("failed to resolve owner: %w", err)
+		}
+		ctx = contextInt.WithUser(ctx, owner)
+	} else {
+		ctx = contextInt.WithUser(ctx, &iam.User{UUID: iam.AdminUserUUID})
+	}
+	_, err := a.services.S3().CreateBucket(ctx, &svcs3.CreateBucketRequest{Name: name})
+	return err
+}
+
+func (a *Adapter) DeleteBucket(ctx context.Context, name string) error {
+	return a.services.S3().DeleteBucket(ctx, name)
+}
 
 func (a *Adapter) ListBuckets(ctx context.Context) ([]*consoleapi.Bucket, error) {
 	metas, err := a.services.S3().ListBucketsWithMetadata(ctx)
@@ -307,6 +373,109 @@ func (a *Adapter) SetBucketPolicy(ctx context.Context, bucket, policyJSON string
 	})
 }
 
+// --- Objects -----------------------------------------------------------------
+
+func (a *Adapter) ListObjects(ctx context.Context, bucket, prefix, delimiter string) ([]*consoleapi.ObjectInfo, error) {
+	result, err := a.services.S3().ListObjectsV2(ctx, &svcs3.ListObjectsV2Request{
+		Bucket:    bucket,
+		Prefix:    prefix,
+		Delimiter: delimiter,
+		MaxKeys:   1000,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]*consoleapi.ObjectInfo, 0, len(result.Objects)+len(result.CommonPrefixes))
+	for _, obj := range result.Objects {
+		out = append(out, &consoleapi.ObjectInfo{
+			Key:          obj.Key,
+			Size:         obj.Size,
+			ETag:         obj.ETag,
+			LastModified: obj.LastModified,
+		})
+	}
+	for _, cp := range result.CommonPrefixes {
+		out = append(out, &consoleapi.ObjectInfo{
+			Key:      cp.Prefix,
+			IsPrefix: true,
+		})
+	}
+	return out, nil
+}
+
+func (a *Adapter) GetObjectMetadata(ctx context.Context, bucket, key string) (*consoleapi.ObjectMetadata, error) {
+	resp, err := a.services.S3().HeadObject(ctx, &svcs3.HeadObjectRequest{
+		Bucket: bucket,
+		Key:    key,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &consoleapi.ObjectMetadata{
+		Key:            key,
+		Size:           resp.Size,
+		ETag:           resp.ETag,
+		LastModified:   resp.LastModified,
+		ContentType:    resp.ContentType,
+		CustomMetadata: resp.CustomMetadata,
+	}, nil
+}
+
+func (a *Adapter) GetObjectTags(ctx context.Context, bucket, key string) (map[string]string, error) {
+	tags, err := a.services.S3().GetObjectTagging(ctx, &svcs3.GetObjectTaggingRequest{
+		Bucket: bucket,
+		Key:    key,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if tags == nil {
+		return map[string]string{}, nil
+	}
+	return tags, nil
+}
+
+func (a *Adapter) SetObjectTags(ctx context.Context, bucket, key string, tags map[string]string) error {
+	return a.services.S3().PutObjectTagging(ctx, &svcs3.PutObjectTaggingRequest{
+		Bucket: bucket,
+		Key:    key,
+		Tags:   tags,
+	})
+}
+
+func (a *Adapter) DeleteObject(ctx context.Context, bucket, key string) error {
+	return a.services.S3().DeleteObject(ctx, &svcs3.DeleteObjectRequest{
+		Bucket: bucket,
+		Key:    key,
+	})
+}
+
+func (a *Adapter) CopyObject(ctx context.Context, srcBucket, srcKey, dstBucket, dstKey string) error {
+	return a.services.S3().CopyObject(ctx, srcBucket, srcKey, dstBucket, dstKey)
+}
+
+func (a *Adapter) GeneratePresignedURL(ctx context.Context, req consoleapi.GeneratePresignedURLRequest) (string, error) {
+	user, err := a.services.Authenticator().GetUserForAccessKey(ctx, req.AccessKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve credentials: %w", err)
+	}
+	method := req.Method
+	if method == "" {
+		method = "GET"
+	}
+	return httpauth.GeneratePresignedURL(
+		user.AccessKey,
+		user.SecretKey,
+		consts.DefaultBucketLocation,
+		req.Bucket,
+		req.Key,
+		req.BaseURL,
+		method,
+		req.Expiry,
+	)
+}
+
 // --- Ownership ---------------------------------------------------------------
 
 func (a *Adapter) GetBucketOwner(ctx context.Context, bucket string) (*consoleapi.Owner, error) {
@@ -318,6 +487,9 @@ func (a *Adapter) GetBucketOwner(ctx context.Context, bucket string) (*consoleap
 }
 
 func (a *Adapter) TransferBucketOwnership(ctx context.Context, bucket, newOwnerAccessKey string) error {
+	if newOwnerAccessKey == "" {
+		return a.services.S3().SetBucketOwner(ctx, bucket, nil)
+	}
 	user, err := a.services.User().GetByAccessKey(ctx, newOwnerAccessKey)
 	if err != nil {
 		if errors.Is(err, svcerrors.ErrUserNotFound) {
@@ -375,16 +547,16 @@ func (a *Adapter) DeleteGroup(ctx context.Context, name string) error {
 	return a.services.Group().Delete(ctx, name)
 }
 
-func (a *Adapter) AddGroupMember(ctx context.Context, groupName, userUID string) error {
-	uid, err := uuid.Parse(userUID)
+func (a *Adapter) AddGroupMember(ctx context.Context, groupName, userAccessKey string) error {
+	u, err := a.services.User().GetByAccessKey(ctx, userAccessKey)
 	if err != nil {
-		return fmt.Errorf("invalid user UUID: %w", err)
+		return fmt.Errorf("failed to resolve user: %w", err)
 	}
-	return a.services.Group().AddMember(ctx, groupName, uid)
+	return a.services.Group().AddMember(ctx, groupName, u.UUID)
 }
 
-func (a *Adapter) RemoveGroupMember(ctx context.Context, groupName, userUID string) error {
-	uid, err := uuid.Parse(userUID)
+func (a *Adapter) RemoveGroupMember(ctx context.Context, groupName, userUUID string) error {
+	uid, err := uuid.Parse(userUUID)
 	if err != nil {
 		return fmt.Errorf("invalid user UUID: %w", err)
 	}

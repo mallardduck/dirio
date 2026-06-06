@@ -1,0 +1,35 @@
+package ui
+
+import "github.com/mallardduck/dirio/consoleapi"
+
+// UserSelectProps configures the UserSelect component.
+type UserSelectProps struct {
+	Name       string           // HTML form field name
+	Label      string           // visible label text
+	Users      []*consoleapi.User
+	EmptyLabel string           // label for the blank "no selection" option; if empty, the field is required
+	Selected   string           // access key to pre-select
+}
+
+// UserSelect renders a labelled <select> populated with non-admin users.
+// When EmptyLabel is non-empty a leading blank option is included and the
+// field is not required; otherwise the field is required.
+templ UserSelect(p UserSelectProps) {
+	<div>
+		<label class="block text-xs text-dirio-muted mb-1">{ p.Label }</label>
+		<select
+			name={ p.Name }
+			required?={ p.EmptyLabel == "" }
+			class="bg-dirio-bg-input border border-dirio-border rounded px-3 py-1.5 text-sm text-dirio-text focus:outline-none focus:border-dirio-teal"
+		>
+			if p.EmptyLabel != "" {
+				<option value="">{ p.EmptyLabel }</option>
+			}
+			for _, u := range p.Users {
+				if u.UUID != consoleapi.AdminUserUUID {
+					<option value={ u.AccessKey } selected?={ u.AccessKey == p.Selected }>{ u.AccessKey }</option>
+				}
+			}
+		</select>
+	</div>
+}

@@ -24,6 +24,7 @@ import (
 	"github.com/mallardduck/dirio/internal/consts"
 	minioHTTP "github.com/mallardduck/dirio/internal/minio/http"
 
+	"github.com/mallardduck/dirio/console/ui"
 	"github.com/mallardduck/dirio/internal/console"
 	"github.com/mallardduck/dirio/internal/service"
 
@@ -293,8 +294,8 @@ func (s *Server) buildHandler() http.Handler {
 		return s.router
 	}
 
-	s.router.MountNamed("/dirio/ui", "dirio", s.consoleRouter)
-	s.log.Info("console mounted on main port", "path", "/dirio/ui/")
+	s.router.MountNamed(ui.DefaultBasePath, "dirio", s.consoleRouter)
+	s.log.Info("console mounted on main port", "path", ui.DefaultBasePath+"/")
 	return s.router
 }
 
@@ -315,10 +316,14 @@ func (s *Server) Start(ctx context.Context) error {
 	// Start separate console listener if configured on a different port.
 	if s.consoleRouter != nil && !s.consoleSamePort() {
 		consoleAddr := fmt.Sprintf(":%d", s.consolePort)
-		// TODO when on dedicated port we should also add loggingHttp.RecoveryMiddleware like main router too
+		// Dedicated-port: console owns the listener root — no path prefix.
+		// Apply logging middleware directly; no wrapper router needed.
+		var consoleHandler http.Handler = s.consoleRouter
+		consoleHandler = loggingHttp.PrepareAccessLogMiddleware(s.log)(consoleHandler)
+		consoleHandler = loggingHttp.RecoveryMiddleware(consoleHandler)
 		s.consoleServer = &http.Server{
 			Addr:         consoleAddr,
-			Handler:      middleware.SetDefaultHeadersMiddleware(s.consoleRouter),
+			Handler:      middleware.SetDefaultHeadersMiddleware(consoleHandler),
 			ReadTimeout:  30 * time.Second,
 			WriteTimeout: 30 * time.Second,
 			IdleTimeout:  60 * time.Second,

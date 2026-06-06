@@ -32,6 +32,7 @@ type API interface {
 	ListPolicies(ctx context.Context) ([]*Policy, error)
 	GetPolicy(ctx context.Context, name string) (*Policy, error)
 	CreatePolicy(ctx context.Context, req CreatePolicyRequest) (*Policy, error)
+	UpdatePolicy(ctx context.Context, name string, req UpdatePolicyRequest) (*Policy, error)
 	DeletePolicy(ctx context.Context, name string) error
 	AttachPolicy(ctx context.Context, policyName, accessKey string) error
 	DetachPolicy(ctx context.Context, policyName, accessKey string) error
@@ -41,8 +42,8 @@ type API interface {
 	GetGroup(ctx context.Context, name string) (*Group, error)
 	CreateGroup(ctx context.Context, req CreateGroupRequest) (*Group, error)
 	DeleteGroup(ctx context.Context, name string) error
-	AddGroupMember(ctx context.Context, groupName, userUID string) error
-	RemoveGroupMember(ctx context.Context, groupName, userUID string) error
+	AddGroupMember(ctx context.Context, groupName, userAccessKey string) error
+	RemoveGroupMember(ctx context.Context, groupName, userUUID string) error
 	AttachGroupPolicy(ctx context.Context, groupName, policyName string) error
 	DetachGroupPolicy(ctx context.Context, groupName, policyName string) error
 	SetGroupStatus(ctx context.Context, groupName string, enabled bool) error
@@ -57,10 +58,21 @@ type API interface {
 	SetServiceAccountStatus(ctx context.Context, uuid string, enabled bool) error
 
 	// Buckets
+	CreateBucket(ctx context.Context, name, ownerAccessKey string) error
+	DeleteBucket(ctx context.Context, name string) error
 	ListBuckets(ctx context.Context) ([]*Bucket, error)
 	GetBucket(ctx context.Context, bucket string) (*Bucket, error)
 	GetBucketPolicy(ctx context.Context, bucket string) (string, error) // raw JSON
 	SetBucketPolicy(ctx context.Context, bucket, policyJSON string) error
+
+	// Objects
+	ListObjects(ctx context.Context, bucket, prefix, delimiter string) ([]*ObjectInfo, error)
+	GetObjectMetadata(ctx context.Context, bucket, key string) (*ObjectMetadata, error)
+	GetObjectTags(ctx context.Context, bucket, key string) (map[string]string, error)
+	SetObjectTags(ctx context.Context, bucket, key string, tags map[string]string) error
+	DeleteObject(ctx context.Context, bucket, key string) error
+	CopyObject(ctx context.Context, srcBucket, srcKey, dstBucket, dstKey string) error
+	GeneratePresignedURL(ctx context.Context, req GeneratePresignedURLRequest) (string, error)
 
 	// Ownership (DirIO-specific — not reachable via mc or S3 clients)
 	GetBucketOwner(ctx context.Context, bucket string) (*Owner, error)
@@ -82,6 +94,7 @@ type User struct {
 	Status           string    `json:"status"` // "on" or "off"
 	AttachedPolicies []string  `json:"attachedPolicies"`
 	UpdatedAt        time.Time `json:"updatedAt"`
+	SecretKey        string    `json:"secretKey,omitempty"` // only populated when auto-generated on create
 }
 
 // Policy represents an IAM policy as seen by the console.
@@ -110,18 +123,25 @@ type Owner struct {
 
 // CreateUserRequest is the input for CreateUser.
 type CreateUserRequest struct {
-	AccessKey string `json:"accessKey"`
-	SecretKey string `json:"secretKey"`
+	AccessKey      string `json:"accessKey"`
+	SecretKey      string `json:"secretKey"`
+	GenerateSecret bool   `json:"generateSecret"` // if true, SecretKey is ignored and one is generated
 }
 
 // UpdateUserRequest is the input for updating a user.
 type UpdateUserRequest struct {
-	SecretKey *string `json:"secretKey,omitempty"`
+	SecretKey      *string `json:"secretKey,omitempty"`
+	GenerateSecret bool    `json:"generateSecret"`
 }
 
 // CreatePolicyRequest is the input for CreatePolicy.
 type CreatePolicyRequest struct {
 	Name           string `json:"name"`
+	PolicyDocument string `json:"policyDocument"` // raw JSON string
+}
+
+// UpdatePolicyRequest is the input for UpdatePolicy.
+type UpdatePolicyRequest struct {
 	PolicyDocument string `json:"policyDocument"` // raw JSON string
 }
 
@@ -172,6 +192,36 @@ type UpdateServiceAccountRequest struct {
 	SecretKey          *string     `json:"secretKey,omitempty"`
 	EmbeddedPolicyJSON *string     `json:"embeddedPolicyJSON,omitempty"`
 	ExpiresAt          **time.Time `json:"expiresAt,omitempty"`
+}
+
+// ObjectInfo represents a single object or common-prefix entry in a bucket listing.
+type ObjectInfo struct {
+	Key          string    `json:"key"`
+	Size         int64     `json:"size"`
+	ETag         string    `json:"etag"`
+	LastModified time.Time `json:"lastModified"`
+	ContentType  string    `json:"contentType,omitempty"`
+	IsPrefix     bool      `json:"isPrefix,omitempty"` // true for "folder" entries
+}
+
+// ObjectMetadata represents the full metadata of a single object.
+type ObjectMetadata struct {
+	Key            string            `json:"key"`
+	Size           int64             `json:"size"`
+	ETag           string            `json:"etag"`
+	LastModified   time.Time         `json:"lastModified"`
+	ContentType    string            `json:"contentType"`
+	CustomMetadata map[string]string `json:"customMetadata,omitempty"`
+}
+
+// GeneratePresignedURLRequest is the input for GeneratePresignedURL.
+type GeneratePresignedURLRequest struct {
+	AccessKey string        `json:"accessKey"`
+	Bucket    string        `json:"bucket"`
+	Key       string        `json:"key"`
+	Expiry    time.Duration `json:"expiry"`
+	BaseURL   string        `json:"baseURL"`
+	Method    string        `json:"method"` // HTTP method, e.g. "GET" or "PUT"; defaults to "GET"
 }
 
 // EffectivePermissions shows the evaluated access for a user on a bucket.
