@@ -511,8 +511,9 @@ The `dio` ownership and simulation commands require HTTP endpoints that do not y
 - [ ] **Service account management** — create/revoke service accounts, view expiry, manage policy mode
 - [ ] **Group management UI** — create groups, assign members, attach policies
 
-### Audit Log Viewer (depends on Phase 6)
+### Phase 8.1: Audit Log Viewer
 - [ ] Filterable log stream in console — filter by user, bucket, action, allow/deny, time range
+  - Depends on a queryable audit log source for console - may require rebuilding audit log feature and logging. 
 - [ ] Export filtered log to CSV/JSON
 
 ## Phase 9: Ensure vHost and Path-style buckets are both supported correctly (Plus Website buckets)
