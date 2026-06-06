@@ -34,6 +34,14 @@ linters:
         - style
     depguard:
       rules:
+        testutil-test-only:
+          files:
+            - "**/*.go"
+            - "!**/*_test.go"
+            - "!**/tests/**/*.go"
+          deny:
+            - pkg: "github.com/mallardduck/dirio/internal/testutil"
+              desc: "internal/testutil is only for use in test files (*_test.go) or the tests/ directory"
         console-no-internal:
           files:
             - "**/console/**/*.go"
