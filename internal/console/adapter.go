@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/mallardduck/dirio/consoleapi"
+	"github.com/mallardduck/dirio/internal/consts"
+	httpauth "github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/service"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
 	svcgroup "github.com/mallardduck/dirio/internal/service/group"
@@ -204,6 +206,20 @@ func (a *Adapter) CreatePolicy(ctx context.Context, req consoleapi.CreatePolicyR
 	return iamPolicyToConsole(p)
 }
 
+func (a *Adapter) UpdatePolicy(ctx context.Context, name string, req consoleapi.UpdatePolicyRequest) (*consoleapi.Policy, error) {
+	var doc iam.PolicyDocument
+	if err := json.Unmarshal([]byte(req.PolicyDocument), &doc); err != nil {
+		return nil, fmt.Errorf("invalid policy document JSON: %w", err)
+	}
+	p, err := a.services.Policy().Update(ctx, name, &svcpolicy.UpdatePolicyRequest{
+		PolicyDocument: &doc,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return iamPolicyToConsole(p)
+}
+
 func (a *Adapter) DeletePolicy(ctx context.Context, name string) error {
 	return a.services.Policy().Delete(ctx, name)
 }
@@ -305,6 +321,104 @@ func (a *Adapter) SetBucketPolicy(ctx context.Context, bucket, policyJSON string
 		Bucket:         bucket,
 		PolicyDocument: &doc,
 	})
+}
+
+// --- Objects -----------------------------------------------------------------
+
+func (a *Adapter) ListObjects(ctx context.Context, bucket, prefix, delimiter string) ([]*consoleapi.ObjectInfo, error) {
+	result, err := a.services.S3().ListObjectsV2(ctx, &svcs3.ListObjectsV2Request{
+		Bucket:    bucket,
+		Prefix:    prefix,
+		Delimiter: delimiter,
+		MaxKeys:   1000,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]*consoleapi.ObjectInfo, 0, len(result.Objects)+len(result.CommonPrefixes))
+	for _, obj := range result.Objects {
+		out = append(out, &consoleapi.ObjectInfo{
+			Key:          obj.Key,
+			Size:         obj.Size,
+			ETag:         obj.ETag,
+			LastModified: obj.LastModified,
+		})
+	}
+	for _, cp := range result.CommonPrefixes {
+		out = append(out, &consoleapi.ObjectInfo{
+			Key:      cp.Prefix,
+			IsPrefix: true,
+		})
+	}
+	return out, nil
+}
+
+func (a *Adapter) GetObjectMetadata(ctx context.Context, bucket, key string) (*consoleapi.ObjectMetadata, error) {
+	resp, err := a.services.S3().HeadObject(ctx, &svcs3.HeadObjectRequest{
+		Bucket: bucket,
+		Key:    key,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &consoleapi.ObjectMetadata{
+		Key:            key,
+		Size:           resp.Size,
+		ETag:           resp.ETag,
+		LastModified:   resp.LastModified,
+		ContentType:    resp.ContentType,
+		CustomMetadata: resp.CustomMetadata,
+	}, nil
+}
+
+func (a *Adapter) GetObjectTags(ctx context.Context, bucket, key string) (map[string]string, error) {
+	tags, err := a.services.S3().GetObjectTagging(ctx, &svcs3.GetObjectTaggingRequest{
+		Bucket: bucket,
+		Key:    key,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if tags == nil {
+		return map[string]string{}, nil
+	}
+	return tags, nil
+}
+
+func (a *Adapter) SetObjectTags(ctx context.Context, bucket, key string, tags map[string]string) error {
+	return a.services.S3().PutObjectTagging(ctx, &svcs3.PutObjectTaggingRequest{
+		Bucket: bucket,
+		Key:    key,
+		Tags:   tags,
+	})
+}
+
+func (a *Adapter) DeleteObject(ctx context.Context, bucket, key string) error {
+	return a.services.S3().DeleteObject(ctx, &svcs3.DeleteObjectRequest{
+		Bucket: bucket,
+		Key:    key,
+	})
+}
+
+func (a *Adapter) CopyObject(ctx context.Context, srcBucket, srcKey, dstBucket, dstKey string) error {
+	return a.services.S3().CopyObject(ctx, srcBucket, srcKey, dstBucket, dstKey)
+}
+
+func (a *Adapter) GeneratePresignedURL(ctx context.Context, req consoleapi.GeneratePresignedURLRequest) (string, error) {
+	user, err := a.services.Authenticator().GetUserForAccessKey(ctx, req.AccessKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve credentials: %w", err)
+	}
+	return httpauth.GeneratePresignedGetURL(
+		user.AccessKey,
+		user.SecretKey,
+		consts.DefaultBucketLocation,
+		req.Bucket,
+		req.Key,
+		req.BaseURL,
+		req.Expiry,
+	)
 }
 
 // --- Ownership ---------------------------------------------------------------
