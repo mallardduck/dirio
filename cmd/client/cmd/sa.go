@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/minio/madmin-go/v3"
 	"github.com/spf13/cobra"
 
 	"github.com/mallardduck/dirio/internal/dioclient/render"
@@ -131,7 +130,7 @@ func runSACreate(cmd *cobra.Command, _ []string) error {
 
 	warnIfGenericS3(cmd.Context())
 
-	req := madmin.AddServiceAccountReq{
+	req := dioclient.AddServiceAccountReq{
 		TargetUser: flagSAUser,
 		Name:       flagSAName,
 	}
@@ -218,7 +217,7 @@ func runSAUpdate(cmd *cobra.Command, args []string) error {
 
 	warnIfGenericS3(cmd.Context())
 
-	req := madmin.UpdateServiceAccountReq{
+	req := dioclient.UpdateServiceAccountReq{
 		NewName: flagSAName,
 	}
 
@@ -265,7 +264,7 @@ func runSARm(cmd *cobra.Command, args []string) error {
 
 // --- helpers ---
 
-func serviceAccountToMap(a madmin.ServiceAccountInfo) map[string]any {
+func serviceAccountToMap(a dioclient.ServiceAccountInfo) map[string]any {
 	m := map[string]any{
 		"access_key":  a.AccessKey,
 		"parent_user": a.ParentUser,

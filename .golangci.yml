@@ -85,14 +85,14 @@ linters:
             - pkg: "github.com/minio/madmin-go"
               desc: "console/ has no MinIO deps — use dirio/api interface"
         sdk-madmin-quarantine:
-          # madmin-go is allowed anywhere within sdk/dioclient/ for now.
-          # Future: tighten to sdk/dioclient/compat/minio/ only once native types are added.
+          # madmin-go is quarantined to sdk/dioclient/compat/minio/ only.
+          # All other sdk/ files must use the native types in sdk/dioclient/types.go.
           files:
             - "**/sdk/**/*.go"
-            - "!**/sdk/dioclient/**/*.go"
+            - "!**/sdk/dioclient/compat/minio/**"
           deny:
             - pkg: "github.com/minio/madmin-go"
-              desc: "madmin-go must stay within sdk/dioclient/ — eventually migrate to compat/minio/"
+              desc: "madmin-go is quarantined to sdk/dioclient/compat/minio/ — use native dioclient types instead"
         server-no-stray-minio:
           # internal/ may only use MinIO libs in the explicit compat zones:
           #   internal/minio/    — MinIO admin API wire protocol + data import
