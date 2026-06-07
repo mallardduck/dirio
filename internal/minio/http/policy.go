@@ -267,7 +267,7 @@ func (s PolicyHTTPService) SetPolicy(w nethttp.ResponseWriter, r *nethttp.Reques
 			"policiesDetached": []string{},
 		}
 
-		encrypted, err := jsonutil.MarshalAndEncrypt(adminUser.SecretKey, response)
+		encrypted, err := marshalAndEncrypt(adminUser.SecretKey, response)
 		if err != nil {
 			s.log.Error("Failed to marshal/encrypt response", "error", err)
 			w.WriteHeader(nethttp.StatusInternalServerError)
@@ -346,7 +346,7 @@ func (s PolicyHTTPService) DetachPolicy(w nethttp.ResponseWriter, r *nethttp.Req
 			"policiesDetached": []string{policyName},
 		}
 
-		encrypted, err := jsonutil.MarshalAndEncrypt(adminUser.SecretKey, response)
+		encrypted, err := marshalAndEncrypt(adminUser.SecretKey, response)
 		if err != nil {
 			s.log.Error("Failed to marshal/encrypt response", "error", err)
 			w.WriteHeader(nethttp.StatusInternalServerError)
@@ -455,7 +455,7 @@ func (s PolicyHTTPService) parsePolicyAssocParams(w nethttp.ResponseWriter, r *n
 		Group    string   `json:"Group"`
 		Policies []string `json:"Policies"`
 	}
-	if err := jsonutil.DecryptAndUnmarshal(adminUser.SecretKey, r.Body, &req); err != nil {
+	if err := decryptAndUnmarshal(adminUser.SecretKey, r.Body, &req); err != nil {
 		s.log.Error("Failed to decrypt/parse request body", "error", err)
 		w.WriteHeader(nethttp.StatusBadRequest)
 		return "", "", false, false

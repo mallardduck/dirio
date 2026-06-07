@@ -64,7 +64,7 @@ func (s *UserHTTPService) ListUsers(w nethttp.ResponseWriter, r *nethttp.Request
 		}
 	}
 
-	encrypted, err := jsonutil.MarshalAndEncrypt(adminUser.SecretKey, result)
+	encrypted, err := marshalAndEncrypt(adminUser.SecretKey, result)
 	if err != nil {
 		s.log.Error("Failed to encrypt response", "error", err)
 		w.WriteHeader(nethttp.StatusInternalServerError)
@@ -99,7 +99,7 @@ func (s *UserHTTPService) CreateUser(w nethttp.ResponseWriter, r *nethttp.Reques
 	}
 
 	var body map[string]string
-	if err := jsonutil.DecryptAndUnmarshal(adminUser.SecretKey, bytes.NewReader(bodyBytes), &body); err != nil {
+	if err := decryptAndUnmarshal(adminUser.SecretKey, bytes.NewReader(bodyBytes), &body); err != nil {
 		s.log.Error("Failed to parse request body as JSON", "error", err)
 		w.WriteHeader(nethttp.StatusBadRequest)
 		return

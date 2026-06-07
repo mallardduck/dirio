@@ -2,7 +2,6 @@ package http
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"log/slog"
 	nethttp "net/http"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 	"github.com/mallardduck/go-http-helpers/pkg/query"
-	"github.com/minio/madmin-go/v3"
 
 	"github.com/mallardduck/dirio/internal/http/auth"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
@@ -93,13 +91,6 @@ func (s *ServiceAccountHTTPService) AddServiceAccount(w nethttp.ResponseWriter, 
 		return
 	}
 
-	decryptedData, err := madmin.DecryptData(adminUser.SecretKey, bytes.NewReader(bodyBytes))
-	if err != nil {
-		s.log.Error("Failed to decrypt request body", "error", err)
-		w.WriteHeader(nethttp.StatusBadRequest)
-		return
-	}
-
 	var body struct {
 		AccessKey   string     `json:"accessKey"`
 		SecretKey   string     `json:"secretKey"`
@@ -109,8 +100,8 @@ func (s *ServiceAccountHTTPService) AddServiceAccount(w nethttp.ResponseWriter, 
 		PolicyMode  string     `json:"policyMode"`
 		Expiration  *time.Time `json:"expiration"`
 	}
-	if err := json.Unmarshal(decryptedData, &body); err != nil {
-		s.log.Error("Failed to parse request body", "error", err)
+	if err := decryptAndUnmarshal(adminUser.SecretKey, bytes.NewReader(bodyBytes), &body); err != nil {
+		s.log.Error("Failed to decrypt/parse request body", "error", err)
 		w.WriteHeader(nethttp.StatusBadRequest)
 		return
 	}
@@ -275,13 +266,6 @@ func (s *ServiceAccountHTTPService) parseUpdateBody(w nethttp.ResponseWriter, r 
 		return nil, false
 	}
 
-	decryptedData, err := madmin.DecryptData(adminUser.SecretKey, bytes.NewReader(bodyBytes))
-	if err != nil {
-		s.log.Error("Failed to decrypt request body", "error", err)
-		w.WriteHeader(nethttp.StatusBadRequest)
-		return nil, false
-	}
-
 	var body struct {
 		NewSecretKey   string     `json:"newSecretKey"`
 		NewStatus      string     `json:"newStatus"`
@@ -289,8 +273,8 @@ func (s *ServiceAccountHTTPService) parseUpdateBody(w nethttp.ResponseWriter, r 
 		NewDescription string     `json:"newDescription"`
 		NewExpiration  *time.Time `json:"newExpiration"`
 	}
-	if err := json.Unmarshal(decryptedData, &body); err != nil {
-		s.log.Error("Failed to parse request body", "error", err)
+	if err := decryptAndUnmarshal(adminUser.SecretKey, bytes.NewReader(bodyBytes), &body); err != nil {
+		s.log.Error("Failed to decrypt/parse request body", "error", err)
 		w.WriteHeader(nethttp.StatusBadRequest)
 		return nil, false
 	}
@@ -333,16 +317,9 @@ func statusStringToServiceAcct(s string) iamPkg.ServiceAcctStatus {
 // writeEncryptedJSON marshals v, encrypts it with secretKey, and writes the result
 // as application/octet-stream with status 200.
 func (s *ServiceAccountHTTPService) writeEncryptedJSON(w nethttp.ResponseWriter, secretKey string, v any) {
-	data, err := json.Marshal(v)
+	encrypted, err := marshalAndEncrypt(secretKey, v)
 	if err != nil {
-		s.log.Error("Failed to marshal response", "error", err)
-		w.WriteHeader(nethttp.StatusInternalServerError)
-		return
-	}
-
-	encrypted, err := madmin.EncryptData(secretKey, data)
-	if err != nil {
-		s.log.Error("Failed to encrypt response", "error", err)
+		s.log.Error("Failed to marshal/encrypt response", "error", err)
 		w.WriteHeader(nethttp.StatusInternalServerError)
 		return
 	}

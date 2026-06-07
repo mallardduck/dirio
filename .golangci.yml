@@ -175,20 +175,19 @@ linters:
             - pkg: "github.com/mallardduck/dirio/common"
               desc: "console/ must stay neutral — no dirio-specific common/ imports"
         server-no-stray-minio:
-          # internal/ may only use MinIO libs in the explicit compat zones:
-          #   internal/minio/    — MinIO admin API wire protocol + data import
-          #   internal/jsonutil/ — madmin encrypt/decrypt for wire compat
+          # MinIO libs are quarantined to two zones in internal/:
+          #   internal/minio/    — madmin wire protocol (encrypt/decrypt + admin HTTP handlers)
           #   internal/testutil/ — test helpers that construct madmin-encrypted payloads
+          # All other internal/ code must stay minio-free.
           files:
             - "**/internal/**/*.go"
             - "!**/internal/minio/**"
-            - "!**/internal/jsonutil/**"
             - "!**/internal/testutil/**"
           deny:
             - pkg: "github.com/minio/minio-go"
               desc: "minio-go outside compat zone — use sdk/dioclient for S3 client ops"
             - pkg: "github.com/minio/madmin-go"
-              desc: "madmin-go outside compat zone — wire protocol only in internal/minio/, internal/jsonutil/, and internal/testutil/"
+              desc: "madmin-go outside compat zone — wire protocol belongs in internal/minio/ only"
     errcheck:
       check-type-assertions: false
       check-blank: false
