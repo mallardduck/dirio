@@ -58,7 +58,7 @@ tasks:
   test-unit:
     desc: Run unit tests only (excludes integration and client tests)
     cmds:
-      - go test -v -race ./internal/... ./pkg/...
+      - go test -v -race ./internal/...
 
   test-integration:
     desc: Run integration tests only

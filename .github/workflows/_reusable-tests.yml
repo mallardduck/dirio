@@ -25,10 +25,18 @@ jobs:
       uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2.1.0
 
     - name: Download dependencies
-      run: go mod download
+      run: |
+        go mod download
+        (cd sdk && go mod download)
+        (cd api && go mod download)
+        (cd console && go mod download)
 
     - name: Verify dependencies
-      run: go mod verify
+      run: |
+        go mod verify
+        (cd sdk && go mod verify)
+        (cd api && go mod verify)
+        (cd console && go mod verify)
 
     - name: Run go vet
       run: go vet ./...
@@ -75,7 +83,9 @@ jobs:
       uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2.1.0
 
     - name: Download dependencies
-      run: go mod download
+      run: |
+        go mod download
+        (cd sdk && go mod download)
 
     - name: Run integration tests
       run: |
@@ -119,7 +129,9 @@ jobs:
       uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2.1.0
 
     - name: Download dependencies
-      run: go mod download
+      run: |
+        go mod download
+        (cd sdk && go mod download)
 
     - name: Run admin tests
       run: |
@@ -163,7 +175,9 @@ jobs:
       uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2.1.0
 
     - name: Download dependencies
-      run: go mod download
+      run: |
+        go mod download
+        (cd sdk && go mod download)
 
     - name: Run console tests
       run: |
@@ -208,7 +222,9 @@ jobs:
       uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2.1.0
 
     - name: Download dependencies
-      run: go mod download
+      run: |
+        go mod download
+        (cd sdk && go mod download)
 
     - name: Run client tests
       run: |
