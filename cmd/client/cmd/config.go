@@ -9,7 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/mallardduck/dirio/common/output"
-	"github.com/mallardduck/dirio/internal/dioclient/profile"
+	"github.com/mallardduck/dirio/cmd/client/internal/dioclient/profile"
 )
 
 var configCmd = &cobra.Command{
