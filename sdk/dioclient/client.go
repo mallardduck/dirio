@@ -10,8 +10,7 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
+	compatminio "github.com/mallardduck/dirio/sdk/dioclient/compat/minio"
 )
 
 // Config holds the connection parameters for a single DirIO server.
@@ -32,7 +31,7 @@ type Config struct {
 
 // Client is a connected DirIO client. It is safe for concurrent use.
 type Client struct {
-	mc     *minio.Client
+	s3     s3Backend
 	cfg    Config
 	secure bool
 }
@@ -52,25 +51,10 @@ func New(cfg Config) (*Client, error) {
 		return nil, fmt.Errorf("dioclient: invalid endpoint %q: %w", cfg.Endpoint, err)
 	}
 
-	secure := u.Scheme == "https"
-	host := u.Host
-
-	mc, err := minio.New(host, &minio.Options{
-		Creds:        credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
-		Secure:       secure,
-		Region:       cfg.Region,
-		BucketLookup: bucketLookup(cfg.PathStyle),
-	})
+	proxy, err := compatminio.NewS3Proxy(cfg.Endpoint, cfg.AccessKey, cfg.SecretKey, cfg.Region, cfg.PathStyle)
 	if err != nil {
 		return nil, fmt.Errorf("dioclient: %w", err)
 	}
 
-	return &Client{mc: mc, cfg: cfg, secure: secure}, nil
-}
-
-func bucketLookup(pathStyle bool) minio.BucketLookupType {
-	if pathStyle {
-		return minio.BucketLookupPath
-	}
-	return minio.BucketLookupAuto
+	return &Client{s3: proxy, cfg: cfg, secure: u.Scheme == "https"}, nil
 }

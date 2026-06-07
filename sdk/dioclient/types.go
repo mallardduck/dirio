@@ -1,26 +1,13 @@
 package dioclient
 
 import (
-	"time"
-
 	compatminio "github.com/mallardduck/dirio/sdk/dioclient/compat/minio"
 )
 
-// BucketInfo describes a single S3 bucket.
-type BucketInfo struct {
-	Name      string
-	CreatedAt time.Time
-}
-
-// ObjectInfo describes a single S3 object.
-type ObjectInfo struct {
-	Key          string
-	Size         int64
-	LastModified time.Time
-	ETag         string
-	ContentType  string
-	StorageClass string
-}
+// S3 types — defined in compat/minio, re-exported as type aliases so callers
+// never import the compat package directly.
+type BucketInfo = compatminio.BucketInfo
+type ObjectInfo = compatminio.ObjectInfo
 
 // Admin and IAM types — defined in compat/minio, re-exported as type aliases so
 // callers never need to import the compat package directly. When DirIO-native admin

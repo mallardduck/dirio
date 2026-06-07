@@ -87,3 +87,22 @@ type PolicyAssociationResp struct {
 	PoliciesDetached []string
 	PoliciesAttached []string
 }
+
+// BucketInfo describes a single S3 bucket.
+type BucketInfo struct {
+	Name      string
+	CreatedAt time.Time
+}
+
+// ObjectInfo describes a single S3 object or common prefix.
+// Size is -1 for common prefixes (virtual directories). Err is non-nil when
+// a per-object error occurred during listing.
+type ObjectInfo struct {
+	Key          string
+	Size         int64
+	LastModified time.Time
+	ETag         string
+	ContentType  string
+	StorageClass string
+	Err          error
+}

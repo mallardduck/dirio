@@ -93,6 +93,16 @@ linters:
           deny:
             - pkg: "github.com/minio/madmin-go"
               desc: "madmin-go is quarantined to sdk/dioclient/compat/minio/ — use native dioclient types instead"
+        sdk-minio-quarantine:
+          # minio-go is quarantined to sdk/dioclient/compat/minio/ only.
+          # All other sdk/ files must use the s3Backend interface.
+          # When minio-go is removed, only compat/minio/ needs to change.
+          files:
+            - "**/sdk/**/*.go"
+            - "!**/sdk/dioclient/compat/minio/**"
+          deny:
+            - pkg: "github.com/minio/minio-go"
+              desc: "minio-go is quarantined to sdk/dioclient/compat/minio/ — use s3Backend interface instead"
         client-no-server-internals:
           # cmd/client/ is a standalone CLI binary. It must not reach into server
           # internals — only sdk/, common/, and internal/dioclient/ are permitted.

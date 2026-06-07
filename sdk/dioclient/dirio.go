@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/minio/minio-go/v7/pkg/signer"
+	compatminio "github.com/mallardduck/dirio/sdk/dioclient/compat/minio"
 )
 
 // DirioClient makes authenticated requests to the DirIO-specific REST API at
@@ -204,7 +204,7 @@ func (c *DirioClient) do(ctx context.Context, method, path string, body []byte) 
 
 	// SignV4 takes the request by value; re-attach the body to the returned pointer
 	// because the value copy does not carry the io.Reader.
-	signed := signer.SignV4(*req, c.accessKey, c.secretKey, "", c.region)
+	signed := compatminio.SignRequestV4(*req, c.accessKey, c.secretKey, c.region)
 	if len(body) > 0 {
 		signed.Body = io.NopCloser(bytes.NewReader(body))
 		signed.ContentLength = int64(len(body))
