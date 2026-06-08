@@ -17,11 +17,11 @@ import (
 
 // Service provides service account management operations
 type Service struct {
-	metadata *metadata.Manager
+	metadata Repository
 }
 
 // NewService creates a new service account service
-func NewService(m *metadata.Manager) *Service {
+func NewService(m Repository) *Service {
 	return &Service{metadata: m}
 }
 

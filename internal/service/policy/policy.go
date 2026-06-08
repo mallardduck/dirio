@@ -13,11 +13,11 @@ import (
 
 // Service provides policy management operations
 type Service struct {
-	metadataManager *metadata.Manager
+	metadataManager Repository
 }
 
 // NewService creates a new policy service
-func NewService(metadataManager *metadata.Manager) *Service {
+func NewService(metadataManager Repository) *Service {
 	return &Service{
 		metadataManager: metadataManager,
 	}

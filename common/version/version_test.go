@@ -4,30 +4,16 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestVersionDefaults(t *testing.T) {
-	tests := []struct {
-		name string
-		got  string
-		want string
-	}{
-		{"Version", Version, "dev"},
-		{"Commit", Commit, "none"},
-		{"BuildTime", BuildTime, "unknown"},
-		{"BuiltBy", BuiltBy, "local"},
-		{"GitTreeState", GitTreeState, "unknown"},
-	}
-	for _, tt := range tests {
-		if tt.got != tt.want {
-			t.Errorf("%s = %q, want %q", tt.name, tt.got, tt.want)
-		}
-	}
-
-	if !strings.HasPrefix(GoVersion, "go1.") {
-		t.Errorf("GoVersion = %q, want go1.* prefix", GoVersion)
-	}
-	if GoVersion != runtime.Version() {
-		t.Errorf("GoVersion = %q, want runtime.Version() = %q", GoVersion, runtime.Version())
-	}
+	assert.Equal(t, "dev", Version)
+	assert.Equal(t, "none", Commit)
+	assert.Equal(t, "unknown", BuildTime)
+	assert.Equal(t, "local", BuiltBy)
+	assert.Equal(t, "unknown", GitTreeState)
+	assert.Equal(t, runtime.Version(), GoVersion)
+	assert.True(t, strings.HasPrefix(GoVersion, "go1."), "GoVersion should have go1. prefix, got %q", GoVersion)
 }

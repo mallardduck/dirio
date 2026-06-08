@@ -8,23 +8,21 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/mallardduck/dirio/internal/service/validation"
-
 	"github.com/mallardduck/dirio/internal/http/auth"
-
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
+	"github.com/mallardduck/dirio/internal/service/validation"
 	"github.com/mallardduck/dirio/sdk/iam"
 )
 
 // Service provides user management operations
 type Service struct {
-	metadataManager *metadata.Manager
+	metadataManager Repository
 	authenticator   *auth.Authenticator
 }
 
 // NewService creates a new user service
-func NewService(metadataManager *metadata.Manager, authManager *auth.Authenticator) *Service {
+func NewService(metadataManager Repository, authManager *auth.Authenticator) *Service {
 	return &Service{
 		metadataManager: metadataManager,
 		authenticator:   authManager,
