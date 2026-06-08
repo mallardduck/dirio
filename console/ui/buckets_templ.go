@@ -11,7 +11,7 @@ import templruntime "github.com/a-h/templ/runtime"
 import (
 	"fmt"
 
-	"github.com/mallardduck/dirio/consoleapi"
+	"github.com/mallardduck/dirio/api"
 )
 
 // BucketsPageData holds all data for the buckets list page.

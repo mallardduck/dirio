@@ -47,7 +47,7 @@ linters:
             - "**/console/**/*.go"
           deny:
             - pkg: "github.com/mallardduck/dirio/internal"
-              desc: "console/ must not import internal/ — use consoleapi/ interface only"
+              desc: "console/ must not import internal/ — use dirio/api interface only"
         metadata-only-via-service:
           # Deny direct metadata imports in handler/adapter/CLI layers.
           # Intentionally NOT listed here (i.e. allowed to import metadata directly):
@@ -59,15 +59,135 @@ linters:
           #   internal/context/**     — context helpers used by the above layers
           files:
             - "**/internal/http/api/**/*.go"
-            - "**/internal/minio/**/*.go"
+            - "**/internal/compat/minio/**/*.go"
             - "**/console/**/*.go"
-            - "**/consoleapi/**/*.go"
+            - "**/api/**/*.go"
             - "**/cmd/**/*.go"
-            - "**/pkg/**/*.go"
+            - "**/sdk/**/*.go"
             - "**/tests/**/*.go"
           deny:
             - pkg: "github.com/mallardduck/dirio/internal/persistence/metadata"
               desc: "import metadata only via the service layer (ServicesFactory); HTTP handlers and console adapters must not access metadata directly"
+        api-no-minio:
+          files:
+            - "**/api/**/*.go"
+          deny:
+            - pkg: "github.com/minio/minio-go"
+              desc: "dirio/api is a neutral contract module — no MinIO types allowed"
+            - pkg: "github.com/minio/madmin-go"
+              desc: "dirio/api is a neutral contract module — no MinIO types allowed"
+        console-no-minio:
+          files:
+            - "**/console/**/*.go"
+          deny:
+            - pkg: "github.com/minio/minio-go"
+              desc: "console/ has no MinIO deps — use dirio/api interface"
+            - pkg: "github.com/minio/madmin-go"
+              desc: "console/ has no MinIO deps — use dirio/api interface"
+        sdk-madmin-quarantine:
+          # madmin-go is quarantined to sdk/dioclient/compat/minio/ only.
+          # All other sdk/ files must use the native types in sdk/dioclient/types.go.
+          files:
+            - "**/sdk/**/*.go"
+            - "!**/sdk/dioclient/compat/minio/**"
+          deny:
+            - pkg: "github.com/minio/madmin-go"
+              desc: "madmin-go is quarantined to sdk/dioclient/compat/minio/ — use native dioclient types instead"
+        sdk-minio-quarantine:
+          # minio-go is quarantined to sdk/dioclient/compat/minio/ only.
+          # All other sdk/ files must use the s3Backend interface.
+          # When minio-go is removed, only compat/minio/ needs to change.
+          files:
+            - "**/sdk/**/*.go"
+            - "!**/sdk/dioclient/compat/minio/**"
+          deny:
+            - pkg: "github.com/minio/minio-go"
+              desc: "minio-go is quarantined to sdk/dioclient/compat/minio/ — use s3Backend interface instead"
+        client-no-server-internals:
+          # cmd/client/ is a standalone CLI binary. It must not reach into server
+          # internals — only sdk/, common/, and internal/dioclient/ are permitted.
+          # This boundary is the pre-condition for a future server/client split.
+          files:
+            - "**/cmd/client/**/*.go"
+          deny:
+            - pkg: "github.com/mallardduck/dirio/internal/service"
+              desc: "cmd/client must not import server service layer — use sdk/dioclient"
+            - pkg: "github.com/mallardduck/dirio/internal/http"
+              desc: "cmd/client must not import server HTTP — use sdk/dioclient"
+            - pkg: "github.com/mallardduck/dirio/internal/persistence"
+              desc: "cmd/client must not import server persistence layer"
+            - pkg: "github.com/mallardduck/dirio/internal/policy"
+              desc: "cmd/client must not import server policy engine"
+            - pkg: "github.com/mallardduck/dirio/internal/startup"
+              desc: "cmd/client must not import server startup"
+            - pkg: "github.com/mallardduck/dirio/internal/telemetry"
+              desc: "cmd/client must not import server telemetry"
+            - pkg: "github.com/mallardduck/dirio/internal/compat/minio"
+              desc: "cmd/client must not import server MinIO compat layer"
+            - pkg: "github.com/mallardduck/dirio/internal/console"
+              desc: "cmd/client must not import server console adapter"
+            - pkg: "github.com/mallardduck/dirio/internal/config"
+              desc: "cmd/client must not import server config — use sdk/dioclient profile"
+            - pkg: "github.com/mallardduck/dirio/internal/crypto"
+              desc: "cmd/client must not import server crypto"
+            - pkg: "github.com/mallardduck/dirio/internal/logging"
+              desc: "cmd/client must not import server logging"
+        server-no-client-internals:
+          # Server code and shared internal/ packages must not import client-only
+          # helpers. internal/dioclient/ is for the dio CLI and nothing else.
+          files:
+            - "**/cmd/server/**/*.go"
+            - "**/internal/**/*.go"
+            - "!**/internal/dioclient/**/*.go"
+          deny:
+            - pkg: "github.com/mallardduck/dirio/internal/dioclient"
+              desc: "server code must not import client internals (internal/dioclient/)"
+        common-no-internal:
+          # common/ must remain standalone — no internal/ dependencies.
+          # This keeps it importable by both server and client without coupling.
+          files:
+            - "**/common/**/*.go"
+          deny:
+            - pkg: "github.com/mallardduck/dirio/internal"
+              desc: "common/ must not import internal/ — it must remain standalone for both binaries"
+        sdk-no-common:
+          # sdk/ is a neutral S3/admin client library. It must not import
+          # dirio-specific common/ utilities (version, output) — those are for
+          # the CLI binaries, not for the importable SDK.
+          files:
+            - "**/sdk/**/*.go"
+          deny:
+            - pkg: "github.com/mallardduck/dirio/common"
+              desc: "sdk/ must stay neutral — no dirio-specific common/ imports"
+        api-no-common:
+          # api/ is a neutral contract module with no dirio-specific dependencies.
+          files:
+            - "**/api/**/*.go"
+          deny:
+            - pkg: "github.com/mallardduck/dirio/common"
+              desc: "api/ must stay neutral — no dirio-specific common/ imports"
+        console-no-common:
+          # console/ is a neutral UI module. It interacts with the server only
+          # through api/ interfaces, not through common/ CLI utilities.
+          files:
+            - "**/console/**/*.go"
+          deny:
+            - pkg: "github.com/mallardduck/dirio/common"
+              desc: "console/ must stay neutral — no dirio-specific common/ imports"
+        server-no-stray-minio:
+          # MinIO libs are quarantined to two zones in internal/:
+          #   internal/compat/minio/    — madmin wire protocol (encrypt/decrypt + admin HTTP handlers)
+          #   internal/testutil/ — test helpers that construct madmin-encrypted payloads
+          # All other internal/ code must stay minio-free.
+          files:
+            - "**/internal/**/*.go"
+            - "!**/internal/compat/minio/**"
+            - "!**/internal/testutil/**"
+          deny:
+            - pkg: "github.com/minio/minio-go"
+              desc: "minio-go outside compat zone — use sdk/dioclient for S3 client ops"
+            - pkg: "github.com/minio/madmin-go"
+              desc: "madmin-go outside compat zone — wire protocol belongs in internal/compat/minio/ only"
     errcheck:
       check-type-assertions: false
       check-blank: false

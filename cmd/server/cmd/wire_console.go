@@ -5,6 +5,7 @@ package cmd
 import (
 	"context"
 
+	"github.com/mallardduck/dirio/common/version"
 	"github.com/mallardduck/dirio/console"
 	consoleauth "github.com/mallardduck/dirio/console/auth"
 	"github.com/mallardduck/dirio/console/ui"
@@ -12,8 +13,7 @@ import (
 	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/http/server"
 	"github.com/mallardduck/dirio/internal/service"
-	"github.com/mallardduck/dirio/internal/version"
-	"github.com/mallardduck/dirio/pkg/iam"
+	"github.com/mallardduck/dirio/sdk/iam"
 )
 
 // setupConsole wires the admin console into the server when the noconsole build

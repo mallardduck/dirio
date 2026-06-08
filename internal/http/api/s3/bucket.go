@@ -14,7 +14,7 @@ import (
 	"github.com/mallardduck/dirio/internal/consts"
 	"github.com/mallardduck/dirio/internal/http/middleware"
 	"github.com/mallardduck/dirio/internal/service/s3"
-	"github.com/mallardduck/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/sdk/s3types"
 )
 
 // CreateBucket handles PUT /{bucket}

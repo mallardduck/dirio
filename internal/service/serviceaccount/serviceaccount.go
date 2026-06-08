@@ -12,16 +12,16 @@ import (
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
 	"github.com/mallardduck/dirio/internal/service/validation"
-	"github.com/mallardduck/dirio/pkg/iam"
+	"github.com/mallardduck/dirio/sdk/iam"
 )
 
 // Service provides service account management operations
 type Service struct {
-	metadata *metadata.Manager
+	metadata Repository
 }
 
 // NewService creates a new service account service
-func NewService(m *metadata.Manager) *Service {
+func NewService(m Repository) *Service {
 	return &Service{metadata: m}
 }
 

@@ -8,8 +8,8 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/mallardduck/dirio/internal/cli/output"
-	"github.com/mallardduck/dirio/internal/dioclient/profile"
+	"github.com/mallardduck/dirio/cmd/client/internal/dioclient/profile"
+	"github.com/mallardduck/dirio/common/output"
 )
 
 var configCmd = &cobra.Command{

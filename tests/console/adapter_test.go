@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mallardduck/dirio/consoleapi"
+	consoleapi "github.com/mallardduck/dirio/api"
 	consolewire "github.com/mallardduck/dirio/internal/console"
 	"github.com/mallardduck/dirio/internal/service"
 	"github.com/mallardduck/dirio/internal/testutil"

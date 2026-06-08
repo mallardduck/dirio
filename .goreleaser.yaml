@@ -7,6 +7,8 @@ project_name: dirio
 
 before:
   hooks:
+    # Sync workspace before anything else so all go.work.sum entries are current.
+    - go work sync
     - go mod tidy
     # Install templ CLI pinned to the version in go.mod.
     - go install github.com/a-h/templ/cmd/templ@v0.3.1020
@@ -30,11 +32,11 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/mallardduck/dirio/internal/version.Version={{.Version}}
-      - -X github.com/mallardduck/dirio/internal/version.Commit={{.Commit}}
-      - -X github.com/mallardduck/dirio/internal/version.BuildTime={{.Date}}
-      - -X github.com/mallardduck/dirio/internal/version.BuiltBy=goreleaser
-      - -X github.com/mallardduck/dirio/internal/version.GitTreeState={{.GitTreeState}}
+      - -X github.com/mallardduck/dirio/common/version.Version={{.Version}}
+      - -X github.com/mallardduck/dirio/common/version.Commit={{.Commit}}
+      - -X github.com/mallardduck/dirio/common/version.BuildTime={{.Date}}
+      - -X github.com/mallardduck/dirio/common/version.BuiltBy=goreleaser
+      - -X github.com/mallardduck/dirio/common/version.GitTreeState={{.GitTreeState}}
 
   - id: client
     main: ./cmd/client
@@ -50,11 +52,11 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/mallardduck/dirio/internal/version.Version={{.Version}}
-      - -X github.com/mallardduck/dirio/internal/version.Commit={{.Commit}}
-      - -X github.com/mallardduck/dirio/internal/version.BuildTime={{.Date}}
-      - -X github.com/mallardduck/dirio/internal/version.BuiltBy=goreleaser
-      - -X github.com/mallardduck/dirio/internal/version.GitTreeState={{.GitTreeState}}
+      - -X github.com/mallardduck/dirio/common/version.Version={{.Version}}
+      - -X github.com/mallardduck/dirio/common/version.Commit={{.Commit}}
+      - -X github.com/mallardduck/dirio/common/version.BuildTime={{.Date}}
+      - -X github.com/mallardduck/dirio/common/version.BuiltBy=goreleaser
+      - -X github.com/mallardduck/dirio/common/version.GitTreeState={{.GitTreeState}}
 
 archives:
   - id: server-archive

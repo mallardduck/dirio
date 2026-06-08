@@ -12,8 +12,8 @@ import (
 	"github.com/mallardduck/dirio/internal/http/middleware"
 	"github.com/mallardduck/dirio/internal/jsonutil"
 	"github.com/mallardduck/dirio/internal/service/s3"
-	"github.com/mallardduck/dirio/pkg/iam"
-	"github.com/mallardduck/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/sdk/iam"
+	"github.com/mallardduck/dirio/sdk/s3types"
 )
 
 // PutBucketPolicy handles PUT /{bucket}?policy

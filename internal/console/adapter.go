@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/mallardduck/dirio/consoleapi"
+	consoleapi "github.com/mallardduck/dirio/api"
 	"github.com/mallardduck/dirio/internal/consts"
 	contextInt "github.com/mallardduck/dirio/internal/context"
 	"github.com/mallardduck/dirio/internal/crypto"
@@ -24,8 +24,8 @@ import (
 	svcs3 "github.com/mallardduck/dirio/internal/service/s3"
 	svcsacct "github.com/mallardduck/dirio/internal/service/serviceaccount"
 	svcuser "github.com/mallardduck/dirio/internal/service/user"
-	"github.com/mallardduck/dirio/pkg/iam"
-	s3types "github.com/mallardduck/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/sdk/iam"
+	s3types "github.com/mallardduck/dirio/sdk/s3types"
 )
 
 // ErrNotImplemented is returned for API methods not yet backed by the service layer.

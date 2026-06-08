@@ -1,0 +1,9 @@
+go 1.26
+
+use (
+	.
+	./api
+	./common
+	./console
+	./sdk
+)

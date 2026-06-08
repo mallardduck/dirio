@@ -10,7 +10,7 @@ import (
 
 	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
-	"github.com/mallardduck/dirio/pkg/iam"
+	"github.com/mallardduck/dirio/sdk/iam"
 )
 
 var authLogger = logging.Component("auth")

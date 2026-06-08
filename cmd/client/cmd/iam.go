@@ -7,11 +7,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/minio/madmin-go/v3"
 	"github.com/spf13/cobra"
 
-	"github.com/mallardduck/dirio/internal/dioclient/render"
-	"github.com/mallardduck/dirio/pkg/dioclient"
+	"github.com/mallardduck/dirio/cmd/client/internal/dioclient/render"
+	"github.com/mallardduck/dirio/sdk/dioclient"
 )
 
 // --- flags ---
@@ -300,7 +299,7 @@ func runIAMUserEnable(cmd *cobra.Command, args []string) error {
 
 	warnIfGenericS3(cmd.Context())
 
-	if err := ac.SetUserStatus(cmd.Context(), args[0], madmin.AccountEnabled); err != nil {
+	if err := ac.SetUserStatus(cmd.Context(), args[0], dioclient.AccountEnabled); err != nil {
 		return fmt.Errorf("iam user enable: %w", err)
 	}
 
@@ -316,7 +315,7 @@ func runIAMUserDisable(cmd *cobra.Command, args []string) error {
 
 	warnIfGenericS3(cmd.Context())
 
-	if err := ac.SetUserStatus(cmd.Context(), args[0], madmin.AccountDisabled); err != nil {
+	if err := ac.SetUserStatus(cmd.Context(), args[0], dioclient.AccountDisabled); err != nil {
 		return fmt.Errorf("iam user disable: %w", err)
 	}
 
@@ -463,7 +462,7 @@ func runIAMPolicyAttach(cmd *cobra.Command, args []string) error {
 
 	warnIfGenericS3(cmd.Context())
 
-	req := madmin.PolicyAssociationReq{
+	req := dioclient.PolicyAssociationReq{
 		Policies: []string{args[0]},
 		User:     flagIAMPolicyUser,
 		Group:    flagIAMPolicyGroup,
@@ -493,7 +492,7 @@ func runIAMPolicyDetach(cmd *cobra.Command, args []string) error {
 
 	warnIfGenericS3(cmd.Context())
 
-	req := madmin.PolicyAssociationReq{
+	req := dioclient.PolicyAssociationReq{
 		Policies: []string{args[0]},
 		User:     flagIAMPolicyUser,
 		Group:    flagIAMPolicyGroup,

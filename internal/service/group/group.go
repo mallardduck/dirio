@@ -8,16 +8,16 @@ import (
 
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
-	"github.com/mallardduck/dirio/pkg/iam"
+	"github.com/mallardduck/dirio/sdk/iam"
 )
 
 // Service provides group management operations
 type Service struct {
-	metadata *metadata.Manager
+	metadata Repository
 }
 
 // NewService creates a new group service
-func NewService(m *metadata.Manager) *Service {
+func NewService(m Repository) *Service {
 	return &Service{metadata: m}
 }
 

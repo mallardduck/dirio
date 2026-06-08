@@ -17,7 +17,7 @@ import (
 	svcerrors "github.com/mallardduck/dirio/internal/service/errors"
 	"github.com/mallardduck/dirio/internal/service/s3"
 	svcuser "github.com/mallardduck/dirio/internal/service/user"
-	"github.com/mallardduck/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/sdk/s3types"
 )
 
 var filterLogger = logging.Component("filter")

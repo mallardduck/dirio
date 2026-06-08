@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/mallardduck/dirio/internal/dioclient/render"
-	"github.com/mallardduck/dirio/pkg/dioclient"
+	"github.com/mallardduck/dirio/cmd/client/internal/dioclient/render"
+	"github.com/mallardduck/dirio/sdk/dioclient"
 )
 
 // --- flags ---

@@ -12,9 +12,9 @@ import (
 
 	"github.com/mallardduck/dirio/console/components/toast"
 
+	consoleapi "github.com/mallardduck/dirio/api"
 	"github.com/mallardduck/dirio/console/auth"
 	"github.com/mallardduck/dirio/console/ui"
-	"github.com/mallardduck/dirio/consoleapi"
 )
 
 // Handler holds the console API reference used by all handler methods.

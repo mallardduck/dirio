@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
-	"github.com/mallardduck/dirio/pkg/iam"
+	"github.com/mallardduck/dirio/sdk/iam"
 )
 
 func TestEngine_AdminBypass(t *testing.T) {

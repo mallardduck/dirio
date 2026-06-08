@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/mallardduck/dirio/internal/policy"
-	"github.com/mallardduck/dirio/pkg/iam"
+	"github.com/mallardduck/dirio/sdk/iam"
 )
 
 // Example showing how to validate a policy document after unmarshaling

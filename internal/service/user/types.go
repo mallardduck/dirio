@@ -1,6 +1,6 @@
 package user
 
-import "github.com/mallardduck/dirio/pkg/iam"
+import "github.com/mallardduck/dirio/sdk/iam"
 
 // CreateUserRequest represents a request to create a new user
 type CreateUserRequest struct {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/policy/variables"
-	"github.com/mallardduck/dirio/pkg/iam"
+	"github.com/mallardduck/dirio/sdk/iam"
 )
 
 func TestEvaluateStatementWithConditions(t *testing.T) {

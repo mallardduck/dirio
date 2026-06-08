@@ -21,8 +21,8 @@ import (
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 	"github.com/mallardduck/teapot-router/pkg/urlbuilder"
 
+	minioHTTP "github.com/mallardduck/dirio/internal/compat/minio/http"
 	"github.com/mallardduck/dirio/internal/consts"
-	minioHTTP "github.com/mallardduck/dirio/internal/minio/http"
 
 	"github.com/mallardduck/dirio/console/ui"
 	"github.com/mallardduck/dirio/internal/console"
@@ -33,10 +33,10 @@ import (
 	"github.com/mallardduck/dirio/internal/http/server/metrics"
 	"github.com/mallardduck/dirio/internal/http/server/prof"
 
+	miniomiddleware "github.com/mallardduck/dirio/internal/compat/minio/middleware"
 	"github.com/mallardduck/dirio/internal/http/api"
 	"github.com/mallardduck/dirio/internal/http/auth"
 	"github.com/mallardduck/dirio/internal/http/middleware"
-	miniomiddleware "github.com/mallardduck/dirio/internal/minio/middleware"
 	"github.com/mallardduck/dirio/internal/policy"
 
 	"github.com/mallardduck/dirio/internal/config/data"

@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	minioimport "github.com/mallardduck/dirio/internal/compat/minio/import"
 	"github.com/mallardduck/dirio/internal/consts"
-	minioimport "github.com/mallardduck/dirio/internal/minio/import"
 )
 
 // TestMinIOImport_CreatesMetadataFiles tests that importing MinIO data actually creates metadata files

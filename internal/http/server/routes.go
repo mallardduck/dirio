@@ -6,7 +6,7 @@ import (
 
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 
-	minioHTTP "github.com/mallardduck/dirio/internal/minio/http"
+	minioHTTP "github.com/mallardduck/dirio/internal/compat/minio/http"
 
 	dirioapi "github.com/mallardduck/dirio/internal/http/api/dirio"
 	"github.com/mallardduck/dirio/internal/http/server/prof"

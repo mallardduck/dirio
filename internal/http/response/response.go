@@ -9,7 +9,7 @@ import (
 	"github.com/mallardduck/go-http-helpers/pkg/headers"
 
 	"github.com/mallardduck/dirio/internal/global"
-	"github.com/mallardduck/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/sdk/s3types"
 )
 
 // WriteXMLResponse writes an HTTP response in XML format with the XML declaration header.

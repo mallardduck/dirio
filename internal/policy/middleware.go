@@ -17,7 +17,7 @@ import (
 	"github.com/mallardduck/dirio/internal/logging"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
 	"github.com/mallardduck/dirio/internal/policy/variables"
-	"github.com/mallardduck/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/sdk/s3types"
 )
 
 var authzLogger = logging.Component("authz")

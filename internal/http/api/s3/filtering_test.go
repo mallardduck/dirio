@@ -8,7 +8,7 @@ import (
 
 	"github.com/mallardduck/dirio/internal/context"
 	"github.com/mallardduck/dirio/internal/policy"
-	"github.com/mallardduck/dirio/pkg/iam"
+	"github.com/mallardduck/dirio/sdk/iam"
 )
 
 // Test helper functions that don't require HTTPHandler

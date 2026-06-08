@@ -11,8 +11,8 @@ import (
 	"github.com/mallardduck/dirio/internal/context"
 	"github.com/mallardduck/dirio/internal/policy"
 	"github.com/mallardduck/dirio/internal/policy/variables"
-	"github.com/mallardduck/dirio/pkg/iam"
-	"github.com/mallardduck/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/sdk/iam"
+	"github.com/mallardduck/dirio/sdk/s3types"
 )
 
 // filterBuckets extracts request context and delegates to the observation service.

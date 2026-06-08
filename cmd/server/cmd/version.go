@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/mallardduck/dirio/internal/version"
+	"github.com/mallardduck/dirio/common/version"
 )
 
 // versionCmd represents the version command

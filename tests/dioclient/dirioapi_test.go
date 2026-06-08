@@ -4,12 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/minio/madmin-go/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/mallardduck/dirio/internal/testutil"
-	"github.com/mallardduck/dirio/pkg/dioclient"
+	"github.com/mallardduck/dirio/sdk/dioclient"
 )
 
 // newDirioClient creates a dioclient.DirioClient pointed at the test server.
@@ -24,10 +23,10 @@ func newDirioClient(ts *testutil.TestServer) *dioclient.DirioClient {
 
 // attachPolicy is a test helper that attaches a named policy to a user.
 func attachPolicy(t *testing.T, ac interface {
-	AttachPolicy(context.Context, madmin.PolicyAssociationReq) (madmin.PolicyAssociationResp, error)
+	AttachPolicy(context.Context, dioclient.PolicyAssociationReq) (dioclient.PolicyAssociationResp, error)
 }, ctx context.Context, policy, user string) {
 	t.Helper()
-	_, err := ac.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+	_, err := ac.AttachPolicy(ctx, dioclient.PolicyAssociationReq{
 		Policies: []string{policy},
 		User:     user,
 	})

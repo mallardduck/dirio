@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
-	"github.com/mallardduck/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/sdk/s3types"
 )
 
 // fetchBucketOwner retrieves owner information for a bucket.

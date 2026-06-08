@@ -8,7 +8,7 @@ package ui
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import "github.com/mallardduck/dirio/consoleapi"
+import "github.com/mallardduck/dirio/api"
 
 // CommonS3Actions is the list of IAM permissions offered in the simulator dropdown.
 var CommonS3Actions = []string{

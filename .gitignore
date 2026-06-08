@@ -38,8 +38,5 @@ NUL
 .DS_Store
 Thumbs.db
 
-# Go workspace file
-go.work
-
 # Vendor directory
 vendor/

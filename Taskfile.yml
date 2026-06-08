@@ -58,7 +58,7 @@ tasks:
   test-unit:
     desc: Run unit tests only (excludes integration and client tests)
     cmds:
-      - go test -v -race ./internal/... ./pkg/...
+      - go test -v -race ./internal/...
 
   test-integration:
     desc: Run integration tests only
@@ -200,6 +200,21 @@ tasks:
     cmds:
       - go mod download
       - go mod tidy
+
+  sync-test-deps:
+    desc: Sync test framework versions (testify etc.) across all workspace sub-modules to match root go.mod
+    cmds:
+      - bash scripts/sync-test-deps.sh
+
+  check-test-deps:
+    desc: Verify test framework versions are in sync across all workspace sub-modules (CI check)
+    cmds:
+      - bash scripts/sync-test-deps.sh --check
+
+  mockgen:
+    desc: Regenerate all gomock mocks (runs go generate on every service package)
+    cmds:
+      - go generate ./internal/service/...
 
   # ── UI tooling ────────────────────────────────────────────────────────────
 

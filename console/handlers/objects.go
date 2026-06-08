@@ -7,8 +7,8 @@ import (
 
 	"github.com/mallardduck/teapot-router/pkg/teapot"
 
+	consoleapi "github.com/mallardduck/dirio/api"
 	"github.com/mallardduck/dirio/console/ui"
-	"github.com/mallardduck/dirio/consoleapi"
 )
 
 // BucketBrowser handles GET /buckets/{bucket}/objects — lists objects at the

@@ -3,8 +3,8 @@ package s3
 import (
 	"context"
 
-	"github.com/mallardduck/dirio/pkg/iam"
-	"github.com/mallardduck/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/sdk/iam"
+	"github.com/mallardduck/dirio/sdk/s3types"
 )
 
 // PutBucketPolicyRequest contains parameters for setting a bucket policy

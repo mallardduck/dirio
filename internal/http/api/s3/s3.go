@@ -10,7 +10,7 @@ import (
 	"github.com/mallardduck/dirio/internal/service"
 	"github.com/mallardduck/dirio/internal/service/observation"
 	svcs3 "github.com/mallardduck/dirio/internal/service/s3"
-	"github.com/mallardduck/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/sdk/s3types"
 )
 
 // HTTPHandler handles S3 API requests

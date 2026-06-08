@@ -16,7 +16,7 @@ import (
 	internalserver "github.com/mallardduck/dirio/internal/http/server"
 	"github.com/mallardduck/dirio/internal/service"
 	"github.com/mallardduck/dirio/internal/testutil"
-	"github.com/mallardduck/dirio/pkg/iam"
+	"github.com/mallardduck/dirio/sdk/iam"
 )
 
 const consolePrefix = ui.DefaultBasePath

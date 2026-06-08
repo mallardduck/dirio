@@ -27,7 +27,7 @@ import (
 	"github.com/mallardduck/dirio/internal/persistence/path"
 
 	"github.com/mallardduck/dirio/internal/jsonutil"
-	"github.com/mallardduck/dirio/pkg/iam"
+	"github.com/mallardduck/dirio/sdk/iam"
 )
 
 // Metadata format versions

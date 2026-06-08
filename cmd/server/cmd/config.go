@@ -8,10 +8,10 @@ import (
 	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/spf13/cobra"
 
-	intCliConfig "github.com/mallardduck/dirio/internal/cli/config"
-	"github.com/mallardduck/dirio/internal/cli/output"
+	"github.com/mallardduck/dirio/common/output"
 	"github.com/mallardduck/dirio/internal/config"
 	"github.com/mallardduck/dirio/internal/config/data"
+	"github.com/mallardduck/dirio/internal/config/fields"
 	"github.com/mallardduck/dirio/internal/crypto"
 )
 
@@ -56,9 +56,9 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 		return runConfigGetAll(cmd)
 	}
 	key := args[0]
-	f, ok := intCliConfig.ReadableFields[key]
+	f, ok := fields.ReadableFields[key]
 	if !ok {
-		return intCliConfig.UnknownReadableKeyError(key)
+		return fields.UnknownReadableKeyError(key)
 	}
 	_, dc, _, err := openDataConfig(cmd)
 	if err != nil {
@@ -75,8 +75,8 @@ func runConfigGetAll(cmd *cobra.Command) error {
 	}
 	output.Header("Data config: " + dataDir)
 	output.Blank()
-	for _, k := range intCliConfig.SortedKeys(intCliConfig.ReadableFields) {
-		output.Field(k, intCliConfig.ReadableFields[k].Get(dc))
+	for _, k := range fields.SortedKeys(fields.ReadableFields) {
+		output.Field(k, fields.ReadableFields[k].Get(dc))
 	}
 	output.Blank()
 	output.Hint("Read-only fields: version, instance-id, credentials.access-key, created-at, updated-at")
@@ -88,9 +88,9 @@ func runConfigGetAll(cmd *cobra.Command) error {
 
 func runConfigSet(cmd *cobra.Command, args []string) error {
 	key, value := args[0], args[1]
-	f, ok := intCliConfig.SettableFields[key]
+	f, ok := fields.SettableFields[key]
 	if !ok {
-		return intCliConfig.UnknownSettableKeyError(key)
+		return fields.UnknownSettableKeyError(key)
 	}
 	dataDir, dc, fs, err := openDataConfig(cmd)
 	if err != nil {

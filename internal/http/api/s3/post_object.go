@@ -12,7 +12,7 @@ import (
 	"github.com/mallardduck/dirio/internal/http/middleware"
 	"github.com/mallardduck/dirio/internal/http/response"
 	svcs3 "github.com/mallardduck/dirio/internal/service/s3"
-	"github.com/mallardduck/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/sdk/s3types"
 )
 
 // PostObject handles POST /{bucket} — S3 POST policy browser-based form upload.

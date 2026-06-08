@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/mallardduck/dirio/consoleapi"
+	consoleapi "github.com/mallardduck/dirio/api"
 	"github.com/mallardduck/dirio/internal/policy"
 )
 

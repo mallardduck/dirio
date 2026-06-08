@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/minio/madmin-go/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/mallardduck/dirio/internal/testutil"
-	"github.com/mallardduck/dirio/pkg/dioclient"
+	"github.com/mallardduck/dirio/sdk/dioclient"
 )
 
 // newAdminClient creates a dioclient.AdminClient pointed at the test server.
@@ -80,7 +79,7 @@ func TestAdminClient_GetUserInfo(t *testing.T) {
 
 	info, err := ac.GetUserInfo(ctx, "bob")
 	require.NoError(t, err)
-	assert.Equal(t, madmin.AccountEnabled, info.Status)
+	assert.Equal(t, dioclient.AccountEnabled, info.Status)
 }
 
 func TestAdminClient_SetUserStatus(t *testing.T) {
@@ -90,15 +89,15 @@ func TestAdminClient_SetUserStatus(t *testing.T) {
 
 	require.NoError(t, ac.AddUser(ctx, "carol", "carolsecret123"))
 
-	require.NoError(t, ac.SetUserStatus(ctx, "carol", madmin.AccountDisabled))
+	require.NoError(t, ac.SetUserStatus(ctx, "carol", dioclient.AccountDisabled))
 	info, err := ac.GetUserInfo(ctx, "carol")
 	require.NoError(t, err)
-	assert.Equal(t, madmin.AccountDisabled, info.Status)
+	assert.Equal(t, dioclient.AccountDisabled, info.Status)
 
-	require.NoError(t, ac.SetUserStatus(ctx, "carol", madmin.AccountEnabled))
+	require.NoError(t, ac.SetUserStatus(ctx, "carol", dioclient.AccountEnabled))
 	info, err = ac.GetUserInfo(ctx, "carol")
 	require.NoError(t, err)
-	assert.Equal(t, madmin.AccountEnabled, info.Status)
+	assert.Equal(t, dioclient.AccountEnabled, info.Status)
 }
 
 // --- IAM policy tests ---
@@ -152,7 +151,7 @@ func TestAdminClient_AttachAndDetachPolicy(t *testing.T) {
 	require.NoError(t, ac.AddCannedPolicy(ctx, "attachpol", samplePolicy("bucket")))
 	require.NoError(t, ac.AddUser(ctx, "dave", "davesecret1234"))
 
-	_, err := ac.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+	_, err := ac.AttachPolicy(ctx, dioclient.PolicyAssociationReq{
 		Policies: []string{"attachpol"},
 		User:     "dave",
 	})
@@ -162,7 +161,7 @@ func TestAdminClient_AttachAndDetachPolicy(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "attachpol", info.PolicyName)
 
-	_, err = ac.DetachPolicy(ctx, madmin.PolicyAssociationReq{
+	_, err = ac.DetachPolicy(ctx, dioclient.PolicyAssociationReq{
 		Policies: []string{"attachpol"},
 		User:     "dave",
 	})
@@ -189,7 +188,7 @@ func TestAdminClient_AddAndDeleteServiceAccount(t *testing.T) {
 	ac := newAdminClient(t, ts)
 	ctx := context.Background()
 
-	creds, err := ac.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+	creds, err := ac.AddServiceAccount(ctx, dioclient.AddServiceAccountReq{
 		Name: "ci-bot",
 	})
 	require.NoError(t, err)
@@ -221,7 +220,7 @@ func TestAdminClient_InfoServiceAccount(t *testing.T) {
 	ac := newAdminClient(t, ts)
 	ctx := context.Background()
 
-	creds, err := ac.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+	creds, err := ac.AddServiceAccount(ctx, dioclient.AddServiceAccountReq{
 		Name:        "info-test-sa",
 		Description: "for info test",
 	})
@@ -239,12 +238,12 @@ func TestAdminClient_UpdateServiceAccount(t *testing.T) {
 	ac := newAdminClient(t, ts)
 	ctx := context.Background()
 
-	creds, err := ac.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+	creds, err := ac.AddServiceAccount(ctx, dioclient.AddServiceAccountReq{
 		Name: "original-name",
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, ac.UpdateServiceAccount(ctx, creds.AccessKey, madmin.UpdateServiceAccountReq{
+	require.NoError(t, ac.UpdateServiceAccount(ctx, creds.AccessKey, dioclient.UpdateServiceAccountReq{
 		NewName: "updated-name",
 	}))
 

@@ -5,7 +5,7 @@ import (
 
 	"github.com/mallardduck/dirio/internal/policy/conditions"
 	"github.com/mallardduck/dirio/internal/policy/variables"
-	"github.com/mallardduck/dirio/pkg/iam"
+	"github.com/mallardduck/dirio/sdk/iam"
 )
 
 // matchPrincipal checks if the request principal matches the statement principal.

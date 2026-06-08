@@ -15,7 +15,7 @@ import (
 
 	"github.com/mallardduck/dirio/internal/consts"
 
-	"github.com/mallardduck/dirio/pkg/iam"
+	"github.com/mallardduck/dirio/sdk/iam"
 )
 
 func TestObjectMetadata_PutAndGet(t *testing.T) {

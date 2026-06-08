@@ -8,7 +8,7 @@ package ui
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import "github.com/mallardduck/dirio/consoleapi"
+import "github.com/mallardduck/dirio/api"
 
 // PolicyDetailData holds all data for the policy detail page.
 type PolicyDetailData struct {

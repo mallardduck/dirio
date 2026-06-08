@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/mallardduck/dirio/internal/cli/output"
+	"github.com/mallardduck/dirio/common/output"
 	"github.com/mallardduck/dirio/internal/config"
 	"github.com/mallardduck/dirio/internal/config/data"
 	"github.com/mallardduck/dirio/internal/logging"

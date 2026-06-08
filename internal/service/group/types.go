@@ -1,6 +1,6 @@
 package group
 
-import "github.com/mallardduck/dirio/pkg/iam"
+import "github.com/mallardduck/dirio/sdk/iam"
 
 // CreateGroupRequest represents a request to create a new group
 type CreateGroupRequest struct {

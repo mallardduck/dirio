@@ -12,7 +12,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/mallardduck/dirio/consoleapi"
+	"github.com/mallardduck/dirio/api"
 )
 
 // memberKey returns the access key for a member UUID, falling back to the UUID string.

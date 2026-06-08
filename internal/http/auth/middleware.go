@@ -13,8 +13,8 @@ import (
 	loggingHttp "github.com/mallardduck/dirio/internal/http/middleware/logging"
 	httpresponse "github.com/mallardduck/dirio/internal/http/response"
 	"github.com/mallardduck/dirio/internal/persistence/metadata"
-	"github.com/mallardduck/dirio/pkg/iam"
-	"github.com/mallardduck/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/sdk/iam"
+	"github.com/mallardduck/dirio/sdk/s3types"
 )
 
 func (a *Authenticator) AuthMiddleware(next http.Handler) http.Handler {

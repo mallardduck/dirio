@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	httpresponse "github.com/mallardduck/dirio/internal/http/response"
-	"github.com/mallardduck/dirio/pkg/s3types"
+	"github.com/mallardduck/dirio/sdk/s3types"
 )
 
 func TestWriteXMLResponse(t *testing.T) {
